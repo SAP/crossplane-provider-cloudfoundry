@@ -1,0 +1,279 @@
+# xOrg creates btp subaccount and enables cloud foundry environment
+# Uses btp-account-provider
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xorgs.composition-example.cloud.sap
+spec:
+  writeConnectionSecretsToNamespace: default
+  compositeTypeRef:
+    apiVersion: composition-example.cloud.sap/v1alpha1
+    kind: xOrg
+  patchSets:
+    - name: subaccountRef
+      patches:
+      - toFieldPath: spec.forProvider.subaccountRef.name
+        fromFieldPath: metadata.name
+        transforms:
+          - type: string
+            string:
+              fmt: "sa-%s"
+
+  resources:
+    # import global account
+    - name: globalaccount
+      base: 
+        apiVersion: account.btp.orchestrate.cloud.sap/v1alpha1
+        kind: GlobalAccount
+        metadata:
+          name: PATCH_ME
+          annotations:
+            crossplane.io/external-name: PATCH_ME
+          labels:
+            provider: btp-account-provider
+        spec:
+          providerConfigRef:
+            name: default
+      patches:
+      - fromFieldPath: metadata.name
+        toFieldPath: metadata.name
+        transforms:
+          - type: string
+            string:
+              fmt: "ga-%s"
+      - fromFieldPath: spec.parameters.globalaccount
+        toFieldPath: metadata.annotations.crossplane.io/external-name
+
+    # create subaccount
+    - name: subaccount 
+      base:  
+        apiVersion: account.btp.orchestrate.cloud.sap/v1alpha1
+        kind: Subaccount
+        metadata:
+          name: PATCH_ME
+          labels:
+            provider: btp-account-provider
+        spec:
+          forProvider:
+            globalAccountRef:
+              name: PATCH_ME
+            displayName: PATCH_ME
+            region: PATCH_ME
+            subdomain: PATCH_ME
+            subaccountAdmins:
+              - daniel.lou@sap.com
+              - cloudorchestrator@sap.com
+      patches:
+      - fromFieldPath: metadata.name
+        toFieldPath: metadata.name
+        transforms:
+          - type: string
+            string:
+              fmt: "sa-%s"
+      - fromFieldPath: metadata.name
+        toFieldPath: spec.forProvider.globalAccountRef.name
+        transforms:
+          - type: string
+            string:
+              fmt: "ga-%s"
+      - fromFieldPath: metadata.name
+        toFieldPath: spec.forProvider.displayName
+      - fromFieldPath: metadata.name
+        toFieldPath: spec.forProvider.subdomain
+      - fromFieldPath: spec.parameters.region
+        toFieldPath: spec.forProvider.region
+
+    # assign entitlement
+    - name: cis entitlement  
+      base:  
+        apiVersion: account.btp.orchestrate.cloud.sap/v1alpha1
+        kind: Entitlement
+        metadata:
+          name: PATCH_ME
+          namespace: default
+          labels:
+            provider: btp-account-provider
+        spec:
+          forProvider:
+            serviceName: cis
+            servicePlanName: local
+            enable: true
+            subaccountRef:
+              name: PATCH_ME
+      patches:
+      - fromFieldPath: metadata.name
+        toFieldPath: metadata.name
+        transforms:
+          - type: string
+            string: 
+               fmt: "cis-entitlement-%s"
+      - type: PatchSet
+        patchSetName: subaccountRef
+
+    # set up service manager
+    - name: service manager 
+      base:
+        apiVersion: account.btp.orchestrate.cloud.sap/v1alpha1
+        kind: ServiceManager
+        metadata:
+          name: service-manager
+        spec:
+          writeConnectionSecretToRef:
+            namespace: default
+            name: PATCH_ME
+          forProvider:
+            subaccountRef:
+              name: PATCH_ME
+      patches:
+      - fromFieldPath: metadata.name
+        toFieldPath: metadata.name
+        transforms:
+          - type: string
+            string: 
+               fmt: "sm-%s"
+      - toFieldPath: spec.writeConnectionSecretToRef.name
+        fromFieldPath: metadata.name
+        transforms:
+          - type: string
+            string: 
+               fmt: "sm-%s"
+      - type: PatchSet
+        patchSetName: subaccountRef
+
+    # set up cis
+    - name: cloud management 
+      base:
+        apiVersion: account.btp.orchestrate.cloud.sap/v1alpha1
+        kind: CloudManagement
+        metadata:
+          name: PATCH_ME
+          labels:
+            provider: btp-account-provider
+        spec:
+          writeConnectionSecretToRef:
+            name: PATCH_ME
+            namespace: default
+          forProvider:
+            serviceManagerRef:
+              name: PATCH_ME
+            subaccountRef:
+              name: PATCH_ME
+      patches:
+      - fromFieldPath: metadata.name
+        toFieldPath: metadata.name
+        transforms:
+          - type: string
+            string: 
+               fmt: "cis-%s"
+      - toFieldPath: spec.writeConnectionSecretToRef.name
+        fromFieldPath: metadata.name
+        transforms:
+          - type: string
+            string: 
+               fmt: "cis-%s"
+      - toFieldPath: spec.forProvider.serviceManagerRef.name
+        fromFieldPath: metadata.name
+        transforms:
+          - type: string
+            string: 
+               fmt: "sm-%s"
+      - type: PatchSet
+        patchSetName: subaccountRef
+
+    # enable cloud foundry environment 
+    - name: cloudfoundry environment
+      base: 
+        apiVersion: environment.btp.orchestrate.cloud.sap/v1alpha1
+        kind: CloudFoundryEnvironment
+        metadata:
+          name: PATCH_ME
+          namespace: default
+          labels:
+            provider: btp-account-provider
+        spec:
+          writeConnectionSecretToRef:
+            name: PATCH_ME
+            namespace: default
+          forProvider:
+            landscape: PATCH_ME
+          cloudManagementRef:
+            name: PATCH_ME
+          subaccountRef:
+            name:  PATCH_ME
+      patches:
+      - toFieldPath: metadata.name
+        fromFieldPath: metadata.name
+      - toFieldPath: spec.writeConnectionSecretToRef.name
+        fromFieldPath: metadata.name
+      - toFieldPath: spec.forProvider.landscape
+        fromFieldPath: spec.parameters.region
+        transforms:
+          - type: string
+            string: 
+               fmt: "cf-%s"
+      - toFieldPath: spec.cloudManagementRef.name
+        fromFieldPath: metadata.name
+        transforms:
+          - type: string
+            string: 
+               fmt: "cis-%s"
+      - toFieldPath: spec.subaccountRef.name
+        fromFieldPath: metadata.name
+        transforms:
+          - type: string
+            string: 
+               fmt: "sa-%s"
+      - type: ToCompositeFieldPath
+        fromFieldPath: status.atProvider.id
+        toFieldPath: status.id
+
+    # config btp-cloudfoundry-provider 
+    - name: cf-providerconfig
+      base: 
+        apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1beta1
+        kind: ProviderConfig
+        metadata:
+          name: default
+        spec:
+          credentials:
+            source: Secret
+            secretRef:
+              name: sa-cloudorchestrator
+              namespace: default
+              key: credentials
+          endpoint:
+            source: Secret
+            secretRef:
+              name: PATCH_ME
+              namespace: default
+              key: apiEndpoint
+      patches:
+      - toFieldPath: metadata.name
+        fromFieldPath: metadata.name
+      - toFieldPath: spec.endpoint.secretRef.name
+        fromFieldPath: metadata.name
+      readinessChecks:
+        - type: None
+
+    # observe cf org in btp-cloudfoundry-provider
+    - name: cf-org
+      base:
+        apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+        kind: Organization
+        metadata:
+          name: PATCH_ME
+          annotations:
+            crossplane.io/external-name: PATCH_ME
+          labels:
+            provider: btp-cloudfoundry-provider
+        spec:
+          providerConfigRef:
+            name: PATCH_ME
+          forProvider: {}
+      patches:
+      - toFieldPath: metadata.name
+        fromFieldPath: metadata.name
+      - toFieldPath: spec.providerConfigRef.name
+        fromFieldPath: metadata.name
+      - toFieldPath: metadata.annotations.crossplane.io/external-name
+        fromFieldPath: metadata.name

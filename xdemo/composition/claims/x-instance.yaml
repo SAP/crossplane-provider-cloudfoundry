@@ -1,0 +1,10 @@
+# xInstance claim 
+apiVersion: composition-example.cloud.sap/v1alpha1
+kind: xInstance
+metadata:
+  name: xdemo
+spec:
+  parameters:
+    globalaccount: SAP Cloud Orchestration Canary
+    project: calm
+    region: eu12

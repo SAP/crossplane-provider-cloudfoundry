@@ -1,0 +1,45 @@
+# xOrg creates a cloudfoundry organization in the specified globalaccount and region
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xorgs.composition-example.cloud.sap
+spec:
+  group: composition-example.cloud.sap
+  names:
+    kind: xOrg
+    plural: xorgs
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              parameters:
+                type: object
+                properties:
+                  globalaccount:
+                    description: the name of an (existing) BTP Global Account, e.g., "SAP Cloud Orchestration Canary"
+                    type: string 
+                  region:
+                    description: btp region, e.g., eu12
+                    enum:
+                      - "eu12"
+                      - "eu10-canary"
+                      - "eu21"
+                    type: string
+                    default: eu12 
+                required:
+                  - globalaccount
+            required:
+              - parameters
+          status:
+            type: object
+            properties:
+              id:
+                description: ID of CloudFoundry Organization
+                type: string

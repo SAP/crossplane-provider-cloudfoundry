@@ -1,0 +1,44 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: Organization
+metadata:
+  namespace: default
+  name: my-org
+  annotations:
+    crossplane.io/external-name: cf-dev
+spec:
+  forProvider: {}
+
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: OrgMembers
+metadata:
+  namespace: default
+  name: my-org-auditors
+spec:
+  forProvider:
+    roleType: Auditors 
+    orgRef: 
+      name: my-org
+      policy:
+        resolve: Always
+    members:
+    - username: co-test-user@groups.sap.com
+    enforcementPolicy: Strict
+
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: OrgMembers
+metadata:
+  namespace: default
+  name: my-org-users
+spec:
+  forProvider:
+    roleType: Users
+    orgRef: 
+      name: my-org
+      policy:
+        resolve: Always
+    members:
+    - username: co-test-user@groups.sap.com
+    enforcementPolicy: Lax

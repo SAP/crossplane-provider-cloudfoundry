@@ -1,0 +1,10 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: Organization
+metadata:
+  namespace: default
+  name: my-org
+  annotations:
+    crossplane.io/external-name: cf-ci-e2e
+spec:
+  forProvider: {}

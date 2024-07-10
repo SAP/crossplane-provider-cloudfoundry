@@ -1,0 +1,43 @@
+# xInstance sets up a new DwC instance for your project in the specified globalaccount
+apiVersion: apiextensions.crossplane.io/v1
+kind: CompositeResourceDefinition
+metadata:
+  name: xinstances.composition-example.cloud.sap
+spec:
+  group: composition-example.cloud.sap
+  names:
+    kind: xInstance
+    plural: xinstances
+  versions:
+  - name: v1alpha1
+    served: true
+    referenceable: true
+    schema:
+      openAPIV3Schema:
+        type: object
+        properties:
+          spec:
+            type: object
+            properties:
+              parameters:
+                type: object
+                properties:
+                  globalaccount:
+                    description: name of an (existing) BTP Global Account, e.g., "SAP Cloud Orchestration Canary"
+                    type: string 
+                  region:
+                    description: region, e.g., eu12
+                    enum:
+                      - "eu12"
+                      - "eu10-canary"
+                      - "eu21"
+                    type: string
+                    default: eu12 
+                  project:
+                    description: your dwc project name, e.g., calm 
+                    type: string 
+                required:
+                  - globalaccount
+                  - project
+            required:
+              - parameters

@@ -1,0 +1,30 @@
+# Please edit the object below. Lines beginning with a '#' will be ignored,
+# and an empty file will abort the edit. If an error occurs while saving this file will be
+# reopened with the relevant failures.
+#
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    rbac.crossplane.io/aggregate-to-admin: "true"
+    rbac.crossplane.io/aggregate-to-crossplane: "true"
+    rbac.crossplane.io/aggregate-to-edit: "true"
+  name: crossplane:provider:btp-cloudfoundry-provider-locallyrun:aggregate-to-edit
+rules:
+- apiGroups:
+  - cloudfoundry.btp.orchestrate.cloud.sap
+  resources:
+  - providerconfigs
+  - providerconfigs/status
+  - organizations
+  - orgs
+  - orgmembers
+  - spaces
+  - spaceusers
+  - spacemembers
+  - serviceinstances
+  - servicekeys
+  - ups
+  - apps
+  verbs:
+  - '*'

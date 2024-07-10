@@ -1,0 +1,16 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: SpaceUsers
+metadata:
+  name: my-space-users
+spec:
+  forProvider:
+    developers: 
+    - "cloudorchestrator@sap.com"
+    - "daniel.lou@sap.com"
+    spaceRef: 
+      name: my-space
+      policy:
+        resolve: Always
+
+

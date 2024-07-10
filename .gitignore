@@ -1,0 +1,15 @@
+/.cache
+/.work
+/_output
+cover.out
+/vendor
+/.vendor-new
+.DS_Store
+
+# ignore IDE folders
+.vscode/
+.idea/
+#ignore goenv version fileß
+.go-version
+#ignore dev.env
+dev.env

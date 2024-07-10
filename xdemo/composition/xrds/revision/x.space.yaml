@@ -1,0 +1,284 @@
+# xSpace 
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: xspaces.composition-example.cloud.sap
+spec: 
+  writeConnectionSecretsToNamespace: default
+  # xSpace composition resembles a hypothetical DwC orbit space
+  compositeTypeRef:
+    apiVersion: composition-example.cloud.sap/v1alpha1
+    kind: xSpace
+  patchSets:
+    - name: providerconfig-ref
+      patches:
+      - toFieldPath: spec.providerConfigRef.name
+        fromFieldPath: spec.parameters.org
+    - name: space-ref
+      patches:
+      - toFieldPath: spec.forProvider.spaceRef.name
+        fromFieldPath: metadata.name
+
+  resources:
+    # 1. create cloud foundry space 
+    - name: cf-space
+      base:
+        apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+        kind: Space
+        metadata:
+          namespace: default
+          name: PATCH_ME
+          labels:
+            provider: btp-cloudfoundry-provider
+        spec:
+          providerConfigRef:
+            name: PATCH_ME
+          forProvider:
+            name: PATCH_ME
+            orgRef: 
+              name: PATCH_ME
+      patches:
+      - type: PatchSet
+        patchSetName: providerconfig-ref
+      - fromFieldPath: metadata.name
+        toFieldPath: metadata.name
+      - fromFieldPath: metadata.name
+        toFieldPath: spec.forProvider.name
+      - toFieldPath: spec.forProvider.orgRef.name
+        fromFieldPath: spec.parameters.org
+      - type: ToCompositeFieldPath
+        fromFieldPath: status.atProvider.id
+        toFieldPath: status.id
+
+    # 2. assign space developers
+    - name: cf-space-roles
+      base:
+        apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+        kind: SpaceUsers
+        metadata:
+          namespace: default
+          name: developers
+          labels:
+            provider: btp-cloudfoundry-provider
+        spec:
+          providerConfigRef:
+            name: PATCH_ME
+          forProvider:
+            developers: 
+            - "cloudorchestrator@sap.com"
+            - "daniel.lou@sap.com"
+            spaceRef: 
+              name: PATCH_ME
+      patches:
+      - type: PatchSet
+        patchSetName: providerconfig-ref
+      - type: PatchSet
+        patchSetName: space-ref
+
+    # 3. create user provided services
+    - name: themisto-access-data
+      base:
+        apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+        kind: UPS
+        metadata:
+          namespace: default
+          name: themisto-access-data
+          labels:
+            provider: btp-cloudfoundry-provider
+        spec:
+          providerConfigRef:
+            name: PATCH_ME
+          forProvider:
+            name: themisto-access-data
+            spaceRef: 
+              name: PATCH_ME
+            credentialsJsonSecretRef:
+                namespace: default
+                name: dwc-poc-secret
+                key: themisto-access-data
+      patches:
+      - type: PatchSet
+        patchSetName: providerconfig-ref
+      - type: PatchSet
+        patchSetName: space-ref
+
+    - name: gcp-credentials
+      base:
+        apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+        kind: UPS
+        metadata:
+          namespace: default
+          name: gcp-credentials
+          labels:
+            provider: btp-cloudfoundry-provider
+        spec:
+          providerConfigRef:
+            name: PATCH_ME
+          forProvider:
+            name: gcp-credentials
+            spaceRef: 
+              name: PATCH_ME
+            credentialsJsonSecretRef:
+                namespace: default
+                name: dwc-poc-secret
+                key: gcp-credentials
+      patches:
+      - type: PatchSet
+        patchSetName: providerconfig-ref
+      - type: PatchSet
+        patchSetName: space-ref
+        
+    # 4. create reuse services 
+    - name: app-log
+      base:
+        apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+        kind: ServiceInstance
+        metadata:
+          namespace: default
+          name: app-log
+          labels:
+            provider: btp-cloudfoundry-provider
+            crossplane.io/external-data: | 
+              {
+                "service_plan": {
+                  "offering": "application-logs",
+                  "plan": "lite"
+                }
+              }
+        spec:
+          providerConfigRef:
+            name: PATCH_ME
+          forProvider:
+            name: app-log
+            spaceRef:
+              name: cf-demo-space
+      patches:
+      - type: PatchSet
+        patchSetName: providerconfig-ref
+      - type: PatchSet
+        patchSetName: space-ref
+
+    - name: destination-service
+      base:
+        apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+        kind: ServiceInstance
+        metadata:
+          namespace: default
+          name: destination-service
+          labels:
+            provider: btp-cloudfoundry-provider
+            crossplane.io/external-data: | 
+              {
+                "service_plan": {
+                  "offering": "destination",
+                  "plan": "lite"
+                }
+              }
+        spec:
+          providerConfigRef:
+            name: PATCH_ME
+          forProvider:
+            name: destination-service
+            spaceRef:
+              name: cf-demo-space
+      patches:
+      - type: PatchSet
+        patchSetName: providerconfig-ref
+      - type: PatchSet
+        patchSetName: space-ref
+
+    - name: xsuaa-broker
+      base:
+        apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+        kind: ServiceInstance
+        metadata:
+          name: xsuaa-broker
+          labels:
+            provider: btp-cloudfoundry-provider
+            crossplane.io/external-data: | 
+              {
+                "service_plan": {
+                  "offering": "xsuaa",
+                  "plan": "broker"
+                }
+              }
+        spec:
+          providerConfigRef:
+            name: PATCH_ME
+          forProvider:
+            name: xsuaa-broker
+            spaceRef: 
+              name: PATCH_ME
+            jsonParams: PATCH_ME
+      patches:
+      - type: PatchSet
+        patchSetName: providerconfig-ref
+      - type: PatchSet
+        patchSetName: space-ref
+      - type: CombineFromComposite
+        toFieldPath: spec.forProvider.jsonParams        
+        combine:
+          variables:
+            - fromFieldPath: metadata.name
+            - fromFieldPath: metadata.name
+          strategy: string
+          string:
+            fmt: |
+              {
+                "xsappname": "%s",
+                "description": "demo app %s",
+                "tenant-mode": "shared"
+              }
+
+    - name: saas-registry
+      base:
+        apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+        kind: ServiceInstance
+        metadata:
+          name: saas-registry
+          labels:
+            provider: btp-cloudfoundry-provider
+            crossplane.io/external-data: | 
+              {
+                "service_plan": {
+                  "offering": "saas-registry",
+                  "plan": "application"
+                }
+              }
+        spec:
+          providerConfigRef:
+            name: PATCH_ME
+          forProvider:
+            name: saas-registry
+            spaceRef: 
+              name: cf-demo-space
+            jsonParams: PATCH_ME
+      patches:
+      - type: PatchSet
+        patchSetName: providerconfig-ref
+      - type: PatchSet
+        patchSetName: space-ref
+      - type: CombineFromComposite
+        toFieldPath: spec.forProvider.jsonParams        
+        combine:
+          variables:
+            - fromFieldPath: metadata.name
+            - fromFieldPath: metadata.name
+            - fromFieldPath: metadata.name
+          strategy: string
+          string:
+            fmt: |
+              {
+                "xsappname": "%s",
+                "appName": "DwC-Application-%s",
+                "displayName": "DwC Application %s",
+                "description": "Application for 'SAP - Deploy with Confidence'",
+                "category": "SaaS",
+                "appUrls": {
+                  "getDependencies": "https://jupiter-dwc-trial-dev-eu10.cfapps.eu10.hana.ondemand.com/callback/application/v1/dependencies",
+                  "onSubscription": "https://jupiter-dwc-trial-dev-eu10.cfapps.eu10.hana.ondemand.com/callback/application/v1/tenants/{tenantId}"
+                }
+              } 
+    # ...
+
+

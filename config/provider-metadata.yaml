@@ -1,0 +1,918 @@
+name: cloudfoundry-community/cloudfoundry
+resources:
+    cloudfoundry_app:
+        subCategory: ""
+        description: Provides a Cloud Foundry Application resource.
+        name: cloudfoundry_app
+        title: cloudfoundry_app
+        examples:
+            - name: spring-music
+              manifest: |-
+                {
+                  "name": "spring-music",
+                  "path": "/Work/cloudfoundry/apps/spring-music/build/libs/spring-music.war"
+                }
+            - name: gobis-server
+              manifest: |-
+                {
+                  "buildpack": "go_buildpack",
+                  "name": "gobis-server",
+                  "path": "${zipper_file.fixture.output_path}",
+                  "source_code_hash": "${zipper_file.fixture.output_sha}"
+                }
+              references:
+                path: zipper_file.fixture.output_path
+                source_code_hash: zipper_file.fixture.output_sha
+              dependencies:
+                zipper_file.fixture: |-
+                    {
+                      "output_path": "path/to/gobis-server.zip",
+                      "source": "https://github.com/orange-cloudfoundry/gobis-server.git#v1.7.3"
+                    }
+            - name: java-spring
+              manifest: |-
+                {
+                  "routes": [
+                    {
+                      "route": "${cloudfoundry_route.java-spring.id}"
+                    },
+                    {
+                      "route": "${cloudfoundry_route.java-spring-2.id}"
+                    }
+                  ]
+                }
+              references:
+                routes.route: cloudfoundry_route.java-spring-2.id
+            - name: test-app-bg
+              manifest: |-
+                {
+                  "buildpack": "abuildpack",
+                  "name": "test-app-bg",
+                  "path": "myapp.zip",
+                  "routes": [
+                    {
+                      "route": "arouteid"
+                    }
+                  ],
+                  "space": "apaceid",
+                  "strategy": "blue-green-v2"
+                }
+              dependencies:
+                cloudfoundry_network_policy.my-policy: |-
+                    {
+                      "policy": [
+                        {
+                          "destination_app": "${cloudfoundry_app.test-app-bg2.id_bg}",
+                          "port": "8080",
+                          "protocol": "tcp",
+                          "source_app": "${cloudfoundry_app.test-app-bg.id_bg}"
+                        }
+                      ]
+                    }
+            - name: test-app-bg2
+              manifest: |-
+                {
+                  "buildpack": "abuildpack",
+                  "name": "test-app-bg2",
+                  "path": "myapp.zip",
+                  "routes": [
+                    {
+                      "route": "arouteid"
+                    }
+                  ],
+                  "space": "apaceid",
+                  "strategy": "blue-green-v2"
+                }
+              dependencies:
+                cloudfoundry_network_policy.my-policy: |-
+                    {
+                      "policy": [
+                        {
+                          "destination_app": "${cloudfoundry_app.test-app-bg2.id_bg}",
+                          "port": "8080",
+                          "protocol": "tcp",
+                          "source_app": "${cloudfoundry_app.test-app-bg.id_bg}"
+                        }
+                      ]
+                    }
+        argumentDocs:
+            annotations: |-
+                - (Optional, map string of string) Add annotations as described here.
+                Works only on cloud foundry with api >= v3.63.
+            blue-green: ':'
+            buildpack: '- (Optional, String) The buildpack used to stage the application. There are multiple options to choose from:'
+            buildpacks: '- (Optional, List) Multiple buildpacks used to stage the application. When both buildpack and buildpacks are set, buildpacks wins. There are multiple options to choose from:'
+            command: '- (Optional, String) A custom start command for the application. This overrides the start command provided by the buildpack.'
+            disk_quota: '- (Optional, Number) The disk space to be allocated for each application instance in megabytes. If not provided, default disk quota is retrieved from Cloud Foundry and assigned.'
+            docker_credentials: '- (Optional) Defines login credentials for private docker repositories'
+            docker_image: '- (Optional, String) The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0'
+            enable_ssh: '- (Optional, Boolean) Whether to enable or disable SSH access to the container. Default is true unless disabled globally.'
+            environment: '- (Optional, Map) Key/value pairs of custom environment variables to set in your app. Does not include any system or service variables.'
+            health_check_http_endpoint: -(Optional, String) The endpoint for the http health check type. The default is '/'.
+            health_check_invocation_timeout: '- (Optional, Number) The timeout in seconds for individual health check requests for "http" and "port" health checks.'
+            health_check_timeout: '- (Optional, Number) The timeout in seconds for the health check.'
+            health_check_type: '- (Optional, String) The health check type which can be one of "port", "process", "http". Default is "port".'
+            id: '- The GUID of the application'
+            id_bg: '- The GUID of the application updated by resource when strategy is blue-green.'
+            instances: '- (Optional, Number) The number of app instances that you want to start. Defaults to 1.'
+            labels: |-
+                - (Optional, map string of string) Add labels as described here.
+                Works only on cloud foundry with api >= v3.63.
+            memory: '- (Optional, Number) The memory limit for each application instance in megabytes. If not provided, value is computed and retreived from Cloud Foundry.'
+            name: '- (Required) The name of the application.'
+            none: ':'
+            params: '- (Optional, Map) A list of key/value parameters used by the service broker to create the binding. Defaults to empty map.'
+            password: '- (Required, String) Password for the private docker repo'
+            path: '- (Required) An uri or path to target a zip file. this can be in the form of unix path (/my/path.zip) or url path (http://zip.com/my.zip)'
+            port: '- (Number) The port of the application to map the tcp route to.'
+            rolling: ':'
+            route: '- (Required, String) The route id. Route can be defined using the cloudfoundry_route resource'
+            routes: '- (Optional, block) The routes to map to the application to control its ingress traffic.'
+            service_binding: '- (Optional, Array) Service instances to bind to the application.'
+            service_instance: '- (Required, String) The service instance GUID.'
+            source_code_hash: |-
+                - (Optional) Used to trigger updates. Must be set to a base64-encoded SHA256 hash of the path specified. The usual way to set this is ${base64sha256(file("file.zip"))},
+                where "file.zip" is the local filename of the lambda function source archive.
+            space: '- (Required) The GUID of the associated Cloud Foundry space.'
+            stack: '- (Optional) The name of the stack the application will be deployed to. Use the cloudfoundry_stack data resource to lookup the available stack names to override Cloud Foundry default.'
+            standard: ', v2'
+            stopped: '- (Optional, Boolean) Defines the desired application state. Set to true to have the application remain in a stopped state. Default is false, i.e. application will be started.'
+            strategy: |-
+                - (Required) Strategy to use for creating/updating application. Defaults to none
+                Supported options:
+            timeout: '- (Optional, Number) Max wait time for app instance startup, in seconds. Defaults to 60 seconds.'
+            username: '- (Required, String) Username for the private docker repo'
+        importStatements: []
+    cloudfoundry_asg:
+        subCategory: ""
+        description: Provides a Cloud Foundry Application Security Group resource.
+        name: cloudfoundry_asg
+        title: cloudfoundry_asg
+        examples:
+            - name: messaging
+              manifest: |-
+                {
+                  "name": "rmq-service",
+                  "rule": [
+                    {
+                      "destination": "192.168.1.100",
+                      "log": true,
+                      "ports": "1883,8883",
+                      "protocol": "tcp"
+                    },
+                    {
+                      "destination": "192.168.1.101",
+                      "log": true,
+                      "ports": "5671-5672",
+                      "protocol": "tcp"
+                    }
+                  ]
+                }
+        argumentDocs:
+            code: '- (Optional, Integer) Allowed ICMP code. . A value of -1 allows all codes. Default is -1.'
+            description: '- (Optional, String) Description of the rule. Defaults to empty.'
+            destination: '- (Required, String) The IP address or CIDR block that can receive traffic.'
+            id: '- The GUID of the application security group'
+            log: '- (Optional, Boolean) Set to true to enable logging. For more information on how to configure system logs to be sent to a syslog drain, review the ASG logging documentation. Defaults to false.'
+            name: '- (Required) The name of the application security group.'
+            ports: '- (Required, String) A single port, comma-separated ports or range of ports that can receive traffic.'
+            protocol: '- (Required, String) One of icmp, tcp, udp, or all.'
+            rule: '- (Required) A list of egress rules with the following arguments.'
+            type: '- (Optional, Integer) Allowed ICMP type. A value of -1 allows all types. Default is -1.'
+        importStatements: []
+    cloudfoundry_buildpack:
+        subCategory: ""
+        description: Provides a Cloud Foundry Buildpack resource.
+        name: cloudfoundry_buildpack
+        title: cloudfoundry_buildpack
+        examples:
+            - name: tomee
+              manifest: |-
+                {
+                  "enable": true,
+                  "name": "tomcat-enterprise-edition",
+                  "path": "https://github.com/cloudfoundry-community/tomee-buildpack/releases/download/v3.17/tomee-buildpack-v3.17.zip",
+                  "position": "12"
+                }
+            - name: tomee
+              manifest: |-
+                {
+                  "enable": true,
+                  "name": "tomcat-enterprise-edition",
+                  "path": "${zipper_file.fixture.output_path}",
+                  "position": "12",
+                  "source_code_hash": "${zipper_file.fixture.output_sha}"
+                }
+              references:
+                path: zipper_file.fixture.output_path
+                source_code_hash: zipper_file.fixture.output_sha
+              dependencies:
+                zipper_file.fixture: |-
+                    {
+                      "output_path": "path/to/tomee-buildpack_v3.17.zip",
+                      "source": "https://github.com/cloudfoundry-community/tomee-buildpack.git#v3.17"
+                    }
+        argumentDocs:
+            annotations: |-
+                - (Optional, map string of string) Add annotations as described here.
+                Works only on cloud foundry with api >= v3.63.
+            enabled: '- (Optional, Boolean) Specifies whether to allow apps to be pushed with the buildpack, and defaults to true.'
+            id: '- The GUID of the buildpack'
+            labels: |-
+                - (Optional, map string of string) Add labels as described here.
+                Works only on cloud foundry with api >= v3.63.
+            locked: '- (Optional, Boolean) Specifies whether buildpack is locked to prevent further updates, and defaults to false.'
+            name: '- (Required) The name of the Buildpack.'
+            path: '- (Required) An uri or path to target a zip file. this can be in the form of unix path (/my/path.zip) or url path (http://zip.com/my.zip)'
+            position: '- (Optional, Number) Specifies where to place the buildpack in the detection priority list. For more information, see the Buildpack Detection topic. When not provided, cloudfoundry assigns a default buildpack position.'
+            source_code_hash: |-
+                - (Optional) Used to trigger updates. Must be set to a base64-encoded SHA256 hash of the path specified. The usual way to set this is base64sha256(file("file.zip")),
+                where "file.zip" is the local filename of the lambda function source archive.
+        importStatements: []
+    cloudfoundry_default_asg:
+        subCategory: ""
+        description: Provides a Cloud Foundry Default Application Security Group resource.
+        name: cloudfoundry_default_asg
+        title: cloudfoundry_default_asg
+        examples:
+            - name: running
+              manifest: |-
+                {
+                  "asgs": [
+                    "${cloudfoundry_asg.messaging.id}",
+                    "${cloudfoundry_asg.services.id}"
+                  ],
+                  "name": "running"
+                }
+        argumentDocs:
+            asgs: '- (Required) A list of references to application security groups IDs.'
+            name: '- (Required) This should be one of running or staging'
+        importStatements: []
+    cloudfoundry_domain:
+        subCategory: ""
+        description: Provides a Cloud Foundry Domain resource.
+        name: cloudfoundry_domain
+        title: cloudfoundry_domain
+        examples:
+            - name: shared
+              manifest: |-
+                {
+                  "domain": "${data.cloudfoundry_domain.apps.domain}",
+                  "internal": false,
+                  "sub_domain": "dev"
+                }
+              references:
+                domain: data.cloudfoundry_domain.apps.domain
+            - name: private
+              manifest: |-
+                {
+                  "name": "pcfdev-org.io",
+                  "org": "${cloudfoundry_org.pcfdev-org.id}"
+                }
+              references:
+                org: cloudfoundry_org.pcfdev-org.id
+        argumentDocs:
+            domain: '- (Optional, String) Domain part of full domain name. If specified the sub_domain argument needs to be provided and the name will be computed.'
+            id: '- The GUID of the domain.'
+            internal: '- (Optional, bool) Flag that sets the domain as an internal domain. Internal domains are used for internal app to app networking only. Defaults to "false". Only works on shared domain.'
+            name: '- (Optional, String) Full name of domain. If specified then the sub_domain and domain attributes will be computed from the name'
+            org: '- (Optional, String) The ID of the Org that owns this domain. If specified, this resource will provision a private domain. By default, the provisioned domain is a public (shared) domain.'
+            router_group: '- (Optional, String) The router group GUID, which can be retrieved via the cloudfoundry_router_group data resource. You would need to provide this when creating a shared domain for TCP routes.'
+            sub_domain: '- (Optional, String) Sub-domain part of full domain name. If specified the domain argument needs to be provided and the name will be computed.'
+        importStatements: []
+    cloudfoundry_evg:
+        subCategory: ""
+        description: Provides a Cloud Foundry Environment Variable Group resource.
+        name: cloudfoundry_evg
+        title: cloudfoundry_evg
+        examples:
+            - name: running
+              manifest: |-
+                {
+                  "name": "running",
+                  "variables": {
+                    "name1": "value1",
+                    "name2": "value2",
+                    "name3": "value3",
+                    "name4": "value4"
+                  }
+                }
+        argumentDocs:
+            name: '- (Required) Either running or staging to indicate the type of environment variable group to update'
+            variables: '- (Required) A map of name-value pairs of environment variables'
+        importStatements: []
+    cloudfoundry_feature_flags:
+        subCategory: ""
+        description: Provides a Cloud Foundry configuration resource.
+        name: cloudfoundry_feature_flags
+        title: cloudfoundry_feature_flags
+        examples:
+            - name: config
+              manifest: |-
+                {
+                  "feature_flags": [
+                    {
+                      "app_bits_upload": true,
+                      "app_scaling": true,
+                      "diego_docker": false,
+                      "env_var_visibility": true,
+                      "private_domain_creation": true,
+                      "route_creation": true,
+                      "service_instance_creation": true,
+                      "set_roles_by_username": true,
+                      "space_developer_env_var_visibility": true,
+                      "space_scoped_private_broker_creation": true,
+                      "task_creation": true,
+                      "unset_roles_by_username": true,
+                      "user_org_creation": false
+                    }
+                  ]
+                }
+        argumentDocs:
+            app_bits_upload: '- (Optional) Space Developers can upload app bits. Minimum CC API version: 2.12.'
+            app_scaling: '- (Optional) Space Developers can perform scaling operations (i.e. change memory, disk, or instances). Minimum CC API version: 2.12.'
+            diego_docker: '- (Optional) Space Developers can push Docker apps. Minimum CC API version 2.33.'
+            env_var_visibility: '- (Optional) All users can view environment variables. Minimum CC API version: 2.58.'
+            feature_flags: '- (Required) Feature flags enabling/disabling certain Cloud Foundry features.'
+            private_domain_creation: '- (Optional) An Org Manager can create private domains for that organization. Minimum CC API version: 2.12.'
+            route_creation: '- (Optional) Space Developers can create routes in a space. Minimum CC API version: 2.12.'
+            service_instance_creation: '- (Optional) Space Developers can create service instances in a space. Minimum CC API version: 2.12.'
+            set_roles_by_username: '- (Optional) Org Managers and Space Managers can add roles by username. Minimum CC API version: 2.37.'
+            space_developer_env_var_visibility: '- (Optional) Space Developers can view their v2 environment variables. Org Managers and Space Managers can view their v3 environment variables. Minimum CC API version: 2.58.'
+            space_scoped_private_broker_creation: '- (Optional) Space Developers can create space-scoped private service brokers. Minimum CC API version: 2.58.'
+            task_creation: '- (Optional) Space Developers can create tasks on their application. This feature is under development. Minimum CC API version: 2.47.'
+            unset_roles_by_username: '- (Optional) Org Managers and Space Managers can remove roles by username. Minimum CC API version: 2.37.'
+            user_org_creation: '- (Optional) Any user can create an organization. Minimum CC API version: 2.12.'
+        importStatements: []
+    cloudfoundry_isolation_segment:
+        subCategory: ""
+        description: Provides a Cloud Foundry Isolation segment resource.
+        name: cloudfoundry_isolation_segment
+        title: cloudfoundry_isolation_segment
+        examples:
+            - name: public
+              manifest: |-
+                {
+                  "name": "public_exposure"
+                }
+        argumentDocs:
+            annotations: |-
+                - (Optional, map string of string) Add annotations as described here.
+                Works only on cloud foundry with api >= v3.63.
+            id: '- The GUID of the segment'
+            labels: |-
+                - (Optional, map string of string) Add labels as described here.
+                Works only on cloud foundry with api >= v3.63.
+            name: |-
+                - (Required, String) Isolation Segment names must be unique across the entire system,
+                and case is ignored when checking for uniqueness. The name must match the value specified in
+                the placement_tags section of the Diego manifest file. If the names do not match, Cloud Foundry
+                fails to place apps in the isolation segment when apps are started or restarted in the space
+                assigned to the isolation segment.
+        importStatements: []
+    cloudfoundry_isolation_segment_entitlement:
+        subCategory: ""
+        description: Provides a Cloud Foundry relationship resource between organizations and a isolation_segment.
+        name: cloudfoundry_isolation_segment_entitlement
+        title: cloudfoundry_isolation_segment_entitlement
+        examples:
+            - name: public
+              manifest: |-
+                {
+                  "orgs": [
+                    "${data.cloudfloundry_org.org1.id}",
+                    "${data.cloudfloundry_org.org2.id}"
+                  ],
+                  "segment": "${data.cloudfoundry_isolation_segment.public.id}"
+                }
+              references:
+                segment: data.cloudfoundry_isolation_segment.public.id
+        argumentDocs:
+            default: '- (Optional, bool) Set this isolation segment defined as default segment for those organizations. Default to false.'
+            id: '- The GUID of the segment'
+            orgs: |-
+                - (Required, List)   List of ID of organizations that are entitled with this segment. An
+                organization must be entitled with the segment in order to bind it to one space.
+            segment: '- (Required, String) The ID of the isolation segment to entitle.'
+        importStatements: []
+    cloudfoundry_network_policy:
+        subCategory: ""
+        description: Provides a Cloud Foundry Network Policy resource.
+        name: cloudfoundry_network_policy
+        title: cloudfoundry_network_policy
+        examples:
+            - name: my-policy
+              manifest: |-
+                {
+                  "policy": [
+                    {
+                      "destination_app": "${cloudfoundry_app.app2.id}",
+                      "port": "8080-8090",
+                      "source_app": "${cloudfoundry_app.app1.id}"
+                    },
+                    {
+                      "destination_app": "${cloudfoundry_app.app3.id}",
+                      "port": "9999",
+                      "protocol": "udp",
+                      "source_app": "${cloudfoundry_app.app1.id}"
+                    }
+                  ]
+                }
+              references:
+                policy.destination_app: cloudfoundry_app.app3.id
+                policy.source_app: cloudfoundry_app.app1.id
+        argumentDocs:
+            destination_app: '- (Required, String) The ID of the application to connect to.'
+            id: '- The GUID of the network_policy'
+            policy: '- (Required, List) List of policies that allow direct network traffic from one app to another.'
+            port: '- (Required, String) Port (8080) or range of ports (8080-8085) for connection to destination app'
+            protocol: '- (Optional, String) One of ''udp'' or ''tcp'' identifying the allowed protocol for the access. Default is ''tcp''.'
+            source_app: '- (Required, String) The ID of the application to connect from.'
+        importStatements: []
+    cloudfoundry_org:
+        subCategory: ""
+        description: Provides a Cloud Foundry Org resource.
+        name: cloudfoundry_org
+        title: cloudfoundry_org
+        examples:
+            - name: o1
+              manifest: |-
+                {
+                  "name": "organization-one",
+                  "quota": "${cloudfoundry_quota.runaway.id}"
+                }
+              references:
+                quota: cloudfoundry_quota.runaway.id
+        argumentDocs:
+            annotations: |-
+                - (Optional, map string of string) Add annotations as described here.
+                Works only on cloud foundry with api >= v3.63.
+            id: '- The GUID of the organization'
+            labels: |-
+                - (Optional, map string of string) Add labels as described here.
+                Works only on cloud foundry with api >= v3.63.
+            name: '- (Required) The name of the Org in Cloud Foundry'
+            quota: '- (Optional) The ID of quota or plan to be given to this Org. By default, no quota is assigned to the org.'
+        importStatements: []
+    cloudfoundry_org_quota:
+        subCategory: ""
+        description: Provides a Cloud Foundry Org Quota resource.
+        name: cloudfoundry_org_quota
+        title: cloudfoundry_org_quota
+        examples:
+            - name: large
+              manifest: |-
+                {
+                  "allow_paid_service_plans": false,
+                  "instance_memory": 2048,
+                  "name": "large",
+                  "total_app_instances": 100,
+                  "total_memory": 51200,
+                  "total_route_ports": 5,
+                  "total_routes": 50,
+                  "total_services": 200
+                }
+              dependencies:
+                cloudfoundry_org.o1: |-
+                    {
+                      "name": "organization-one",
+                      "quota": "${cloudfoundry_org_quota.large.id}"
+                    }
+        argumentDocs:
+            allow_paid_service_plans: '- (Required) Determines whether users can provision instances of non-free service plans. Does not control plan visibility. When false, non-free service plans may be visible in the marketplace but instances can not be provisioned.'
+            id: '- The GUID of the quota'
+            instance_memory: '- (Optional) Maximum memory per application instance'
+            name: '- (Required) The name you use to identify the quota or plan in Cloud Foundry'
+            total_app_instances: '- (Optional) Maximum app instances allowed'
+            total_memory: '- (Required) Maximum memory usage allowed'
+            total_private_domains: '- (Optional) Maximum number of private domains allowed to be created within the Org'
+            total_route_ports: '- (Optional) Maximum routes with reserved ports'
+            total_routes: '- (Required) Maximum routes allowed'
+            total_services: '- (Required) Maximum services allowed'
+        importStatements: []
+    cloudfoundry_org_users:
+        subCategory: ""
+        description: Provides a Cloud Foundry Org users resource.
+        name: cloudfoundry_org_users
+        title: cloudfoundry_org_users
+        examples:
+            - name: ou1
+              manifest: |-
+                {
+                  "auditors": [
+                    "user-guid",
+                    "username"
+                  ],
+                  "billing_managers": [
+                    "user-guid",
+                    "username"
+                  ],
+                  "managers": [
+                    "user-guid",
+                    "username"
+                  ],
+                  "org": "organization-id"
+                }
+        argumentDocs:
+            auditors: |-
+                - (Optional) List of ID of users to
+                assign OrgAuditor role to. By default, no auditors are
+                assigned.
+            billing_managers: |-
+                - (Optional) List of ID of users to
+                assign BillingManager role to. By default, no billing
+                managers are assigned.
+            force: |-
+                - (Optional, Boolean) Set to true to enforce that users defined here will be only theses users defined (remove
+                users roles from external modification).
+            managers: |-
+                - (Optional) List of users to assign OrgManager
+                role to. By default, no managers are assigned.
+            org: '- (Required) Organization associated guid.'
+        importStatements: []
+    cloudfoundry_private_domain_access:
+        subCategory: ""
+        description: Provides a Cloud Foundry private domain access resource.
+        name: cloudfoundry_private_domain_access
+        title: cloudfoundry_private_domain_access
+        examples:
+            - name: shared-to-my-org
+              manifest: |-
+                {
+                  "domain": "${data.cloudfoundry_domain.domain.id}",
+                  "org": "${data.cloudfoundry_org.my-org.id}"
+                }
+              references:
+                domain: data.cloudfoundry_domain.domain.id
+                org: data.cloudfoundry_org.my-org.id
+        argumentDocs:
+            domain: '- (Required, String) The GUID of private domain.'
+            org: '- (Required, String) The GUID of the organization.'
+        importStatements: []
+    cloudfoundry_route:
+        subCategory: ""
+        description: Provides a Cloud Foundry route resource.
+        name: cloudfoundry_route
+        title: cloudfoundry_route
+        examples:
+            - name: default
+              manifest: |-
+                {
+                  "domain": "${data.cloudfoundry_domain.apps.domain.id}",
+                  "hostname": "myapp",
+                  "space": "${data.cloudfoundry_space.dev.id}"
+                }
+              references:
+                domain: data.cloudfoundry_domain.apps.domain.id
+                space: data.cloudfoundry_space.dev.id
+        argumentDocs:
+            app: '- (Required, String) The ID of the application to map this route to.'
+            domain: '- (Required, String) The ID of the domain to map the host name to. If not provided the default application domain will be used.'
+            endpoint: '- The complete endpoint with path if set for the route'
+            hostname: '- (Required, Optional) The application''s host name. This is required for shared domains.'
+            id: '- The GUID of the route'
+            path: '- (Optional) A path for a HTTP route.'
+            port: '- (Optional, Int) The port to associate with the route for a TCP route. Conflicts with random_port.'
+            space: '- (Required, String) The ID of the space to create the route in.'
+            target: |-
+                - (Optional, Set) One or more route mapping(s) that will map this route to application(s). Can be repeated multiple times to load balance route traffic among multiple applications.
+                The target block supports:
+        importStatements: []
+    cloudfoundry_route_service_binding:
+        subCategory: ""
+        description: Provides a Cloud Foundry resource to bind a service instance to a route.
+        name: cloudfoundry_route_service_binding
+        title: cloudfoundry_route_service_binding
+        examples:
+            - name: route-bind
+              manifest: |-
+                {
+                  "route": "${cloudfoundry_route.myroute.id}",
+                  "service_instance": "${cloudfoundry_service_instance.myservice.id}"
+                }
+              references:
+                route: cloudfoundry_route.myroute.id
+                service_instance: cloudfoundry_service_instance.myservice.id
+        argumentDocs:
+            json_params: '- (Optional, String) Arbitrary parameters in the form of stringified JSON object to pass to the service bind handler. Defaults to empty map.'
+            route: '- (Required, String) The ID of the route to bind the service instance to.'
+            service_instance: '- (Required, String) The ID the service instance to bind to the route.'
+        importStatements: []
+    cloudfoundry_service_broker:
+        subCategory: ""
+        description: Provides a Cloud Foundry Service Broker resource.
+        name: cloudfoundry_service_broker
+        title: cloudfoundry_service_broker
+        examples:
+            - name: mysql
+              manifest: |-
+                {
+                  "name": "test-mysql",
+                  "password": "admin",
+                  "url": "http://mysql-broker.local.pcfdev.io",
+                  "username": "admin"
+                }
+        argumentDocs:
+            annotations: |-
+                - (Optional, map string of string) Add annotations as described here.
+                Works only on cloud foundry with api >= v3.71.
+            fail_when_catalog_not_accessible: '- (Optional) Set to true if you want to see errors when getting service broker catalog (default behaviour is silently failed).'
+            id: '- The GUID of the service broker'
+            labels: |-
+                - (Optional, map string of string) Add labels as described here.
+                Works only on cloud foundry with api >= v3.71.
+            name: '- (Required) The name of the service broker'
+            password: '- (Required) The password to authenticate against the service broker API calls'
+            service_plans: '- Map of service plan GUIDs keyed by service "<service name>/<plan name>"'
+            services: '- Map of service GUIDs keyed by service name'
+            space: '- (Optional) The ID of the space to scope this broker to (registering the broker as space-scoped). By default, registers standard brokers'
+            url: '- (Required) The URL to the service broker API'
+            username: '- (Required) The user name to use to authenticate against the service broker API calls'
+        importStatements: []
+    cloudfoundry_service_instance:
+        subCategory: ""
+        description: Provides a Cloud Foundry Service Instance.
+        name: cloudfoundry_service_instance
+        title: cloudfoundry_service_instance
+        examples:
+            - name: redis1
+              manifest: |-
+                {
+                  "name": "pricing-grid",
+                  "service_plan": "${data.cloudfoundry_service.redis.service_plans[\"shared-vm\"]}",
+                  "space": "${cloudfoundry_space.dev.id}"
+                }
+              references:
+                service_plan: data.cloudfoundry_service.redis.service_plans["shared-vm"]
+                space: cloudfoundry_space.dev.id
+        argumentDocs:
+            create: '- (Default 15 minutes) Used for Creating Instance.'
+            delete: '- (Default 15 minutes) Used for Destroying Instance.'
+            id: '- The GUID of the service instance'
+            json_params: '- (Optional, String) Json string of arbitrary parameters. Some services support providing additional configuration parameters within the provision request. By default, no params are provided.'
+            name: '- (Required, String) The name of the Service Instance in Cloud Foundry'
+            recursive_delete: '- DEPRECATED, Since CF API v3, recursive delete is done automatically by the cloudcontroller. This will be removed in future releases.'
+            replace_on_params_change: '- (Optional, Bool) Default: false. If set true, Cloud Foundry will replace the resource on any params change. This is useful if the service does not support parameter updates.'
+            replace_on_service_plan_change: '- (Optional, Bool) Default: false. If set true, Cloud Foundry will replace the resource on any service plan changes. Some brokered services do not support plan changes and this allows the provider to handle those cases.'
+            service_plan: '- (Required, String) The ID of the service plan'
+            space: '- (Required, String) The ID of the space'
+            tags: '- (Optional, List) List of instance tags. Some services provide a list of tags that Cloud Foundry delivers in VCAP_SERVICES Env variables. By default, no tags are assigned.'
+            update: '- (Default 15 minutes) Used for Updating Instance.'
+        importStatements: []
+    cloudfoundry_service_key:
+        subCategory: ""
+        description: Provides a Cloud Foundry Service Key.
+        name: cloudfoundry_service_key
+        title: cloudfoundry_service_key
+        examples:
+            - name: redis1-key1
+              manifest: |-
+                {
+                  "name": "pricing-grid-key1",
+                  "service_instance": "${cloudfoundry_service_instance.redis1.id}"
+                }
+              references:
+                service_instance: cloudfoundry_service_instance.redis1.id
+              dependencies:
+                cloudfoundry_service_instance.redis1: |-
+                    {
+                      "name": "pricing-grid",
+                      "service_plan": "${data.cloudfoundry_service.redis.service_plans[\"shared-vm\"]}",
+                      "space": "${cloudfoundry_space.dev.id}"
+                    }
+        argumentDocs:
+            credentials: '- Credentials for this service key that can be used to bind to the associated service instance.'
+            id: '- The GUID of the service instance.'
+            name: '- (Required) The name of the Service Key in Cloud Foundry.'
+            params: '- (Optional, Map) A list of key/value parameters used by the service broker to create the binding for the key. By default, no parameters are provided.'
+            params_json: '- (Optional, String) Arbitrary parameters in the form of stringified JSON object to pass to the service bind handler.'
+            service_instance: '- (Required) The ID of the Service Instance the key should be associated with.'
+        importStatements: []
+    cloudfoundry_service_plan_access:
+        subCategory: ""
+        description: Provides a Cloud Foundry Service Access resource.
+        name: cloudfoundry_service_plan_access
+        title: cloudfoundry_service_plan_access
+        examples:
+            - name: org1-mysql-512mb
+              manifest: |-
+                {
+                  "plan": "${cloudfoundry_service_broker.mysql.service_plans[\"p-mysql/512mb\"]}",
+                  "public": true
+                }
+              references:
+                plan: cloudfoundry_service_broker.mysql.service_plans["p-mysql/512mb"]
+            - name: org1-mysql-512mb
+              manifest: |-
+                {
+                  "org": "${cloudfoundry_org.org1.id}",
+                  "plan": "${cloudfoundry_service_broker.mysql.service_plans[\"p-mysql/1gb\"]}"
+                }
+              references:
+                org: cloudfoundry_org.org1.id
+                plan: cloudfoundry_service_broker.mysql.service_plans["p-mysql/1gb"]
+        argumentDocs:
+            org: '- (Optional) The ID of the Org which should have access to the plan. Conflicts with public.'
+            plan: '- (Required) The ID of the service plan to grant access to'
+            public: '- (Optional) Boolean that controls the public state of the plan. Conflicts with org.'
+        importStatements: []
+    cloudfoundry_space:
+        subCategory: ""
+        description: Provides a Cloud Foundry Space resource.
+        name: cloudfoundry_space
+        title: cloudfoundry_space
+        examples:
+            - name: s1
+              manifest: |-
+                {
+                  "allow_ssh": true,
+                  "asgs": [
+                    "${cloudfoundry_asg.svc.id}"
+                  ],
+                  "name": "space-one",
+                  "org": "${cloudfoundry_org.o1.id}",
+                  "quota": "${cloudfoundry_quota.dev.id}"
+                }
+              references:
+                org: cloudfoundry_org.o1.id
+                quota: cloudfoundry_quota.dev.id
+        argumentDocs:
+            allow_ssh: '- (Optional) Allows SSH to application containers via the CF CLI. Defaults to true.'
+            annotations: |-
+                - (Optional, map string of string) Add annotations as described here.
+                Works only on cloud foundry with api >= v3.63.
+            asgs: '- (Optional) List of running application security groups to apply to applications running within this space. Defaults to empty list.'
+            id: '- The GUID of the Space'
+            isolation_segment: '- (Experimental,Optional) The ID of the isolation segment to assign to the space. The segment must be entitled to the space''s parent organization. If the isolation segment id is unspecified, then Cloud Foundry assigns the space to the org’s default isolation segment if any. Note that existing apps in the space will not run in a newly assigned isolation segment until they are restarted.'
+            labels: |-
+                - (Optional, map string of string) Add labels as described here.
+                Works only on cloud foundry with api >= v3.63.
+            name: '- (Required) The name of the Space in Cloud Foundry.'
+            org: '- (Required) The ID of the Org within which to create the space.'
+            quota: '- (Optional) The ID of the Space quota or plan defined for the owning Org. Specifying an empty string requests unassigns any space quota from the space. Defaults to empty string.'
+            staging_asgs: '- (Optional) List of staging application security groups to apply to applications being staged for this space. Defaults to empty list.'
+        importStatements: []
+    cloudfoundry_space_asgs:
+        subCategory: ""
+        description: Manage application security groups of a space.
+        name: cloudfoundry_space_asgs
+        title: cloudfoundry_space_asgs
+        examples:
+            - name: spaceasgs1
+              manifest: |-
+                {
+                  "running_asgs": [
+                    "${cloudfoundry_asg.asg1.id}"
+                  ],
+                  "space": "${cloudfoundry_space.space1.id}",
+                  "staging_asgs": [
+                    "${cloudfoundry_asg.asg2.id}"
+                  ]
+                }
+              references:
+                space: cloudfoundry_space.space1.id
+        argumentDocs:
+            running_asgs: '- (Optional) List of running application security groups to apply to applications running within this space. Defaults to empty list.'
+            space: '- (Required) The guid of the target space.'
+            staging_asgs: '- (Optional) List of staging application security groups to apply to applications being staged for this space. Defaults to empty list.'
+        importStatements: []
+    cloudfoundry_space_quota:
+        subCategory: ""
+        description: Provides a Cloud Foundry space Quota resource.
+        name: cloudfoundry_space_quota
+        title: cloudfoundry_space_quota
+        examples:
+            - name: 10g
+              manifest: |-
+                {
+                  "allow_paid_service_plans": false,
+                  "instance_memory": 512,
+                  "name": "10g",
+                  "org": "${cloudfoundry_org.myorg.id}",
+                  "total_app_instances": 10,
+                  "total_memory": 10240,
+                  "total_routes": 5,
+                  "total_services": 20
+                }
+              references:
+                org: cloudfoundry_org.myorg.id
+        argumentDocs:
+            allow_paid_service_plans: '- (Required) Determines whether users can provision instances of non-free service plans. Does not control plan visibility. When false, non-free service plans may be visible in the marketplace but instances can not be provisioned.'
+            id: '- The GUID of the quota'
+            instance_memory: '- (Optional) Maximum memory per application instance'
+            name: '- (Required) The name you use to identify the quota or plan in Cloud Foundry'
+            total_app_instances: '- (Optional) Maximum app instances allowed'
+            total_memory: '- (Required) Maximum memory usage allowed'
+            total_private_domains: '- (Optional) Maximum number of private domains allowed to be created within the Org'
+            total_route_ports: '- (Optional) Maximum routes with reserved ports'
+            total_routes: '- (Required) Maximum routes allowed'
+            total_services: '- (Required) Maximum services allowed'
+        importStatements: []
+    cloudfoundry_space_users:
+        subCategory: ""
+        description: Provides a Cloud Foundry Space users resource.
+        name: cloudfoundry_space_users
+        title: cloudfoundry_space_users
+        examples:
+            - name: su1
+              manifest: |-
+                {
+                  "auditors": [
+                    "${data.cloudfoundry_user.adr.id}",
+                    "${data.cloudfoundry_user.dev3.id}",
+                    "username"
+                  ],
+                  "developers": [
+                    "${data.cloudfoundry_user.tl.id}",
+                    "${data.cloudfoundry_user.dev1.id}",
+                    "${data.cloudfoundry_user.dev2.id}",
+                    "username"
+                  ],
+                  "managers": [
+                    "${data.cloudfoundry_user.tl.id}",
+                    "username"
+                  ],
+                  "space": "space-id"
+                }
+        argumentDocs:
+            auditors: |-
+                - (Optional) List of users to
+                assign SpaceAuditor role to. Defaults to empty list.
+            developers: |-
+                - (Optional) List of users to
+                assign SpaceDeveloper role to. Defaults to empty list.
+            force: |-
+                - (Optional, Boolean) Set to true to enforce that users defined here will be only theses users defined (remove
+                users roles from external modification).
+            managers: |-
+                - (Optional) List of users to
+                assign SpaceManager role to. Defaults to empty list.
+            space: '- (Required) Space associated guid.'
+        importStatements: []
+    cloudfoundry_user:
+        subCategory: ""
+        description: Provides a Cloud Foundry User resource.
+        name: cloudfoundry_user
+        title: cloudfoundry_user
+        examples:
+            - name: admin-service-user
+              manifest: |-
+                {
+                  "family_name": "Doe",
+                  "given_name": "John",
+                  "groups": [
+                    "cloud_controller.admin",
+                    "scim.read",
+                    "scim.write"
+                  ],
+                  "name": "cf-admin",
+                  "password": "Passw0rd"
+                }
+        argumentDocs:
+            email: '- (Optional) The email address of the user. When not provided, name is used as email.'
+            family_name: '- (Optional) The family name of the user'
+            given_name: '- (Optional) The given name of the user'
+            groups: '- (Optional) Any UAA groups / roles to associated the user with'
+            id: '- The GUID of the User'
+            name: '- (Required) The name of the user. This will also be the users login name'
+            origin: '- (Optional) The user authentcation origin. By default this will be UAA. For users authenticated by LDAP this should be ldap'
+            password: '- (Optional) The user''s password'
+        importStatements: []
+    cloudfoundry_user_provided_service:
+        subCategory: ""
+        description: Provides a Cloud Foundry User Provided Service.
+        name: cloudfoundry_user_provided_service
+        title: cloudfoundry_user_provided_service
+        examples:
+            - name: mq
+              manifest: |-
+                {
+                  "credentials": {
+                    "password": "admin",
+                    "url": "mq://localhost:9000",
+                    "username": "admin"
+                  },
+                  "name": "mq-server",
+                  "space": "${cloudfoundry_space.dev.id}"
+                }
+              references:
+                space: cloudfoundry_space.dev.id
+            - name: mail
+              manifest: |-
+                {
+                  "credentials_json": "  {\n    \"server\" : {\n      \"host\" : \"smtp.example.com\",\n      \"port\" : 25,\n      \"tls\"  : false\n    },\n    \"auth\" : {\n      \"user\"     : \"login\",\n      \"password\" : \"secret\"\n    }\n  }\n",
+                  "name": "mail-server",
+                  "space": "${cloudfoundry_space.dev.id}"
+                }
+              references:
+                space: cloudfoundry_space.dev.id
+        argumentDocs:
+            credentials: '- (Optional) Arbitrary credentials in the form of key-value pairs and delivered to applications via VCAP_SERVICES Env variables. Conflicts with credentials_json and defaults to empty map.'
+            credentials_json: '- (Optional) Same as credentials but in the form of a stringified JSON object. Conflicts with credentials and defaults to empty map.'
+            id: '- The GUID of the service instance'
+            name: '- (Required) The name of the Service Instance in Cloud Foundry'
+            route_service_url: '- (Optional) URL to which requests for bound routes will be forwarded. Scheme for this URL must be https and defaults to empty'
+            space: '- (Required) The ID of the space'
+            syslog_drain_url: '- (Optional) URL to which logs for bound applications will be streamed. Defaults to empty.'
+            tags: '- (optional) List of tag representing the service'
+        importStatements: []

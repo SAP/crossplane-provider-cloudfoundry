@@ -1,0 +1,17 @@
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1beta1
+kind: ProviderConfig
+metadata:
+  name: default
+spec:
+  endpoint:
+    source: Secret
+    secretRef:
+      name: cf-demo-environment
+      namespace: default
+      key: apiEndpoint
+  credentials:
+    source: Secret
+    secretRef:
+      name: sa-cloudorchestrator
+      namespace: default
+      key: credentials

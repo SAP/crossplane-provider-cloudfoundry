@@ -1,0 +1,13 @@
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: Domain
+metadata:
+  annotations:
+    meta.upbound.io/example-id: cloudfoundry/v1alpha1/domain
+  labels:
+    testing.upbound.io/example-name: shared
+  name: shared
+spec:
+  forProvider:
+    domain: ${data.cloudfoundry_domain.apps.domain}
+    internal: false
+    subDomain: dev

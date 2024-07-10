@@ -1,0 +1,12 @@
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: App
+metadata:
+  annotations:
+    meta.upbound.io/example-id: cloudfoundry/v1alpha1/app
+  labels:
+    testing.upbound.io/example-name: spring-music
+  name: spring-music
+spec:
+  forProvider:
+    name: spring-music
+    path: /Work/cloudfoundry/apps/spring-music/build/libs/spring-music.war

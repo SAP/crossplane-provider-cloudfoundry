@@ -1,0 +1,32 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: ServiceInstance
+metadata:
+  namespace: default
+  name: my-ups
+spec:
+  forProvider:
+    type: user-provided
+    name: my-ups
+    routeServiceUrl: https://my-route-service.example.com
+    syslogDrainUrl: syslog-tls://example.log-aggregator.com:6514
+    spaceRef: 
+      name: my-space
+      policy:
+        resolve: Always
+    credentialsSecretRef: 
+        name: dynatrace-credentials
+        namespace: crossplane-system
+
+---  
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dynatrace-credentials
+  namespace: crossplane-system
+type: Opaque
+stringData:
+  environmentid: environmentid
+  apitoken: apitoken
+  apiurl: apiurl
+  type: dynatrace

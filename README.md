@@ -24,3 +24,38 @@ We as members, contributors, and leaders pledge to make participation in our com
 ## Licensing
 
 Copyright 2024 SAP SE or an SAP affiliate company and crossplane-provider-cloudfoundry contributors. Please see our [LICENSE](LICENSE) for copyright and license information. Detailed information including third-party components and their licensing/copyright information is available [via the REUSE tool](https://api.reuse.software/info/github.com/SAP/crossplane-provider-cloudfoundry).
+
+# Provider CloudFoundry
+
+`provider-cloudfoundry` is a [Crossplane](https://crossplane.io/) provider for managing your CloudFoundry resources using the
+CloudFoundry V3 API.
+
+## Getting Started
+
+Please check out [community guide](https://pages.github.tools.sap/cloud-orchestration/docs/category/cloudfoundry)
+
+## Developing
+
+Run code-generation pipeline:
+
+```console
+go run cmd/generator/main.go "$PWD"
+```
+
+Run against a Kubernetes cluster:
+
+```console
+make run
+```
+
+Build, push, and install:
+
+```console
+make all
+```
+
+Build binary:
+
+```console
+make build
+```

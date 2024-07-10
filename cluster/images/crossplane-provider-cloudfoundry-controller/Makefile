@@ -1,0 +1,59 @@
+# ====================================================================================
+# Setup Project
+
+PLATFORMS := linux_amd64 linux_arm64
+
+include ../../../build/makelib/common.mk
+
+# ====================================================================================
+#  Options
+DOCKER_REGISTRY ?= crossplane
+IMAGE = $(BUILD_REGISTRY)/crossplane/provider-cloudfoundry-controller
+OSBASEIMAGE = scratch
+
+include ../../../build/makelib/image.mk
+
+# ====================================================================================
+# Targets
+#TERRAFORM_VERSION=1.5.4
+#TERRAFORM_PROVIDER_SOURCE=cloudfoundry-community/cloudfoundry
+#TERRAFORM_PROVIDER_REPO=https://github.com/cloudfoundry-community/terraform-provider-cloudfoundry
+#TERRAFORM_PROVIDER_VERSION=0.51.2
+#TERRAFORM_PROVIDER_DOWNLOAD_NAME=terraform-provider-cloudfoundry
+#TERRAFORM_NATIVE_PROVIDER_BINARY=terraform-provider-cloudfoundry_0.51.2_linux_arm64
+
+OS := linux
+ARCH := amd64
+.PHONY: img.build
+img.build:
+	@$(INFO) docker build $(IMAGE)
+	$(MAKE) img.build.shared
+	@$(OK) docker build $(IMAGE)
+
+img.publish:
+	@$(INFO) Skipping image publish for $(IMAGE)
+	@echo Publish is deferred to xpkg machinery
+	@$(OK) Image publish skipped for $(IMAGE)
+
+img.build.shared:
+	echo $(IMAGE_TEMP_DIR)
+	@cp Dockerfile $(IMAGE_TEMP_DIR) || $(FAIL)
+	@cp terraformrc.hcl $(IMAGE_TEMP_DIR) || $(FAIL)
+	@cp $(OUTPUT_DIR)/bin/$(OS)_$(ARCH)/provider $(IMAGE_TEMP_DIR) || $(FAIL)
+	@cd $(IMAGE_TEMP_DIR) && $(SED_CMD) 's|BASEIMAGE|$(OSBASEIMAGE)|g' Dockerfile || $(FAIL)
+	@docker build $(BUILD_ARGS) \
+		--build-arg TERRAFORM_VERSION=$(TERRAFORM_VERSION) \
+		--build-arg TERRAFORM_PROVIDER_SOURCE=$(TERRAFORM_PROVIDER_SOURCE) \
+		--build-arg TERRAFORM_PROVIDER_VERSION=$(TERRAFORM_PROVIDER_VERSION) \
+		--build-arg TERRAFORM_PROVIDER_DOWNLOAD_NAME=$(TERRAFORM_PROVIDER_DOWNLOAD_NAME) \
+		--build-arg TERRAFORM_NATIVE_PROVIDER_BINARY=$(TERRAFORM_NATIVE_PROVIDER_BINARY) \
+		--build-arg GIT_COMMIT="${COMMIT_HASH}" \
+		--build-arg BUILD_TIMESTAMP="$(TIME_LONG)" \
+		-t $(IMAGE) \
+		-t $(IMAGE):$(VERSION) \
+		$(IMAGE_TEMP_DIR) || $(FAIL)
+
+img.promote:
+	@$(INFO) Skipping image promotion from $(FROM_IMAGE) to $(TO_IMAGE)
+	@echo Promote is deferred to xpkg machinery
+	@$(OK) Image promotion skipped for $(FROM_IMAGE) to $(TO_IMAGE)

@@ -1,0 +1,18 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1beta1
+kind: ProviderConfig
+metadata:
+  name: default
+spec:
+  endpoint:
+    source: Secret
+    secretRef:
+      name: cf-environment-secret
+      namespace: crossplane-system
+      key: apiEndpoint
+  credentials:
+    source: Secret
+    secretRef:
+      name: cf-credentials-secret
+      namespace: crossplane-system
+      key: credentials

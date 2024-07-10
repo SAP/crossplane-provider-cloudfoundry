@@ -1,0 +1,26 @@
+apiVersion: account.btp.orchestrate.cloud.sap/v1alpha1
+kind: ProviderConfig
+metadata:
+  name: default
+spec:
+  cisCredentials:
+    secretRef:
+      name: cis-provider-secret
+      namespace: default
+      key: data
+    source: Secret
+  serviceAccountSecret:
+    secretRef:
+      key: credentials
+      name: sa-cloudorchestrator
+      namespace: default
+    source: Secret
+---
+apiVersion: pkg.crossplane.io/v1alpha1
+kind: ControllerConfig
+metadata:
+  name: btp-account-provider
+spec:
+  args:
+    - '--debug'
+    - '--sync=15s'

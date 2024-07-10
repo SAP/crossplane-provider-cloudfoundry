@@ -1,0 +1,40 @@
+---
+# CR to create a managed ServiceInstance
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: my-cloud-logging
+spec:
+  forProvider:
+    type: managed
+    name: my-cloud-logging
+    spaceRef: 
+      name: my-space
+      policy: 
+        resolve: Always
+    servicePlan:
+      offering: cloud-logging
+      plan: dev
+    jsonParams: |
+      {
+        "retention_period": 3
+      }
+
+---
+# CR to create a managed ServiceInstance
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: my-cloud-logging-2
+spec:
+  forProvider:
+    type: managed
+    name: my-cloud-logging-2
+    spaceRef: 
+      name: my-space
+      policy: 
+        resolve: Always
+    servicePlan:
+      offering: cloud-logging
+      plan: dev
+      

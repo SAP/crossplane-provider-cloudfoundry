@@ -1,0 +1,14 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: Route
+metadata:
+  name: my-route
+spec:
+  forProvider:
+    domain:
+      name: cfapps.eu12.hana.ondemand.com
+    hostname: hello-cf
+    spaceRef:
+      name: my-space
+      policy:
+        resolve: Always

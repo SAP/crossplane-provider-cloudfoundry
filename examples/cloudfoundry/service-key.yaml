@@ -1,0 +1,16 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: ServiceKey
+metadata:
+  name: my-service-key
+spec:
+  forProvider:
+    name: my-service-key
+    connectionDetailsAsJSON: false
+    serviceInstanceRef:
+      name: my-audit-log
+      policy:
+        resolve: Always
+  writeConnectionSecretToRef:
+    name: my-audit-log-secret
+    namespace: default

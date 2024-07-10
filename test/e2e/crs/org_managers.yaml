@@ -1,0 +1,13 @@
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: OrgMembers
+metadata:
+  namespace: default
+  name: my-org-managers
+spec:
+  forProvider:
+    roleType: Managers
+    members:
+    - username: co-test-user@groups.sap.com
+    orgRef:
+      name: my-org
+    enforcementPolicy: Lax

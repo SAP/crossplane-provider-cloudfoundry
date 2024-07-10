@@ -1,0 +1,27 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    rbac.crossplane.io/aggregate-to-view: "true"
+  name: crossplane:provider:btp-cloudfoundry-provider-locallyrun:aggregate-to-view
+rules:
+- apiGroups:
+  - cloudfoundry.btp.orchestrate.cloud.sap
+  resources:
+  - providerconfigs
+  - providerconfigs/status
+  - organizations
+  - orgs
+  - orgmembers
+  - spaces
+  - spaces
+  - spaceusers
+  - spacemembers
+  - serviceinstances
+  - servicekeys
+  - ups
+  - apps
+  verbs:
+  - get
+  - list
+  - watch
