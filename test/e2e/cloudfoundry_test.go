@@ -4,6 +4,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -56,7 +57,7 @@ func TestCloudfoundry(t *testing.T) {
 		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			org, err := orgID(ctx, testOrgName)
 			if err != nil {
-				t.Fatalf("test org %s not accessible", testOrgName)
+				t.Fatalf("test org %s not accessible error: %s", testOrgName, err)
 			}
 			_ = deleteSpace(ctx, org, feats["space"].name)
 			_ = deleteDomain(ctx, org, "dev.orchestrator.io")
@@ -212,6 +213,7 @@ func orgID(ctx context.Context, org string) (string, error) {
 	cfClient, err := getCfClient()
 	if err != nil {
 		klog.V(4).InfoS("cannot get connect to cloudfoundry")
+		fmt.Println(err)
 		return "", err
 	}
 

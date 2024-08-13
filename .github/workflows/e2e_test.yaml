@@ -1,0 +1,43 @@
+# This workflow will builds a golang project and runs e2e-tests
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-go
+
+name: e2e-Tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-tags: true
+
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+
+      - name: Install Helm
+        run: |
+          curl https://baltocdn.com/helm/signing.asc | sudo gpg --dearmor -o /usr/share/keyrings/helm.gpg
+          sudo apt-get install apt-transport-https --yes
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+          sudo apt-get update
+          sudo apt-get install -y helm
+
+      - name: Install gettext for envsubst
+        run: sudo apt-get update && sudo apt-get install -y gettext
+
+      - name: Run build and e2e test
+        run: make test-acceptance
+        env:
+          CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
+          CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
+          USER_WHERE_ROLES_GET_ASSIGNED: ${{ secrets.USER_WHERE_ROLES_GET_ASSIGNED }}
+          TECHNICAL_USER_EMAIL: ${{ secrets.TECHNICAL_USER_EMAIL }}

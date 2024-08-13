@@ -69,6 +69,7 @@ IMAGES = $(PROJECT_NAME) $(PROJECT_NAME)-controller
 
 export UUT_CONFIG = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME)):$(VERSION)
 export UUT_CONTROLLER=$(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME))-controller:$(VERSION)
+export E2E_IMAGES = {"crossplane/provider-cloudfoundry":"$(UUT_CONFIG)","crossplane/provider-cloudfoundry-controller":"$(UUT_CONTROLLER)"}
 
 # NOTE(hasheddan): we force image building to happen prior to xpkg build so that
 # we ensure image is present in daemon.
@@ -242,6 +243,24 @@ e2e: local-deploy uptest
 
 .PHONY: cobertura submodules fallthrough run crds.clean dev-debug dev-clean demo-cluster demo-install demo-clean demo-debug
 
+.PHONY: test-acceptance
+test-acceptance: $(KIND) $(HELM3) build generate-test-crs
+	@$(INFO) running integration tests
+	@$(INFO) Skipping long running tests
+	@echo UUT_CONFIG=$$UUT_CONFIG
+	@echo UUT_CONTROLLER=$$UUT_CONTROLLER
+	@echo "E2E_IMAGES=$$E2E_IMAGES"
+	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -timeout 40m
+	@$(OK) integration tests passed
+
+.PHONY:generate-test-crs
+generate-test-crs:
+	@$(INFO) generating crs
+	find test/e2e/crs -type f -name "*.yaml" -exec sh -c '\
+    	for template; do \
+    		envsubst < "$$template" > "$${template}.tmp" && mv "$${template}.tmp" "$$template"; \
+    	done' sh {} +
+	@$(OK) crs generated
 # ====================================================================================
 # Special Targets
 
