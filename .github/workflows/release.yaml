@@ -1,0 +1,125 @@
+# Release builds and publish a new release.
+
+# Secrets:
+# TEST_REGISTRY_USER: registry user for the container registry
+# TEST_REGISTRY_PASSWORD: password for container registry
+# Vars:
+# REGISTRY_URL: registry url for the container registry
+
+name: Release
+
+on:
+    workflow_dispatch:
+      inputs:
+        nextVersion:
+          description: 'specify the release version in the semver format v[major].[minor].[patch] e.g. v0.0.0' 
+          required: true                    
+
+# Releases need permissions to read and write the repository contents.
+# GitHub considers creating releases and uploading assets as writing contents.
+permissions:
+  contents: write
+
+jobs:
+    run-go-license-check:
+      uses: ./.github/workflows/check-go-licenses.yaml
+
+    run-reuse-license-check:
+      uses: ./.github/workflows/reuse-scan.yaml
+
+    run-unit-test:
+      uses: ./.github/workflows/unit_test.yaml
+
+    run-make-reviewable-and-check-diff:
+      uses: ./.github/workflows/reviewable_check_diff.yaml
+
+    run-e2e-test:
+      uses: ./.github/workflows/e2e_test.yaml
+      needs: 
+      - run-go-license-check
+      - run-reuse-license-check
+      - run-unit-test
+      - run-make-reviewable-and-check-diff
+      with:
+        environment: pr-e2e-no-approval
+      secrets:
+        CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
+        CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
+        USER_WHERE_ROLES_GET_ASSIGNED_EMAIL: ${{ secrets.USER_WHERE_ROLES_GET_ASSIGNED_EMAIL }}
+        TECHNICAL_USER_EMAIL: ${{ secrets.TECHNICAL_USER_EMAIL }}
+
+    release:
+      runs-on: ubuntu-latest
+      needs: 
+      - run-go-license-check
+      - run-unit-test
+      - run-make-reviewable-and-check-diff
+      - run-e2e-test
+
+      steps:
+      - name: Print Version Number
+        run: echo "Building release version ${{ github.event.inputs.nextVersion }}"
+        
+        # sets the github.event.inputs.nextVersion input as version tag
+      - name: Tag head with version
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
+        with:
+          script: |
+            github.rest.git.createRef({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: 'refs/tags/${{ github.event.inputs.nextVersion }}',
+              sha: context.sha
+            })
+     
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@d70bba72b1f3fd22344832f00baa16ece964efeb # v3.4.0
+        with:
+          version: v0.15.1
+          install: true
+
+      - name: Checkout code
+        uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+        with:
+          submodules: true
+          
+      - name: Fetch History
+        run: git fetch --prune --unshallow
+
+      - name: Set up Go
+        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
+        with:
+          go-version: '1.21'   
+  
+      - name: Vendor Dependencies
+        run: make vendor vendor.check
+
+      - name: Build Images
+        run: make build
+        env:
+          # We're using docker buildx, which doesn't actually load the images it
+          # builds by default. Specifying --load does so.
+          BUILD_ARGS: "--load"
+          DOCKER_REGISTRY: ${{ vars.REGISTRY_URL }}
+
+      - name: Login to GAR
+        uses: docker/login-action@0d4c9c5ea7693da7b068278f7b52bda2a190a446 # v3.2.0
+        with:
+          registry: europe-west3-docker-docker.pkg.dev
+          username: _json_key
+          password: ${{ secrets.GAR_JSON_KEY }}
+
+      - name: Publish Artifacts to DockerHub
+        run: make publish BRANCH_NAME=${GITHUB_REF##*/}
+        env:
+          DOCKER_REGISTRY: ${{ vars.REGISTRY_URL }}
+        
+      - name: Run GoReleaser
+        uses: goreleaser/goreleaser-action@286f3b13b1b49da4ac219696163fb8c1c93e1200 # v6.0.0
+        with:
+          distribution: goreleaser
+          version: "~> v2"
+          args: release --clean
+        env:
+          # GitHub sets the GITHUB_TOKEN secret automatically.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

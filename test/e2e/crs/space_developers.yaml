@@ -7,7 +7,7 @@ spec:
   forProvider:
     roleType: Developers
     members:
-      - username: $USER_WHERE_ROLES_GET_ASSIGNED # technical used in test for roles
+      - username: $USER_WHERE_ROLES_GET_ASSIGNED_EMAIL # technical used in test for roles
       - username: $TECHNICAL_USER_EMAIL #technical user for testing
     spaceRef:
       name: my-space

@@ -7,7 +7,7 @@ spec:
   forProvider:
     roleType: Managers
     members:
-      - username: $USER_WHERE_ROLES_GET_ASSIGNED
+      - username: $USER_WHERE_ROLES_GET_ASSIGNED_EMAIL
     orgRef:
       name: my-org
     enforcementPolicy: Lax
