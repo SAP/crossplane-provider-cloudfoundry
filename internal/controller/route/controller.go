@@ -7,8 +7,8 @@ import (
 
 	"github.com/pkg/errors"
 
-	cf "github.com/cloudfoundry-community/go-cfclient/v3/client"
-	cfresource "github.com/cloudfoundry-community/go-cfclient/v3/resource"
+	cf "github.com/cloudfoundry/go-cfclient/v3/client"
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -22,11 +22,10 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/route/v1alpha1"
+	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	apisv1alpha1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	apisv1beta1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/cfclient"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/features"
 )
 
@@ -84,7 +83,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 type connector struct {
 	kube        k8s.Client
 	usage       resource.Tracker
-	newClientFn func(context.Context, k8s.Client, resource.Managed) (*cfclient.Client, error)
+	newClientFn func(context.Context, k8s.Client, resource.Managed) (*cf.Client, error)
 }
 
 // Connect typically produces an ExternalClient by:
@@ -115,7 +114,7 @@ type external struct {
 	// A 'client' used to connect to the external resource API. In practice this
 	// would be something like an AWS SDK client.
 	kube    k8s.Client
-	client  *cfclient.Client
+	client  *cf.Client
 	service *cf.RouteClient
 }
 
@@ -284,7 +283,7 @@ func generateObservation(r *cfresource.Route) v1alpha1.RouteObservation {
 
 // DomainFinder contains helper to retrieve domains from cf api
 type DomainFinder struct {
-	client cfclient.Client
+	client cf.Client
 	kube   k8s.Client
 }
 

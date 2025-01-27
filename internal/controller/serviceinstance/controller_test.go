@@ -15,8 +15,8 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/service/v1alpha1"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/cfclient/fake"
+	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/fake"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/serviceinstance"
 )
 
@@ -26,59 +26,74 @@ var (
 	space           = "a46808d1-d09a-4eef-add1-30872dec82f7"
 	guid            = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 	servicePlan     = "c595293f-2696-438d-887e-053200ec47c8"
-	jsonCredentials = `{"foo":"bar"}`
+	jsonCredentials = `{"json":"bar"}`
 )
 
-type modifier func(*v1alpha1.ServiceInstance)
+type modifier func(*v1alpha2.ServiceInstance)
 
 func withExternalName(name string) modifier {
-	return func(r *v1alpha1.ServiceInstance) {
+	return func(r *v1alpha2.ServiceInstance) {
 		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
 func withCredentials(credentials *string) modifier {
-	return func(r *v1alpha1.ServiceInstance) {
+	return func(r *v1alpha2.ServiceInstance) {
 		switch r.Spec.ForProvider.Type {
-		case v1alpha1.ManagedService:
+		case v1alpha2.ManagedService:
 			r.Spec.ForProvider.JSONParams = credentials
-		case v1alpha1.UserProvidedService:
+		case v1alpha2.UserProvidedService:
 			r.Spec.ForProvider.JSONCredentials = credentials
 		}
 	}
 }
 
-func withServicePlan(servicePlan v1alpha1.ServicePlan) modifier {
-	return func(r *v1alpha1.ServiceInstance) {
+func withServicePlan(servicePlan v1alpha2.ServicePlanParameters) modifier {
+	return func(r *v1alpha2.ServiceInstance) {
 		r.Spec.ForProvider.ServicePlan = &servicePlan
 	}
 }
 
 func withSpace(space string) modifier {
-	return func(r *v1alpha1.ServiceInstance) {
+	return func(r *v1alpha2.ServiceInstance) {
 		r.Spec.ForProvider.Space = &space
 	}
 }
 
 func withConditions(c ...xpv1.Condition) modifier {
-	return func(i *v1alpha1.ServiceInstance) { i.Status.SetConditions(c...) }
+	return func(i *v1alpha2.ServiceInstance) { i.Status.SetConditions(c...) }
 }
 
-func withStatus(s v1alpha1.ServiceInstanceObservation) modifier {
-	return func(r *v1alpha1.ServiceInstance) {
+func withStatus(s v1alpha2.ServiceInstanceObservation) modifier {
+	return func(r *v1alpha2.ServiceInstance) {
 		r.Status.AtProvider = s
 	}
 }
 
-func serviceInstance(typ string, m ...modifier) *v1alpha1.ServiceInstance {
-	r := &v1alpha1.ServiceInstance{
+func withParameters(params string) modifier {
+	return func(r *v1alpha2.ServiceInstance) {
+		r.Spec.ForProvider.JSONParams = &params
+	}
+}
+
+func withDriftDetection(d bool) modifier {
+	return func(r *v1alpha2.ServiceInstance) {
+		r.Spec.EnableParameterDriftDetection = d
+	}
+}
+
+func serviceInstance(typ string, m ...modifier) *v1alpha2.ServiceInstance {
+	r := &v1alpha2.ServiceInstance{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Finalizers:  []string{},
 			Annotations: map[string]string{},
 		},
-		Spec: v1alpha1.ServiceInstanceSpec{
-			ForProvider: v1alpha1.ServiceInstanceParameters{Type: v1alpha1.ServiceInstanceType(typ), Name: &name},
+		Spec: v1alpha2.ServiceInstanceSpec{
+			ForProvider: v1alpha2.ServiceInstanceParameters{Type: v1alpha2.ServiceInstanceType(typ), Name: &name},
+		},
+		Status: v1alpha2.ServiceInstanceStatus{
+			AtProvider: v1alpha2.ServiceInstanceObservation{},
 		},
 	}
 
@@ -121,10 +136,10 @@ func TestObserve(t *testing.T) {
 		},
 		"ExternalNameNotSet": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan})),
+				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg: serviceInstance("managed", withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withSpace(space)),
+				mg: serviceInstance("managed", withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withSpace(space)),
 				obs: managed.ExternalObservation{
 					ResourceExists: false,
 				},
@@ -141,7 +156,7 @@ func TestObserve(t *testing.T) {
 		},
 		"Boom!": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg:  serviceInstance("managed", withExternalName(guid)),
@@ -163,7 +178,7 @@ func TestObserve(t *testing.T) {
 		},
 		"NotFound": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg:  serviceInstance("managed", withExternalName(guid)),
@@ -186,13 +201,13 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
-					withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
 					withConditions(xpv1.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -201,11 +216,11 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceInstance,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceInstance,
 					nil,
 				)
 				m.On("GetManagedParameters", guid).Return(
@@ -217,13 +232,13 @@ func TestObserve(t *testing.T) {
 		},
 		"CreateFailed": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
-					withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
 					withConditions(xpv1.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
@@ -232,11 +247,11 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationFailed).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationFailed).ServiceInstance,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationFailed).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationFailed).ServiceInstance,
 					nil,
 				)
 				m.On("GetManagedParameters", guid).Return(
@@ -248,13 +263,13 @@ func TestObserve(t *testing.T) {
 		},
 		"UpdateFailed": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
-					withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
 					withConditions(xpv1.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
@@ -263,11 +278,11 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationUpdate, v1alpha1.LastOperationFailed).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationUpdate, v1alpha2.LastOperationFailed).ServiceInstance,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationUpdate, v1alpha1.LastOperationFailed).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationUpdate, v1alpha2.LastOperationFailed).ServiceInstance,
 					nil,
 				)
 				m.On("GetManagedParameters", guid).Return(
@@ -279,13 +294,13 @@ func TestObserve(t *testing.T) {
 		},
 		"InProgress": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
-					withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
 					withConditions(xpv1.Unavailable()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -294,15 +309,81 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationInProgress).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationInProgress).ServiceInstance,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationInProgress).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationInProgress).ServiceInstance,
 					nil,
 				)
 				m.On("GetManagedParameters", guid).Return(
 					fake.JSONRawMessage(""),
+					nil, // no error
+				)
+				return m
+			},
+		},
+		"DriftDetectionLoop": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(true)),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withConditions(xpv1.Available()),
+					withParameters("{\"foo\":\"bar\", \"baz\": 1}"),
+					withDriftDetection(true),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage("{\"foo\":\"bar\"}"),
+					nil, // no error
+				)
+				return m
+			},
+		},
+		"DriftDetectionBreak": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(false)),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withConditions(xpv1.Available()),
+					withParameters("{\"foo\":\"bar\", \"baz\": 1}"),
+					withDriftDetection(false),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage("{\"foo\":\"bar\"}"),
 					nil, // no error
 				)
 				return m
@@ -362,10 +443,10 @@ func TestCreate(t *testing.T) {
 	}{
 		"Successful": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan})),
+				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withConditions(xpv1.Creating()), withExternalName(guid)),
+				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating()), withExternalName(guid)),
 				obs: managed.ExternalCreation{},
 				err: nil,
 			},
@@ -393,10 +474,10 @@ func TestCreate(t *testing.T) {
 		},
 		"SuccessfulWithParams": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withCredentials(&jsonCredentials)),
+				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials)),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv1.Creating()), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: *fake.JSONRawMessage(jsonCredentials)})),
+				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv1.Creating()), withExternalName(guid), withStatus(v1alpha2.ServiceInstanceObservation{Credentials: []byte(jsonCredentials)})),
 				obs: managed.ExternalCreation{},
 				err: nil,
 			},
@@ -424,10 +505,10 @@ func TestCreate(t *testing.T) {
 		},
 		"CannotPollCreationJob": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan})),
+				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withConditions(xpv1.Creating())),
+				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -455,10 +536,10 @@ func TestCreate(t *testing.T) {
 		},
 		"AlreadyExist": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan})),
+				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withConditions(xpv1.Creating())),
+				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -543,10 +624,10 @@ func TestUpdate(t *testing.T) {
 	}{
 		"Successful": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
+				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
+				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid})),
 				obs: managed.ExternalUpdate{},
 				err: nil,
 			},
@@ -574,10 +655,10 @@ func TestUpdate(t *testing.T) {
 		},
 		"SuccessfulWithParams": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}), withCredentials(&jsonCredentials)),
+				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid}), withCredentials(&jsonCredentials)),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withCredentials(&jsonCredentials), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: *fake.JSONRawMessage(jsonCredentials)})),
+				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withExternalName(guid), withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid, Credentials: *fake.JSONRawMessage(jsonCredentials)})),
 				obs: managed.ExternalUpdate{},
 				err: nil,
 			},
@@ -605,10 +686,10 @@ func TestUpdate(t *testing.T) {
 		},
 		"CannotPollCreationJob": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
+				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
+				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid})),
 				obs: managed.ExternalUpdate{},
 				err: errors.Wrap(errBoom, errUpdate),
 			},
@@ -636,10 +717,10 @@ func TestUpdate(t *testing.T) {
 		},
 		"DoesNotExist": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
+				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlan{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
+				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid})),
 				obs: managed.ExternalUpdate{},
 				err: errors.Wrap(errBoom, errUpdate),
 			},

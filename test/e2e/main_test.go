@@ -15,8 +15,8 @@ import (
 	"github.com/crossplane-contrib/xp-testing/pkg/vendored"
 	"k8s.io/klog"
 
-	"github.com/cloudfoundry-community/go-cfclient/v3/client"
-	"github.com/cloudfoundry-community/go-cfclient/v3/config"
+	"github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/pkg/errors"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
 	"sigs.k8s.io/e2e-framework/klient/decoder"
@@ -111,11 +111,10 @@ func getCfClient() (*client.Client, error) {
 	if err := json.Unmarshal([]byte(creds), &s); err != nil {
 		return nil, errors.Wrap(err, "cannot extract cloud foundry credentials from env variable")
 	}
-	cfg, err := config.NewUserPassword(endpoint, s.Email, s.Password)
+	cfg, err := config.New(endpoint, config.UserPassword(s.Email, s.Password), config.SkipTLSValidation())
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot configure cloudfoundry client")
 	}
-	cfg.WithSkipTLSValidation(true)
 
 	return client.New(cfg)
 }

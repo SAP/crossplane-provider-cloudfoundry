@@ -3,6 +3,7 @@ package servicekey
 import (
 	"context"
 
+	"github.com/cloudfoundry/go-cfclient/v3/config"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -15,11 +16,10 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/servicekey/v1alpha1"
+	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	apisv1alpha1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	apisv1beta1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/cfclient"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/servicekey"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/features"
 )
@@ -49,7 +49,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithExternalConnecter(&connector{
 			kube:        mgr.GetClient(),
 			usage:       resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
-			newClientFn: clients.CloudfoundryClientBuilder,
+			newClientFn: servicekey.NewClient,
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
@@ -77,7 +77,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 type connector struct {
 	kube        k8s.Client
 	usage       resource.Tracker
-	newClientFn func(context.Context, k8s.Client, resource.Managed) (*cfclient.Client, error)
+	newClientFn func(config *config.Config) (*servicekey.Client, error)
 }
 
 // Connect typically produces an ExternalClient by:
@@ -94,14 +94,19 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
-	cf, err := c.newClientFn(ctx, c.kube, mg)
+	cfg, err := clients.GetCredentialConfig(ctx, c.kube, mg)
+	if err != nil {
+		return nil, errors.Wrap(err, errNewClient)
+	}
+
+	s, err := servicekey.NewClient(cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
 	return &external{
 		kube:       c.kube,
-		servicekey: servicekey.NewClient(cf),
+		servicekey: s,
 	}, nil
 }
 
@@ -122,7 +127,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	r, err := c.servicekey.MatchSingle(ctx, cr.Spec.ForProvider)
 
 	if err != nil {
-		if cfclient.ErrorIsNotFound(err) {
+		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
 		}
 		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
@@ -184,7 +189,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 		return nil
 	}
 
-	err := c.servicekey.Delete(ctx, *cr.Status.AtProvider.ID)
+	_, err := c.servicekey.Delete(ctx, *cr.Status.AtProvider.ID)
 	if err != nil {
 		return errors.Wrap(err, errDelete)
 	}

@@ -3,8 +3,7 @@ package space
 import (
 	"context"
 
-	cf "github.com/cloudfoundry-community/go-cfclient/v3/client"
-	cfresource "github.com/cloudfoundry-community/go-cfclient/v3/resource"
+	"github.com/cloudfoundry/go-cfclient/v3/config"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -14,32 +13,35 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
+	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/space/v1alpha1"
+	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 	apisv1alpha1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	apisv1beta1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/cfclient"
+	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/space"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/features"
 )
 
 const (
-	errTrackPCUsage = "cannot track ProviderConfig usage"
-	errGetPC        = "cannot get ProviderConfig"
-	errGetCreds     = "cannot get credentials"
-	errNewClient    = "cannot create new client"
-	errNotSpace     = "managed resource is not a cloudfoundry Space"
-	errGet          = "cannot get cloudfoundry Space"
-	errCreate       = "cannot create cloudfoundry Space"
-	errUpdate       = "cannot update cloudfoundry Space"
-	errDelete       = "cannot delete cloudfoundry Space"
+	errTrackPCUsage      = "cannot track ProviderConfig usage"
+	errTrackUsage        = "cannot track usage"
+	errGetProviderConfig = "cannot get ProviderConfig or resolve credential references"
+	errGetCreds          = "cannot get credentials"
+	errNewClient         = "cannot create new client"
+	errNotSpace          = "managed resource is not a cloudfoundry Space"
+	errGet               = "cannot get cloudfoundry Space"
+	errCreate            = "cannot create cloudfoundry Space"
+	errUpdate            = "cannot update cloudfoundry Space"
+	errDelete            = "cannot delete cloudfoundry Space"
+	errEnableSSH         = "cannot enable SSH for space"
 )
 
 // Setup adds a controller that reconciles Org managed resources.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
-	name := managed.ControllerName(v1alpha1.Space_GroupKind)
+	name := managed.ControllerName(v1alpha2.Space_GroupKind)
 
 	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
 	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
@@ -51,7 +53,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithExternalConnecter(&connector{
 			kube:        mgr.GetClient(),
 			usage:       resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
-			newClientFn: clients.CloudfoundryClientBuilder,
+			newClientFn: space.NewClient,
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
@@ -65,13 +67,13 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	r := managed.NewReconciler(mgr,
-		resource.ManagedKind(v1alpha1.Space_GroupVersionKind),
+		resource.ManagedKind(v1alpha2.Space_GroupVersionKind),
 		options...)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
-		For(&v1alpha1.Space{}).
+		For(&v1alpha2.Space{}).
 		Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 }
 
@@ -80,7 +82,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 type connector struct {
 	kube        k8s.Client
 	usage       resource.Tracker
-	newClientFn func(context.Context, k8s.Client, resource.Managed) (*cfclient.Client, error)
+	newClientFn func(*config.Config) (space.Space, space.Feature, error)
 }
 
 // Connect typically produces an ExternalClient by:
@@ -89,7 +91,7 @@ type connector struct {
 // 3. Getting the credentials specified by the ProviderConfig.
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
-	if _, ok := mg.(*v1alpha1.Space); !ok {
+	if _, ok := mg.(*v1alpha2.Space); !ok {
 		return nil, errors.New(errNotSpace)
 	}
 
@@ -97,74 +99,111 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
-	s, err := c.newClientFn(ctx, c.kube, mg)
+	config, err := clients.GetCredentialConfig(ctx, c.kube, mg)
+	if err != nil {
+		return nil, errors.Wrap(err, errGetProviderConfig)
+	}
+
+	s, f, err := c.newClientFn(config)
 	if err != nil {
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
-	return &external{service: s.Spaces}, nil
+	return &external{client: s, feature: f, kube: c.kube}, nil
 }
 
 // An ExternalClient observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
-	// A 'client' used to connect to the external resource API. In practice this
-	// would be something like an AWS SDK client.
-	service *cf.SpaceClient
+	kube    k8s.Client
+	client  space.Space
+	feature space.Feature
 }
 
 // Observe generates observation for a space
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
-	cr, ok := mg.(*v1alpha1.Space)
+	cr, ok := mg.(*v1alpha2.Space)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errNotSpace)
 	}
-
 	if meta.GetExternalName(cr) == "" {
 		return managed.ExternalObservation{}, nil
 	}
 
-	s, err := c.service.Single(ctx,
-		&cf.SpaceListOptions{
-			ListOptions:       nil,
-			Names:             cf.Filter{Values: []string{*cr.Spec.ForProvider.Name}},
-			OrganizationGUIDs: cf.Filter{Values: []string{*cr.Spec.ForProvider.Org}},
-		},
-	)
+	// TODO: external_name are set to metadata.name by default.
+	if meta.GetExternalName(cr) == "" {
+		return managed.ExternalObservation{}, nil
+	}
+
+	// get by external name or by matching spec
+	s, err := c.client.Get(ctx, meta.GetExternalName(cr))
+	// if clients.ErrorIsNotFound(err) {
+	// 	// match spec
+	// 	s, err = c.s.Single(ctx, space.GenerateListOption(cr.Spec.ForProvider))
+	// }
+
+	// not found or error
 	if err != nil {
-		if IsNotFound(err) {
+		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
 		}
 		return managed.ExternalObservation{ResourceExists: false}, errors.Wrap(err, errGet)
 	}
+	if s.Relationships == nil {
+		return managed.ExternalObservation{}, errors.New(errGet)
+	}
 
-	cr.Status.AtProvider = GenerateObservation(s)
+	// ssh
+	ssh, err := c.feature.IsSSHEnabled(ctx, s.GUID)
+	if err != nil {
+		// new error message cannot get space feature
+		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
+	}
 
-	if cr.Status.AtProvider.ID != nil {
-		cr.SetConditions(xpv1.Available())
+	cr.SetConditions(xpv1.Available())
+
+	space.LateInitialize(&cr.Spec.ForProvider, s, ssh)
+
+	cr.Status.AtProvider = space.GenerateObservation(s, ssh)
+
+	if err := c.kube.Status().Update(ctx, cr); err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, errUpdate)
 	}
 
 	return managed.ExternalObservation{
-		ResourceExists:   cr.Status.AtProvider.ID != nil,
-		ResourceUpToDate: s.Name == *cr.Spec.ForProvider.Name,
+		ResourceExists:   true,
+		ResourceUpToDate: space.IsUpToDate(cr.Spec.ForProvider, s, ssh),
 	}, nil
 }
 
 // Create creates a space
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
-	cr, ok := mg.(*v1alpha1.Space)
+	cr, ok := mg.(*v1alpha2.Space)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errNotSpace)
 	}
 
 	cr.SetConditions(xpv1.Creating())
-	fp := cr.Spec.ForProvider
-	s, err := c.service.Create(ctx, cfresource.NewSpaceCreate(*fp.Name, *fp.Org))
+
+	s, err := c.client.Create(ctx, space.GenerateCreate(cr.Spec.ForProvider))
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
 
 	meta.SetExternalName(cr, s.GUID)
+
+	if err := c.kube.Update(ctx, cr); err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, errUpdate)
+	}
+
+	// enable SSH if allowed
+	if !ptr.Deref(cr.Spec.ForProvider.AllowSSH, false) {
+		err = c.feature.EnableSSH(ctx, s.GUID, true)
+		if err != nil {
+			return managed.ExternalCreation{}, errors.Wrap(err, errEnableSSH)
+		}
+		cr.Status.AtProvider.AllowSSH = ptr.To(true)
+	}
 
 	return managed.ExternalCreation{
 		// Optionally return any details that may be required to connect to the
@@ -175,59 +214,52 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Update updates a space
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
-	cr, ok := mg.(*v1alpha1.Space)
+	cr, ok := mg.(*v1alpha2.Space)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errNotSpace)
 	}
 
+	// assert that ID is set
 	if cr.Status.AtProvider.ID == nil {
 		return managed.ExternalUpdate{}, errors.New(errUpdate)
 	}
-	_, err := c.service.Update(ctx, *cr.Status.AtProvider.ID, &cfresource.SpaceUpdate{
-		Name:     *cr.Spec.ForProvider.Name,
-		Metadata: &cfresource.Metadata{},
-	})
-	if err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
+
+	// reconcile SSH
+	if ptr.Deref(cr.Spec.ForProvider.AllowSSH, false) != ptr.Deref(cr.Status.AtProvider.AllowSSH, false) {
+		err := c.feature.EnableSSH(ctx, *cr.Status.AtProvider.ID, ptr.Deref(cr.Spec.ForProvider.AllowSSH, false))
+		if err != nil {
+			return managed.ExternalUpdate{}, errors.Wrap(err, errEnableSSH)
+		}
 	}
 
-	return managed.ExternalUpdate{
-		// Optionally return any details that may be required to connect to the
-		// external resource. These will be stored as the connection secret.
-		ConnectionDetails: managed.ConnectionDetails{},
-	}, nil
+	// rename
+	if ptr.Deref(cr.Spec.ForProvider.Name, "") != ptr.Deref(cr.Status.AtProvider.Name, "") {
+		_, err := c.client.Update(ctx, *cr.Status.AtProvider.ID, space.GenerateUpdate(cr.Spec.ForProvider))
+		if err != nil {
+			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
+		}
+	}
+
+	return managed.ExternalUpdate{}, nil
 }
 
-// Delete depetes a space
+// Delete deletes a space
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha1.Space)
+	cr, ok := mg.(*v1alpha2.Space)
 	if !ok {
 		return errors.New(errNotSpace)
 	}
 	cr.SetConditions(xpv1.Deleting())
 
+	// assert that ID is set
 	if cr.Status.AtProvider.ID == nil {
 		return errors.New(errDelete)
 	}
-	_, err := c.service.Delete(ctx, *cr.Status.AtProvider.ID)
+
+	_, err := c.client.Delete(ctx, *cr.Status.AtProvider.ID)
 	if err != nil {
 		return errors.Wrap(err, errDelete)
 	}
 
 	return nil
-}
-
-// GenerateObservation generates observations for Spaces
-func GenerateObservation(s *cfresource.Space) v1alpha1.SpaceObservation {
-	o := v1alpha1.SpaceObservation{}
-	if s == nil {
-		return o
-	}
-	o.ID = &s.GUID
-	return o
-}
-
-// IsNotFound checks if an error is a not found error from CF
-func IsNotFound(err error) bool {
-	return err.Error() == cf.ErrExactlyOneResultNotReturned.Error()
 }

@@ -37,6 +37,7 @@ func main() {
 	// todo(mirza): should this be move inside the method GetProvider?
 	provider := config.GetProvider()
 	//	provider.RootGroup = "cloudfoundry.btp.orchestrate.cloud.sap"
+
 	rg := provider.RootGroup
 	fmt.Println(rg)
 

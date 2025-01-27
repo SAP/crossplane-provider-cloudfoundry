@@ -25,7 +25,7 @@ func (mg *App) GetTerraformResourceType() string {
 
 // GetConnectionDetailsMapping for this App
 func (tr *App) GetConnectionDetailsMapping() map[string]string {
-	return map[string]string{"docker_credentials": "spec.forProvider.dockerCredentialsSecretRef", "environment": "spec.forProvider.environmentSecretRef", "service_binding[*].params": "spec.forProvider.serviceBinding[*].paramsSecretRef", "service_binding[*].params_json": "spec.forProvider.serviceBinding[*].paramsJsonSecretRef"}
+	return map[string]string{"docker_credentials": "dockerCredentialsSecretRef"}
 }
 
 // GetObservation of this App
@@ -129,5 +129,5 @@ func (tr *App) LateInitialize(attrs []byte) (bool, error) {
 
 // GetTerraformSchemaVersion returns the associated Terraform schema version
 func (tr *App) GetTerraformSchemaVersion() int {
-	return 4
+	return 0
 }

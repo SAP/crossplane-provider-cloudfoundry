@@ -1,12 +1,11 @@
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
 kind: Space
 metadata:
   namespace: default
   name: my-space
 spec:
   forProvider:
-    allowSsh: true
     name: my-space
     orgRef:
       name:  my-org

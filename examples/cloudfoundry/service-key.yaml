@@ -12,5 +12,5 @@ spec:
       policy:
         resolve: Always
   writeConnectionSecretToRef:
-    name: my-audit-log-secret
+    name: my-service-key-secret
     namespace: default

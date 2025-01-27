@@ -3,6 +3,7 @@ package orgmembers
 import (
 	"context"
 
+	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/pkg/errors"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -17,25 +18,25 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/members/v1alpha1"
+	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	apisv1alpha1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	apisv1beta1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/cfclient"
+	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/members"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/features"
 )
 
 const (
-	errTrackPCUsage   = "cannot track ProviderConfig usage"
-	errGetPC          = "cannot get ProviderConfig"
-	errGetCreds       = "cannot get credentials"
-	errNewClient      = "cannot create new client"
-	errNotOrgMembers  = "managed resource is not a cloudfoundry OrgMembers"
-	errRead           = "cannot read cloudfoundry OrgMembers"
-	errCreate         = "cannot create cloudfoundry OrgMembers"
-	errUpdate         = "cannot update cloudfoundry OrgMembers"
-	errDelete         = "cannot delete cloudfoundry OrgMembers"
-	errOrgNotResolved = "org reference is not resolved."
+	errWrongKind         = "Managed resource is not an OrgMembers kind"
+	errTrackUsage        = "cannot track usage"
+	errGetProviderConfig = "cannot get ProviderConfig or resolve credential references"
+	errGetClient         = "cannot create a client to talk to the cloudfoundry API"
+	errGetCreds          = "cannot get credentials"
+	errRead              = "cannot read cloudfoundry OrgMembers"
+	errCreate            = "cannot create cloudfoundry OrgMembers"
+	errUpdate            = "cannot update cloudfoundry OrgMembers"
+	errDelete            = "cannot delete cloudfoundry OrgMembers"
+	errOrgNotResolved    = "org reference is not resolved."
 )
 
 // Setup adds a controller that reconciles managed resources OrgMembers.
@@ -51,7 +52,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithExternalConnecter(&connector{
 			kube:        mgr.GetClient(),
 			usage:       resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
-			newClientFn: clients.CloudfoundryClientBuilder}),
+			newClientFn: members.NewClient}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
@@ -78,7 +79,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 type connector struct {
 	kube        k8s.Client
 	usage       resource.Tracker
-	newClientFn func(context.Context, k8s.Client, resource.Managed) (*cfclient.Client, error)
+	newClientFn func(*config.Config) (*members.Client, error)
 }
 
 // Connect typically produces an ExternalClient by:
@@ -88,16 +89,21 @@ type connector struct {
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
 	if _, ok := mg.(*v1alpha1.OrgMembers); !ok {
-		return nil, errors.New(errNotOrgMembers)
+		return nil, errors.New(errWrongKind)
 	}
 
 	if err := c.usage.Track(ctx, mg); err != nil {
-		return nil, errors.Wrap(err, errTrackPCUsage)
+		return nil, errors.Wrap(err, errTrackUsage)
 	}
 
-	client, err := c.newClientFn(ctx, c.kube, mg)
+	cfg, err := clients.GetCredentialConfig(ctx, c.kube, mg)
 	if err != nil {
-		return nil, errors.Wrap(err, errNewClient)
+		return nil, errors.Wrap(err, errGetProviderConfig)
+	}
+
+	client, err := c.newClientFn(cfg)
+	if err != nil {
+		return nil, errors.Wrap(err, errGetClient)
 	}
 
 	return &external{client: client}, nil
@@ -107,13 +113,13 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
 	// A 'client' used to connect to the external resource API, in this case the Cloud Foundry v3 API.
-	client *cfclient.Client
+	client *members.Client
 }
 
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
 	cr, ok := mg.(*v1alpha1.OrgMembers)
 	if !ok {
-		return managed.ExternalObservation{}, errors.New(errNotOrgMembers)
+		return managed.ExternalObservation{}, errors.New(errWrongKind)
 	}
 
 	// Reference to Org must be resolved first
@@ -149,7 +155,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
 	cr, ok := mg.(*v1alpha1.OrgMembers)
 	if !ok {
-		return managed.ExternalCreation{}, errors.New(errNotOrgMembers)
+		return managed.ExternalCreation{}, errors.New(errWrongKind)
 	}
 
 	// TODO: checking conflicting CR that `strictly` enforces the same role on the same
@@ -176,7 +182,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
 	cr, ok := mg.(*v1alpha1.OrgMembers)
 	if !ok {
-		return managed.ExternalUpdate{}, errors.New(errNotOrgMembers)
+		return managed.ExternalUpdate{}, errors.New(errWrongKind)
 	}
 
 	updated, err := c.client.UpdateOrgMembers(ctx, cr)
@@ -198,7 +204,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	cr, ok := mg.(*v1alpha1.OrgMembers)
 	if !ok {
-		return errors.New(errNotOrgMembers)
+		return errors.New(errWrongKind)
 	}
 	cr.SetConditions(xpv1.Deleting())
 

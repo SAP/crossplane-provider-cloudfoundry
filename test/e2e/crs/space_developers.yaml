@@ -7,10 +7,11 @@ spec:
   forProvider:
     roleType: Developers
     members:
-      - username: $USER_WHERE_ROLES_GET_ASSIGNED_EMAIL # technical used in test for roles
-      - username: $TECHNICAL_USER_EMAIL #technical user for testing
+    - username: co-test-user@groups.sap.com
+    - username: dl_65faab09346a9101347c1723@global.corp.sap
+    - username: lasse.friedrich@sap.com
     spaceRef:
       name: my-space
       policy:
         resolve: Always
-    enforcementPolicy: Strict
+    enforcementPolicy: Lax

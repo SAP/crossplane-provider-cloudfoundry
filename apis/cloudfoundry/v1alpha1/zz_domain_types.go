@@ -19,99 +19,147 @@ import (
 
 type DomainInitParameters struct {
 
-	// Domain part of full domain name. If specified the sub_domain argument needs to be provided and the name will be computed.
-	Domain *string `json:"domain,omitempty" tf:"domain,omitempty"`
+	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
+	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// +mapType=granular
+	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
 
-	// Flag that sets the domain as an internal domain. Internal domains are used for internal app to app networking only. Defaults to "false". Only works on shared domain.
-	// Flag that sets the domain as an internal domain. Internal domains are used for internal app to app networking only.
+	// to-container) traffic, or external (user-to-container) traffic
+	// Whether the domain is used for internal (container-to-container) traffic, or external (user-to-container) traffic
 	Internal *bool `json:"internal,omitempty" tf:"internal,omitempty"`
 
-	// Full name of domain. If specified then the sub_domain and domain attributes will be computed from the name
+	// (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
+	// The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// +mapType=granular
+	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
+
+	// (String) The name of the domain;must be between 3 ~ 253 characters and follow RFC 1035
+	// The name of the domain;must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035)
 	Name *string `json:"name,omitempty" tf:"name,omitempty"`
 
-	// The ID of the Org that owns this domain. If specified, this resource will provision a private domain. By default, the provisioned domain is a public (shared) domain.
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/organization/v1alpha1.Organization
+	// (String) The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
+	// The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
+	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org
 	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/config.ExternalID()
 	Org *string `json:"org,omitempty" tf:"org,omitempty"`
 
-	// Reference to a Organization in organization to populate org.
+	// Reference to a Org in resources to populate org.
 	// +kubebuilder:validation:Optional
 	OrgRef *v1.Reference `json:"orgRef,omitempty" tf:"-"`
 
-	// Selector for a Organization in organization to populate org.
+	// Selector for a Org in resources to populate org.
 	// +kubebuilder:validation:Optional
 	OrgSelector *v1.Selector `json:"orgSelector,omitempty" tf:"-"`
 
-	// The router group GUID, which can be retrieved via the cloudfoundry_router_group data resource. You would need to provide this when creating a shared domain for TCP routes.
+	// (String) The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
+	// The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
 	RouterGroup *string `json:"routerGroup,omitempty" tf:"router_group,omitempty"`
 
-	// Sub-domain part of full domain name. If specified the domain argument needs to be provided and the name will be computed.
-	SubDomain *string `json:"subDomain,omitempty" tf:"sub_domain,omitempty"`
+	// (Set of String) Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
+	// Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
+	// +listType=set
+	SharedOrgs []*string `json:"sharedOrgs,omitempty" tf:"shared_orgs,omitempty"`
 }
 
 type DomainObservation struct {
 
-	// Domain part of full domain name. If specified the sub_domain argument needs to be provided and the name will be computed.
-	Domain *string `json:"domain,omitempty" tf:"domain,omitempty"`
+	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
+	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// +mapType=granular
+	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
 
-	// The GUID of the domain.
+	// (String) The date and time when the resource was created in RFC3339 format.
+	// The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+	CreatedAt *string `json:"createdAt,omitempty" tf:"created_at,omitempty"`
+
+	// (String) The GUID of the object.
 	ID *string `json:"id,omitempty" tf:"id,omitempty"`
 
-	// Flag that sets the domain as an internal domain. Internal domains are used for internal app to app networking only. Defaults to "false". Only works on shared domain.
-	// Flag that sets the domain as an internal domain. Internal domains are used for internal app to app networking only.
+	// to-container) traffic, or external (user-to-container) traffic
+	// Whether the domain is used for internal (container-to-container) traffic, or external (user-to-container) traffic
 	Internal *bool `json:"internal,omitempty" tf:"internal,omitempty"`
 
-	// Full name of domain. If specified then the sub_domain and domain attributes will be computed from the name
+	// (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
+	// The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// +mapType=granular
+	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
+
+	// (String) The name of the domain;must be between 3 ~ 253 characters and follow RFC 1035
+	// The name of the domain;must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035)
 	Name *string `json:"name,omitempty" tf:"name,omitempty"`
 
-	// The ID of the Org that owns this domain. If specified, this resource will provision a private domain. By default, the provisioned domain is a public (shared) domain.
+	// (String) The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
+	// The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
 	Org *string `json:"org,omitempty" tf:"org,omitempty"`
 
-	// The router group GUID, which can be retrieved via the cloudfoundry_router_group data resource. You would need to provide this when creating a shared domain for TCP routes.
+	// (String) The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
+	// The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
 	RouterGroup *string `json:"routerGroup,omitempty" tf:"router_group,omitempty"`
 
-	RouterType *string `json:"routerType,omitempty" tf:"router_type,omitempty"`
+	// (Set of String) Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
+	// Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
+	// +listType=set
+	SharedOrgs []*string `json:"sharedOrgs,omitempty" tf:"shared_orgs,omitempty"`
 
-	// Sub-domain part of full domain name. If specified the domain argument needs to be provided and the name will be computed.
-	SubDomain *string `json:"subDomain,omitempty" tf:"sub_domain,omitempty"`
+	// (Set of String) Available protocols for routes using the domain, currently http and tcp
+	// Available protocols for routes using the domain, currently http and tcp
+	// +listType=set
+	SupportedProtocols []*string `json:"supportedProtocols,omitempty" tf:"supported_protocols,omitempty"`
+
+	// (String) The date and time when the resource was updated in RFC3339 format.
+	// The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+	UpdatedAt *string `json:"updatedAt,omitempty" tf:"updated_at,omitempty"`
 }
 
 type DomainParameters struct {
 
-	// Domain part of full domain name. If specified the sub_domain argument needs to be provided and the name will be computed.
+	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
+	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +kubebuilder:validation:Optional
-	Domain *string `json:"domain,omitempty" tf:"domain,omitempty"`
+	// +mapType=granular
+	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
 
-	// Flag that sets the domain as an internal domain. Internal domains are used for internal app to app networking only. Defaults to "false". Only works on shared domain.
-	// Flag that sets the domain as an internal domain. Internal domains are used for internal app to app networking only.
+	// to-container) traffic, or external (user-to-container) traffic
+	// Whether the domain is used for internal (container-to-container) traffic, or external (user-to-container) traffic
 	// +kubebuilder:validation:Optional
 	Internal *bool `json:"internal,omitempty" tf:"internal,omitempty"`
 
-	// Full name of domain. If specified then the sub_domain and domain attributes will be computed from the name
+	// (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
+	// The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// +kubebuilder:validation:Optional
+	// +mapType=granular
+	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
+
+	// (String) The name of the domain;must be between 3 ~ 253 characters and follow RFC 1035
+	// The name of the domain;must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035)
 	// +kubebuilder:validation:Optional
 	Name *string `json:"name,omitempty" tf:"name,omitempty"`
 
-	// The ID of the Org that owns this domain. If specified, this resource will provision a private domain. By default, the provisioned domain is a public (shared) domain.
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/organization/v1alpha1.Organization
+	// (String) The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
+	// The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
+	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org
 	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/config.ExternalID()
 	// +kubebuilder:validation:Optional
 	Org *string `json:"org,omitempty" tf:"org,omitempty"`
 
-	// Reference to a Organization in organization to populate org.
+	// Reference to a Org in resources to populate org.
 	// +kubebuilder:validation:Optional
 	OrgRef *v1.Reference `json:"orgRef,omitempty" tf:"-"`
 
-	// Selector for a Organization in organization to populate org.
+	// Selector for a Org in resources to populate org.
 	// +kubebuilder:validation:Optional
 	OrgSelector *v1.Selector `json:"orgSelector,omitempty" tf:"-"`
 
-	// The router group GUID, which can be retrieved via the cloudfoundry_router_group data resource. You would need to provide this when creating a shared domain for TCP routes.
+	// (String) The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
+	// The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
 	// +kubebuilder:validation:Optional
 	RouterGroup *string `json:"routerGroup,omitempty" tf:"router_group,omitempty"`
 
-	// Sub-domain part of full domain name. If specified the domain argument needs to be provided and the name will be computed.
+	// (Set of String) Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
+	// Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
 	// +kubebuilder:validation:Optional
-	SubDomain *string `json:"subDomain,omitempty" tf:"sub_domain,omitempty"`
+	// +listType=set
+	SharedOrgs []*string `json:"sharedOrgs,omitempty" tf:"shared_orgs,omitempty"`
 }
 
 // DomainSpec defines the desired state of Domain
@@ -141,17 +189,18 @@ type DomainStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 
-// Domain is the Schema for the Domains API. Provides a Cloud Foundry Domain resource.
-// +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// Domain is the Schema for the Domains API. Provides a resource for managing shared or private domains in Cloud Foundry.
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
+// +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
 type Domain struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              DomainSpec   `json:"spec"`
-	Status            DomainStatus `json:"status,omitempty"`
+	// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"
+	Spec   DomainSpec   `json:"spec"`
+	Status DomainStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true

@@ -4,12 +4,12 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/cloudfoundry-community/go-cfclient/v3/client"
-	"github.com/cloudfoundry-community/go-cfclient/v3/resource"
+	"github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/config"
+	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/servicekey/v1alpha1"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/cfclient"
+	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 // ServiceKey defines interfaces to the ServiceKey resource
@@ -18,7 +18,7 @@ type ServiceKey interface {
 	GetDetails(context.Context, string) (*resource.ServiceCredentialBindingDetails, error)
 	Single(context.Context, *client.ServiceCredentialBindingListOptions) (*resource.ServiceCredentialBinding, error)
 	Create(context.Context, *resource.ServiceCredentialBindingCreate) (string, *resource.ServiceCredentialBinding, error)
-	Delete(context.Context, string) error
+	Delete(context.Context, string) (string, error)
 }
 
 // Job defines interfaces to async operations/jobs.
@@ -32,9 +32,13 @@ type Client struct {
 	Job
 }
 
-// NewClient creates a new client instance from a cfclient.ServiceKey instance.
-func NewClient(cf *cfclient.Client) *Client {
-	return &Client{cf.ServiceCredentialBindings, cf.Jobs}
+// NewClient creates a new client instance from a cfclient.ServiceInstance instance.
+func NewClient(config *config.Config) (*Client, error) {
+	cf, err := client.New(config)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{cf.ServiceCredentialBindings, cf.Jobs}, nil
 }
 
 // Get retrieves external resource using CR's external_name (guid)

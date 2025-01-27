@@ -6,7 +6,7 @@ metadata:
 spec:
   forProvider:
     domain: 
-      name: cfapps.eu10.hana.ondemand.com
+      name: cfapps.eu12.hana.ondemand.com
     hostname: hello-co
     spaceRef:
       name: my-space

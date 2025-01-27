@@ -1,9 +1,0 @@
-apiVersion: composition-example.cloud.sap/v1alpha1
-kind: xSpace
-metadata:
-  name: my-xspace 
-spec:
-  parameters:
-    org: my-xorg
-    stage: dev
-

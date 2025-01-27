@@ -1,8 +1,0 @@
-apiVersion: pkg.crossplane.io/v1
-kind: Provider
-metadata:
-  name: btp-account-provider
-spec:
-  package: deploy-releases-hyperspace-docker.common.cdn.repositories.cloud.sap/crossplane/provider-btp-account:0.0.1-20230125095541
-  packagePullSecrets:
-   - name: orchestrator-registry

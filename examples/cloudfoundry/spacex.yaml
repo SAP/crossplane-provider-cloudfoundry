@@ -1,15 +1,16 @@
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
-kind: Organization
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+kind: Org
 metadata:
   namespace: default
   name: my-org
   annotations:
     crossplane.io/external-name: cf-dev
 spec:
-  forProvider: {}
+  forProvider: 
+    name: cf-dev
 
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
 kind: Space
 metadata:
   namespace: default
@@ -17,7 +18,7 @@ metadata:
 spec:
   forProvider:
     allowSsh: true
-    name: space-dev
+    name: space-dev-x
     orgRef:
       name: my-org
       policy:
@@ -39,7 +40,5 @@ spec:
     members:
     - username: cloudorchestrator@sap.com
     - username: daniel.lou@sap.com
-    - username: thomas.hertz@sap.com
-    - username: cesar.andres@sap.com
-    - username: mirza@groups.sap.com
+    - username: dl_65faab09346a9101347c1723@global.corp.sap
     enforcementPolicy: Strict

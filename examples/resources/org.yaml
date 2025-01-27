@@ -1,0 +1,12 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+kind: Org
+metadata:
+  namespace: default
+  name: my-org
+spec:
+  managementPolicies: ["Observe"]
+  forProvider: 
+    name: cf-dev
+  providerConfigRef:
+    name: default

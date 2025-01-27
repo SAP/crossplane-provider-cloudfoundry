@@ -1,6 +1,6 @@
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
-kind: Organization
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+kind: Org
 metadata:
   namespace: default
   name: my-org

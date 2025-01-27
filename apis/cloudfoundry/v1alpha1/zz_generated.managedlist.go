@@ -24,21 +24,3 @@ func (l *DomainList) GetItems() []resource.Managed {
 	}
 	return items
 }
-
-// GetItems of this PrivateDomainAccessList.
-func (l *PrivateDomainAccessList) GetItems() []resource.Managed {
-	items := make([]resource.Managed, len(l.Items))
-	for i := range l.Items {
-		items[i] = &l.Items[i]
-	}
-	return items
-}
-
-// GetItems of this QuotaList.
-func (l *QuotaList) GetItems() []resource.Managed {
-	items := make([]resource.Managed, len(l.Items))
-	for i := range l.Items {
-		items[i] = &l.Items[i]
-	}
-	return items
-}

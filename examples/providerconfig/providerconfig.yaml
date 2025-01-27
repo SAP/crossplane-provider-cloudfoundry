@@ -4,12 +4,7 @@ kind: ProviderConfig
 metadata:
   name: default
 spec:
-  endpoint:
-    source: Secret
-    secretRef:
-      name: cf-environment-secret
-      namespace: crossplane-system
-      key: apiEndpoint
+  apiEndpoint: https://api.cf.eu12.hana.ondemand.com
   credentials:
     source: Secret
     secretRef:

@@ -8,7 +8,8 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/cloudfoundry-community/go-cfclient/v3/config"
+	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/upjet/pkg/terraform"
 	"github.com/pkg/errors"
@@ -16,7 +17,6 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1beta1"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/cfclient"
 )
 
 // CfCredentials used to authenticate with the provider
@@ -45,6 +45,7 @@ const (
 	errExtractEndpoint      = "cannot extract endpoint"
 	errUnmarshalCredentials = "cannot unmarshal cloudfoundry credentials as JSON"
 	errUnmarshalEndpoint    = "cannot unmarshal cloudfoundry endpoint as JSON"
+	errNoEndpoint           = "no API endpoint is configured in ProviderConfig"
 )
 
 // TerraformSetupBuilder builds Terraform a terraform.SetupFn function which
@@ -89,8 +90,22 @@ func TerraformSetupBuilder(version, providerSource, providerVersion string) terr
 	}
 }
 
-// CloudfoundryClientBuilder is a function that builds a CF Client
-var CloudfoundryClientBuilder = func(ctx context.Context, client client.Client, mg resource.Managed) (*cfclient.Client, error) {
+// CloudFoundryClientFn is a function that builds a CF Client
+type CloudFoundryClientFn func(context.Context, client.Client, resource.Managed) (*cfv3.Client, error)
+
+// CloudfoundryClientBuilder implement CloudFoundryClientFn
+func CloudfoundryClientBuilder(ctx context.Context, client client.Client, mg resource.Managed) (*cfv3.Client, error) {
+
+	cfg, err := GetCredentialConfig(ctx, client, mg)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot config cloudfoundry client")
+	}
+
+	return cfv3.New(cfg)
+}
+
+// GetCredentialConfig returns a config.Config for the given managed resource
+func GetCredentialConfig(ctx context.Context, client client.Client, mg resource.Managed) (*config.Config, error) {
 	pc, err := getProviderConfig(ctx, client, mg)
 	if err != nil {
 		return nil, errors.Wrap(err, errGetProviderConfig)
@@ -105,13 +120,7 @@ var CloudfoundryClientBuilder = func(ctx context.Context, client client.Client, 
 		return nil, errors.Wrap(err, errExtractEndpoint)
 	}
 
-	cfg, err := config.NewUserPassword(*url, cred.Email, cred.Password)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot config cloudfoundry client")
-	}
-	cfg.WithSkipTLSValidation(true)
-
-	return cfclient.New(cfg)
+	return config.New(*url, config.UserPassword(cred.Email, cred.Password), config.SkipTLSValidation())
 }
 
 func getProviderConfig(ctx context.Context, client client.Client, mg resource.Managed) (*v1beta1.ProviderConfig, error) {
@@ -135,10 +144,18 @@ func getCredentials(ctx context.Context, client client.Client, pc *v1beta1.Provi
 }
 
 func getEndpoint(ctx context.Context, client client.Client, pc *v1beta1.ProviderConfig) (*string, error) {
-	buf, err := resource.CommonCredentialExtractor(ctx, pc.Spec.Endpoint.Source, client, pc.Spec.Endpoint.CommonCredentialSelectors)
-	if err != nil {
-		return nil, err
+
+	if pc.Spec.APIEndpoint != nil {
+		return pc.Spec.APIEndpoint, nil
 	}
-	endpoint := string(buf)
-	return &endpoint, nil
+
+	if pc.Spec.Endpoint != nil {
+		buf, err := resource.CommonCredentialExtractor(ctx, pc.Spec.Endpoint.Source, client, pc.Spec.Endpoint.CommonCredentialSelectors)
+		if err != nil {
+			return nil, err
+		}
+		endpoint := string(buf)
+		return &endpoint, nil
+	}
+	return nil, errors.New(errNoEndpoint)
 }

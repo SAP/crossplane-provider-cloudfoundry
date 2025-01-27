@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	cfclient "github.com/cloudfoundry-community/go-cfclient/v3/client"
+	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
 )

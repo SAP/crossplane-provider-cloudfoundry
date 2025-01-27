@@ -1,17 +1,19 @@
 # ====================================================================================
 # Setup Project
 
+PROJECT_NAME := provider-$(PROVIDER_NAME)
 PROJECT_NAME := crossplane-provider-cloudfoundry
 PROJECT_REPO := github.tools.sap/cloud-orchestration/$(PROJECT_NAME)
 
 
 export TERRAFORM_VERSION := 1.5.4
 
-export TERRAFORM_PROVIDER_SOURCE := cloudfoundry-community/cloudfoundry
-export TERRAFORM_PROVIDER_REPO := https://github.com/cloudfoundry-community/terraform-provider-cloudfoundry
-export TERRAFORM_PROVIDER_VERSION := 0.51.2
+export TERRAFORM_PROVIDER_SOURCE := cloudfoundry/cloudfoundry
+export TERRAFORM_PROVIDER_REPO := https://github.com/cloudfoundry/terraform-provider-cloudfoundry
+export TERRAFORM_PROVIDER_VERSION := 1.1.0
 export TERRAFORM_PROVIDER_DOWNLOAD_NAME := terraform-provider-cloudfoundry
-export TERRAFORM_NATIVE_PROVIDER_BINARY := terraform-provider-cloudfoundry_0.51.2_linux_arm64
+export TERRAFORM_PROVIDER_DOWNLOAD_URL_PREFIX ?= https://releases.hashicorp.com/$(TERRAFORM_PROVIDER_DOWNLOAD_NAME)/$(TERRAFORM_PROVIDER_VERSION)
+export TERRAFORM_NATIVE_PROVIDER_BINARY := terraform-provider-cloudfoundry_$(TERRAFORM_PROVIDER_VERSION)_x5
 export TERRAFORM_DOCS_PATH := docs/resources
 
 PLATFORMS ?= linux_amd64 linux_arm64
@@ -39,24 +41,24 @@ NPROCS ?= 1
 # to half the number of CPU cores.
 GO_TEST_PARALLEL := $(shell echo $$(( $(NPROCS) / 2 )))
 
-GO_REQUIRED_VERSION ?= 1.19
+GO_REQUIRED_VERSION ?= 1.22
 GO_STATIC_PACKAGES = $(GO_PROJECT)/cmd/provider $(GO_PROJECT)/cmd/generator
 GO_LDFLAGS += -X $(GO_PROJECT)/internal/version.Version=$(VERSION)
 GO_SUBDIRS += cmd internal apis
 GO111MODULE = on
-GOLANGCILINT_VERSION ?= 1.53.3
+GOLANGCILINT_VERSION ?= 1.62.2
 -include build/makelib/golang.mk
 
 # kind-related versions
-KIND_VERSION ?= v0.22.0
-KIND_NODE_IMAGE_TAG ?= v1.29.2
+KIND_VERSION ?= v0.26.0
+KIND_NODE_IMAGE_TAG ?= v1.32.0
 
 # Setup Kubernetes tools
 
-KIND_VERSION = v0.15.0
-UP_VERSION = v0.14.0
+KIND_VERSION = v0.22.0
+UP_VERSION = v0.31.0
 UP_CHANNEL = stable
-UPTEST_VERSION = v0.2.1
+UPTEST_VERSION = v0.11.1
 -include build/makelib/k8s_tools.mk
 
 # ====================================================================================
@@ -111,6 +113,17 @@ terraform.buildvars: common.buildvars
 	@echo TERRAFORM_WORKDIR=$(TERRAFORM_WORKDIR)
 	@echo TERRAFORM_PROVIDER_SCHEMA=$(TERRAFORM_PROVIDER_SCHEMA)
 
+$(TERRAFORM_PROVIDER_SCHEMA): $(TERRAFORM)
+	@$(INFO) generating provider schema for $(TERRAFORM_PROVIDER_SOURCE) $(TERRAFORM_PROVIDER_VERSION)
+	@mkdir -p $(TERRAFORM_WORKDIR)
+	@echo '{"terraform":[{"required_providers":[{"provider":{"source":"'"$(TERRAFORM_PROVIDER_SOURCE)"'","version":"'"$(TERRAFORM_PROVIDER_VERSION)"'"}}],"required_version":"'"$(TERRAFORM_VERSION)"'"}]}' > $(TERRAFORM_WORKDIR)/main.tf.json
+	@echo $(TERRAFORM_PROVIDER_VERSION)
+	@$(TERRAFORM) -chdir=$(TERRAFORM_WORKDIR) init > $(TERRAFORM_WORKDIR)/terraform-logs.txt 2>&1
+	@echo $(TERRAFORM_WORKDIR)
+	@$(TERRAFORM) -chdir=$(TERRAFORM_WORKDIR) providers schema -json=true > $(TERRAFORM_PROVIDER_SCHEMA) 2>> $(TERRAFORM_WORKDIR)/terraform-logs.txt
+	@echo $(TERRAFORM)
+	@echo $(TERRAFORM_PROVIDER_SOURCE)
+	@$(OK) generating provider schema for $(TERRAFORM_PROVIDER_SOURCE) $(TERRAFORM_PROVIDER_VERSION)
 
 $(TERRAFORM):
 	@$(INFO) installing terraform $(HOSTOS)-$(HOSTARCH)
@@ -121,13 +134,6 @@ $(TERRAFORM):
 	@rm -fr $(TOOLS_HOST_DIR)/tmp-terraform
 	@$(OK) installing terraform $(HOSTOS)-$(HOSTARCH)
 
-$(TERRAFORM_PROVIDER_SCHEMA): $(TERRAFORM)
-	@$(INFO) generating provider schema for $(TERRAFORM_PROVIDER_SOURCE) $(TERRAFORM_PROVIDER_VERSION)
-	@mkdir -p $(TERRAFORM_WORKDIR)
-	@echo '{"terraform":[{"required_providers":[{"provider":{"source":"'"$(TERRAFORM_PROVIDER_SOURCE)"'","version":"'"$(TERRAFORM_PROVIDER_VERSION)"'"}}],"required_version":"'"$(TERRAFORM_VERSION)"'"}]}' > $(TERRAFORM_WORKDIR)/main.tf.json
-	@$(TERRAFORM) -chdir=$(TERRAFORM_WORKDIR) init > $(TERRAFORM_WORKDIR)/terraform-logs.txt 2>&1
-	@$(TERRAFORM) -chdir=$(TERRAFORM_WORKDIR) providers schema -json=true > $(TERRAFORM_PROVIDER_SCHEMA) 2>> $(TERRAFORM_WORKDIR)/terraform-logs.txt
-	@$(OK) generating provider schema for $(TERRAFORM_PROVIDER_SOURCE) $(TERRAFORM_PROVIDER_VERSION)
 
 pull-docs:
 	@$(INFO) pull-docs called
@@ -160,12 +166,13 @@ cobertura:
 		$(GOCOVER_COBERTURA) > $(GO_TEST_OUTPUT)/cobertura-coverage.xml
 
 
-dev-debug: dev-clean $(KIND) $(KUBECTL)
+dev-debug: dev-clean $(KIND) $(KUBECTL) $(HELM3)
 	@$(INFO) Creating kind cluster
 	@$(KIND) create cluster --name=$(PROJECT_NAME)-dev
 	@$(KUBECTL) cluster-info --context kind-$(PROJECT_NAME)-dev
-	@$(INFO) Installing Crossplane CRDs
-	@$(KUBECTL) apply --server-side -k https://github.com/crossplane/crossplane//cluster?ref=master
+	@$(INFO) Installing Crossplane
+	@$(HELM3) repo add crossplane-stable https://charts.crossplane.io/stable
+	@$(HELM3) repo update
 	@$(INFO) Installing Provider CloudFoundry CRDs
 	@$(KUBECTL) apply -R -f package/crds
 	@$(INFO) Creating crossplane-system namespace
@@ -190,37 +197,6 @@ run: go.build
 	@$(INFO) Running Crossplane locally out-of-cluster . . .
 	@# To see other arguments that can be provided, run the command with --help instead
 	UPBOUND_CONTEXT="local" $(GO_OUT_DIR)/provider --debug
-# ====================================================================================
-# Demo
-
-demo-cluster: demo-clean $(KIND) $(KUBECTL) $(HELM3)
-	@$(INFO) Creating kind cluster
-	@$(KIND) create cluster --name=$(PROJECT_NAME)-demo
-	@$(KUBECTL) cluster-info --context kind-$(PROJECT_NAME)-demo
-	@$(INFO) Installing Crossplane
-	@$(HELM3) repo add crossplane-stable https://charts.crossplane.io/stable
-	@$(HELM3) repo update
-	@$(KUBECTL) create ns crossplane-system
-	@$(HELM3) install crossplane --namespace crossplane-system crossplane-stable/crossplane --set args='{--enable-composition-revisions}'
-
-demo-install: $(KIND) $(KUBECTL)
-	@$(INFO) Creating Orchestration-Registry, CIS, SA Secrets
-	@$(KUBECTL) apply -R -f xdemo/secret
-	@$(INFO) Installing Provider btp-account
-	@$(KUBECTL) apply -f xdemo/btp-account/install.yaml
-	sleep 10
-	@$(INFO) Config Provider btp-account
-	@$(KUBECTL) apply -R -f xdemo/btp-account/providerconfig
-	@$(INFO) Installing CloudFoundry CRDs
-	@$(KUBECTL) apply -R -f package/crds
-	@$(INFO) Config RBAC locally for CloudFoundry CRDs
-	@$(KUBECTL) apply -R -f xdemo/cloudfoundry/rbac
-	@$(INFO) Install compostions
-	@$(KUBECTL) apply -R -f xdemo/composition/xrds
-
-demo-clean: $(KIND)
-	@$(INFO) Deleting kind cluster
-	@$(KIND) delete cluster --name=$(PROJECT_NAME)-demo
 
 # ====================================================================================
 # End to End Testing
@@ -241,26 +217,25 @@ local-deploy: build controlplane.up local.xpkg.deploy.provider.$(PROJECT_NAME)
 
 e2e: local-deploy uptest
 
-.PHONY: cobertura submodules fallthrough run crds.clean dev-debug dev-clean demo-cluster demo-install demo-clean demo-debug
+# Updated End to End Testing following BTP Provider
 
 .PHONY: test-acceptance
-test-acceptance: $(KIND) $(HELM3) build generate-test-crs
+test-acceptance:  $(KIND) $(HELM3) build 
 	@$(INFO) running integration tests
 	@$(INFO) Skipping long running tests
 	@echo UUT_CONFIG=$$UUT_CONFIG
 	@echo UUT_CONTROLLER=$$UUT_CONTROLLER
 	@echo "E2E_IMAGES=$$E2E_IMAGES"
-	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -timeout 40m
-	@$(OK) integration tests passed
+	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -run '$(testFilter)' 2>&1 | tee test-output.log
+	@echo "===========Test Summary==========="
+	@grep -E "PASS|FAIL" test-output.log
+	@case `tail -n 1 test-output.log` in \
+     		*FAIL*) echo "❌ Error: Test failed"; exit 1 ;; \
+     		*) echo "✅ All tests passed"; $(OK) integration tests passed ;; \
+     esac	
 
-.PHONY:generate-test-crs
-generate-test-crs:
-	@$(INFO) generating crs
-	find test/e2e/crs -type f -name "*.yaml" -exec sh -c '\
-    	for template; do \
-    		envsubst < "$$template" > "$${template}.tmp" && mv "$${template}.tmp" "$$template"; \
-    	done' sh {} +
-	@$(OK) crs generated
+.PHONY: cobertura submodules fallthrough run crds.clean dev-debug dev-clean demo-cluster demo-install demo-clean demo-debug
+
 # ====================================================================================
 # Special Targets
 

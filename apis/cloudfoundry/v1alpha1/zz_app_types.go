@@ -19,410 +19,749 @@ import (
 
 type AppInitParameters struct {
 
-	// Add annotations as described here.
-	// Works only on cloud foundry with api >= v3.63.
+	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
+	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +mapType=granular
 	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
 
-	// The buildpack used to stage the application. There are multiple options to choose from:
-	Buildpack *string `json:"buildpack,omitempty" tf:"buildpack,omitempty"`
-
-	// Multiple buildpacks used to stage the application. When both buildpack and buildpacks are set, buildpacks wins. There are multiple options to choose from:
+	// (Set of String) Multiple buildpacks used to stage the application.
+	// Multiple buildpacks used to stage the application.
+	// +listType=set
 	Buildpacks []*string `json:"buildpacks,omitempty" tf:"buildpacks,omitempty"`
 
+	// (String) A custom start command for the application. This overrides the start command provided by the buildpack.
 	// A custom start command for the application. This overrides the start command provided by the buildpack.
 	Command *string `json:"command,omitempty" tf:"command,omitempty"`
 
-	// The disk space to be allocated for each application instance in megabytes. If not provided, default disk quota is retrieved from Cloud Foundry and assigned.
-	DiskQuota *float64 `json:"diskQuota,omitempty" tf:"disk_quota,omitempty"`
+	// (String) The disk space to be allocated for each application instance.
+	// The disk space to be allocated for each application instance.
+	DiskQuota *string `json:"diskQuota,omitempty" tf:"disk_quota,omitempty"`
 
+	DockerCredentials map[string]string `json:"dockerCredentialsSecretRef,omitempty" tf:"-"`
+
+	// (String) The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0
 	// The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0
 	DockerImage *string `json:"dockerImage,omitempty" tf:"docker_image,omitempty"`
 
-	// Whether to enable or disable SSH access to the container. Default is true unless disabled globally.
-	EnableSSH *bool `json:"enableSsh,omitempty" tf:"enable_ssh,omitempty"`
+	// (Map of String) Key/value pairs of custom environment variables to set in your app. Does not include any system or service variables.
+	// Key/value pairs of custom environment variables to set in your app. Does not include any system or service variables.
+	// +mapType=granular
+	Environment map[string]*string `json:"environment,omitempty" tf:"environment,omitempty"`
 
-	// The endpoint for the http health check type. The default is '/'.
+	// (String) The endpoint for the http health check type.
+	// The endpoint for the http health check type.
 	HealthCheckHTTPEndpoint *string `json:"healthCheckHttpEndpoint,omitempty" tf:"health_check_http_endpoint,omitempty"`
 
-	// The timeout in seconds for individual health check requests for "http" and "port" health checks.
+	// (Number) The interval in seconds between health checks.
+	// The interval in seconds between health checks.
+	HealthCheckInterval *float64 `json:"healthCheckInterval,omitempty" tf:"health_check_interval,omitempty"`
+
+	// (Number) The timeout in seconds for the health check requests for http and port health checks.
+	// The timeout in seconds for the health check requests for http and port health checks.
 	HealthCheckInvocationTimeout *float64 `json:"healthCheckInvocationTimeout,omitempty" tf:"health_check_invocation_timeout,omitempty"`
 
-	// The timeout in seconds for the health check.
-	HealthCheckTimeout *float64 `json:"healthCheckTimeout,omitempty" tf:"health_check_timeout,omitempty"`
-
-	// The health check type which can be one of "port", "process", "http". Default is "port".
+	// (String) The health check type which can be one of 'port', 'process', 'http'.
+	// The health check type which can be one of 'port', 'process', 'http'.
 	HealthCheckType *string `json:"healthCheckType,omitempty" tf:"health_check_type,omitempty"`
 
+	// (Number) The number of app instances that you want to start. Defaults to 1.
 	// The number of app instances that you want to start. Defaults to 1.
 	Instances *float64 `json:"instances,omitempty" tf:"instances,omitempty"`
 
-	// Add labels as described here.
-	// Works only on cloud foundry with api >= v3.63.
+	// (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
+	// The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +mapType=granular
 	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
 
-	// The memory limit for each application instance in megabytes. If not provided, value is computed and retreived from Cloud Foundry.
-	Memory *float64 `json:"memory,omitempty" tf:"memory,omitempty"`
+	// (String) The attribute specifies the log rate limit for all instances of an app.
+	// The attribute specifies the log rate limit for all instances of an app.
+	LogRateLimitPerSecond *string `json:"logRateLimitPerSecond,omitempty" tf:"log_rate_limit_per_second,omitempty"`
 
+	// (String) The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
+	// The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
+	Memory *string `json:"memory,omitempty" tf:"memory,omitempty"`
+
+	// (String) The name of the application.
 	// The name of the application.
 	Name *string `json:"name,omitempty" tf:"name,omitempty"`
 
-	// An uri or path to target a zip file. this can be in the form of unix path (/my/path.zip) or url path (http://zip.com/my.zip)
-	// Path to an app zip in the form of unix path or http url
+	// (Boolean) The attribute with a value of true to prevent a route from being created for your app.
+	// The attribute with a value of true to prevent a route from being created for your app.
+	NoRoute *bool `json:"noRoute,omitempty" tf:"no_route,omitempty"`
+
+	// (String) The name of the associated Cloud Foundry organization.
+	// The name of the associated Cloud Foundry organization.
+	OrgName *string `json:"orgName,omitempty" tf:"org_name,omitempty"`
+
+	// (String) The path to the zip file for the application.
+	// The path to the zip file for the application.
 	Path *string `json:"path,omitempty" tf:"path,omitempty"`
 
-	// +listType=set
-	Ports []*float64 `json:"ports,omitempty" tf:"ports,omitempty"`
+	// (Attributes Set) List of configurations for individual process types. (see below for nested schema)
+	Processes []ProcessesInitParameters `json:"processes,omitempty" tf:"processes,omitempty"`
 
-	// The routes to map to the application to control its ingress traffic.
+	// route attribute to generate a unique route and avoid name collisions.
+	// The random-route attribute to generate a unique route and avoid name collisions.
+	RandomRoute *bool `json:"randomRoute,omitempty" tf:"random_route,omitempty"`
+
+	// (String) The endpoint for the http readiness health check type.
+	// The endpoint for the http readiness health check type.
+	ReadinessHealthCheckHTTPEndpoint *string `json:"readinessHealthCheckHttpEndpoint,omitempty" tf:"readiness_health_check_http_endpoint,omitempty"`
+
+	// (Number) The interval in seconds between readiness health checks.
+	// The interval in seconds between readiness health checks.
+	ReadinessHealthCheckInterval *float64 `json:"readinessHealthCheckInterval,omitempty" tf:"readiness_health_check_interval,omitempty"`
+
+	// (Number) The timeout in seconds for the readiness health check requests for http and port health checks.
+	// The timeout in seconds for the readiness health check requests for http and port health checks.
+	ReadinessHealthCheckInvocationTimeout *float64 `json:"readinessHealthCheckInvocationTimeout,omitempty" tf:"readiness_health_check_invocation_timeout,omitempty"`
+
+	// (String) The readiness health check type which can be one of 'port', 'process', 'http'.
+	// The readiness health check type which can be one of 'port', 'process', 'http'.
+	ReadinessHealthCheckType *string `json:"readinessHealthCheckType,omitempty" tf:"readiness_health_check_type,omitempty"`
+
+	// (Attributes Set) The routes to map to the application to control its ingress traffic. (see below for nested schema)
 	Routes []RoutesInitParameters `json:"routes,omitempty" tf:"routes,omitempty"`
 
-	// Service instances to bind to the application.
-	ServiceBinding []ServiceBindingInitParameters `json:"serviceBinding,omitempty" tf:"service_binding,omitempty"`
+	// (Attributes Set) Service instances to bind to the application. (see below for nested schema)
+	ServiceBindings []ServiceBindingsInitParameters `json:"serviceBindings,omitempty" tf:"service_bindings,omitempty"`
 
-	// Used to trigger updates. Must be set to a base64-encoded SHA256 hash of the path specified. The usual way to set this is ${base64sha256(file("file.zip"))},
-	// where "file.zip" is the local filename of the lambda function source archive.
+	// (Attributes Set) The attribute specifies additional processes to run in the same container as your app (see below for nested schema)
+	Sidecars []SidecarsInitParameters `json:"sidecars,omitempty" tf:"sidecars,omitempty"`
+
+	// encoded SHA256 hash of the path specified.
+	// Used to trigger updates. Must be set to a base64-encoded SHA256 hash of the path specified.
 	SourceCodeHash *string `json:"sourceCodeHash,omitempty" tf:"source_code_hash,omitempty"`
 
-	// The GUID of the associated Cloud Foundry space.
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/space/v1alpha1.Space
-	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/config.ExternalID()
-	Space *string `json:"space,omitempty" tf:"space,omitempty"`
+	// (String) The name of the associated Cloud Foundry space.
+	// The name of the associated Cloud Foundry space.
+	SpaceName *string `json:"spaceName,omitempty" tf:"space_name,omitempty"`
 
-	// Reference to a Space in space to populate space.
-	// +kubebuilder:validation:Optional
-	SpaceRef *v1.Reference `json:"spaceRef,omitempty" tf:"-"`
-
-	// Selector for a Space in space to populate space.
-	// +kubebuilder:validation:Optional
-	SpaceSelector *v1.Selector `json:"spaceSelector,omitempty" tf:"-"`
-
-	// The name of the stack the application will be deployed to. Use the cloudfoundry_stack data resource to lookup the available stack names to override Cloud Foundry default.
+	// (String) The base operating system and file system that your application will execute in. Please refer to the docs for more information
+	// The base operating system and file system that your application will execute in. Please refer to the [docs](https://v3-apidocs.cloudfoundry.org/version/3.155.0/index.html#stacks) for more information
 	Stack *string `json:"stack,omitempty" tf:"stack,omitempty"`
 
-	// Defines the desired application state. Set to true to have the application remain in a stopped state. Default is false, i.e. application will be started.
-	Stopped *bool `json:"stopped,omitempty" tf:"stopped,omitempty"`
-
-	// Strategy to use for creating/updating application. Defaults to none
-	// Supported options:
-	// Deployment strategy, default to none but accept blue-green strategy
+	// green', defaults to 'none'.
+	// The deployment strategy to use when deploying the application. Valid values are 'none', 'rolling', and 'blue-green', defaults to 'none'.
 	Strategy *string `json:"strategy,omitempty" tf:"strategy,omitempty"`
 
-	// Max wait time for app instance startup, in seconds. Defaults to 60 seconds.
+	// check will report failure.
+	// Time in seconds at which the health-check will report failure.
 	Timeout *float64 `json:"timeout,omitempty" tf:"timeout,omitempty"`
 }
 
 type AppObservation struct {
 
-	// Add annotations as described here.
-	// Works only on cloud foundry with api >= v3.63.
+	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
+	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +mapType=granular
 	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
 
-	// The buildpack used to stage the application. There are multiple options to choose from:
-	Buildpack *string `json:"buildpack,omitempty" tf:"buildpack,omitempty"`
-
-	// Multiple buildpacks used to stage the application. When both buildpack and buildpacks are set, buildpacks wins. There are multiple options to choose from:
+	// (Set of String) Multiple buildpacks used to stage the application.
+	// Multiple buildpacks used to stage the application.
+	// +listType=set
 	Buildpacks []*string `json:"buildpacks,omitempty" tf:"buildpacks,omitempty"`
 
+	// (String) A custom start command for the application. This overrides the start command provided by the buildpack.
 	// A custom start command for the application. This overrides the start command provided by the buildpack.
 	Command *string `json:"command,omitempty" tf:"command,omitempty"`
 
-	// The disk space to be allocated for each application instance in megabytes. If not provided, default disk quota is retrieved from Cloud Foundry and assigned.
-	DiskQuota *float64 `json:"diskQuota,omitempty" tf:"disk_quota,omitempty"`
+	// (String) The date and time when the resource was created in RFC3339 format.
+	// The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+	CreatedAt *string `json:"createdAt,omitempty" tf:"created_at,omitempty"`
 
+	// (String) The disk space to be allocated for each application instance.
+	// The disk space to be allocated for each application instance.
+	DiskQuota *string `json:"diskQuota,omitempty" tf:"disk_quota,omitempty"`
+
+	// (String) The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0
 	// The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0
 	DockerImage *string `json:"dockerImage,omitempty" tf:"docker_image,omitempty"`
 
-	// Whether to enable or disable SSH access to the container. Default is true unless disabled globally.
-	EnableSSH *bool `json:"enableSsh,omitempty" tf:"enable_ssh,omitempty"`
+	// (Map of String) Key/value pairs of custom environment variables to set in your app. Does not include any system or service variables.
+	// Key/value pairs of custom environment variables to set in your app. Does not include any system or service variables.
+	// +mapType=granular
+	Environment map[string]*string `json:"environment,omitempty" tf:"environment,omitempty"`
 
-	// The endpoint for the http health check type. The default is '/'.
+	// (String) The endpoint for the http health check type.
+	// The endpoint for the http health check type.
 	HealthCheckHTTPEndpoint *string `json:"healthCheckHttpEndpoint,omitempty" tf:"health_check_http_endpoint,omitempty"`
 
-	// The timeout in seconds for individual health check requests for "http" and "port" health checks.
+	// (Number) The interval in seconds between health checks.
+	// The interval in seconds between health checks.
+	HealthCheckInterval *float64 `json:"healthCheckInterval,omitempty" tf:"health_check_interval,omitempty"`
+
+	// (Number) The timeout in seconds for the health check requests for http and port health checks.
+	// The timeout in seconds for the health check requests for http and port health checks.
 	HealthCheckInvocationTimeout *float64 `json:"healthCheckInvocationTimeout,omitempty" tf:"health_check_invocation_timeout,omitempty"`
 
-	// The timeout in seconds for the health check.
-	HealthCheckTimeout *float64 `json:"healthCheckTimeout,omitempty" tf:"health_check_timeout,omitempty"`
-
-	// The health check type which can be one of "port", "process", "http". Default is "port".
+	// (String) The health check type which can be one of 'port', 'process', 'http'.
+	// The health check type which can be one of 'port', 'process', 'http'.
 	HealthCheckType *string `json:"healthCheckType,omitempty" tf:"health_check_type,omitempty"`
 
-	// The GUID of the application
+	// (String) The GUID of the object.
 	ID *string `json:"id,omitempty" tf:"id,omitempty"`
 
-	// The GUID of the application updated by resource when strategy is blue-green.
-	IDBg *string `json:"idBg,omitempty" tf:"id_bg,omitempty"`
-
+	// (Number) The number of app instances that you want to start. Defaults to 1.
 	// The number of app instances that you want to start. Defaults to 1.
 	Instances *float64 `json:"instances,omitempty" tf:"instances,omitempty"`
 
-	// Add labels as described here.
-	// Works only on cloud foundry with api >= v3.63.
+	// (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
+	// The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +mapType=granular
 	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
 
-	// The memory limit for each application instance in megabytes. If not provided, value is computed and retreived from Cloud Foundry.
-	Memory *float64 `json:"memory,omitempty" tf:"memory,omitempty"`
+	// (String) The attribute specifies the log rate limit for all instances of an app.
+	// The attribute specifies the log rate limit for all instances of an app.
+	LogRateLimitPerSecond *string `json:"logRateLimitPerSecond,omitempty" tf:"log_rate_limit_per_second,omitempty"`
 
+	// (String) The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
+	// The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
+	Memory *string `json:"memory,omitempty" tf:"memory,omitempty"`
+
+	// (String) The name of the application.
 	// The name of the application.
 	Name *string `json:"name,omitempty" tf:"name,omitempty"`
 
-	// An uri or path to target a zip file. this can be in the form of unix path (/my/path.zip) or url path (http://zip.com/my.zip)
-	// Path to an app zip in the form of unix path or http url
+	// (Boolean) The attribute with a value of true to prevent a route from being created for your app.
+	// The attribute with a value of true to prevent a route from being created for your app.
+	NoRoute *bool `json:"noRoute,omitempty" tf:"no_route,omitempty"`
+
+	// (String) The name of the associated Cloud Foundry organization.
+	// The name of the associated Cloud Foundry organization.
+	OrgName *string `json:"orgName,omitempty" tf:"org_name,omitempty"`
+
+	// (String) The path to the zip file for the application.
+	// The path to the zip file for the application.
 	Path *string `json:"path,omitempty" tf:"path,omitempty"`
 
-	// +listType=set
-	Ports []*float64 `json:"ports,omitempty" tf:"ports,omitempty"`
+	// (Attributes Set) List of configurations for individual process types. (see below for nested schema)
+	Processes []ProcessesObservation `json:"processes,omitempty" tf:"processes,omitempty"`
 
-	// The routes to map to the application to control its ingress traffic.
+	// route attribute to generate a unique route and avoid name collisions.
+	// The random-route attribute to generate a unique route and avoid name collisions.
+	RandomRoute *bool `json:"randomRoute,omitempty" tf:"random_route,omitempty"`
+
+	// (String) The endpoint for the http readiness health check type.
+	// The endpoint for the http readiness health check type.
+	ReadinessHealthCheckHTTPEndpoint *string `json:"readinessHealthCheckHttpEndpoint,omitempty" tf:"readiness_health_check_http_endpoint,omitempty"`
+
+	// (Number) The interval in seconds between readiness health checks.
+	// The interval in seconds between readiness health checks.
+	ReadinessHealthCheckInterval *float64 `json:"readinessHealthCheckInterval,omitempty" tf:"readiness_health_check_interval,omitempty"`
+
+	// (Number) The timeout in seconds for the readiness health check requests for http and port health checks.
+	// The timeout in seconds for the readiness health check requests for http and port health checks.
+	ReadinessHealthCheckInvocationTimeout *float64 `json:"readinessHealthCheckInvocationTimeout,omitempty" tf:"readiness_health_check_invocation_timeout,omitempty"`
+
+	// (String) The readiness health check type which can be one of 'port', 'process', 'http'.
+	// The readiness health check type which can be one of 'port', 'process', 'http'.
+	ReadinessHealthCheckType *string `json:"readinessHealthCheckType,omitempty" tf:"readiness_health_check_type,omitempty"`
+
+	// (Attributes Set) The routes to map to the application to control its ingress traffic. (see below for nested schema)
 	Routes []RoutesObservation `json:"routes,omitempty" tf:"routes,omitempty"`
 
-	// Service instances to bind to the application.
-	ServiceBinding []ServiceBindingObservation `json:"serviceBinding,omitempty" tf:"service_binding,omitempty"`
+	// (Attributes Set) Service instances to bind to the application. (see below for nested schema)
+	ServiceBindings []ServiceBindingsObservation `json:"serviceBindings,omitempty" tf:"service_bindings,omitempty"`
 
-	// Used to trigger updates. Must be set to a base64-encoded SHA256 hash of the path specified. The usual way to set this is ${base64sha256(file("file.zip"))},
-	// where "file.zip" is the local filename of the lambda function source archive.
+	// (Attributes Set) The attribute specifies additional processes to run in the same container as your app (see below for nested schema)
+	Sidecars []SidecarsObservation `json:"sidecars,omitempty" tf:"sidecars,omitempty"`
+
+	// encoded SHA256 hash of the path specified.
+	// Used to trigger updates. Must be set to a base64-encoded SHA256 hash of the path specified.
 	SourceCodeHash *string `json:"sourceCodeHash,omitempty" tf:"source_code_hash,omitempty"`
 
-	// The GUID of the associated Cloud Foundry space.
-	Space *string `json:"space,omitempty" tf:"space,omitempty"`
+	// (String) The name of the associated Cloud Foundry space.
+	// The name of the associated Cloud Foundry space.
+	SpaceName *string `json:"spaceName,omitempty" tf:"space_name,omitempty"`
 
-	// The name of the stack the application will be deployed to. Use the cloudfoundry_stack data resource to lookup the available stack names to override Cloud Foundry default.
+	// (String) The base operating system and file system that your application will execute in. Please refer to the docs for more information
+	// The base operating system and file system that your application will execute in. Please refer to the [docs](https://v3-apidocs.cloudfoundry.org/version/3.155.0/index.html#stacks) for more information
 	Stack *string `json:"stack,omitempty" tf:"stack,omitempty"`
 
-	// Defines the desired application state. Set to true to have the application remain in a stopped state. Default is false, i.e. application will be started.
-	Stopped *bool `json:"stopped,omitempty" tf:"stopped,omitempty"`
-
-	// Strategy to use for creating/updating application. Defaults to none
-	// Supported options:
-	// Deployment strategy, default to none but accept blue-green strategy
+	// green', defaults to 'none'.
+	// The deployment strategy to use when deploying the application. Valid values are 'none', 'rolling', and 'blue-green', defaults to 'none'.
 	Strategy *string `json:"strategy,omitempty" tf:"strategy,omitempty"`
 
-	// Max wait time for app instance startup, in seconds. Defaults to 60 seconds.
+	// check will report failure.
+	// Time in seconds at which the health-check will report failure.
 	Timeout *float64 `json:"timeout,omitempty" tf:"timeout,omitempty"`
+
+	// (String) The date and time when the resource was updated in RFC3339 format.
+	// The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+	UpdatedAt *string `json:"updatedAt,omitempty" tf:"updated_at,omitempty"`
 }
 
 type AppParameters struct {
 
-	// Add annotations as described here.
-	// Works only on cloud foundry with api >= v3.63.
+	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
+	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +kubebuilder:validation:Optional
 	// +mapType=granular
 	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
 
-	// The buildpack used to stage the application. There are multiple options to choose from:
+	// (Set of String) Multiple buildpacks used to stage the application.
+	// Multiple buildpacks used to stage the application.
 	// +kubebuilder:validation:Optional
-	Buildpack *string `json:"buildpack,omitempty" tf:"buildpack,omitempty"`
-
-	// Multiple buildpacks used to stage the application. When both buildpack and buildpacks are set, buildpacks wins. There are multiple options to choose from:
-	// +kubebuilder:validation:Optional
+	// +listType=set
 	Buildpacks []*string `json:"buildpacks,omitempty" tf:"buildpacks,omitempty"`
 
+	// (String) A custom start command for the application. This overrides the start command provided by the buildpack.
 	// A custom start command for the application. This overrides the start command provided by the buildpack.
 	// +kubebuilder:validation:Optional
 	Command *string `json:"command,omitempty" tf:"command,omitempty"`
 
-	// The disk space to be allocated for each application instance in megabytes. If not provided, default disk quota is retrieved from Cloud Foundry and assigned.
+	// (String) The disk space to be allocated for each application instance.
+	// The disk space to be allocated for each application instance.
 	// +kubebuilder:validation:Optional
-	DiskQuota *float64 `json:"diskQuota,omitempty" tf:"disk_quota,omitempty"`
+	DiskQuota *string `json:"diskQuota,omitempty" tf:"disk_quota,omitempty"`
 
-	// Defines login credentials for private docker repositories
+	// (Attributes) Defines login credentials for private docker repositories (see below for nested schema)
 	// +kubebuilder:validation:Optional
 	DockerCredentialsSecretRef *v1.SecretReference `json:"dockerCredentialsSecretRef,omitempty" tf:"-"`
 
+	// (String) The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0
 	// The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0
 	// +kubebuilder:validation:Optional
 	DockerImage *string `json:"dockerImage,omitempty" tf:"docker_image,omitempty"`
 
-	// Whether to enable or disable SSH access to the container. Default is true unless disabled globally.
-	// +kubebuilder:validation:Optional
-	EnableSSH *bool `json:"enableSsh,omitempty" tf:"enable_ssh,omitempty"`
-
+	// (Map of String) Key/value pairs of custom environment variables to set in your app. Does not include any system or service variables.
 	// Key/value pairs of custom environment variables to set in your app. Does not include any system or service variables.
 	// +kubebuilder:validation:Optional
-	EnvironmentSecretRef *v1.SecretReference `json:"environmentSecretRef,omitempty" tf:"-"`
+	// +mapType=granular
+	Environment map[string]*string `json:"environment,omitempty" tf:"environment,omitempty"`
 
-	// The endpoint for the http health check type. The default is '/'.
+	// (String) The endpoint for the http health check type.
+	// The endpoint for the http health check type.
 	// +kubebuilder:validation:Optional
 	HealthCheckHTTPEndpoint *string `json:"healthCheckHttpEndpoint,omitempty" tf:"health_check_http_endpoint,omitempty"`
 
-	// The timeout in seconds for individual health check requests for "http" and "port" health checks.
+	// (Number) The interval in seconds between health checks.
+	// The interval in seconds between health checks.
+	// +kubebuilder:validation:Optional
+	HealthCheckInterval *float64 `json:"healthCheckInterval,omitempty" tf:"health_check_interval,omitempty"`
+
+	// (Number) The timeout in seconds for the health check requests for http and port health checks.
+	// The timeout in seconds for the health check requests for http and port health checks.
 	// +kubebuilder:validation:Optional
 	HealthCheckInvocationTimeout *float64 `json:"healthCheckInvocationTimeout,omitempty" tf:"health_check_invocation_timeout,omitempty"`
 
-	// The timeout in seconds for the health check.
-	// +kubebuilder:validation:Optional
-	HealthCheckTimeout *float64 `json:"healthCheckTimeout,omitempty" tf:"health_check_timeout,omitempty"`
-
-	// The health check type which can be one of "port", "process", "http". Default is "port".
+	// (String) The health check type which can be one of 'port', 'process', 'http'.
+	// The health check type which can be one of 'port', 'process', 'http'.
 	// +kubebuilder:validation:Optional
 	HealthCheckType *string `json:"healthCheckType,omitempty" tf:"health_check_type,omitempty"`
 
+	// (Number) The number of app instances that you want to start. Defaults to 1.
 	// The number of app instances that you want to start. Defaults to 1.
 	// +kubebuilder:validation:Optional
 	Instances *float64 `json:"instances,omitempty" tf:"instances,omitempty"`
 
-	// Add labels as described here.
-	// Works only on cloud foundry with api >= v3.63.
+	// (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
+	// The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +kubebuilder:validation:Optional
 	// +mapType=granular
 	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
 
-	// The memory limit for each application instance in megabytes. If not provided, value is computed and retreived from Cloud Foundry.
+	// (String) The attribute specifies the log rate limit for all instances of an app.
+	// The attribute specifies the log rate limit for all instances of an app.
 	// +kubebuilder:validation:Optional
-	Memory *float64 `json:"memory,omitempty" tf:"memory,omitempty"`
+	LogRateLimitPerSecond *string `json:"logRateLimitPerSecond,omitempty" tf:"log_rate_limit_per_second,omitempty"`
 
+	// (String) The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
+	// The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
+	// +kubebuilder:validation:Optional
+	Memory *string `json:"memory,omitempty" tf:"memory,omitempty"`
+
+	// (String) The name of the application.
 	// The name of the application.
 	// +kubebuilder:validation:Optional
 	Name *string `json:"name,omitempty" tf:"name,omitempty"`
 
-	// An uri or path to target a zip file. this can be in the form of unix path (/my/path.zip) or url path (http://zip.com/my.zip)
-	// Path to an app zip in the form of unix path or http url
+	// (Boolean) The attribute with a value of true to prevent a route from being created for your app.
+	// The attribute with a value of true to prevent a route from being created for your app.
+	// +kubebuilder:validation:Optional
+	NoRoute *bool `json:"noRoute,omitempty" tf:"no_route,omitempty"`
+
+	// (String) The name of the associated Cloud Foundry organization.
+	// The name of the associated Cloud Foundry organization.
+	// +kubebuilder:validation:Optional
+	OrgName *string `json:"orgName,omitempty" tf:"org_name,omitempty"`
+
+	// (String) The path to the zip file for the application.
+	// The path to the zip file for the application.
 	// +kubebuilder:validation:Optional
 	Path *string `json:"path,omitempty" tf:"path,omitempty"`
 
+	// (Attributes Set) List of configurations for individual process types. (see below for nested schema)
 	// +kubebuilder:validation:Optional
-	// +listType=set
-	Ports []*float64 `json:"ports,omitempty" tf:"ports,omitempty"`
+	Processes []ProcessesParameters `json:"processes,omitempty" tf:"processes,omitempty"`
 
-	// The routes to map to the application to control its ingress traffic.
+	// route attribute to generate a unique route and avoid name collisions.
+	// The random-route attribute to generate a unique route and avoid name collisions.
+	// +kubebuilder:validation:Optional
+	RandomRoute *bool `json:"randomRoute,omitempty" tf:"random_route,omitempty"`
+
+	// (String) The endpoint for the http readiness health check type.
+	// The endpoint for the http readiness health check type.
+	// +kubebuilder:validation:Optional
+	ReadinessHealthCheckHTTPEndpoint *string `json:"readinessHealthCheckHttpEndpoint,omitempty" tf:"readiness_health_check_http_endpoint,omitempty"`
+
+	// (Number) The interval in seconds between readiness health checks.
+	// The interval in seconds between readiness health checks.
+	// +kubebuilder:validation:Optional
+	ReadinessHealthCheckInterval *float64 `json:"readinessHealthCheckInterval,omitempty" tf:"readiness_health_check_interval,omitempty"`
+
+	// (Number) The timeout in seconds for the readiness health check requests for http and port health checks.
+	// The timeout in seconds for the readiness health check requests for http and port health checks.
+	// +kubebuilder:validation:Optional
+	ReadinessHealthCheckInvocationTimeout *float64 `json:"readinessHealthCheckInvocationTimeout,omitempty" tf:"readiness_health_check_invocation_timeout,omitempty"`
+
+	// (String) The readiness health check type which can be one of 'port', 'process', 'http'.
+	// The readiness health check type which can be one of 'port', 'process', 'http'.
+	// +kubebuilder:validation:Optional
+	ReadinessHealthCheckType *string `json:"readinessHealthCheckType,omitempty" tf:"readiness_health_check_type,omitempty"`
+
+	// (Attributes Set) The routes to map to the application to control its ingress traffic. (see below for nested schema)
 	// +kubebuilder:validation:Optional
 	Routes []RoutesParameters `json:"routes,omitempty" tf:"routes,omitempty"`
 
-	// Service instances to bind to the application.
+	// (Attributes Set) Service instances to bind to the application. (see below for nested schema)
 	// +kubebuilder:validation:Optional
-	ServiceBinding []ServiceBindingParameters `json:"serviceBinding,omitempty" tf:"service_binding,omitempty"`
+	ServiceBindings []ServiceBindingsParameters `json:"serviceBindings,omitempty" tf:"service_bindings,omitempty"`
 
-	// Used to trigger updates. Must be set to a base64-encoded SHA256 hash of the path specified. The usual way to set this is ${base64sha256(file("file.zip"))},
-	// where "file.zip" is the local filename of the lambda function source archive.
+	// (Attributes Set) The attribute specifies additional processes to run in the same container as your app (see below for nested schema)
+	// +kubebuilder:validation:Optional
+	Sidecars []SidecarsParameters `json:"sidecars,omitempty" tf:"sidecars,omitempty"`
+
+	// encoded SHA256 hash of the path specified.
+	// Used to trigger updates. Must be set to a base64-encoded SHA256 hash of the path specified.
 	// +kubebuilder:validation:Optional
 	SourceCodeHash *string `json:"sourceCodeHash,omitempty" tf:"source_code_hash,omitempty"`
 
-	// The GUID of the associated Cloud Foundry space.
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/space/v1alpha1.Space
-	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/config.ExternalID()
+	// (String) The name of the associated Cloud Foundry space.
+	// The name of the associated Cloud Foundry space.
 	// +kubebuilder:validation:Optional
-	Space *string `json:"space,omitempty" tf:"space,omitempty"`
+	SpaceName *string `json:"spaceName,omitempty" tf:"space_name,omitempty"`
 
-	// Reference to a Space in space to populate space.
-	// +kubebuilder:validation:Optional
-	SpaceRef *v1.Reference `json:"spaceRef,omitempty" tf:"-"`
-
-	// Selector for a Space in space to populate space.
-	// +kubebuilder:validation:Optional
-	SpaceSelector *v1.Selector `json:"spaceSelector,omitempty" tf:"-"`
-
-	// The name of the stack the application will be deployed to. Use the cloudfoundry_stack data resource to lookup the available stack names to override Cloud Foundry default.
+	// (String) The base operating system and file system that your application will execute in. Please refer to the docs for more information
+	// The base operating system and file system that your application will execute in. Please refer to the [docs](https://v3-apidocs.cloudfoundry.org/version/3.155.0/index.html#stacks) for more information
 	// +kubebuilder:validation:Optional
 	Stack *string `json:"stack,omitempty" tf:"stack,omitempty"`
 
-	// Defines the desired application state. Set to true to have the application remain in a stopped state. Default is false, i.e. application will be started.
-	// +kubebuilder:validation:Optional
-	Stopped *bool `json:"stopped,omitempty" tf:"stopped,omitempty"`
-
-	// Strategy to use for creating/updating application. Defaults to none
-	// Supported options:
-	// Deployment strategy, default to none but accept blue-green strategy
+	// green', defaults to 'none'.
+	// The deployment strategy to use when deploying the application. Valid values are 'none', 'rolling', and 'blue-green', defaults to 'none'.
 	// +kubebuilder:validation:Optional
 	Strategy *string `json:"strategy,omitempty" tf:"strategy,omitempty"`
 
-	// Max wait time for app instance startup, in seconds. Defaults to 60 seconds.
+	// check will report failure.
+	// Time in seconds at which the health-check will report failure.
 	// +kubebuilder:validation:Optional
 	Timeout *float64 `json:"timeout,omitempty" tf:"timeout,omitempty"`
 }
 
+type ProcessesInitParameters struct {
+
+	// (String) A custom start command for the application. This overrides the start command provided by the buildpack.
+	Command *string `json:"command,omitempty" tf:"command,omitempty"`
+
+	// (String) The disk space to be allocated for each application instance.
+	DiskQuota *string `json:"diskQuota,omitempty" tf:"disk_quota,omitempty"`
+
+	// (String) The endpoint for the http health check type.
+	HealthCheckHTTPEndpoint *string `json:"healthCheckHttpEndpoint,omitempty" tf:"health_check_http_endpoint,omitempty"`
+
+	// (Number) The interval in seconds between health checks.
+	HealthCheckInterval *int64 `json:"healthCheckInterval,omitempty" tf:"health_check_interval,omitempty"`
+
+	// (Number) The timeout in seconds for the health check requests for http and port health checks.
+	HealthCheckInvocationTimeout *int64 `json:"healthCheckInvocationTimeout,omitempty" tf:"health_check_invocation_timeout,omitempty"`
+
+	// (String) The health check type which can be one of 'port', 'process', 'http'.
+	HealthCheckType *string `json:"healthCheckType,omitempty" tf:"health_check_type,omitempty"`
+
+	// (Number) The number of app instances that you want to start. Defaults to 1.
+	Instances *int64 `json:"instances,omitempty" tf:"instances,omitempty"`
+
+	// (String) The attribute specifies the log rate limit for all instances of an app.
+	LogRateLimitPerSecond *string `json:"logRateLimitPerSecond,omitempty" tf:"log_rate_limit_per_second,omitempty"`
+
+	// (String) The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
+	Memory *string `json:"memory,omitempty" tf:"memory,omitempty"`
+
+	// (String) The endpoint for the http readiness health check type.
+	ReadinessHealthCheckHTTPEndpoint *string `json:"readinessHealthCheckHttpEndpoint,omitempty" tf:"readiness_health_check_http_endpoint,omitempty"`
+
+	// (Number) The interval in seconds between readiness health checks.
+	ReadinessHealthCheckInterval *int64 `json:"readinessHealthCheckInterval,omitempty" tf:"readiness_health_check_interval,omitempty"`
+
+	// (Number) The timeout in seconds for the readiness health check requests for http and port health checks.
+	ReadinessHealthCheckInvocationTimeout *int64 `json:"readinessHealthCheckInvocationTimeout,omitempty" tf:"readiness_health_check_invocation_timeout,omitempty"`
+
+	// (String) The readiness health check type which can be one of 'port', 'process', 'http'.
+	ReadinessHealthCheckType *string `json:"readinessHealthCheckType,omitempty" tf:"readiness_health_check_type,omitempty"`
+
+	// check will report failure.
+	Timeout *int64 `json:"timeout,omitempty" tf:"timeout,omitempty"`
+
+	// (String) The process type. Can be web or worker.
+	Type *string `json:"type,omitempty" tf:"type,omitempty"`
+}
+
+type ProcessesObservation struct {
+
+	// (String) A custom start command for the application. This overrides the start command provided by the buildpack.
+	Command *string `json:"command,omitempty" tf:"command,omitempty"`
+
+	// (String) The disk space to be allocated for each application instance.
+	DiskQuota *string `json:"diskQuota,omitempty" tf:"disk_quota,omitempty"`
+
+	// (String) The endpoint for the http health check type.
+	HealthCheckHTTPEndpoint *string `json:"healthCheckHttpEndpoint,omitempty" tf:"health_check_http_endpoint,omitempty"`
+
+	// (Number) The interval in seconds between health checks.
+	HealthCheckInterval *int64 `json:"healthCheckInterval,omitempty" tf:"health_check_interval,omitempty"`
+
+	// (Number) The timeout in seconds for the health check requests for http and port health checks.
+	HealthCheckInvocationTimeout *int64 `json:"healthCheckInvocationTimeout,omitempty" tf:"health_check_invocation_timeout,omitempty"`
+
+	// (String) The health check type which can be one of 'port', 'process', 'http'.
+	HealthCheckType *string `json:"healthCheckType,omitempty" tf:"health_check_type,omitempty"`
+
+	// (Number) The number of app instances that you want to start. Defaults to 1.
+	Instances *int64 `json:"instances,omitempty" tf:"instances,omitempty"`
+
+	// (String) The attribute specifies the log rate limit for all instances of an app.
+	LogRateLimitPerSecond *string `json:"logRateLimitPerSecond,omitempty" tf:"log_rate_limit_per_second,omitempty"`
+
+	// (String) The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
+	Memory *string `json:"memory,omitempty" tf:"memory,omitempty"`
+
+	// (String) The endpoint for the http readiness health check type.
+	ReadinessHealthCheckHTTPEndpoint *string `json:"readinessHealthCheckHttpEndpoint,omitempty" tf:"readiness_health_check_http_endpoint,omitempty"`
+
+	// (Number) The interval in seconds between readiness health checks.
+	ReadinessHealthCheckInterval *int64 `json:"readinessHealthCheckInterval,omitempty" tf:"readiness_health_check_interval,omitempty"`
+
+	// (Number) The timeout in seconds for the readiness health check requests for http and port health checks.
+	ReadinessHealthCheckInvocationTimeout *int64 `json:"readinessHealthCheckInvocationTimeout,omitempty" tf:"readiness_health_check_invocation_timeout,omitempty"`
+
+	// (String) The readiness health check type which can be one of 'port', 'process', 'http'.
+	ReadinessHealthCheckType *string `json:"readinessHealthCheckType,omitempty" tf:"readiness_health_check_type,omitempty"`
+
+	// check will report failure.
+	Timeout *int64 `json:"timeout,omitempty" tf:"timeout,omitempty"`
+
+	// (String) The process type. Can be web or worker.
+	Type *string `json:"type,omitempty" tf:"type,omitempty"`
+}
+
+type ProcessesParameters struct {
+
+	// (String) A custom start command for the application. This overrides the start command provided by the buildpack.
+	// +kubebuilder:validation:Optional
+	Command *string `json:"command,omitempty" tf:"command,omitempty"`
+
+	// (String) The disk space to be allocated for each application instance.
+	// +kubebuilder:validation:Optional
+	DiskQuota *string `json:"diskQuota,omitempty" tf:"disk_quota,omitempty"`
+
+	// (String) The endpoint for the http health check type.
+	// +kubebuilder:validation:Optional
+	HealthCheckHTTPEndpoint *string `json:"healthCheckHttpEndpoint,omitempty" tf:"health_check_http_endpoint,omitempty"`
+
+	// (Number) The interval in seconds between health checks.
+	// +kubebuilder:validation:Optional
+	HealthCheckInterval *int64 `json:"healthCheckInterval,omitempty" tf:"health_check_interval,omitempty"`
+
+	// (Number) The timeout in seconds for the health check requests for http and port health checks.
+	// +kubebuilder:validation:Optional
+	HealthCheckInvocationTimeout *int64 `json:"healthCheckInvocationTimeout,omitempty" tf:"health_check_invocation_timeout,omitempty"`
+
+	// (String) The health check type which can be one of 'port', 'process', 'http'.
+	// +kubebuilder:validation:Optional
+	HealthCheckType *string `json:"healthCheckType,omitempty" tf:"health_check_type,omitempty"`
+
+	// (Number) The number of app instances that you want to start. Defaults to 1.
+	// +kubebuilder:validation:Optional
+	Instances *int64 `json:"instances,omitempty" tf:"instances,omitempty"`
+
+	// (String) The attribute specifies the log rate limit for all instances of an app.
+	// +kubebuilder:validation:Optional
+	LogRateLimitPerSecond *string `json:"logRateLimitPerSecond,omitempty" tf:"log_rate_limit_per_second,omitempty"`
+
+	// (String) The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
+	// +kubebuilder:validation:Optional
+	Memory *string `json:"memory,omitempty" tf:"memory,omitempty"`
+
+	// (String) The endpoint for the http readiness health check type.
+	// +kubebuilder:validation:Optional
+	ReadinessHealthCheckHTTPEndpoint *string `json:"readinessHealthCheckHttpEndpoint,omitempty" tf:"readiness_health_check_http_endpoint,omitempty"`
+
+	// (Number) The interval in seconds between readiness health checks.
+	// +kubebuilder:validation:Optional
+	ReadinessHealthCheckInterval *int64 `json:"readinessHealthCheckInterval,omitempty" tf:"readiness_health_check_interval,omitempty"`
+
+	// (Number) The timeout in seconds for the readiness health check requests for http and port health checks.
+	// +kubebuilder:validation:Optional
+	ReadinessHealthCheckInvocationTimeout *int64 `json:"readinessHealthCheckInvocationTimeout,omitempty" tf:"readiness_health_check_invocation_timeout,omitempty"`
+
+	// (String) The readiness health check type which can be one of 'port', 'process', 'http'.
+	// +kubebuilder:validation:Optional
+	ReadinessHealthCheckType *string `json:"readinessHealthCheckType,omitempty" tf:"readiness_health_check_type,omitempty"`
+
+	// check will report failure.
+	// +kubebuilder:validation:Optional
+	Timeout *int64 `json:"timeout,omitempty" tf:"timeout,omitempty"`
+
+	// (String) The process type. Can be web or worker.
+	// +kubebuilder:validation:Optional
+	Type *string `json:"type" tf:"type,omitempty"`
+}
+
 type RoutesInitParameters struct {
 
-	// (Number) The port of the application to map the tcp route to.
-	Port *float64 `json:"port,omitempty" tf:"port,omitempty"`
+	// (String) The protocol to use for the route. Valid values are http2, http1, and tcp.
+	Protocol *string `json:"protocol,omitempty" tf:"protocol,omitempty"`
 
-	// The route id. Route can be defined using the cloudfoundry_route resource
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/route/v1alpha1.Route
+	// (String) The fully route qualified domain name which will be bound to app
+	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha1.Route
 	Route *string `json:"route,omitempty" tf:"route,omitempty"`
 
-	// Reference to a Route in route to populate route.
+	// Reference to a Route in resources to populate route.
 	// +kubebuilder:validation:Optional
 	RouteRef *v1.Reference `json:"routeRef,omitempty" tf:"-"`
 
-	// Selector for a Route in route to populate route.
+	// Selector for a Route in resources to populate route.
 	// +kubebuilder:validation:Optional
 	RouteSelector *v1.Selector `json:"routeSelector,omitempty" tf:"-"`
 }
 
 type RoutesObservation struct {
 
-	// (Number) The port of the application to map the tcp route to.
-	Port *float64 `json:"port,omitempty" tf:"port,omitempty"`
+	// (String) The protocol to use for the route. Valid values are http2, http1, and tcp.
+	Protocol *string `json:"protocol,omitempty" tf:"protocol,omitempty"`
 
-	// The route id. Route can be defined using the cloudfoundry_route resource
+	// (String) The fully route qualified domain name which will be bound to app
 	Route *string `json:"route,omitempty" tf:"route,omitempty"`
 }
 
 type RoutesParameters struct {
 
-	// (Number) The port of the application to map the tcp route to.
+	// (String) The protocol to use for the route. Valid values are http2, http1, and tcp.
 	// +kubebuilder:validation:Optional
-	Port *float64 `json:"port,omitempty" tf:"port,omitempty"`
+	Protocol *string `json:"protocol,omitempty" tf:"protocol,omitempty"`
 
-	// The route id. Route can be defined using the cloudfoundry_route resource
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/route/v1alpha1.Route
+	// (String) The fully route qualified domain name which will be bound to app
+	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha1.Route
 	// +kubebuilder:validation:Optional
 	Route *string `json:"route,omitempty" tf:"route,omitempty"`
 
-	// Reference to a Route in route to populate route.
+	// Reference to a Route in resources to populate route.
 	// +kubebuilder:validation:Optional
 	RouteRef *v1.Reference `json:"routeRef,omitempty" tf:"-"`
 
-	// Selector for a Route in route to populate route.
+	// Selector for a Route in resources to populate route.
 	// +kubebuilder:validation:Optional
 	RouteSelector *v1.Selector `json:"routeSelector,omitempty" tf:"-"`
 }
 
-type ServiceBindingInitParameters struct {
+type ServiceBindingsInitParameters struct {
 
-	// The service instance GUID.
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/service/v1alpha1.ServiceInstance
+	// (String) A json object to send to the service broker during service binding.
+	Params *string `json:"params,omitempty" tf:"params,omitempty"`
+
+	// (String) The service instance name.
+	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.ServiceInstance
 	ServiceInstance *string `json:"serviceInstance,omitempty" tf:"service_instance,omitempty"`
 
-	// Reference to a ServiceInstance in service to populate serviceInstance.
+	// Reference to a ServiceInstance in resources to populate serviceInstance.
 	// +kubebuilder:validation:Optional
 	ServiceInstanceRef *v1.Reference `json:"serviceInstanceRef,omitempty" tf:"-"`
 
-	// Selector for a ServiceInstance in service to populate serviceInstance.
+	// Selector for a ServiceInstance in resources to populate serviceInstance.
 	// +kubebuilder:validation:Optional
 	ServiceInstanceSelector *v1.Selector `json:"serviceInstanceSelector,omitempty" tf:"-"`
 }
 
-type ServiceBindingObservation struct {
+type ServiceBindingsObservation struct {
 
-	// The service instance GUID.
+	// (String) A json object to send to the service broker during service binding.
+	Params *string `json:"params,omitempty" tf:"params,omitempty"`
+
+	// (String) The service instance name.
 	ServiceInstance *string `json:"serviceInstance,omitempty" tf:"service_instance,omitempty"`
 }
 
-type ServiceBindingParameters struct {
+type ServiceBindingsParameters struct {
 
+	// (String) A json object to send to the service broker during service binding.
 	// +kubebuilder:validation:Optional
-	ParamsJSONSecretRef *v1.SecretKeySelector `json:"paramsJsonSecretRef,omitempty" tf:"-"`
+	Params *string `json:"params,omitempty" tf:"params,omitempty"`
 
-	// A list of key/value parameters used by the service broker to create the binding. Defaults to empty map.
-	// +kubebuilder:validation:Optional
-	ParamsSecretRef *v1.SecretReference `json:"paramsSecretRef,omitempty" tf:"-"`
-
-	// The service instance GUID.
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/service/v1alpha1.ServiceInstance
+	// (String) The service instance name.
+	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.ServiceInstance
 	// +kubebuilder:validation:Optional
 	ServiceInstance *string `json:"serviceInstance,omitempty" tf:"service_instance,omitempty"`
 
-	// Reference to a ServiceInstance in service to populate serviceInstance.
+	// Reference to a ServiceInstance in resources to populate serviceInstance.
 	// +kubebuilder:validation:Optional
 	ServiceInstanceRef *v1.Reference `json:"serviceInstanceRef,omitempty" tf:"-"`
 
-	// Selector for a ServiceInstance in service to populate serviceInstance.
+	// Selector for a ServiceInstance in resources to populate serviceInstance.
 	// +kubebuilder:validation:Optional
 	ServiceInstanceSelector *v1.Selector `json:"serviceInstanceSelector,omitempty" tf:"-"`
+}
+
+type SidecarsInitParameters struct {
+
+	// (String) A custom start command for the application. This overrides the start command provided by the buildpack.
+	Command *string `json:"command,omitempty" tf:"command,omitempty"`
+
+	// (String) The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
+	Memory *string `json:"memory,omitempty" tf:"memory,omitempty"`
+
+	// (String) The name of the application.
+	Name *string `json:"name,omitempty" tf:"name,omitempty"`
+
+	// (Set of String) List of processes to associate sidecar with.
+	// +listType=set
+	ProcessTypes []*string `json:"processTypes,omitempty" tf:"process_types,omitempty"`
+}
+
+type SidecarsObservation struct {
+
+	// (String) A custom start command for the application. This overrides the start command provided by the buildpack.
+	Command *string `json:"command,omitempty" tf:"command,omitempty"`
+
+	// (String) The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
+	Memory *string `json:"memory,omitempty" tf:"memory,omitempty"`
+
+	// (String) The name of the application.
+	Name *string `json:"name,omitempty" tf:"name,omitempty"`
+
+	// (Set of String) List of processes to associate sidecar with.
+	// +listType=set
+	ProcessTypes []*string `json:"processTypes,omitempty" tf:"process_types,omitempty"`
+}
+
+type SidecarsParameters struct {
+
+	// (String) A custom start command for the application. This overrides the start command provided by the buildpack.
+	// +kubebuilder:validation:Optional
+	Command *string `json:"command,omitempty" tf:"command,omitempty"`
+
+	// (String) The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
+	// +kubebuilder:validation:Optional
+	Memory *string `json:"memory,omitempty" tf:"memory,omitempty"`
+
+	// (String) The name of the application.
+	// +kubebuilder:validation:Optional
+	Name *string `json:"name" tf:"name,omitempty"`
+
+	// (Set of String) List of processes to associate sidecar with.
+	// +kubebuilder:validation:Optional
+	// +listType=set
+	ProcessTypes []*string `json:"processTypes,omitempty" tf:"process_types,omitempty"`
 }
 
 // AppSpec defines the desired state of App
@@ -452,9 +791,9 @@ type AppStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 
-// App is the Schema for the Apps API. Provides a Cloud Foundry Application resource.
-// +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// App is the Schema for the Apps API. Provides a Cloud Foundry resource to manage applications.
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
+// +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
@@ -462,6 +801,8 @@ type App struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
 	// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"
+	// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.orgName) || (has(self.initProvider) && has(self.initProvider.orgName))",message="spec.forProvider.orgName is a required parameter"
+	// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.spaceName) || (has(self.initProvider) && has(self.initProvider.spaceName))",message="spec.forProvider.spaceName is a required parameter"
 	Spec   AppSpec   `json:"spec"`
 	Status AppStatus `json:"status,omitempty"`
 }

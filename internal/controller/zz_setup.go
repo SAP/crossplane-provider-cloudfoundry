@@ -11,8 +11,6 @@ import (
 
 	app "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/controller/cloudfoundry/app"
 	domain "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/controller/cloudfoundry/domain"
-	privatedomainaccess "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/controller/cloudfoundry/privatedomainaccess"
-	quota "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/controller/cloudfoundry/quota"
 	providerconfig "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/controller/providerconfig"
 )
 
@@ -22,8 +20,6 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	for _, setup := range []func(ctrl.Manager, controller.Options) error{
 		app.Setup,
 		domain.Setup,
-		privatedomainaccess.Setup,
-		quota.Setup,
 		providerconfig.Setup,
 	} {
 		if err := setup(mgr, o); err != nil {

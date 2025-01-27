@@ -15,9 +15,3 @@ func (tr *App) Hub() {}
 
 // Hub marks this type as a conversion hub.
 func (tr *Domain) Hub() {}
-
-// Hub marks this type as a conversion hub.
-func (tr *PrivateDomainAccess) Hub() {}
-
-// Hub marks this type as a conversion hub.
-func (tr *Quota) Hub() {}

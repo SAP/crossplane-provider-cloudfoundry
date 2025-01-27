@@ -19,11 +19,11 @@ spec:
   scope: Cluster
   versions:
   - additionalPrinterColumns:
-    - jsonPath: .status.conditions[?(@.type=='Ready')].status
-      name: READY
-      type: string
     - jsonPath: .status.conditions[?(@.type=='Synced')].status
       name: SYNCED
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: READY
       type: string
     - jsonPath: .metadata.annotations.crossplane\.io/external-name
       name: EXTERNAL-NAME
@@ -34,8 +34,8 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Domain is the Schema for the Domains API. Provides a Cloud Foundry
-          Domain resource.
+        description: Domain is the Schema for the Domains API. Provides a resource
+          for managing shared or private domains in Cloud Foundry.
         properties:
           apiVersion:
             description: |-
@@ -73,28 +73,39 @@ spec:
                 type: string
               forProvider:
                 properties:
-                  domain:
-                    description: Domain part of full domain name. If specified the
-                      sub_domain argument needs to be provided and the name will be
-                      computed.
-                    type: string
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
+                      The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    type: object
+                    x-kubernetes-map-type: granular
                   internal:
                     description: |-
-                      Flag that sets the domain as an internal domain. Internal domains are used for internal app to app networking only. Defaults to "false". Only works on shared domain.
-                      Flag that sets the domain as an internal domain. Internal domains are used for internal app to app networking only.
+                      to-container) traffic, or external (user-to-container) traffic
+                      Whether the domain is used for internal (container-to-container) traffic, or external (user-to-container) traffic
                     type: boolean
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
+                      The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    type: object
+                    x-kubernetes-map-type: granular
                   name:
-                    description: Full name of domain. If specified then the sub_domain
-                      and domain attributes will be computed from the name
+                    description: |-
+                      (String) The name of the domain;must be between 3 ~ 253 characters and follow RFC 1035
+                      The name of the domain;must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035)
                     type: string
                   org:
-                    description: The ID of the Org that owns this domain. If specified,
-                      this resource will provision a private domain. By default, the
-                      provisioned domain is a public (shared) domain.
+                    description: |-
+                      (String) The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
+                      The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
                     type: string
                   orgRef:
-                    description: Reference to a Organization in organization to populate
-                      org.
+                    description: Reference to a Org in resources to populate org.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -128,8 +139,7 @@ spec:
                     - name
                     type: object
                   orgSelector:
-                    description: Selector for a Organization in organization to populate
-                      org.
+                    description: Selector for a Org in resources to populate org.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -169,15 +179,18 @@ spec:
                         type: object
                     type: object
                   routerGroup:
-                    description: The router group GUID, which can be retrieved via
-                      the cloudfoundry_router_group data resource. You would need
-                      to provide this when creating a shared domain for TCP routes.
+                    description: |-
+                      (String) The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
+                      The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
                     type: string
-                  subDomain:
-                    description: Sub-domain part of full domain name. If specified
-                      the domain argument needs to be provided and the name will be
-                      computed.
-                    type: string
+                  sharedOrgs:
+                    description: |-
+                      (Set of String) Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
+                      Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
                 type: object
               initProvider:
                 description: |-
@@ -192,28 +205,39 @@ spec:
                   for example because of an external controller is managing them, like an
                   autoscaler.
                 properties:
-                  domain:
-                    description: Domain part of full domain name. If specified the
-                      sub_domain argument needs to be provided and the name will be
-                      computed.
-                    type: string
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
+                      The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    type: object
+                    x-kubernetes-map-type: granular
                   internal:
                     description: |-
-                      Flag that sets the domain as an internal domain. Internal domains are used for internal app to app networking only. Defaults to "false". Only works on shared domain.
-                      Flag that sets the domain as an internal domain. Internal domains are used for internal app to app networking only.
+                      to-container) traffic, or external (user-to-container) traffic
+                      Whether the domain is used for internal (container-to-container) traffic, or external (user-to-container) traffic
                     type: boolean
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
+                      The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    type: object
+                    x-kubernetes-map-type: granular
                   name:
-                    description: Full name of domain. If specified then the sub_domain
-                      and domain attributes will be computed from the name
+                    description: |-
+                      (String) The name of the domain;must be between 3 ~ 253 characters and follow RFC 1035
+                      The name of the domain;must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035)
                     type: string
                   org:
-                    description: The ID of the Org that owns this domain. If specified,
-                      this resource will provision a private domain. By default, the
-                      provisioned domain is a public (shared) domain.
+                    description: |-
+                      (String) The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
+                      The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
                     type: string
                   orgRef:
-                    description: Reference to a Organization in organization to populate
-                      org.
+                    description: Reference to a Org in resources to populate org.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -247,8 +271,7 @@ spec:
                     - name
                     type: object
                   orgSelector:
-                    description: Selector for a Organization in organization to populate
-                      org.
+                    description: Selector for a Org in resources to populate org.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -288,15 +311,18 @@ spec:
                         type: object
                     type: object
                   routerGroup:
-                    description: The router group GUID, which can be retrieved via
-                      the cloudfoundry_router_group data resource. You would need
-                      to provide this when creating a shared domain for TCP routes.
+                    description: |-
+                      (String) The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
+                      The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
                     type: string
-                  subDomain:
-                    description: Sub-domain part of full domain name. If specified
-                      the domain argument needs to be provided and the name will be
-                      computed.
-                    type: string
+                  sharedOrgs:
+                    description: |-
+                      (Set of String) Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
+                      Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
                 type: object
               managementPolicies:
                 default:
@@ -465,44 +491,80 @@ spec:
             required:
             - forProvider
             type: object
+            x-kubernetes-validations:
+            - message: spec.forProvider.name is a required parameter
+              rule: '!(''*'' in self.managementPolicies || ''Create'' in self.managementPolicies
+                || ''Update'' in self.managementPolicies) || has(self.forProvider.name)
+                || (has(self.initProvider) && has(self.initProvider.name))'
           status:
             description: DomainStatus defines the observed state of Domain.
             properties:
               atProvider:
                 properties:
-                  domain:
-                    description: Domain part of full domain name. If specified the
-                      sub_domain argument needs to be provided and the name will be
-                      computed.
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
+                      The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    type: object
+                    x-kubernetes-map-type: granular
+                  createdAt:
+                    description: |-
+                      (String) The date and time when the resource was created in RFC3339 format.
+                      The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                   id:
-                    description: The GUID of the domain.
+                    description: (String) The GUID of the object.
                     type: string
                   internal:
                     description: |-
-                      Flag that sets the domain as an internal domain. Internal domains are used for internal app to app networking only. Defaults to "false". Only works on shared domain.
-                      Flag that sets the domain as an internal domain. Internal domains are used for internal app to app networking only.
+                      to-container) traffic, or external (user-to-container) traffic
+                      Whether the domain is used for internal (container-to-container) traffic, or external (user-to-container) traffic
                     type: boolean
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
+                      The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    type: object
+                    x-kubernetes-map-type: granular
                   name:
-                    description: Full name of domain. If specified then the sub_domain
-                      and domain attributes will be computed from the name
+                    description: |-
+                      (String) The name of the domain;must be between 3 ~ 253 characters and follow RFC 1035
+                      The name of the domain;must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035)
                     type: string
                   org:
-                    description: The ID of the Org that owns this domain. If specified,
-                      this resource will provision a private domain. By default, the
-                      provisioned domain is a public (shared) domain.
+                    description: |-
+                      (String) The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
+                      The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
                     type: string
                   routerGroup:
-                    description: The router group GUID, which can be retrieved via
-                      the cloudfoundry_router_group data resource. You would need
-                      to provide this when creating a shared domain for TCP routes.
+                    description: |-
+                      (String) The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
+                      The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
                     type: string
-                  routerType:
-                    type: string
-                  subDomain:
-                    description: Sub-domain part of full domain name. If specified
-                      the domain argument needs to be provided and the name will be
-                      computed.
+                  sharedOrgs:
+                    description: |-
+                      (Set of String) Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
+                      Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
+                  supportedProtocols:
+                    description: |-
+                      (Set of String) Available protocols for routes using the domain, currently http and tcp
+                      Available protocols for routes using the domain, currently http and tcp
+                    items:
+                      type: string
+                    type: array
+                    x-kubernetes-list-type: set
+                  updatedAt:
+                    description: |-
+                      (String) The date and time when the resource was updated in RFC3339 format.
+                      The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                 type: object
               conditions:
@@ -521,6 +583,13 @@ spec:
                         A Message containing details about this condition's last transition from
                         one status to another, if any.
                       type: string
+                    observedGeneration:
+                      description: |-
+                        ObservedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      type: integer
                     reason:
                       description: A Reason for this condition's last transition from
                         one status to another.
@@ -544,6 +613,13 @@ spec:
                 x-kubernetes-list-map-keys:
                 - type
                 x-kubernetes-list-type: map
+              observedGeneration:
+                description: |-
+                  ObservedGeneration is the latest metadata.generation
+                  which resulted in either a ready state, or stalled due to error
+                  it can not recover from without human intervention.
+                format: int64
+                type: integer
             type: object
         required:
         - spec

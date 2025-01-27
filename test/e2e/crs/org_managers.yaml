@@ -7,7 +7,7 @@ spec:
   forProvider:
     roleType: Managers
     members:
-      - username: $USER_WHERE_ROLES_GET_ASSIGNED_EMAIL
+    - username: co-test-user@groups.sap.com
     orgRef:
       name: my-org
     enforcementPolicy: Lax

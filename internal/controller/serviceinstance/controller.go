@@ -5,7 +5,8 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/cloudfoundry-community/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/nsf/jsondiff"
 	"github.com/pkg/errors"
 	v1 "k8s.io/api/core/v1"
@@ -23,33 +24,33 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/service/v1alpha1"
+	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 	apisv1alpha1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	apisv1beta1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/cfclient"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/serviceinstance"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/features"
 )
 
 const (
-	resourceType    = "ServiceInstance"
-	externalSystem  = "Cloud Foundry"
-	errTrackPCUsage = "cannot track ProviderConfig usage"
-	errNewClient    = "cannot create a client for " + externalSystem
-	errWrongCRType  = "managed resource is not a " + resourceType
-	errUpdateCR     = "cannot update the managed resource"
-	errGet          = "cannot get " + resourceType + " in " + externalSystem
-	errCreate       = "cannot create " + resourceType + " in " + externalSystem
-	errUpdate       = "cannot update " + resourceType + " in " + externalSystem
-	errDelete       = "cannot delete " + resourceType + " in " + externalSystem
-	errCleanFailed  = "cannot delete failed service instance"
-	errSecret       = "cannot resolve secret reference"
+	resourceType     = "ServiceInstance"
+	externalSystem   = "Cloud Foundry"
+	errTrackPCUsage  = "cannot track ProviderConfig usage"
+	errNewClient     = "cannot create a client for " + externalSystem
+	errWrongCRType   = "managed resource is not a " + resourceType
+	errUpdateCR      = "cannot update the managed resource"
+	errGet           = "cannot get " + resourceType + " in " + externalSystem
+	errCreate        = "cannot create " + resourceType + " in " + externalSystem
+	errUpdate        = "cannot update " + resourceType + " in " + externalSystem
+	errDelete        = "cannot delete " + resourceType + " in " + externalSystem
+	errCleanFailed   = "cannot delete failed service instance"
+	errSecret        = "cannot resolve secret reference"
+	errGetParameters = "cannot get parameters of the service instance for drift detection. Please check this is supported or set enableParameterDriftDetection to false."
 )
 
 // Setup adds a controller that reconciles ServiceInstance CR.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
-	name := managed.ControllerName(v1alpha1.ServiceInstanceGroupKind)
+	name := managed.ControllerName(v1alpha2.ServiceInstance_GroupKind)
 
 	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
 	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
@@ -61,7 +62,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithExternalConnecter(&connector{
 			kube:        mgr.GetClient(),
 			usage:       resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
-			newClientFn: clients.CloudfoundryClientBuilder}),
+			newClientFn: serviceinstance.NewClient}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithTimeout(5 * time.Minute), // increase timeout for long-running operations
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
@@ -74,13 +75,13 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	r := managed.NewReconciler(mgr,
-		resource.ManagedKind(v1alpha1.ServiceInstanceGroupVersionKind),
+		resource.ManagedKind(v1alpha2.ServiceInstance_GroupVersionKind),
 		options...)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
-		For(&v1alpha1.ServiceInstance{}).
+		For(&v1alpha2.ServiceInstance{}).
 		Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 }
 
@@ -89,7 +90,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 type connector struct {
 	kube        k8s.Client
 	usage       resource.Tracker
-	newClientFn func(context.Context, k8s.Client, resource.Managed) (*cfclient.Client, error)
+	newClientFn func(*config.Config) (*serviceinstance.Client, error)
 }
 
 // Connect typically produces an ExternalClient by:
@@ -98,7 +99,7 @@ type connector struct {
 // 3. Getting the credentials specified by the ProviderConfig.
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
-	if _, ok := mg.(*v1alpha1.ServiceInstance); !ok {
+	if _, ok := mg.(*v1alpha2.ServiceInstance); !ok {
 		return nil, errors.New(errWrongCRType)
 	}
 
@@ -106,14 +107,19 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
-	cf, err := c.newClientFn(ctx, c.kube, mg)
+	cfg, err := clients.GetCredentialConfig(ctx, c.kube, mg)
+	if err != nil {
+		return nil, errors.Wrap(err, errNewClient)
+	}
+
+	s, err := serviceinstance.NewClient(cfg)
 	if err != nil {
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
 	return &external{
 		kube:            c.kube,
-		serviceinstance: serviceinstance.NewClient(cf),
+		serviceinstance: s,
 	}, nil
 }
 
@@ -125,8 +131,8 @@ type external struct {
 }
 
 // Observe checks if the external resource exists and if it does, it observes it.
-func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
-	cr, ok := mg.(*v1alpha1.ServiceInstance)
+func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
+	cr, ok := mg.(*v1alpha2.ServiceInstance)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errWrongCRType)
 	}
@@ -142,57 +148,61 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	// resource exists, set the external name
 	meta.SetExternalName(cr, r.GUID)
 
-	// Generate observation of the external resource
-	externalState := serviceinstance.GenerateObservation(r)
+	// Update atProvider from the retrieved the service instance
+	serviceinstance.UpdateObservation(&cr.Status.AtProvider, r)
 
-	// Get the credentials from the external resource
-	appliedCredentials, err := c.serviceinstance.GetServiceCredentials(ctx, r)
-	if err != nil { // some services do not return credentials in the response, we use the stored credential in CR
-		appliedCredentials = cr.Status.AtProvider.Credentials
-	}
-	externalState.Credentials = appliedCredentials
-
-	// Update observation of the CR with the observed state
-	cr.Status.AtProvider = externalState
-	switch cr.Status.AtProvider.LastOperation.State {
-	// If the last operation is in progress, set the CR to unavailable and signal that the reconciler should not update the resource
-	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
+	switch r.LastOperation.State {
+	case v1alpha2.LastOperationInitial, v1alpha2.LastOperationInProgress:
+		// Set the CR to unavailable and signal that the reconciler should not update the resource
 		cr.SetConditions(xpv1.Unavailable().WithMessage(r.LastOperation.Description))
 		return managed.ExternalObservation{
 			ResourceExists:   true,
-			ResourceUpToDate: true, // Do not update the resource while the last operation is in progress
+			ResourceUpToDate: true, // Set to true so that the reconciler do not schedule another update while the last operation is in progress
 		}, nil
 	// If the last operation failed, set the CR to unavailable and signal that the reconciler should retry the last operation
-	case v1alpha1.LastOperationFailed:
+	case v1alpha2.LastOperationFailed:
+		// If the last operation failed, set the CR to unavailable and signal that the reconciler should retry the last operation
 		cr.SetConditions(xpv1.Unavailable().WithMessage(r.LastOperation.Description))
 		return managed.ExternalObservation{
-			ResourceExists:   r.LastOperation.Type != v1alpha1.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
-			ResourceUpToDate: r.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
+			ResourceExists:   r.LastOperation.Type != v1alpha2.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
+			ResourceUpToDate: r.LastOperation.Type != v1alpha2.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
 		}, nil
-	case v1alpha1.LastOperationSucceeded:
+	case v1alpha2.LastOperationSucceeded:
+		// If the last operation succeeded, set the CR to available
 		cr.SetConditions(xpv1.Available())
+		// If parameter drift detection is enable, get actual credentials from the service instance
+		if cr.Spec.EnableParameterDriftDetection {
+			// Get the parameters of the service instance for drift detection
+			cred, err := c.serviceinstance.GetServiceCredentials(ctx, r)
+			if err != nil {
+				return managed.ExternalObservation{ResourceExists: true}, errors.Wrap(err, errGetParameters)
+			}
+			cr.Status.AtProvider.Credentials = cred
+		}
 		// Check if the credentials in the spec match the credentials in the external resource
 		desiredCredentials, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, errSecret)
 		}
-		upToDate := serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r) && jsonContain(appliedCredentials, desiredCredentials)
+		upToDate := serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r) && jsonContain(cr.Status.AtProvider.Credentials, desiredCredentials)
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
+	default:
+		// should never reach here
+		cr.SetConditions(xpv1.Unavailable().WithMessage(r.LastOperation.Description))
+		// If the last operation is unknown, error out
+		return managed.ExternalObservation{}, errors.New("unknown last operation state")
 	}
-
-	// If the last operation is unknown, error out
-	return managed.ExternalObservation{}, errors.New("unknown last operation state")
 }
 
 // Create attempts to create the external resource.
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
-	cr, ok := mg.(*v1alpha1.ServiceInstance)
+	cr, ok := mg.(*v1alpha2.ServiceInstance)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
 	}
 
 	// If the last operation is create and it failed, clean up the failed service instance before retry create
-	if cr.Status.AtProvider.LastOperation.Type == v1alpha1.LastOperationCreate && cr.Status.AtProvider.LastOperation.State == v1alpha1.LastOperationFailed {
+	if cr.Status.AtProvider.LastOperation.Type == v1alpha2.LastOperationCreate && cr.Status.AtProvider.LastOperation.State == v1alpha2.LastOperationFailed {
 		err := c.serviceinstance.Delete(ctx, cr)
 		if err != nil {
 			return managed.ExternalCreation{}, errors.Wrap(err, errCleanFailed)
@@ -231,7 +241,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Update attempts to update the external resource to reflect the managed resource's desired state.
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
-	cr, ok := mg.(*v1alpha1.ServiceInstance)
+	cr, ok := mg.(*v1alpha2.ServiceInstance)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errWrongCRType)
 	}
@@ -266,7 +276,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Delete attempts to delete the external resource.
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha1.ServiceInstance)
+	cr, ok := mg.(*v1alpha2.ServiceInstance)
 	if !ok {
 		return errors.New(errWrongCRType)
 	}
@@ -279,7 +289,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 }
 
 // extractSecret extracts parameters/credentials from a secret reference.
-func extractSecret(ctx context.Context, kube k8s.Client, s *v1alpha1.SecretReference) (json.RawMessage, error) {
+func extractSecret(ctx context.Context, kube k8s.Client, s *v1alpha2.SecretReference) (json.RawMessage, error) {
 	if s == nil {
 		return nil, nil
 	}
@@ -307,15 +317,23 @@ func extractSecret(ctx context.Context, kube k8s.Client, s *v1alpha1.SecretRefer
 }
 
 // extractCredentialSpec returns the parameters or credentials from the spec
-func extractCredentialSpec(ctx context.Context, kube k8s.Client, spec v1alpha1.ServiceInstanceParameters) ([]byte, error) {
-	if spec.Type == v1alpha1.ManagedService {
+func extractCredentialSpec(ctx context.Context, kube k8s.Client, spec v1alpha2.ServiceInstanceParameters) ([]byte, error) {
+
+	// If the spec has yaml parameters use those and only those.
+	if spec.Parameters != nil {
+		// Unmarshal the YAML into the map.
+		return spec.Parameters.Raw, nil
+	}
+
+	if spec.Type == v1alpha2.ManagedService {
 		if spec.JSONParams != nil {
 			return []byte(*spec.JSONParams), nil
 		}
-		return extractSecret(ctx, kube, spec.ParamsSecretRef)
+
+		return extractSecret(ctx, kube, spec.ParametersSecretRef)
 	}
 
-	if spec.Type == v1alpha1.UserProvidedService {
+	if spec.Type == v1alpha2.UserProvidedService {
 		if spec.JSONCredentials != nil {
 			return []byte(*spec.JSONCredentials), nil
 		}
@@ -331,7 +349,7 @@ type servicePlanInitializer struct {
 
 // Initialize implements crossplane InitializeFn interface
 func (s *servicePlanInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha1.ServiceInstance)
+	cr, ok := mg.(*v1alpha2.ServiceInstance)
 	if !ok {
 		return errors.New("Not a ServiceInstance")
 	}
@@ -342,8 +360,8 @@ func (s *servicePlanInitializer) Initialize(ctx context.Context, mg resource.Man
 	// fallback on crossplane.io/external-data annotation for backward compatibility
 	if cr.Spec.ForProvider.ServicePlan == nil {
 		sp := struct {
-			ServicePlan *v1alpha1.ServicePlan `json:"service_plan"`
-		}{ServicePlan: &v1alpha1.ServicePlan{}}
+			ServicePlan *v1alpha2.ServicePlanParameters `json:"service_plan"`
+		}{ServicePlan: &v1alpha2.ServicePlanParameters{}}
 
 		if data, ok := mg.GetAnnotations()["crossplane.io/external-data"]; ok {
 			if err := json.Unmarshal([]byte(data), &sp); err == nil {
@@ -382,6 +400,11 @@ func (s *servicePlanInitializer) Initialize(ctx context.Context, mg resource.Man
 func jsonContain(a, b []byte) bool {
 	// if b is "{}", it is considered as empty
 	if len(b) == 0 || string(b) == "{}" {
+		return true
+	}
+
+	// if a is nil it is considered as intention to break reconciliation
+	if a == nil {
 		return true
 	}
 

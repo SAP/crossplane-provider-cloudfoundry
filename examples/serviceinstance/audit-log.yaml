@@ -1,6 +1,6 @@
 ---
 # CR to create a managed ServiceInstance
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
 kind: ServiceInstance
 metadata:
   name: my-audit-log
@@ -33,4 +33,3 @@ spec:
   writeConnectionSecretToRef:
     name: my-audit-log-key
     namespace: default
-

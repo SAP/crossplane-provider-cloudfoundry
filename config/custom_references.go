@@ -29,10 +29,10 @@ var (
 	ExternalIDFn = "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/config.ExternalID()"
 
 	// OrgType is the package-path that implements the CRD type `Organization`.
-	OrgType = "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/organization/v1alpha1.Organization"
+	OrgType = "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org"
 
 	// SpaceType is the package-path that implements the CRD type `Space`
-	SpaceType = "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/space/v1alpha1.Space"
+	SpaceType = "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Space"
 )
 
 // CustomReferenceConfigurations configures references to non-terraformed resources, e.g., org, space.

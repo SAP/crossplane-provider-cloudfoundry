@@ -15,15 +15,7 @@ include ../../../build/makelib/image.mk
 
 # ====================================================================================
 # Targets
-#TERRAFORM_VERSION=1.5.4
-#TERRAFORM_PROVIDER_SOURCE=cloudfoundry-community/cloudfoundry
-#TERRAFORM_PROVIDER_REPO=https://github.com/cloudfoundry-community/terraform-provider-cloudfoundry
-#TERRAFORM_PROVIDER_VERSION=0.51.2
-#TERRAFORM_PROVIDER_DOWNLOAD_NAME=terraform-provider-cloudfoundry
-#TERRAFORM_NATIVE_PROVIDER_BINARY=terraform-provider-cloudfoundry_0.51.2_linux_arm64
 
-OS := linux
-ARCH := amd64
 .PHONY: img.build
 img.build:
 	@$(INFO) docker build $(IMAGE)

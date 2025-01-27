@@ -4,22 +4,17 @@ package e2e
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"testing"
 	"time"
 
-	"github.com/cloudfoundry-community/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/client"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	meta "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/cloudfoundry/v1alpha1"
-	v1alpha1members "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/members/v1alpha1"
-	v1alpha1org "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/organization/v1alpha1"
-	v1alpha1route "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/route/v1alpha1"
-	v1alpha1service "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/service/v1alpha1"
-	v1alpha1servicekey "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/servicekey/v1alpha1"
-	v1alpha1space "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/space/v1alpha1"
+	v1alpha1resources "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	v1alpha2resources "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 	v1 "k8s.io/api/core/v1"
 	wait2 "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
@@ -42,22 +37,25 @@ func TestCloudfoundry(t *testing.T) {
 		// updated checks if resource is updated, normally by observing a new value on managed field.
 		updated func(k8s.Object) (bool, error)
 	}{
-		"org":              {name: "my-org", obj: &v1alpha1org.Organization{}},
-		"org_managers":     {name: "my-org-managers", obj: &v1alpha1members.OrgMembers{}},
-		"space":            {name: "my-space", obj: &v1alpha1space.Space{}},
-		"space_developers": {name: "my-space-developers", obj: &v1alpha1members.SpaceMembers{}},
-		"service_instance": {name: "my-service-instance", obj: &v1alpha1service.ServiceInstance{}},
-		"ups":              {name: "my-ups", obj: &v1alpha1service.ServiceInstance{}},
-		"service_key":      {name: "my-service-key", obj: &v1alpha1servicekey.ServiceKey{}},
-		"route":            {name: "my-route", obj: &v1alpha1route.Route{}},
-		"app":              {name: "my-app", obj: &v1alpha1.App{}},
+		"org":                        {name: "my-org", obj: &v1alpha2resources.Org{}},
+		"org_managers":               {name: "my-org-managers", obj: &v1alpha1resources.OrgMembers{}},
+		"org_role":                   {name: "my-org-role", obj: &v1alpha2resources.OrgRole{}},
+		"space":                      {name: "my-space", obj: &v1alpha2resources.Space{}},
+		"space_developers":           {name: "my-space-developers", obj: &v1alpha1resources.SpaceMembers{}},
+		"space_role":                 {name: "my-space-role", obj: &v1alpha2resources.SpaceRole{}},
+		"service_instance":           {name: "my-service-instance", obj: &v1alpha2resources.ServiceInstance{}},
+		"ups":                        {name: "my-ups", obj: &v1alpha2resources.ServiceInstance{}},
+		"service_credential_binding": {name: "my-service-credential-binding", obj: &v1alpha2resources.ServiceCredentialBinding{}},
+		"service_key":                {name: "my-service-key", obj: &v1alpha1resources.ServiceKey{}},
+		"route":                      {name: "my-route", obj: &v1alpha1resources.Route{}},
+		"app":                        {name: "my-app", obj: &v1alpha1.App{}},
 	}
 
-	var feat = features.New("cloudfoundry e2e test").Setup(
+	var feat = features.New("CO-159 cloudfoundry e2e test").Setup(
 		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			org, err := orgID(ctx, testOrgName)
 			if err != nil {
-				t.Fatalf("test org %s not accessible error: %s", testOrgName, err)
+				t.Fatalf("test org %s not accessible", testOrgName)
 			}
 			_ = deleteSpace(ctx, org, feats["space"].name)
 			_ = deleteDomain(ctx, org, "dev.orchestrator.io")
@@ -76,7 +74,7 @@ func TestCloudfoundry(t *testing.T) {
 	)
 
 	// creation assess steps in dependency order, e.g., `org` before `space` as `space` depends on org`.
-	var steps = [...]string{"org", "org_managers", "space", "space_developers", "service_instance", "service_key", "ups"}
+	var steps = [...]string{"org", "org_managers", "org_role", "space", "space_role", "space_developers", "service_instance", "service_credential_binding", "ups"}
 	for _, name := range steps {
 		ft, ok := feats[name]
 		if !ok {
@@ -195,10 +193,9 @@ func ResourceReady(cfg *envconf.Config, object k8s.Object) wait2.ConditionWithCo
 		condition := mg.GetCondition(xpv1.TypeReady)
 		result := condition.Status == v1.ConditionTrue
 		klog.V(4).Infof(
-			"Waiting %s to become %s %s",
+			"Waiting %s to become ready. Result = %v",
 			mg.GetName(),
-			condition,
-			condition.Status,
+			result,
 		)
 		return result
 	})
@@ -213,7 +210,6 @@ func orgID(ctx context.Context, org string) (string, error) {
 	cfClient, err := getCfClient()
 	if err != nil {
 		klog.V(4).InfoS("cannot get connect to cloudfoundry")
-		fmt.Println(err)
 		return "", err
 	}
 

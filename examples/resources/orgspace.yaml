@@ -1,0 +1,41 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+kind: Org
+metadata:
+  namespace: default
+  name: my-org
+  annotations:
+    crossplane.io/external-name: cf-dev
+spec:
+  managementPolicies: ["Observe"]
+  forProvider: {}
+  providerConfigRef:
+    name: default
+
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+kind: Space
+metadata:
+  namespace: default
+  name: my-space
+spec:
+  forProvider:
+    allowSsh: false
+    name: my-space-x
+    orgRef:
+      name: my-org
+--- 
+
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+kind: SpaceMembers
+metadata:
+  namespace: default
+  name: my-space-role
+spec:
+  forProvider:
+    roleType: Developers
+    spaceRef:
+      name: my-space
+    members:
+      - username: "daniel.lou@sap.com"
+      - username: dl_673efb6870d04101363fc6b3@global.corp.sap

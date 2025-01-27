@@ -1,0 +1,10 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+kind: Org
+metadata:
+  namespace: default
+  name: my-org-create
+spec:
+  forProvider:
+    name: cf-dev
+

@@ -5,12 +5,13 @@ import (
 	"encoding/json"
 	"time"
 
-	"github.com/cloudfoundry-community/go-cfclient/v3/client"
-	"github.com/cloudfoundry-community/go-cfclient/v3/resource"
+	"github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/config"
+	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/pkg/errors"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/service/v1alpha1"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/cfclient"
+	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
 )
 
 // ServiceInstance defines interfaces to the ServiceInstance resource
@@ -19,9 +20,9 @@ type ServiceInstance interface {
 	GetManagedParameters(context.Context, string) (*json.RawMessage, error)
 	GetUserProvidedCredentials(context.Context, string) (*json.RawMessage, error)
 	Single(context.Context, *client.ServiceInstanceListOptions) (*resource.ServiceInstance, error)
-	CreateManaged(context.Context, *resource.ServiceInstanceCreate) (string, error)
+	CreateManaged(context.Context, *resource.ServiceInstanceManagedCreate) (string, error)
 	UpdateManaged(context.Context, string, *resource.ServiceInstanceManagedUpdate) (string, *resource.ServiceInstance, error)
-	CreateUserProvided(context.Context, *resource.ServiceInstanceCreate) (*resource.ServiceInstance, error)
+	CreateUserProvided(context.Context, *resource.ServiceInstanceUserProvidedCreate) (*resource.ServiceInstance, error)
 	UpdateUserProvided(context.Context, string, *resource.ServiceInstanceUserProvidedUpdate) (*resource.ServiceInstance, error)
 	Delete(context.Context, string) (string, error)
 }
@@ -62,8 +63,12 @@ type Client struct {
 }
 
 // NewClient creates a new client instance from a cfclient.ServiceInstance instance.
-func NewClient(cf *cfclient.Client) *Client {
-	return &Client{cf.ServiceInstances, cf.Jobs}
+func NewClient(config *config.Config) (*Client, error) {
+	cf, err := client.New(config)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{cf.ServiceInstances, cf.Jobs}, nil
 }
 
 // Get retrieves external resource using GUID
@@ -75,7 +80,7 @@ func (c *Client) Get(ctx context.Context, guid string) (*resource.ServiceInstanc
 }
 
 // MatchSingle retrieves external resource by matching CR's ForProvider spec
-func (c *Client) MatchSingle(ctx context.Context, spec v1alpha1.ServiceInstanceParameters) (*resource.ServiceInstance, error) {
+func (c *Client) MatchSingle(ctx context.Context, spec v1alpha2.ServiceInstanceParameters) (*resource.ServiceInstance, error) {
 	// if external-name is not set, search by Name and Space
 	opt := client.NewServiceInstanceListOptions()
 	opt.Type = string(spec.Type)
@@ -83,7 +88,8 @@ func (c *Client) MatchSingle(ctx context.Context, spec v1alpha1.ServiceInstanceP
 	if spec.Space != nil && *spec.Space != "" {
 		opt.SpaceGUIDs.EqualTo(*spec.Space)
 	}
-	if spec.ServicePlan != nil && spec.ServicePlan.ID != nil && *spec.ServicePlan.ID != "" {
+
+	if spec.ServicePlan != nil && *spec.ServicePlan.ID != "" {
 		opt.ServicePlanGUIDs.EqualTo(*spec.ServicePlan.ID)
 	}
 
@@ -108,7 +114,7 @@ func (c *Client) GetServiceCredentials(ctx context.Context, r *resource.ServiceI
 		return nil, nil
 	}
 
-	if r.Type == string(v1alpha1.ManagedService) {
+	if r.Type == string(v1alpha2.ManagedService) {
 		raw, err := c.ServiceInstance.GetManagedParameters(ctx, r.GUID)
 		if raw == nil {
 			return nil, err
@@ -124,12 +130,12 @@ func (c *Client) GetServiceCredentials(ctx context.Context, r *resource.ServiceI
 }
 
 // Create creates the external resource according to CR's ForProvider spec
-func (c *Client) Create(ctx context.Context, spec v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) Create(ctx context.Context, spec v1alpha2.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
 	switch spec.Type {
-	case v1alpha1.ManagedService:
+	case v1alpha2.ManagedService:
 		return c.createManaged(ctx, spec, creds)
 
-	case v1alpha1.UserProvidedService:
+	case v1alpha2.UserProvidedService:
 		return c.createUserProvided(ctx, spec, creds)
 	default:
 		return nil, errors.New("unknown service instance type")
@@ -137,7 +143,7 @@ func (c *Client) Create(ctx context.Context, spec v1alpha1.ServiceInstanceParame
 }
 
 // createManaged creates a managed service instance according to CR's ForProvider spec
-func (c *Client) createManaged(ctx context.Context, spec v1alpha1.ServiceInstanceParameters, params json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) createManaged(ctx context.Context, spec v1alpha2.ServiceInstanceParameters, params json.RawMessage) (*resource.ServiceInstance, error) {
 
 	opt := resource.NewServiceInstanceCreateManaged(*spec.Name, *spec.Space, *spec.ServicePlan.ID)
 
@@ -158,7 +164,7 @@ func (c *Client) createManaged(ctx context.Context, spec v1alpha1.ServiceInstanc
 }
 
 // createUserProvided creates a user-provided service instance according to CR's ForProvider spec
-func (c *Client) createUserProvided(ctx context.Context, spec v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) createUserProvided(ctx context.Context, spec v1alpha2.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
 	// Credential is required for UPS
 	if creds == nil {
 		return nil, errors.New("Missing or invalid credentials")
@@ -181,15 +187,15 @@ func (c *Client) createUserProvided(ctx context.Context, spec v1alpha1.ServiceIn
 }
 
 // Update updates the external resource to keep it in sync with CR's ForProvider spec
-func (c *Client) Update(ctx context.Context, guid string, desired *v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) Update(ctx context.Context, guid string, desired *v1alpha2.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
 	observed, err := c.Get(ctx, guid)
 	if err != nil {
 		return nil, err
 	}
 	switch desired.Type {
-	case v1alpha1.ManagedService:
+	case v1alpha2.ManagedService:
 		return c.updateManaged(ctx, observed, desired, creds)
-	case v1alpha1.UserProvidedService:
+	case v1alpha2.UserProvidedService:
 		return c.updateUserProvided(ctx, observed, desired, creds)
 	default:
 		return nil, errors.New("unknown service instance type")
@@ -197,7 +203,7 @@ func (c *Client) Update(ctx context.Context, guid string, desired *v1alpha1.Serv
 }
 
 // updateManaged updates managed service instance according to CR's ForProvider spec
-func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceInstance, desired *v1alpha1.ServiceInstanceParameters, params json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceInstance, desired *v1alpha2.ServiceInstanceParameters, params json.RawMessage) (*resource.ServiceInstance, error) {
 	upd := resource.NewServiceInstanceManagedUpdate()
 
 	if observed.Name != *desired.Name {
@@ -231,7 +237,7 @@ func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceIn
 }
 
 // updateUserProvided updates user-provided service instance according to CR's ForProvider spec
-func (c *Client) updateUserProvided(ctx context.Context, observed *resource.ServiceInstance, desired *v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) updateUserProvided(ctx context.Context, observed *resource.ServiceInstance, desired *v1alpha2.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
 	upd := resource.NewServiceInstanceUserProvidedUpdate()
 
 	if creds == nil {
@@ -248,11 +254,11 @@ func (c *Client) updateUserProvided(ctx context.Context, observed *resource.Serv
 }
 
 // Delete deletes a service instance managed by the CR
-func (c *Client) Delete(ctx context.Context, cr *v1alpha1.ServiceInstance) error {
+func (c *Client) Delete(ctx context.Context, cr *v1alpha2.ServiceInstance) error {
 	job, err := c.ServiceInstance.Delete(ctx, *cr.Status.AtProvider.ID)
 
 	// If the service instance is already deleted, return nil
-	if cfclient.ErrorIsNotFound(err) {
+	if clients.ErrorIsNotFound(err) {
 		return nil
 	}
 
@@ -265,44 +271,41 @@ func (c *Client) Delete(ctx context.Context, cr *v1alpha1.ServiceInstance) error
 }
 
 // LateInitialize populates EMPTY parameters based on the observed managed resource properties
-func LateInitialize(p *v1alpha1.ServiceInstanceParameters, r *resource.ServiceInstance) {
+func LateInitialize(p *v1alpha2.ServicePlanParameters, r *resource.ServiceInstance) {
 	// nothing to do here
 }
 
-// GenerateObservation updates CR status based on the observed managed resource status
-func GenerateObservation(observed *resource.ServiceInstance) v1alpha1.ServiceInstanceObservation {
-	if observed == nil {
-		return v1alpha1.ServiceInstanceObservation{}
+// UpdateObservation updates CR status based on the observed managed resource status
+func UpdateObservation(in *v1alpha2.ServiceInstanceObservation, r *resource.ServiceInstance) {
+	if r == nil {
+		return
 	}
 
-	o := v1alpha1.ServiceInstanceObservation{
-		ID: &observed.GUID,
-		LastOperation: v1alpha1.LastOperation{
-			Type:        observed.LastOperation.Type,
-			State:       observed.LastOperation.State,
-			Description: observed.LastOperation.Description,
-			UpdatedAt:   observed.LastOperation.UpdatedAt.String(),
-		},
+	in.ID = &r.GUID
+	in.LastOperation = v1alpha2.LastOperation{
+		Type:        r.LastOperation.Type,
+		State:       r.LastOperation.State,
+		Description: r.LastOperation.Description,
+		UpdatedAt:   r.LastOperation.UpdatedAt.String(),
 	}
 
-	if observed.Type == string(v1alpha1.ManagedService) {
-		o.ServicePlan = &observed.Relationships.ServicePlan.Data.GUID
+	if r.Type == string(v1alpha2.ManagedService) {
+		in.ServicePlan = &r.Relationships.ServicePlan.Data.GUID
 	}
-	return o
 }
 
 // IsUpToDate checks if the managed resource is in sync with CR.
-func IsUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.ServiceInstance) bool {
+func IsUpToDate(in *v1alpha2.ServiceInstanceParameters, observed *resource.ServiceInstance) bool {
 	if *in.Name != observed.Name {
 		return false
 	}
 
 	switch in.Type {
-	case v1alpha1.ManagedService:
+	case v1alpha2.ManagedService:
 		if in.ServicePlan.ID != nil && observed.Relationships.ServicePlan.Data.GUID != *in.ServicePlan.ID {
 			return false
 		}
-	case v1alpha1.UserProvidedService:
+	case v1alpha2.UserProvidedService:
 		if in.RouteServiceURL != *observed.RouteServiceURL {
 			return false
 		}

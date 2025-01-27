@@ -12,8 +12,12 @@ import (
 
 // A ProviderConfigSpec defines the desired state of a ProviderConfig.
 type ProviderConfigSpec struct {
+	// apiEndpoint provides the API of the CloudFoundry instance. This overrides the field `Endpoint`.
+	// +kubebuilder:validation:Optional
+	APIEndpoint *string `json:"apiEndpoint"`
 	// Endpoint provides the connection details
-	Endpoint EndpointConfig `json:"endpoint"`
+	// +kubebuilder:validation:Optional
+	Endpoint *EndpointConfig `json:"endpoint"`
 	// Credentials required to authenticate to this provider.
 	Credentials ProviderCredentials `json:"credentials"`
 }

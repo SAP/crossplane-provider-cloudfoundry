@@ -1,0 +1,31 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+kind: Org
+metadata:
+  namespace: default
+  name: my-org
+  annotations:
+    crossplane.io/external-name: cf-dev
+spec:
+  forProvider:
+    name: cf-dev
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+kind: OrgQuota
+metadata:
+  annotations:
+    crossplane.io/external-name: 03e471b1-1ccb-4b21-ab49-61adfb3d8fb5
+  name: my-orgquota
+spec:
+  deletionPolicy: Delete
+  forProvider:
+    name: my-orgquota
+    allowPaidServicePlans: true
+    instanceMemory: 16384
+    orgs:
+    - 8d47af7d-d8ff-494b-a6ff-60fe1aec648d
+    totalMemory: 5120
+    totalRoutes: 50
+    totalServices: 500
+  providerConfigRef:
+    name: default

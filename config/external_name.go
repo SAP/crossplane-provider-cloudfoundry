@@ -9,11 +9,14 @@ import "github.com/crossplane/upjet/pkg/config"
 // ExternalNameConfigs contains all external name configurations for this
 // provider.
 var ExternalNameConfigs = map[string]config.ExternalName{
-	// Import requires using a randomly generated ID from provider: nl-2e21sda
-	"cloudfoundry_app":                   config.IdentifierFromProvider,
-	"cloudfoundry_domain":                config.IdentifierFromProvider,
-	"cloudfoundry_private_domain_access": config.IdentifierFromProvider,
-	"cloudfoundry_space_quota":           config.IdentifierFromProvider,
+	//	"cloudfoundry_org": config.IdentifierFromProvider,
+	// "cloudfoundry_org_role": config.IdentifierFromProvider,
+	//	"cloudfoundry_org_quota":   config.IdentifierFromProvider,
+	//	"cloudfoundry_space":       config.IdentifierFromProvider,
+	//	"cloudfoundry_space_role":  config.IdentifierFromProvider,
+	//	"cloudfoundry_space_quota": config.IdentifierFromProvider,
+	"cloudfoundry_app":    config.IdentifierFromProvider,
+	"cloudfoundry_domain": config.IdentifierFromProvider,
 }
 
 // ExternalNameConfigurations applies all external name configs listed in the

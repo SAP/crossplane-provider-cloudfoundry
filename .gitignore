@@ -13,3 +13,4 @@ cover.out
 .go-version
 #ignore dev.env
 dev.env
+*~

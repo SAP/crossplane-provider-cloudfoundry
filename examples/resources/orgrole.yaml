@@ -1,0 +1,13 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+kind: OrgRole
+metadata:
+  namespace: default
+  name: my-org-auditor-daniel
+spec:
+  forProvider:
+    type: "Auditor"
+    orgRef:
+      name: my-org
+    username: "daniel.lou@sap.com"
+    origin: sap.ids

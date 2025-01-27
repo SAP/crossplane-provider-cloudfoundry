@@ -59,11 +59,6 @@ func (in *AppInitParameters) DeepCopyInto(out *AppInitParameters) {
 			(*out)[key] = outVal
 		}
 	}
-	if in.Buildpack != nil {
-		in, out := &in.Buildpack, &out.Buildpack
-		*out = new(string)
-		**out = **in
-	}
 	if in.Buildpacks != nil {
 		in, out := &in.Buildpacks, &out.Buildpacks
 		*out = make([]*string, len(*in))
@@ -82,31 +77,49 @@ func (in *AppInitParameters) DeepCopyInto(out *AppInitParameters) {
 	}
 	if in.DiskQuota != nil {
 		in, out := &in.DiskQuota, &out.DiskQuota
-		*out = new(float64)
+		*out = new(string)
 		**out = **in
+	}
+	if in.DockerCredentials != nil {
+		in, out := &in.DockerCredentials, &out.DockerCredentials
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
 	}
 	if in.DockerImage != nil {
 		in, out := &in.DockerImage, &out.DockerImage
 		*out = new(string)
 		**out = **in
 	}
-	if in.EnableSSH != nil {
-		in, out := &in.EnableSSH, &out.EnableSSH
-		*out = new(bool)
-		**out = **in
+	if in.Environment != nil {
+		in, out := &in.Environment, &out.Environment
+		*out = make(map[string]*string, len(*in))
+		for key, val := range *in {
+			var outVal *string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				inVal := (*in)[key]
+				in, out := &inVal, &outVal
+				*out = new(string)
+				**out = **in
+			}
+			(*out)[key] = outVal
+		}
 	}
 	if in.HealthCheckHTTPEndpoint != nil {
 		in, out := &in.HealthCheckHTTPEndpoint, &out.HealthCheckHTTPEndpoint
 		*out = new(string)
 		**out = **in
 	}
-	if in.HealthCheckInvocationTimeout != nil {
-		in, out := &in.HealthCheckInvocationTimeout, &out.HealthCheckInvocationTimeout
+	if in.HealthCheckInterval != nil {
+		in, out := &in.HealthCheckInterval, &out.HealthCheckInterval
 		*out = new(float64)
 		**out = **in
 	}
-	if in.HealthCheckTimeout != nil {
-		in, out := &in.HealthCheckTimeout, &out.HealthCheckTimeout
+	if in.HealthCheckInvocationTimeout != nil {
+		in, out := &in.HealthCheckInvocationTimeout, &out.HealthCheckInvocationTimeout
 		*out = new(float64)
 		**out = **in
 	}
@@ -136,13 +149,28 @@ func (in *AppInitParameters) DeepCopyInto(out *AppInitParameters) {
 			(*out)[key] = outVal
 		}
 	}
+	if in.LogRateLimitPerSecond != nil {
+		in, out := &in.LogRateLimitPerSecond, &out.LogRateLimitPerSecond
+		*out = new(string)
+		**out = **in
+	}
 	if in.Memory != nil {
 		in, out := &in.Memory, &out.Memory
-		*out = new(float64)
+		*out = new(string)
 		**out = **in
 	}
 	if in.Name != nil {
 		in, out := &in.Name, &out.Name
+		*out = new(string)
+		**out = **in
+	}
+	if in.NoRoute != nil {
+		in, out := &in.NoRoute, &out.NoRoute
+		*out = new(bool)
+		**out = **in
+	}
+	if in.OrgName != nil {
+		in, out := &in.OrgName, &out.OrgName
 		*out = new(string)
 		**out = **in
 	}
@@ -151,16 +179,37 @@ func (in *AppInitParameters) DeepCopyInto(out *AppInitParameters) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.Ports != nil {
-		in, out := &in.Ports, &out.Ports
-		*out = make([]*float64, len(*in))
+	if in.Processes != nil {
+		in, out := &in.Processes, &out.Processes
+		*out = make([]ProcessesInitParameters, len(*in))
 		for i := range *in {
-			if (*in)[i] != nil {
-				in, out := &(*in)[i], &(*out)[i]
-				*out = new(float64)
-				**out = **in
-			}
+			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
+	}
+	if in.RandomRoute != nil {
+		in, out := &in.RandomRoute, &out.RandomRoute
+		*out = new(bool)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckHTTPEndpoint != nil {
+		in, out := &in.ReadinessHealthCheckHTTPEndpoint, &out.ReadinessHealthCheckHTTPEndpoint
+		*out = new(string)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckInterval != nil {
+		in, out := &in.ReadinessHealthCheckInterval, &out.ReadinessHealthCheckInterval
+		*out = new(float64)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckInvocationTimeout != nil {
+		in, out := &in.ReadinessHealthCheckInvocationTimeout, &out.ReadinessHealthCheckInvocationTimeout
+		*out = new(float64)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckType != nil {
+		in, out := &in.ReadinessHealthCheckType, &out.ReadinessHealthCheckType
+		*out = new(string)
+		**out = **in
 	}
 	if in.Routes != nil {
 		in, out := &in.Routes, &out.Routes
@@ -169,9 +218,16 @@ func (in *AppInitParameters) DeepCopyInto(out *AppInitParameters) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.ServiceBinding != nil {
-		in, out := &in.ServiceBinding, &out.ServiceBinding
-		*out = make([]ServiceBindingInitParameters, len(*in))
+	if in.ServiceBindings != nil {
+		in, out := &in.ServiceBindings, &out.ServiceBindings
+		*out = make([]ServiceBindingsInitParameters, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.Sidecars != nil {
+		in, out := &in.Sidecars, &out.Sidecars
+		*out = make([]SidecarsInitParameters, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -181,29 +237,14 @@ func (in *AppInitParameters) DeepCopyInto(out *AppInitParameters) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.Space != nil {
-		in, out := &in.Space, &out.Space
+	if in.SpaceName != nil {
+		in, out := &in.SpaceName, &out.SpaceName
 		*out = new(string)
 		**out = **in
-	}
-	if in.SpaceRef != nil {
-		in, out := &in.SpaceRef, &out.SpaceRef
-		*out = new(v1.Reference)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.SpaceSelector != nil {
-		in, out := &in.SpaceSelector, &out.SpaceSelector
-		*out = new(v1.Selector)
-		(*in).DeepCopyInto(*out)
 	}
 	if in.Stack != nil {
 		in, out := &in.Stack, &out.Stack
 		*out = new(string)
-		**out = **in
-	}
-	if in.Stopped != nil {
-		in, out := &in.Stopped, &out.Stopped
-		*out = new(bool)
 		**out = **in
 	}
 	if in.Strategy != nil {
@@ -279,11 +320,6 @@ func (in *AppObservation) DeepCopyInto(out *AppObservation) {
 			(*out)[key] = outVal
 		}
 	}
-	if in.Buildpack != nil {
-		in, out := &in.Buildpack, &out.Buildpack
-		*out = new(string)
-		**out = **in
-	}
 	if in.Buildpacks != nil {
 		in, out := &in.Buildpacks, &out.Buildpacks
 		*out = make([]*string, len(*in))
@@ -300,9 +336,14 @@ func (in *AppObservation) DeepCopyInto(out *AppObservation) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.CreatedAt != nil {
+		in, out := &in.CreatedAt, &out.CreatedAt
+		*out = new(string)
+		**out = **in
+	}
 	if in.DiskQuota != nil {
 		in, out := &in.DiskQuota, &out.DiskQuota
-		*out = new(float64)
+		*out = new(string)
 		**out = **in
 	}
 	if in.DockerImage != nil {
@@ -310,23 +351,34 @@ func (in *AppObservation) DeepCopyInto(out *AppObservation) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.EnableSSH != nil {
-		in, out := &in.EnableSSH, &out.EnableSSH
-		*out = new(bool)
-		**out = **in
+	if in.Environment != nil {
+		in, out := &in.Environment, &out.Environment
+		*out = make(map[string]*string, len(*in))
+		for key, val := range *in {
+			var outVal *string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				inVal := (*in)[key]
+				in, out := &inVal, &outVal
+				*out = new(string)
+				**out = **in
+			}
+			(*out)[key] = outVal
+		}
 	}
 	if in.HealthCheckHTTPEndpoint != nil {
 		in, out := &in.HealthCheckHTTPEndpoint, &out.HealthCheckHTTPEndpoint
 		*out = new(string)
 		**out = **in
 	}
-	if in.HealthCheckInvocationTimeout != nil {
-		in, out := &in.HealthCheckInvocationTimeout, &out.HealthCheckInvocationTimeout
+	if in.HealthCheckInterval != nil {
+		in, out := &in.HealthCheckInterval, &out.HealthCheckInterval
 		*out = new(float64)
 		**out = **in
 	}
-	if in.HealthCheckTimeout != nil {
-		in, out := &in.HealthCheckTimeout, &out.HealthCheckTimeout
+	if in.HealthCheckInvocationTimeout != nil {
+		in, out := &in.HealthCheckInvocationTimeout, &out.HealthCheckInvocationTimeout
 		*out = new(float64)
 		**out = **in
 	}
@@ -337,11 +389,6 @@ func (in *AppObservation) DeepCopyInto(out *AppObservation) {
 	}
 	if in.ID != nil {
 		in, out := &in.ID, &out.ID
-		*out = new(string)
-		**out = **in
-	}
-	if in.IDBg != nil {
-		in, out := &in.IDBg, &out.IDBg
 		*out = new(string)
 		**out = **in
 	}
@@ -366,13 +413,28 @@ func (in *AppObservation) DeepCopyInto(out *AppObservation) {
 			(*out)[key] = outVal
 		}
 	}
+	if in.LogRateLimitPerSecond != nil {
+		in, out := &in.LogRateLimitPerSecond, &out.LogRateLimitPerSecond
+		*out = new(string)
+		**out = **in
+	}
 	if in.Memory != nil {
 		in, out := &in.Memory, &out.Memory
-		*out = new(float64)
+		*out = new(string)
 		**out = **in
 	}
 	if in.Name != nil {
 		in, out := &in.Name, &out.Name
+		*out = new(string)
+		**out = **in
+	}
+	if in.NoRoute != nil {
+		in, out := &in.NoRoute, &out.NoRoute
+		*out = new(bool)
+		**out = **in
+	}
+	if in.OrgName != nil {
+		in, out := &in.OrgName, &out.OrgName
 		*out = new(string)
 		**out = **in
 	}
@@ -381,16 +443,37 @@ func (in *AppObservation) DeepCopyInto(out *AppObservation) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.Ports != nil {
-		in, out := &in.Ports, &out.Ports
-		*out = make([]*float64, len(*in))
+	if in.Processes != nil {
+		in, out := &in.Processes, &out.Processes
+		*out = make([]ProcessesObservation, len(*in))
 		for i := range *in {
-			if (*in)[i] != nil {
-				in, out := &(*in)[i], &(*out)[i]
-				*out = new(float64)
-				**out = **in
-			}
+			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
+	}
+	if in.RandomRoute != nil {
+		in, out := &in.RandomRoute, &out.RandomRoute
+		*out = new(bool)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckHTTPEndpoint != nil {
+		in, out := &in.ReadinessHealthCheckHTTPEndpoint, &out.ReadinessHealthCheckHTTPEndpoint
+		*out = new(string)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckInterval != nil {
+		in, out := &in.ReadinessHealthCheckInterval, &out.ReadinessHealthCheckInterval
+		*out = new(float64)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckInvocationTimeout != nil {
+		in, out := &in.ReadinessHealthCheckInvocationTimeout, &out.ReadinessHealthCheckInvocationTimeout
+		*out = new(float64)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckType != nil {
+		in, out := &in.ReadinessHealthCheckType, &out.ReadinessHealthCheckType
+		*out = new(string)
+		**out = **in
 	}
 	if in.Routes != nil {
 		in, out := &in.Routes, &out.Routes
@@ -399,9 +482,16 @@ func (in *AppObservation) DeepCopyInto(out *AppObservation) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.ServiceBinding != nil {
-		in, out := &in.ServiceBinding, &out.ServiceBinding
-		*out = make([]ServiceBindingObservation, len(*in))
+	if in.ServiceBindings != nil {
+		in, out := &in.ServiceBindings, &out.ServiceBindings
+		*out = make([]ServiceBindingsObservation, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.Sidecars != nil {
+		in, out := &in.Sidecars, &out.Sidecars
+		*out = make([]SidecarsObservation, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -411,19 +501,14 @@ func (in *AppObservation) DeepCopyInto(out *AppObservation) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.Space != nil {
-		in, out := &in.Space, &out.Space
+	if in.SpaceName != nil {
+		in, out := &in.SpaceName, &out.SpaceName
 		*out = new(string)
 		**out = **in
 	}
 	if in.Stack != nil {
 		in, out := &in.Stack, &out.Stack
 		*out = new(string)
-		**out = **in
-	}
-	if in.Stopped != nil {
-		in, out := &in.Stopped, &out.Stopped
-		*out = new(bool)
 		**out = **in
 	}
 	if in.Strategy != nil {
@@ -434,6 +519,11 @@ func (in *AppObservation) DeepCopyInto(out *AppObservation) {
 	if in.Timeout != nil {
 		in, out := &in.Timeout, &out.Timeout
 		*out = new(float64)
+		**out = **in
+	}
+	if in.UpdatedAt != nil {
+		in, out := &in.UpdatedAt, &out.UpdatedAt
+		*out = new(string)
 		**out = **in
 	}
 }
@@ -467,11 +557,6 @@ func (in *AppParameters) DeepCopyInto(out *AppParameters) {
 			(*out)[key] = outVal
 		}
 	}
-	if in.Buildpack != nil {
-		in, out := &in.Buildpack, &out.Buildpack
-		*out = new(string)
-		**out = **in
-	}
 	if in.Buildpacks != nil {
 		in, out := &in.Buildpacks, &out.Buildpacks
 		*out = make([]*string, len(*in))
@@ -490,7 +575,7 @@ func (in *AppParameters) DeepCopyInto(out *AppParameters) {
 	}
 	if in.DiskQuota != nil {
 		in, out := &in.DiskQuota, &out.DiskQuota
-		*out = new(float64)
+		*out = new(string)
 		**out = **in
 	}
 	if in.DockerCredentialsSecretRef != nil {
@@ -503,28 +588,34 @@ func (in *AppParameters) DeepCopyInto(out *AppParameters) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.EnableSSH != nil {
-		in, out := &in.EnableSSH, &out.EnableSSH
-		*out = new(bool)
-		**out = **in
-	}
-	if in.EnvironmentSecretRef != nil {
-		in, out := &in.EnvironmentSecretRef, &out.EnvironmentSecretRef
-		*out = new(v1.SecretReference)
-		**out = **in
+	if in.Environment != nil {
+		in, out := &in.Environment, &out.Environment
+		*out = make(map[string]*string, len(*in))
+		for key, val := range *in {
+			var outVal *string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				inVal := (*in)[key]
+				in, out := &inVal, &outVal
+				*out = new(string)
+				**out = **in
+			}
+			(*out)[key] = outVal
+		}
 	}
 	if in.HealthCheckHTTPEndpoint != nil {
 		in, out := &in.HealthCheckHTTPEndpoint, &out.HealthCheckHTTPEndpoint
 		*out = new(string)
 		**out = **in
 	}
-	if in.HealthCheckInvocationTimeout != nil {
-		in, out := &in.HealthCheckInvocationTimeout, &out.HealthCheckInvocationTimeout
+	if in.HealthCheckInterval != nil {
+		in, out := &in.HealthCheckInterval, &out.HealthCheckInterval
 		*out = new(float64)
 		**out = **in
 	}
-	if in.HealthCheckTimeout != nil {
-		in, out := &in.HealthCheckTimeout, &out.HealthCheckTimeout
+	if in.HealthCheckInvocationTimeout != nil {
+		in, out := &in.HealthCheckInvocationTimeout, &out.HealthCheckInvocationTimeout
 		*out = new(float64)
 		**out = **in
 	}
@@ -554,13 +645,28 @@ func (in *AppParameters) DeepCopyInto(out *AppParameters) {
 			(*out)[key] = outVal
 		}
 	}
+	if in.LogRateLimitPerSecond != nil {
+		in, out := &in.LogRateLimitPerSecond, &out.LogRateLimitPerSecond
+		*out = new(string)
+		**out = **in
+	}
 	if in.Memory != nil {
 		in, out := &in.Memory, &out.Memory
-		*out = new(float64)
+		*out = new(string)
 		**out = **in
 	}
 	if in.Name != nil {
 		in, out := &in.Name, &out.Name
+		*out = new(string)
+		**out = **in
+	}
+	if in.NoRoute != nil {
+		in, out := &in.NoRoute, &out.NoRoute
+		*out = new(bool)
+		**out = **in
+	}
+	if in.OrgName != nil {
+		in, out := &in.OrgName, &out.OrgName
 		*out = new(string)
 		**out = **in
 	}
@@ -569,16 +675,37 @@ func (in *AppParameters) DeepCopyInto(out *AppParameters) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.Ports != nil {
-		in, out := &in.Ports, &out.Ports
-		*out = make([]*float64, len(*in))
+	if in.Processes != nil {
+		in, out := &in.Processes, &out.Processes
+		*out = make([]ProcessesParameters, len(*in))
 		for i := range *in {
-			if (*in)[i] != nil {
-				in, out := &(*in)[i], &(*out)[i]
-				*out = new(float64)
-				**out = **in
-			}
+			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
+	}
+	if in.RandomRoute != nil {
+		in, out := &in.RandomRoute, &out.RandomRoute
+		*out = new(bool)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckHTTPEndpoint != nil {
+		in, out := &in.ReadinessHealthCheckHTTPEndpoint, &out.ReadinessHealthCheckHTTPEndpoint
+		*out = new(string)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckInterval != nil {
+		in, out := &in.ReadinessHealthCheckInterval, &out.ReadinessHealthCheckInterval
+		*out = new(float64)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckInvocationTimeout != nil {
+		in, out := &in.ReadinessHealthCheckInvocationTimeout, &out.ReadinessHealthCheckInvocationTimeout
+		*out = new(float64)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckType != nil {
+		in, out := &in.ReadinessHealthCheckType, &out.ReadinessHealthCheckType
+		*out = new(string)
+		**out = **in
 	}
 	if in.Routes != nil {
 		in, out := &in.Routes, &out.Routes
@@ -587,9 +714,16 @@ func (in *AppParameters) DeepCopyInto(out *AppParameters) {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
 	}
-	if in.ServiceBinding != nil {
-		in, out := &in.ServiceBinding, &out.ServiceBinding
-		*out = make([]ServiceBindingParameters, len(*in))
+	if in.ServiceBindings != nil {
+		in, out := &in.ServiceBindings, &out.ServiceBindings
+		*out = make([]ServiceBindingsParameters, len(*in))
+		for i := range *in {
+			(*in)[i].DeepCopyInto(&(*out)[i])
+		}
+	}
+	if in.Sidecars != nil {
+		in, out := &in.Sidecars, &out.Sidecars
+		*out = make([]SidecarsParameters, len(*in))
 		for i := range *in {
 			(*in)[i].DeepCopyInto(&(*out)[i])
 		}
@@ -599,29 +733,14 @@ func (in *AppParameters) DeepCopyInto(out *AppParameters) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.Space != nil {
-		in, out := &in.Space, &out.Space
+	if in.SpaceName != nil {
+		in, out := &in.SpaceName, &out.SpaceName
 		*out = new(string)
 		**out = **in
-	}
-	if in.SpaceRef != nil {
-		in, out := &in.SpaceRef, &out.SpaceRef
-		*out = new(v1.Reference)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.SpaceSelector != nil {
-		in, out := &in.SpaceSelector, &out.SpaceSelector
-		*out = new(v1.Selector)
-		(*in).DeepCopyInto(*out)
 	}
 	if in.Stack != nil {
 		in, out := &in.Stack, &out.Stack
 		*out = new(string)
-		**out = **in
-	}
-	if in.Stopped != nil {
-		in, out := &in.Stopped, &out.Stopped
-		*out = new(bool)
 		**out = **in
 	}
 	if in.Strategy != nil {
@@ -711,15 +830,42 @@ func (in *Domain) DeepCopyObject() runtime.Object {
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
 func (in *DomainInitParameters) DeepCopyInto(out *DomainInitParameters) {
 	*out = *in
-	if in.Domain != nil {
-		in, out := &in.Domain, &out.Domain
-		*out = new(string)
-		**out = **in
+	if in.Annotations != nil {
+		in, out := &in.Annotations, &out.Annotations
+		*out = make(map[string]*string, len(*in))
+		for key, val := range *in {
+			var outVal *string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				inVal := (*in)[key]
+				in, out := &inVal, &outVal
+				*out = new(string)
+				**out = **in
+			}
+			(*out)[key] = outVal
+		}
 	}
 	if in.Internal != nil {
 		in, out := &in.Internal, &out.Internal
 		*out = new(bool)
 		**out = **in
+	}
+	if in.Labels != nil {
+		in, out := &in.Labels, &out.Labels
+		*out = make(map[string]*string, len(*in))
+		for key, val := range *in {
+			var outVal *string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				inVal := (*in)[key]
+				in, out := &inVal, &outVal
+				*out = new(string)
+				**out = **in
+			}
+			(*out)[key] = outVal
+		}
 	}
 	if in.Name != nil {
 		in, out := &in.Name, &out.Name
@@ -746,10 +892,16 @@ func (in *DomainInitParameters) DeepCopyInto(out *DomainInitParameters) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.SubDomain != nil {
-		in, out := &in.SubDomain, &out.SubDomain
-		*out = new(string)
-		**out = **in
+	if in.SharedOrgs != nil {
+		in, out := &in.SharedOrgs, &out.SharedOrgs
+		*out = make([]*string, len(*in))
+		for i := range *in {
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(string)
+				**out = **in
+			}
+		}
 	}
 }
 
@@ -798,8 +950,24 @@ func (in *DomainList) DeepCopyObject() runtime.Object {
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
 func (in *DomainObservation) DeepCopyInto(out *DomainObservation) {
 	*out = *in
-	if in.Domain != nil {
-		in, out := &in.Domain, &out.Domain
+	if in.Annotations != nil {
+		in, out := &in.Annotations, &out.Annotations
+		*out = make(map[string]*string, len(*in))
+		for key, val := range *in {
+			var outVal *string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				inVal := (*in)[key]
+				in, out := &inVal, &outVal
+				*out = new(string)
+				**out = **in
+			}
+			(*out)[key] = outVal
+		}
+	}
+	if in.CreatedAt != nil {
+		in, out := &in.CreatedAt, &out.CreatedAt
 		*out = new(string)
 		**out = **in
 	}
@@ -812,6 +980,22 @@ func (in *DomainObservation) DeepCopyInto(out *DomainObservation) {
 		in, out := &in.Internal, &out.Internal
 		*out = new(bool)
 		**out = **in
+	}
+	if in.Labels != nil {
+		in, out := &in.Labels, &out.Labels
+		*out = make(map[string]*string, len(*in))
+		for key, val := range *in {
+			var outVal *string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				inVal := (*in)[key]
+				in, out := &inVal, &outVal
+				*out = new(string)
+				**out = **in
+			}
+			(*out)[key] = outVal
+		}
 	}
 	if in.Name != nil {
 		in, out := &in.Name, &out.Name
@@ -828,13 +1012,30 @@ func (in *DomainObservation) DeepCopyInto(out *DomainObservation) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.RouterType != nil {
-		in, out := &in.RouterType, &out.RouterType
-		*out = new(string)
-		**out = **in
+	if in.SharedOrgs != nil {
+		in, out := &in.SharedOrgs, &out.SharedOrgs
+		*out = make([]*string, len(*in))
+		for i := range *in {
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(string)
+				**out = **in
+			}
+		}
 	}
-	if in.SubDomain != nil {
-		in, out := &in.SubDomain, &out.SubDomain
+	if in.SupportedProtocols != nil {
+		in, out := &in.SupportedProtocols, &out.SupportedProtocols
+		*out = make([]*string, len(*in))
+		for i := range *in {
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(string)
+				**out = **in
+			}
+		}
+	}
+	if in.UpdatedAt != nil {
+		in, out := &in.UpdatedAt, &out.UpdatedAt
 		*out = new(string)
 		**out = **in
 	}
@@ -853,15 +1054,42 @@ func (in *DomainObservation) DeepCopy() *DomainObservation {
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
 func (in *DomainParameters) DeepCopyInto(out *DomainParameters) {
 	*out = *in
-	if in.Domain != nil {
-		in, out := &in.Domain, &out.Domain
-		*out = new(string)
-		**out = **in
+	if in.Annotations != nil {
+		in, out := &in.Annotations, &out.Annotations
+		*out = make(map[string]*string, len(*in))
+		for key, val := range *in {
+			var outVal *string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				inVal := (*in)[key]
+				in, out := &inVal, &outVal
+				*out = new(string)
+				**out = **in
+			}
+			(*out)[key] = outVal
+		}
 	}
 	if in.Internal != nil {
 		in, out := &in.Internal, &out.Internal
 		*out = new(bool)
 		**out = **in
+	}
+	if in.Labels != nil {
+		in, out := &in.Labels, &out.Labels
+		*out = make(map[string]*string, len(*in))
+		for key, val := range *in {
+			var outVal *string
+			if val == nil {
+				(*out)[key] = nil
+			} else {
+				inVal := (*in)[key]
+				in, out := &inVal, &outVal
+				*out = new(string)
+				**out = **in
+			}
+			(*out)[key] = outVal
+		}
 	}
 	if in.Name != nil {
 		in, out := &in.Name, &out.Name
@@ -888,10 +1116,16 @@ func (in *DomainParameters) DeepCopyInto(out *DomainParameters) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.SubDomain != nil {
-		in, out := &in.SubDomain, &out.SubDomain
-		*out = new(string)
-		**out = **in
+	if in.SharedOrgs != nil {
+		in, out := &in.SharedOrgs, &out.SharedOrgs
+		*out = make([]*string, len(*in))
+		for i := range *in {
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(string)
+				**out = **in
+			}
+		}
 	}
 }
 
@@ -941,544 +1175,271 @@ func (in *DomainStatus) DeepCopy() *DomainStatus {
 }
 
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *PrivateDomainAccess) DeepCopyInto(out *PrivateDomainAccess) {
+func (in *ProcessesInitParameters) DeepCopyInto(out *ProcessesInitParameters) {
 	*out = *in
-	out.TypeMeta = in.TypeMeta
-	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
-	in.Spec.DeepCopyInto(&out.Spec)
-	in.Status.DeepCopyInto(&out.Status)
+	if in.Command != nil {
+		in, out := &in.Command, &out.Command
+		*out = new(string)
+		**out = **in
+	}
+	if in.DiskQuota != nil {
+		in, out := &in.DiskQuota, &out.DiskQuota
+		*out = new(string)
+		**out = **in
+	}
+	if in.HealthCheckHTTPEndpoint != nil {
+		in, out := &in.HealthCheckHTTPEndpoint, &out.HealthCheckHTTPEndpoint
+		*out = new(string)
+		**out = **in
+	}
+	if in.HealthCheckInterval != nil {
+		in, out := &in.HealthCheckInterval, &out.HealthCheckInterval
+		*out = new(int64)
+		**out = **in
+	}
+	if in.HealthCheckInvocationTimeout != nil {
+		in, out := &in.HealthCheckInvocationTimeout, &out.HealthCheckInvocationTimeout
+		*out = new(int64)
+		**out = **in
+	}
+	if in.HealthCheckType != nil {
+		in, out := &in.HealthCheckType, &out.HealthCheckType
+		*out = new(string)
+		**out = **in
+	}
+	if in.Instances != nil {
+		in, out := &in.Instances, &out.Instances
+		*out = new(int64)
+		**out = **in
+	}
+	if in.LogRateLimitPerSecond != nil {
+		in, out := &in.LogRateLimitPerSecond, &out.LogRateLimitPerSecond
+		*out = new(string)
+		**out = **in
+	}
+	if in.Memory != nil {
+		in, out := &in.Memory, &out.Memory
+		*out = new(string)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckHTTPEndpoint != nil {
+		in, out := &in.ReadinessHealthCheckHTTPEndpoint, &out.ReadinessHealthCheckHTTPEndpoint
+		*out = new(string)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckInterval != nil {
+		in, out := &in.ReadinessHealthCheckInterval, &out.ReadinessHealthCheckInterval
+		*out = new(int64)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckInvocationTimeout != nil {
+		in, out := &in.ReadinessHealthCheckInvocationTimeout, &out.ReadinessHealthCheckInvocationTimeout
+		*out = new(int64)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckType != nil {
+		in, out := &in.ReadinessHealthCheckType, &out.ReadinessHealthCheckType
+		*out = new(string)
+		**out = **in
+	}
+	if in.Timeout != nil {
+		in, out := &in.Timeout, &out.Timeout
+		*out = new(int64)
+		**out = **in
+	}
+	if in.Type != nil {
+		in, out := &in.Type, &out.Type
+		*out = new(string)
+		**out = **in
+	}
 }
 
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new PrivateDomainAccess.
-func (in *PrivateDomainAccess) DeepCopy() *PrivateDomainAccess {
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new ProcessesInitParameters.
+func (in *ProcessesInitParameters) DeepCopy() *ProcessesInitParameters {
 	if in == nil {
 		return nil
 	}
-	out := new(PrivateDomainAccess)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyObject is an autogenerated deepcopy function, copying the receiver, creating a new runtime.Object.
-func (in *PrivateDomainAccess) DeepCopyObject() runtime.Object {
-	if c := in.DeepCopy(); c != nil {
-		return c
-	}
-	return nil
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *PrivateDomainAccessInitParameters) DeepCopyInto(out *PrivateDomainAccessInitParameters) {
-	*out = *in
-	if in.Domain != nil {
-		in, out := &in.Domain, &out.Domain
-		*out = new(string)
-		**out = **in
-	}
-	if in.DomainRef != nil {
-		in, out := &in.DomainRef, &out.DomainRef
-		*out = new(v1.Reference)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.DomainSelector != nil {
-		in, out := &in.DomainSelector, &out.DomainSelector
-		*out = new(v1.Selector)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.Org != nil {
-		in, out := &in.Org, &out.Org
-		*out = new(string)
-		**out = **in
-	}
-	if in.OrgRef != nil {
-		in, out := &in.OrgRef, &out.OrgRef
-		*out = new(v1.Reference)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.OrgSelector != nil {
-		in, out := &in.OrgSelector, &out.OrgSelector
-		*out = new(v1.Selector)
-		(*in).DeepCopyInto(*out)
-	}
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new PrivateDomainAccessInitParameters.
-func (in *PrivateDomainAccessInitParameters) DeepCopy() *PrivateDomainAccessInitParameters {
-	if in == nil {
-		return nil
-	}
-	out := new(PrivateDomainAccessInitParameters)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *PrivateDomainAccessList) DeepCopyInto(out *PrivateDomainAccessList) {
-	*out = *in
-	out.TypeMeta = in.TypeMeta
-	in.ListMeta.DeepCopyInto(&out.ListMeta)
-	if in.Items != nil {
-		in, out := &in.Items, &out.Items
-		*out = make([]PrivateDomainAccess, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new PrivateDomainAccessList.
-func (in *PrivateDomainAccessList) DeepCopy() *PrivateDomainAccessList {
-	if in == nil {
-		return nil
-	}
-	out := new(PrivateDomainAccessList)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyObject is an autogenerated deepcopy function, copying the receiver, creating a new runtime.Object.
-func (in *PrivateDomainAccessList) DeepCopyObject() runtime.Object {
-	if c := in.DeepCopy(); c != nil {
-		return c
-	}
-	return nil
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *PrivateDomainAccessObservation) DeepCopyInto(out *PrivateDomainAccessObservation) {
-	*out = *in
-	if in.Domain != nil {
-		in, out := &in.Domain, &out.Domain
-		*out = new(string)
-		**out = **in
-	}
-	if in.ID != nil {
-		in, out := &in.ID, &out.ID
-		*out = new(string)
-		**out = **in
-	}
-	if in.Org != nil {
-		in, out := &in.Org, &out.Org
-		*out = new(string)
-		**out = **in
-	}
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new PrivateDomainAccessObservation.
-func (in *PrivateDomainAccessObservation) DeepCopy() *PrivateDomainAccessObservation {
-	if in == nil {
-		return nil
-	}
-	out := new(PrivateDomainAccessObservation)
+	out := new(ProcessesInitParameters)
 	in.DeepCopyInto(out)
 	return out
 }
 
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *PrivateDomainAccessParameters) DeepCopyInto(out *PrivateDomainAccessParameters) {
+func (in *ProcessesObservation) DeepCopyInto(out *ProcessesObservation) {
 	*out = *in
-	if in.Domain != nil {
-		in, out := &in.Domain, &out.Domain
+	if in.Command != nil {
+		in, out := &in.Command, &out.Command
 		*out = new(string)
 		**out = **in
 	}
-	if in.DomainRef != nil {
-		in, out := &in.DomainRef, &out.DomainRef
-		*out = new(v1.Reference)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.DomainSelector != nil {
-		in, out := &in.DomainSelector, &out.DomainSelector
-		*out = new(v1.Selector)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.Org != nil {
-		in, out := &in.Org, &out.Org
+	if in.DiskQuota != nil {
+		in, out := &in.DiskQuota, &out.DiskQuota
 		*out = new(string)
 		**out = **in
 	}
-	if in.OrgRef != nil {
-		in, out := &in.OrgRef, &out.OrgRef
-		*out = new(v1.Reference)
-		(*in).DeepCopyInto(*out)
+	if in.HealthCheckHTTPEndpoint != nil {
+		in, out := &in.HealthCheckHTTPEndpoint, &out.HealthCheckHTTPEndpoint
+		*out = new(string)
+		**out = **in
 	}
-	if in.OrgSelector != nil {
-		in, out := &in.OrgSelector, &out.OrgSelector
-		*out = new(v1.Selector)
-		(*in).DeepCopyInto(*out)
+	if in.HealthCheckInterval != nil {
+		in, out := &in.HealthCheckInterval, &out.HealthCheckInterval
+		*out = new(int64)
+		**out = **in
+	}
+	if in.HealthCheckInvocationTimeout != nil {
+		in, out := &in.HealthCheckInvocationTimeout, &out.HealthCheckInvocationTimeout
+		*out = new(int64)
+		**out = **in
+	}
+	if in.HealthCheckType != nil {
+		in, out := &in.HealthCheckType, &out.HealthCheckType
+		*out = new(string)
+		**out = **in
+	}
+	if in.Instances != nil {
+		in, out := &in.Instances, &out.Instances
+		*out = new(int64)
+		**out = **in
+	}
+	if in.LogRateLimitPerSecond != nil {
+		in, out := &in.LogRateLimitPerSecond, &out.LogRateLimitPerSecond
+		*out = new(string)
+		**out = **in
+	}
+	if in.Memory != nil {
+		in, out := &in.Memory, &out.Memory
+		*out = new(string)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckHTTPEndpoint != nil {
+		in, out := &in.ReadinessHealthCheckHTTPEndpoint, &out.ReadinessHealthCheckHTTPEndpoint
+		*out = new(string)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckInterval != nil {
+		in, out := &in.ReadinessHealthCheckInterval, &out.ReadinessHealthCheckInterval
+		*out = new(int64)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckInvocationTimeout != nil {
+		in, out := &in.ReadinessHealthCheckInvocationTimeout, &out.ReadinessHealthCheckInvocationTimeout
+		*out = new(int64)
+		**out = **in
+	}
+	if in.ReadinessHealthCheckType != nil {
+		in, out := &in.ReadinessHealthCheckType, &out.ReadinessHealthCheckType
+		*out = new(string)
+		**out = **in
+	}
+	if in.Timeout != nil {
+		in, out := &in.Timeout, &out.Timeout
+		*out = new(int64)
+		**out = **in
+	}
+	if in.Type != nil {
+		in, out := &in.Type, &out.Type
+		*out = new(string)
+		**out = **in
 	}
 }
 
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new PrivateDomainAccessParameters.
-func (in *PrivateDomainAccessParameters) DeepCopy() *PrivateDomainAccessParameters {
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new ProcessesObservation.
+func (in *ProcessesObservation) DeepCopy() *ProcessesObservation {
 	if in == nil {
 		return nil
 	}
-	out := new(PrivateDomainAccessParameters)
+	out := new(ProcessesObservation)
 	in.DeepCopyInto(out)
 	return out
 }
 
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *PrivateDomainAccessSpec) DeepCopyInto(out *PrivateDomainAccessSpec) {
+func (in *ProcessesParameters) DeepCopyInto(out *ProcessesParameters) {
 	*out = *in
-	in.ResourceSpec.DeepCopyInto(&out.ResourceSpec)
-	in.ForProvider.DeepCopyInto(&out.ForProvider)
-	in.InitProvider.DeepCopyInto(&out.InitProvider)
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new PrivateDomainAccessSpec.
-func (in *PrivateDomainAccessSpec) DeepCopy() *PrivateDomainAccessSpec {
-	if in == nil {
-		return nil
-	}
-	out := new(PrivateDomainAccessSpec)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *PrivateDomainAccessStatus) DeepCopyInto(out *PrivateDomainAccessStatus) {
-	*out = *in
-	in.ResourceStatus.DeepCopyInto(&out.ResourceStatus)
-	in.AtProvider.DeepCopyInto(&out.AtProvider)
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new PrivateDomainAccessStatus.
-func (in *PrivateDomainAccessStatus) DeepCopy() *PrivateDomainAccessStatus {
-	if in == nil {
-		return nil
-	}
-	out := new(PrivateDomainAccessStatus)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *Quota) DeepCopyInto(out *Quota) {
-	*out = *in
-	out.TypeMeta = in.TypeMeta
-	in.ObjectMeta.DeepCopyInto(&out.ObjectMeta)
-	in.Spec.DeepCopyInto(&out.Spec)
-	in.Status.DeepCopyInto(&out.Status)
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new Quota.
-func (in *Quota) DeepCopy() *Quota {
-	if in == nil {
-		return nil
-	}
-	out := new(Quota)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyObject is an autogenerated deepcopy function, copying the receiver, creating a new runtime.Object.
-func (in *Quota) DeepCopyObject() runtime.Object {
-	if c := in.DeepCopy(); c != nil {
-		return c
-	}
-	return nil
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *QuotaInitParameters) DeepCopyInto(out *QuotaInitParameters) {
-	*out = *in
-	if in.AllowPaidServicePlans != nil {
-		in, out := &in.AllowPaidServicePlans, &out.AllowPaidServicePlans
-		*out = new(bool)
-		**out = **in
-	}
-	if in.InstanceMemory != nil {
-		in, out := &in.InstanceMemory, &out.InstanceMemory
-		*out = new(float64)
-		**out = **in
-	}
-	if in.Name != nil {
-		in, out := &in.Name, &out.Name
+	if in.Command != nil {
+		in, out := &in.Command, &out.Command
 		*out = new(string)
 		**out = **in
 	}
-	if in.Org != nil {
-		in, out := &in.Org, &out.Org
+	if in.DiskQuota != nil {
+		in, out := &in.DiskQuota, &out.DiskQuota
 		*out = new(string)
 		**out = **in
 	}
-	if in.OrgRef != nil {
-		in, out := &in.OrgRef, &out.OrgRef
-		*out = new(v1.Reference)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.OrgSelector != nil {
-		in, out := &in.OrgSelector, &out.OrgSelector
-		*out = new(v1.Selector)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.TotalAppInstances != nil {
-		in, out := &in.TotalAppInstances, &out.TotalAppInstances
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalAppTasks != nil {
-		in, out := &in.TotalAppTasks, &out.TotalAppTasks
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalMemory != nil {
-		in, out := &in.TotalMemory, &out.TotalMemory
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalRoutePorts != nil {
-		in, out := &in.TotalRoutePorts, &out.TotalRoutePorts
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalRoutes != nil {
-		in, out := &in.TotalRoutes, &out.TotalRoutes
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalServiceKeys != nil {
-		in, out := &in.TotalServiceKeys, &out.TotalServiceKeys
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalServices != nil {
-		in, out := &in.TotalServices, &out.TotalServices
-		*out = new(float64)
-		**out = **in
-	}
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new QuotaInitParameters.
-func (in *QuotaInitParameters) DeepCopy() *QuotaInitParameters {
-	if in == nil {
-		return nil
-	}
-	out := new(QuotaInitParameters)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *QuotaList) DeepCopyInto(out *QuotaList) {
-	*out = *in
-	out.TypeMeta = in.TypeMeta
-	in.ListMeta.DeepCopyInto(&out.ListMeta)
-	if in.Items != nil {
-		in, out := &in.Items, &out.Items
-		*out = make([]Quota, len(*in))
-		for i := range *in {
-			(*in)[i].DeepCopyInto(&(*out)[i])
-		}
-	}
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new QuotaList.
-func (in *QuotaList) DeepCopy() *QuotaList {
-	if in == nil {
-		return nil
-	}
-	out := new(QuotaList)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyObject is an autogenerated deepcopy function, copying the receiver, creating a new runtime.Object.
-func (in *QuotaList) DeepCopyObject() runtime.Object {
-	if c := in.DeepCopy(); c != nil {
-		return c
-	}
-	return nil
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *QuotaObservation) DeepCopyInto(out *QuotaObservation) {
-	*out = *in
-	if in.AllowPaidServicePlans != nil {
-		in, out := &in.AllowPaidServicePlans, &out.AllowPaidServicePlans
-		*out = new(bool)
-		**out = **in
-	}
-	if in.ID != nil {
-		in, out := &in.ID, &out.ID
+	if in.HealthCheckHTTPEndpoint != nil {
+		in, out := &in.HealthCheckHTTPEndpoint, &out.HealthCheckHTTPEndpoint
 		*out = new(string)
 		**out = **in
 	}
-	if in.InstanceMemory != nil {
-		in, out := &in.InstanceMemory, &out.InstanceMemory
-		*out = new(float64)
+	if in.HealthCheckInterval != nil {
+		in, out := &in.HealthCheckInterval, &out.HealthCheckInterval
+		*out = new(int64)
 		**out = **in
 	}
-	if in.Name != nil {
-		in, out := &in.Name, &out.Name
+	if in.HealthCheckInvocationTimeout != nil {
+		in, out := &in.HealthCheckInvocationTimeout, &out.HealthCheckInvocationTimeout
+		*out = new(int64)
+		**out = **in
+	}
+	if in.HealthCheckType != nil {
+		in, out := &in.HealthCheckType, &out.HealthCheckType
 		*out = new(string)
 		**out = **in
 	}
-	if in.Org != nil {
-		in, out := &in.Org, &out.Org
+	if in.Instances != nil {
+		in, out := &in.Instances, &out.Instances
+		*out = new(int64)
+		**out = **in
+	}
+	if in.LogRateLimitPerSecond != nil {
+		in, out := &in.LogRateLimitPerSecond, &out.LogRateLimitPerSecond
 		*out = new(string)
 		**out = **in
 	}
-	if in.TotalAppInstances != nil {
-		in, out := &in.TotalAppInstances, &out.TotalAppInstances
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalAppTasks != nil {
-		in, out := &in.TotalAppTasks, &out.TotalAppTasks
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalMemory != nil {
-		in, out := &in.TotalMemory, &out.TotalMemory
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalRoutePorts != nil {
-		in, out := &in.TotalRoutePorts, &out.TotalRoutePorts
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalRoutes != nil {
-		in, out := &in.TotalRoutes, &out.TotalRoutes
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalServiceKeys != nil {
-		in, out := &in.TotalServiceKeys, &out.TotalServiceKeys
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalServices != nil {
-		in, out := &in.TotalServices, &out.TotalServices
-		*out = new(float64)
-		**out = **in
-	}
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new QuotaObservation.
-func (in *QuotaObservation) DeepCopy() *QuotaObservation {
-	if in == nil {
-		return nil
-	}
-	out := new(QuotaObservation)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *QuotaParameters) DeepCopyInto(out *QuotaParameters) {
-	*out = *in
-	if in.AllowPaidServicePlans != nil {
-		in, out := &in.AllowPaidServicePlans, &out.AllowPaidServicePlans
-		*out = new(bool)
-		**out = **in
-	}
-	if in.InstanceMemory != nil {
-		in, out := &in.InstanceMemory, &out.InstanceMemory
-		*out = new(float64)
-		**out = **in
-	}
-	if in.Name != nil {
-		in, out := &in.Name, &out.Name
+	if in.Memory != nil {
+		in, out := &in.Memory, &out.Memory
 		*out = new(string)
 		**out = **in
 	}
-	if in.Org != nil {
-		in, out := &in.Org, &out.Org
+	if in.ReadinessHealthCheckHTTPEndpoint != nil {
+		in, out := &in.ReadinessHealthCheckHTTPEndpoint, &out.ReadinessHealthCheckHTTPEndpoint
 		*out = new(string)
 		**out = **in
 	}
-	if in.OrgRef != nil {
-		in, out := &in.OrgRef, &out.OrgRef
-		*out = new(v1.Reference)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.OrgSelector != nil {
-		in, out := &in.OrgSelector, &out.OrgSelector
-		*out = new(v1.Selector)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.TotalAppInstances != nil {
-		in, out := &in.TotalAppInstances, &out.TotalAppInstances
-		*out = new(float64)
+	if in.ReadinessHealthCheckInterval != nil {
+		in, out := &in.ReadinessHealthCheckInterval, &out.ReadinessHealthCheckInterval
+		*out = new(int64)
 		**out = **in
 	}
-	if in.TotalAppTasks != nil {
-		in, out := &in.TotalAppTasks, &out.TotalAppTasks
-		*out = new(float64)
+	if in.ReadinessHealthCheckInvocationTimeout != nil {
+		in, out := &in.ReadinessHealthCheckInvocationTimeout, &out.ReadinessHealthCheckInvocationTimeout
+		*out = new(int64)
 		**out = **in
 	}
-	if in.TotalMemory != nil {
-		in, out := &in.TotalMemory, &out.TotalMemory
-		*out = new(float64)
+	if in.ReadinessHealthCheckType != nil {
+		in, out := &in.ReadinessHealthCheckType, &out.ReadinessHealthCheckType
+		*out = new(string)
 		**out = **in
 	}
-	if in.TotalRoutePorts != nil {
-		in, out := &in.TotalRoutePorts, &out.TotalRoutePorts
-		*out = new(float64)
+	if in.Timeout != nil {
+		in, out := &in.Timeout, &out.Timeout
+		*out = new(int64)
 		**out = **in
 	}
-	if in.TotalRoutes != nil {
-		in, out := &in.TotalRoutes, &out.TotalRoutes
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalServiceKeys != nil {
-		in, out := &in.TotalServiceKeys, &out.TotalServiceKeys
-		*out = new(float64)
-		**out = **in
-	}
-	if in.TotalServices != nil {
-		in, out := &in.TotalServices, &out.TotalServices
-		*out = new(float64)
+	if in.Type != nil {
+		in, out := &in.Type, &out.Type
+		*out = new(string)
 		**out = **in
 	}
 }
 
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new QuotaParameters.
-func (in *QuotaParameters) DeepCopy() *QuotaParameters {
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new ProcessesParameters.
+func (in *ProcessesParameters) DeepCopy() *ProcessesParameters {
 	if in == nil {
 		return nil
 	}
-	out := new(QuotaParameters)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *QuotaSpec) DeepCopyInto(out *QuotaSpec) {
-	*out = *in
-	in.ResourceSpec.DeepCopyInto(&out.ResourceSpec)
-	in.ForProvider.DeepCopyInto(&out.ForProvider)
-	in.InitProvider.DeepCopyInto(&out.InitProvider)
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new QuotaSpec.
-func (in *QuotaSpec) DeepCopy() *QuotaSpec {
-	if in == nil {
-		return nil
-	}
-	out := new(QuotaSpec)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *QuotaStatus) DeepCopyInto(out *QuotaStatus) {
-	*out = *in
-	in.ResourceStatus.DeepCopyInto(&out.ResourceStatus)
-	in.AtProvider.DeepCopyInto(&out.AtProvider)
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new QuotaStatus.
-func (in *QuotaStatus) DeepCopy() *QuotaStatus {
-	if in == nil {
-		return nil
-	}
-	out := new(QuotaStatus)
+	out := new(ProcessesParameters)
 	in.DeepCopyInto(out)
 	return out
 }
@@ -1486,9 +1447,9 @@ func (in *QuotaStatus) DeepCopy() *QuotaStatus {
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
 func (in *RoutesInitParameters) DeepCopyInto(out *RoutesInitParameters) {
 	*out = *in
-	if in.Port != nil {
-		in, out := &in.Port, &out.Port
-		*out = new(float64)
+	if in.Protocol != nil {
+		in, out := &in.Protocol, &out.Protocol
+		*out = new(string)
 		**out = **in
 	}
 	if in.Route != nil {
@@ -1521,9 +1482,9 @@ func (in *RoutesInitParameters) DeepCopy() *RoutesInitParameters {
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
 func (in *RoutesObservation) DeepCopyInto(out *RoutesObservation) {
 	*out = *in
-	if in.Port != nil {
-		in, out := &in.Port, &out.Port
-		*out = new(float64)
+	if in.Protocol != nil {
+		in, out := &in.Protocol, &out.Protocol
+		*out = new(string)
 		**out = **in
 	}
 	if in.Route != nil {
@@ -1546,9 +1507,9 @@ func (in *RoutesObservation) DeepCopy() *RoutesObservation {
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
 func (in *RoutesParameters) DeepCopyInto(out *RoutesParameters) {
 	*out = *in
-	if in.Port != nil {
-		in, out := &in.Port, &out.Port
-		*out = new(float64)
+	if in.Protocol != nil {
+		in, out := &in.Protocol, &out.Protocol
+		*out = new(string)
 		**out = **in
 	}
 	if in.Route != nil {
@@ -1579,66 +1540,11 @@ func (in *RoutesParameters) DeepCopy() *RoutesParameters {
 }
 
 // DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *ServiceBindingInitParameters) DeepCopyInto(out *ServiceBindingInitParameters) {
+func (in *ServiceBindingsInitParameters) DeepCopyInto(out *ServiceBindingsInitParameters) {
 	*out = *in
-	if in.ServiceInstance != nil {
-		in, out := &in.ServiceInstance, &out.ServiceInstance
+	if in.Params != nil {
+		in, out := &in.Params, &out.Params
 		*out = new(string)
-		**out = **in
-	}
-	if in.ServiceInstanceRef != nil {
-		in, out := &in.ServiceInstanceRef, &out.ServiceInstanceRef
-		*out = new(v1.Reference)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.ServiceInstanceSelector != nil {
-		in, out := &in.ServiceInstanceSelector, &out.ServiceInstanceSelector
-		*out = new(v1.Selector)
-		(*in).DeepCopyInto(*out)
-	}
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new ServiceBindingInitParameters.
-func (in *ServiceBindingInitParameters) DeepCopy() *ServiceBindingInitParameters {
-	if in == nil {
-		return nil
-	}
-	out := new(ServiceBindingInitParameters)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *ServiceBindingObservation) DeepCopyInto(out *ServiceBindingObservation) {
-	*out = *in
-	if in.ServiceInstance != nil {
-		in, out := &in.ServiceInstance, &out.ServiceInstance
-		*out = new(string)
-		**out = **in
-	}
-}
-
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new ServiceBindingObservation.
-func (in *ServiceBindingObservation) DeepCopy() *ServiceBindingObservation {
-	if in == nil {
-		return nil
-	}
-	out := new(ServiceBindingObservation)
-	in.DeepCopyInto(out)
-	return out
-}
-
-// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
-func (in *ServiceBindingParameters) DeepCopyInto(out *ServiceBindingParameters) {
-	*out = *in
-	if in.ParamsJSONSecretRef != nil {
-		in, out := &in.ParamsJSONSecretRef, &out.ParamsJSONSecretRef
-		*out = new(v1.SecretKeySelector)
-		**out = **in
-	}
-	if in.ParamsSecretRef != nil {
-		in, out := &in.ParamsSecretRef, &out.ParamsSecretRef
-		*out = new(v1.SecretReference)
 		**out = **in
 	}
 	if in.ServiceInstance != nil {
@@ -1658,12 +1564,195 @@ func (in *ServiceBindingParameters) DeepCopyInto(out *ServiceBindingParameters) 
 	}
 }
 
-// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new ServiceBindingParameters.
-func (in *ServiceBindingParameters) DeepCopy() *ServiceBindingParameters {
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new ServiceBindingsInitParameters.
+func (in *ServiceBindingsInitParameters) DeepCopy() *ServiceBindingsInitParameters {
 	if in == nil {
 		return nil
 	}
-	out := new(ServiceBindingParameters)
+	out := new(ServiceBindingsInitParameters)
+	in.DeepCopyInto(out)
+	return out
+}
+
+// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
+func (in *ServiceBindingsObservation) DeepCopyInto(out *ServiceBindingsObservation) {
+	*out = *in
+	if in.Params != nil {
+		in, out := &in.Params, &out.Params
+		*out = new(string)
+		**out = **in
+	}
+	if in.ServiceInstance != nil {
+		in, out := &in.ServiceInstance, &out.ServiceInstance
+		*out = new(string)
+		**out = **in
+	}
+}
+
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new ServiceBindingsObservation.
+func (in *ServiceBindingsObservation) DeepCopy() *ServiceBindingsObservation {
+	if in == nil {
+		return nil
+	}
+	out := new(ServiceBindingsObservation)
+	in.DeepCopyInto(out)
+	return out
+}
+
+// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
+func (in *ServiceBindingsParameters) DeepCopyInto(out *ServiceBindingsParameters) {
+	*out = *in
+	if in.Params != nil {
+		in, out := &in.Params, &out.Params
+		*out = new(string)
+		**out = **in
+	}
+	if in.ServiceInstance != nil {
+		in, out := &in.ServiceInstance, &out.ServiceInstance
+		*out = new(string)
+		**out = **in
+	}
+	if in.ServiceInstanceRef != nil {
+		in, out := &in.ServiceInstanceRef, &out.ServiceInstanceRef
+		*out = new(v1.Reference)
+		(*in).DeepCopyInto(*out)
+	}
+	if in.ServiceInstanceSelector != nil {
+		in, out := &in.ServiceInstanceSelector, &out.ServiceInstanceSelector
+		*out = new(v1.Selector)
+		(*in).DeepCopyInto(*out)
+	}
+}
+
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new ServiceBindingsParameters.
+func (in *ServiceBindingsParameters) DeepCopy() *ServiceBindingsParameters {
+	if in == nil {
+		return nil
+	}
+	out := new(ServiceBindingsParameters)
+	in.DeepCopyInto(out)
+	return out
+}
+
+// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
+func (in *SidecarsInitParameters) DeepCopyInto(out *SidecarsInitParameters) {
+	*out = *in
+	if in.Command != nil {
+		in, out := &in.Command, &out.Command
+		*out = new(string)
+		**out = **in
+	}
+	if in.Memory != nil {
+		in, out := &in.Memory, &out.Memory
+		*out = new(string)
+		**out = **in
+	}
+	if in.Name != nil {
+		in, out := &in.Name, &out.Name
+		*out = new(string)
+		**out = **in
+	}
+	if in.ProcessTypes != nil {
+		in, out := &in.ProcessTypes, &out.ProcessTypes
+		*out = make([]*string, len(*in))
+		for i := range *in {
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(string)
+				**out = **in
+			}
+		}
+	}
+}
+
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new SidecarsInitParameters.
+func (in *SidecarsInitParameters) DeepCopy() *SidecarsInitParameters {
+	if in == nil {
+		return nil
+	}
+	out := new(SidecarsInitParameters)
+	in.DeepCopyInto(out)
+	return out
+}
+
+// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
+func (in *SidecarsObservation) DeepCopyInto(out *SidecarsObservation) {
+	*out = *in
+	if in.Command != nil {
+		in, out := &in.Command, &out.Command
+		*out = new(string)
+		**out = **in
+	}
+	if in.Memory != nil {
+		in, out := &in.Memory, &out.Memory
+		*out = new(string)
+		**out = **in
+	}
+	if in.Name != nil {
+		in, out := &in.Name, &out.Name
+		*out = new(string)
+		**out = **in
+	}
+	if in.ProcessTypes != nil {
+		in, out := &in.ProcessTypes, &out.ProcessTypes
+		*out = make([]*string, len(*in))
+		for i := range *in {
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(string)
+				**out = **in
+			}
+		}
+	}
+}
+
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new SidecarsObservation.
+func (in *SidecarsObservation) DeepCopy() *SidecarsObservation {
+	if in == nil {
+		return nil
+	}
+	out := new(SidecarsObservation)
+	in.DeepCopyInto(out)
+	return out
+}
+
+// DeepCopyInto is an autogenerated deepcopy function, copying the receiver, writing into out. in must be non-nil.
+func (in *SidecarsParameters) DeepCopyInto(out *SidecarsParameters) {
+	*out = *in
+	if in.Command != nil {
+		in, out := &in.Command, &out.Command
+		*out = new(string)
+		**out = **in
+	}
+	if in.Memory != nil {
+		in, out := &in.Memory, &out.Memory
+		*out = new(string)
+		**out = **in
+	}
+	if in.Name != nil {
+		in, out := &in.Name, &out.Name
+		*out = new(string)
+		**out = **in
+	}
+	if in.ProcessTypes != nil {
+		in, out := &in.ProcessTypes, &out.ProcessTypes
+		*out = make([]*string, len(*in))
+		for i := range *in {
+			if (*in)[i] != nil {
+				in, out := &(*in)[i], &(*out)[i]
+				*out = new(string)
+				**out = **in
+			}
+		}
+	}
+}
+
+// DeepCopy is an autogenerated deepcopy function, copying the receiver, creating a new SidecarsParameters.
+func (in *SidecarsParameters) DeepCopy() *SidecarsParameters {
+	if in == nil {
+		return nil
+	}
+	out := new(SidecarsParameters)
 	in.DeepCopyInto(out)
 	return out
 }

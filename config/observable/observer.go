@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/json"
 
-	cfclient "github.com/cloudfoundry-community/go-cfclient/v3/client"
-	"github.com/cloudfoundry-community/go-cfclient/v3/config"
+	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/config"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/fieldpath"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
@@ -107,11 +107,11 @@ func NewConnectFn(client client.Client, mg resource.Managed) ConnectFn {
 			return nil, err
 		}
 
-		cf, err := config.NewUserPassword(cfg.Endpoint, cfg.Email, cfg.Password)
+		cf, err := config.New(cfg.Endpoint, config.UserPassword(cfg.Email, cfg.Password), config.SkipTLSValidation())
 		if err != nil {
 			return nil, errors.Wrapf(err, "cannot config cloud foundry client with option: %q", cfg)
 		}
-		cf.WithSkipTLSValidation(true)
+
 		return cfclient.New(cf)
 	}
 }
