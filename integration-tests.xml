@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites tests="0" failures="1" errors="0" time="3.995863">
+	<testsuite tests="0" failures="0" time="0.031000" name="github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/test/e2e" timestamp="2025-02-05T13:47:07+01:00">
+		<properties>
+			<property name="go.version" value="go1.23.3 linux/amd64"></property>
+		</properties>
+		<testcase classname="" name="TestMain" time="0.000000">
+			<failure message="Failed" type="">panic: environment variable &#39;CF_CREDENTIALS&#39; couldn&#39;t be found&#xA;&#xA;goroutine 1 [running]:&#xA;github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/test/e2e.getProviderConfigSecretData.GetOrPanic.func1({0x1955c8f?, 0xe?})&#xA;&#x9;/home/gergely/go/pkg/mod/github.com/crossplane-contrib/xp-testing@v1.3.4/pkg/envvar/envvar.go:23 +0x65&#xA;github.com/crossplane-contrib/xp-testing/pkg/envvar.getOrDefault({0x1955c8f, 0xe}, 0x1a42058)&#xA;&#x9;/home/gergely/go/pkg/mod/github.com/crossplane-contrib/xp-testing@v1.3.4/pkg/envvar/envvar.go:32 +0x43&#xA;github.com/crossplane-contrib/xp-testing/pkg/envvar.GetOrPanic(...)&#xA;&#x9;/home/gergely/go/pkg/mod/github.com/crossplane-contrib/xp-testing@v1.3.4/pkg/envvar/envvar.go:22&#xA;github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/test/e2e.getProviderConfigSecretData()&#xA;&#x9;/home/gergely/kubermatic/sap-ora-mcp/github-migration/crossplane-provider-cloudfoundry-github.tools.sap/test/e2e/main_test.go:97 +0x35&#xA;github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/test/e2e.TestMain(0xc00047c780)&#xA;&#x9;/home/gergely/kubermatic/sap-ora-mcp/github-migration/crossplane-provider-cloudfoundry-github.tools.sap/test/e2e/main_test.go:51 +0x10f&#xA;main.main()&#xA;&#x9;_testmain.go:47 +0xa8&#xA;FAIL&#x9;github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/test/e2e&#x9;0.030s&#xA;</failure>
+		</testcase>
+	</testsuite>
+</testsuites>
