@@ -45,7 +45,6 @@ const (
 type SpaceMembersParameters struct {
 	// Space associated guid.
 	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Space
-	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/config.ExternalID()
 	// +kubebuilder:validation:Optional
 	Space *string `json:"space,omitempty"`
 

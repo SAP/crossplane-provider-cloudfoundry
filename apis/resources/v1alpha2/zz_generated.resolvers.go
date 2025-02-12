@@ -10,7 +10,6 @@ import (
 	reference "github.com/crossplane/crossplane-runtime/pkg/reference"
 	errors "github.com/pkg/errors"
 	resources "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources"
-	config "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/config"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
@@ -23,7 +22,7 @@ func (mg *OrgRole) ResolveReferences(ctx context.Context, c client.Reader) error
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Org),
-		Extract:      config.ExternalID(),
+		Extract:      reference.ExternalName(),
 		Reference:    mg.Spec.ForProvider.OrgRef,
 		Selector:     mg.Spec.ForProvider.OrgSelector,
 		To: reference.To{
@@ -101,7 +100,7 @@ func (mg *Space) ResolveReferences(ctx context.Context, c client.Reader) error {
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Org),
-		Extract:      config.ExternalID(),
+		Extract:      reference.ExternalName(),
 		Reference:    mg.Spec.ForProvider.OrgRef,
 		Selector:     mg.Spec.ForProvider.OrgSelector,
 		To: reference.To{
@@ -117,7 +116,7 @@ func (mg *Space) ResolveReferences(ctx context.Context, c client.Reader) error {
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.InitProvider.Org),
-		Extract:      config.ExternalID(),
+		Extract:      reference.ExternalName(),
 		Reference:    mg.Spec.InitProvider.OrgRef,
 		Selector:     mg.Spec.InitProvider.OrgSelector,
 		To: reference.To{
@@ -143,7 +142,7 @@ func (mg *SpaceRole) ResolveReferences(ctx context.Context, c client.Reader) err
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Space),
-		Extract:      config.ExternalID(),
+		Extract:      reference.ExternalName(),
 		Reference:    mg.Spec.ForProvider.SpaceRef,
 		Selector:     mg.Spec.ForProvider.SpaceSelector,
 		To: reference.To{

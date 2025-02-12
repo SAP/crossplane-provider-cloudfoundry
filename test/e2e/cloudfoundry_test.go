@@ -12,7 +12,6 @@ import (
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	meta "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/cloudfoundry/v1alpha1"
 	v1alpha1resources "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	v1alpha2resources "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 	v1 "k8s.io/api/core/v1"
@@ -48,7 +47,6 @@ func TestCloudfoundry(t *testing.T) {
 		"service_credential_binding": {name: "my-service-credential-binding", obj: &v1alpha2resources.ServiceCredentialBinding{}},
 		"service_key":                {name: "my-service-key", obj: &v1alpha1resources.ServiceKey{}},
 		"route":                      {name: "my-route", obj: &v1alpha1resources.Route{}},
-		"app":                        {name: "my-app", obj: &v1alpha1.App{}},
 	}
 
 	var feat = features.New("CO-159 cloudfoundry e2e test").Setup(

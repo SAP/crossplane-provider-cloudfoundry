@@ -7,10 +7,10 @@ package providerconfig
 import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
+	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/providerconfig"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/crossplane/upjet/pkg/controller"
 
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1beta1"
 )
