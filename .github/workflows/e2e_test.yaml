@@ -47,6 +47,7 @@ jobs:
         with:
           #use inputs.checkout-ref to be able to call it from a pull_request_target workflow, since there it needs to be github.event.pull_request.merge_commit_sha and not the default
           ref: ${{ inputs.checkout-ref }}
+          submodules: true
 
       - name: Set up Go
         uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
