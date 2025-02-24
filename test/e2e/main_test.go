@@ -18,7 +18,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/pkg/errors"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"sigs.k8s.io/e2e-framework/klient/decoder"
 	resources "sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/support/kind"

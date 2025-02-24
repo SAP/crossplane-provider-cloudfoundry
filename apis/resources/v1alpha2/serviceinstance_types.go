@@ -40,7 +40,7 @@ type ServiceInstanceParameters struct {
 
 	// Space associated guid.
 	// +crossplane:generate:reference:type=Space
-	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	Space *string `json:"space,omitempty"`
 
 	// Reference to a Space CR to populate space.

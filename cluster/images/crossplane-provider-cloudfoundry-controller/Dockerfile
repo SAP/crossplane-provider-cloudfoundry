@@ -34,9 +34,9 @@ ENTRYPOINT ["crossplane-provider-cloudfoundry"]
 
 LABEL org.opencontainers.image.title="crossplane-provider-cloudfoundry-controller" \
       org.opencontainers.image.description="Crossplane controller for CloudFoundry" \
-      org.opencontainers.image.documentation="https://pages.github.tools.sap/cloud-orchestration/" \
-      org.opencontainers.image.url="https://github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry" \
-      org.opencontainers.image.source="https://github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry.git" \
+      org.opencontainers.image.documentation="https://pages.github.com/SAP/" \
+      org.opencontainers.image.url="https://github.com/SAP/crossplane-provider-cloudfoundry" \
+      org.opencontainers.image.source="https://github.com/SAP/crossplane-provider-cloudfoundry.git" \
       org.opencontainers.image.vendor="SAP SE" \
       org.opencontainers.image.base.name="docker.io/library/alpine:3.20.3" \
       org.opencontainers.image.base.digest="sha256:1e42bbe2508154c9126d48c2b8a75420c3544343bf86fd041fb7527e017a4b4a" \

@@ -7,8 +7,8 @@ import (
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 )
 
 func toMemberKey(u *resource.User) string {

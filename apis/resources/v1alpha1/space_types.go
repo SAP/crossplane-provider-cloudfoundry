@@ -57,8 +57,8 @@ type SpaceParameters struct {
 	Name *string `json:"name" tf:"name,omitempty"`
 
 	// The ID of the Org within which to create the space.
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha1.Organization
-	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
+	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1.Organization
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	// +kubebuilder:validation:Optional
 	Org *string `json:"org,omitempty" tf:"org,omitempty"`
 

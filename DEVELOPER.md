@@ -19,7 +19,7 @@ Ensure you have the following tools installed:
 Clone the repository:
 
 ```console
-git clone https://github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry.git
+git clone https://github.com/SAP/crossplane-provider-cloudfoundry.git
 cd crossplane-provider-cloudfoundry
 ```
 
@@ -82,6 +82,6 @@ make build
 ## Report a Bug
 
 For filing bugs, suggesting improvements, or requesting new features, please
-open an [issue](https://github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/issues).
+open an [issue](https://github.com/SAP/crossplane-provider-cloudfoundry/issues).
 
 <a href="mailto:Daniel.Lou@sap.com">![owner](/Rep_Lou.png)</a>

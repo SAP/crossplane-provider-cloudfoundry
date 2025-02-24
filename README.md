@@ -5,7 +5,7 @@ CloudFoundry V3 API.
 
 ## Getting Started
 
-Please check out [community guide](https://pages.github.tools.sap/cloud-orchestration/docs/category/cloudfoundry)
+Please check out [community guide](https://pages.github.com/SAP/docs/category/cloudfoundry)
 
 ## Developing
 
@@ -53,6 +53,6 @@ Many internal stakeholders want to use Crossplane to manage their applications a
 ## Report a Bug
 
 For filing bugs, suggesting improvements, or requesting new features, please
-open an [issue](https://github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/issues).
+open an [issue](https://github.com/SAP/crossplane-provider-cloudfoundry/issues).
 
 <a href="mailto:Daniel.Lou@sap.com">![owner](/Rep_Lou.png)</a>

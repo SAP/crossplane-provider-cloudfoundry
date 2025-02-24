@@ -25,10 +25,10 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1alpha1"
-	provider "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/controller"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/features"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
+	provider "github.com/SAP/crossplane-provider-cloudfoundry/internal/controller"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
 func main() {

@@ -7,7 +7,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/job"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 )
 
 // Role is the interface for the role client

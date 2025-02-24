@@ -3,7 +3,7 @@
 
 PROJECT_NAME := provider-$(PROVIDER_NAME)
 PROJECT_NAME := crossplane-provider-cloudfoundry
-PROJECT_REPO := github.tools.sap/cloud-orchestration/$(PROJECT_NAME)
+PROJECT_REPO := github.com/SAP/$(PROJECT_NAME)
 
 
 PLATFORMS ?= linux_amd64 linux_arm64

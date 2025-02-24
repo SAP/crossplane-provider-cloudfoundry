@@ -46,8 +46,8 @@ type OrgMembersParameters struct {
 	MemberList `json:",inline"`
 
 	// Org associated guid.
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org
-	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
+	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	// +kubebuilder:validation:Optional
 	Org *string `json:"org,omitempty"`
 

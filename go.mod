@@ -1,4 +1,4 @@
-module github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry
+module github.com/SAP/crossplane-provider-cloudfoundry
 
 go 1.21
 

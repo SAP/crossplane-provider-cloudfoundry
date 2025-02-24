@@ -7,10 +7,10 @@ package v1alpha1
 
 import (
 	"context"
+	resources "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources"
+	v1alpha2 "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 	reference "github.com/crossplane/crossplane-runtime/pkg/reference"
 	errors "github.com/pkg/errors"
-	resources "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources"
-	v1alpha2 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
 

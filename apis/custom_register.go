@@ -2,8 +2,8 @@
 package apis
 
 import (
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 )
 
 func init() {
