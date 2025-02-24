@@ -1,0 +1,37 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+kind: App
+metadata:
+  namespace: default
+  name: my-app
+spec:
+  forProvider:
+    spaceRef:
+      name: my-space 
+    name: my-app-test
+    lifecycle: docker
+    docker:
+      image: loud/hello_co:latest
+    processes:
+      - type: web
+        health-check-type: http
+        health-check-http-endpoint: "/"
+  
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+kind: App
+metadata:
+  namespace: default
+  name: my-app-2
+spec:
+  forProvider:
+    spaceRef:
+      name: my-space 
+    name: my-app-1234
+    lifecycle: docker
+    docker:
+      image: loud/hello_co:latest
+    processes:
+      - type: web
+        health-check-type: http
+        health-check-http-endpoint: "/"
