@@ -31,6 +31,9 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: AGE
       type: date
+    deprecated: true
+    deprecationWarning: v1alpha1/ServiceKey is deprecated. Use v1alpha2/ServiceCredentialBinding
+      with type:key instead
     name: v1alpha1
     schema:
       openAPIV3Schema:

@@ -47,6 +47,7 @@ type OrgMembersParameters struct {
 
 	// Org associated guid.
 	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org
+	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	// +kubebuilder:validation:Optional
 	Org *string `json:"org,omitempty"`
 
@@ -85,6 +86,7 @@ type OrgMembersStatus struct {
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:deprecatedversion:warning="v1alpha1/OrgMembers is deprecated. Use v1alpha2/OrgRole instead"
 type OrgMembers struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

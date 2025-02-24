@@ -14,5 +14,3 @@ cover.out
 #ignore dev.env
 dev.env
 *~
-/.envrc
-/kubeconfig

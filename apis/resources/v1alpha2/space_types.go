@@ -40,6 +40,7 @@ type SpaceInitParameters struct {
 
 	// (String) The guid of the organization to create the space in
 	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org
+	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	Org *string `json:"org,omitempty" tf:"org,omitempty"`
 
 	// Reference to a Organization in resources to populate org.
@@ -126,6 +127,7 @@ type SpaceParameters struct {
 
 	// (String) The guid of the organization to create the space in
 	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org
+	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	Org *string `json:"org,omitempty" tf:"org,omitempty"`
 
 	// Reference to a Organization in resources to populate org.

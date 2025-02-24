@@ -176,7 +176,7 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
-		"NotFound": {
+		"NotFound - Get by GUID when valid GUID is recorded": {
 			args: args{
 				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
 			},
@@ -193,13 +193,37 @@ func TestObserve(t *testing.T) {
 				)
 				m.On("Single").Return(
 					fake.ServiceInstanceNil,
+					errBoom,
+				)
+				return m
+			},
+			kube: &test.MockClient{},
+		},
+
+		"NotFound - fallback on Single when NO valid GUID is recorded in CR": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withExternalName(guid)),
+				obs: managed.ExternalObservation{ResourceExists: false},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", "not-guid").Return(
+					fake.ServiceInstanceNil,
+					errBoom,
+				)
+				m.On("Single").Return(
+					fake.ServiceInstanceNil,
 					fake.ErrNoResultReturned,
 				)
 				return m
 			},
 			kube: &test.MockClient{},
 		},
-		"Successful": {
+		"Successful - Get by GUID": {
 			args: args{
 				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
 			},
@@ -218,6 +242,37 @@ func TestObserve(t *testing.T) {
 				m.On("Get", guid).Return(
 					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceInstance,
 					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage(""),
+					nil, // no error
+				)
+				return m
+			},
+		},
+		"Successful - adopt by forProvider spec": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(space), withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withServicePlan(v1alpha2.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha2.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withConditions(xpv1.Available()),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", "not-guid").Return(
+					fake.ServiceInstanceNil,
+					fake.ErrNoResultReturned,
 				)
 				m.On("Single").Return(
 					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceInstance,

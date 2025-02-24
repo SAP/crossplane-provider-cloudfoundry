@@ -9,6 +9,7 @@ import (
 
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
 
+	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/controller/app"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/controller/org"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/controller/orgmembers"
 	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/controller/orgquota"
@@ -27,6 +28,7 @@ import (
 // the supplied manager.
 func CustomSetup(mgr ctrl.Manager, o controller.Options) error {
 	for _, setup := range []func(ctrl.Manager, controller.Options) error{
+		app.Setup,
 		org.Setup,
 		orgmembers.Setup,
 		orgrole.Setup,

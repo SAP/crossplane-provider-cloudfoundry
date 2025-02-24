@@ -55,7 +55,7 @@ type ServiceInstanceParameters struct {
 
 	// Fields relevant only for user-provided service instances
 	UserProvided `json:",inline"`
-	
+
 	// Timeouts for the service instance operations
 	// +kubebuilder:validation:Optional
 	Timeouts TimeoutsParameters `json:"timeouts,omitempty" tf:"timeouts,omitempty"`
@@ -100,12 +100,12 @@ type Managed struct {
 
 	// MaintenanceInfo describes the version of the service instance
 	MaintenanceInfo MaintenanceInfo `json:"maintenanceInfo,omitempty"`
-	
+
 }
 
 // UserProvided defines parameters only valid for a user-provided service instance
 type UserProvided struct {
-	// Arbitrary credentials as K8S runtime.RawExtension object, delivered to applications via VCAP_SERVICES environment variables.Applicable for user-provided service instance type. 
+	// Arbitrary credentials as K8S runtime.RawExtension object, delivered to applications via VCAP_SERVICES environment variables.Applicable for user-provided service instance type.
 	//
 	// The Credentials field is NOT secret or secured in any way and should
 	// NEVER be used to hold sensitive information. To set parameters that
@@ -117,7 +117,7 @@ type UserProvided struct {
 	// Same as `Credentials`, supplied as arbitrary JSON string. Ignored if `Credentials` is set.
 	// +optional
 	JSONCredentials *string `json:"jsonCredentials,omitempty"`
-    	
+
 	// Same as `Credentials`, supplied as a Secret reference. Ignored if `Credentials` or `JSONCredentials` is set.
 	// +kubebuilder:validation:Optional
 	CredentialsSecretRef *SecretReference `json:"credentialsSecretRef,omitempty"`
@@ -155,7 +155,7 @@ type ServiceInstanceObservation struct {
 	// The job GUID of the last async operation performed on the resource
 	LastAsyncJob *string `json:"lastAsyncJob,omitempty"`
 
-	
+
 	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
 	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +mapType=granular

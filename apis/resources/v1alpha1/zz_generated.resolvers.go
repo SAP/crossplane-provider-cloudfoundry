@@ -9,6 +9,7 @@ import (
 	"context"
 	reference "github.com/crossplane/crossplane-runtime/pkg/reference"
 	errors "github.com/pkg/errors"
+	resources "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources"
 	v1alpha2 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -22,7 +23,7 @@ func (mg *OrgMembers) ResolveReferences(ctx context.Context, c client.Reader) er
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Org),
-		Extract:      reference.ExternalName(),
+		Extract:      resources.ExternalID(),
 		Reference:    mg.Spec.ForProvider.OrgRef,
 		Selector:     mg.Spec.ForProvider.OrgSelector,
 		To: reference.To{
@@ -48,12 +49,38 @@ func (mg *Route) ResolveReferences(ctx context.Context, c client.Reader) error {
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Space),
-		Extract:      reference.ExternalName(),
+		Extract:      resources.ExternalID(),
 		Reference:    mg.Spec.ForProvider.SpaceRef,
 		Selector:     mg.Spec.ForProvider.SpaceSelector,
 		To: reference.To{
-			List:    &v1alpha2.SpaceList{},
-			Managed: &v1alpha2.Space{},
+			List:    &SpaceList{},
+			Managed: &Space{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.Space")
+	}
+	mg.Spec.ForProvider.Space = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.SpaceRef = rsp.ResolvedReference
+
+	return nil
+}
+
+// ResolveReferences of this ServiceInstance.
+func (mg *ServiceInstance) ResolveReferences(ctx context.Context, c client.Reader) error {
+	r := reference.NewAPIResolver(c, mg)
+
+	var rsp reference.ResolutionResponse
+	var err error
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Space),
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.SpaceRef,
+		Selector:     mg.Spec.ForProvider.SpaceSelector,
+		To: reference.To{
+			List:    &SpaceList{},
+			Managed: &Space{},
 		},
 	})
 	if err != nil {
@@ -74,12 +101,12 @@ func (mg *ServiceKey) ResolveReferences(ctx context.Context, c client.Reader) er
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.ServiceInstance),
-		Extract:      reference.ExternalName(),
+		Extract:      resources.ExternalID(),
 		Reference:    mg.Spec.ForProvider.ServiceInstanceRef,
 		Selector:     mg.Spec.ForProvider.ServiceInstanceSelector,
 		To: reference.To{
-			List:    &v1alpha2.ServiceInstanceList{},
-			Managed: &v1alpha2.ServiceInstance{},
+			List:    &ServiceInstanceList{},
+			Managed: &ServiceInstance{},
 		},
 	})
 	if err != nil {
@@ -100,12 +127,12 @@ func (mg *Space) ResolveReferences(ctx context.Context, c client.Reader) error {
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Org),
-		Extract:      reference.ExternalName(),
+		Extract:      resources.ExternalID(),
 		Reference:    mg.Spec.ForProvider.OrgRef,
 		Selector:     mg.Spec.ForProvider.OrgSelector,
 		To: reference.To{
-			List:    &v1alpha2.OrgList{},
-			Managed: &v1alpha2.Org{},
+			List:    &OrganizationList{},
+			Managed: &Organization{},
 		},
 	})
 	if err != nil {
@@ -126,12 +153,12 @@ func (mg *SpaceMembers) ResolveReferences(ctx context.Context, c client.Reader) 
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Space),
-		Extract:      reference.ExternalName(),
+		Extract:      resources.ExternalID(),
 		Reference:    mg.Spec.ForProvider.SpaceRef,
 		Selector:     mg.Spec.ForProvider.SpaceSelector,
 		To: reference.To{
-			List:    &v1alpha2.SpaceList{},
-			Managed: &v1alpha2.Space{},
+			List:    &SpaceList{},
+			Managed: &Space{},
 		},
 	})
 	if err != nil {

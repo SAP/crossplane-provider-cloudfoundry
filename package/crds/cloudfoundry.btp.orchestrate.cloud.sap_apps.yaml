@@ -31,7 +31,7 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: AGE
       type: date
-    name: v1alpha1
+    name: v1alpha2
     schema:
       openAPIV3Schema:
         description: App is the Schema for the Apps API. Provides a Cloud Foundry
@@ -76,899 +76,475 @@ spec:
                   annotations:
                     additionalProperties:
                       type: string
-                    description: |-
-                      (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-                      The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: The annotations associated with Cloud Foundry resources.
+                      Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
-                    x-kubernetes-map-type: granular
                   buildpacks:
-                    description: |-
-                      (Set of String) Multiple buildpacks used to stage the application.
-                      Multiple buildpacks used to stage the application.
+                    description: (NOT SUPPORTED YET) An array of one ore more installed
+                      buildpack names, e.g., ruby_buildpack, java_buildpack.
                     items:
                       type: string
                     type: array
-                    x-kubernetes-list-type: set
-                  command:
-                    description: |-
-                      (String) A custom start command for the application. This overrides the start command provided by the buildpack.
-                      A custom start command for the application. This overrides the start command provided by the buildpack.
+                  default-route:
+                    description: When set to true, a route for the app will be created
+                      using the app name as the hostname and the containing org's
+                      default domain as the domain. Ignored if routes are specified
+                      or if no-route is set to true.
+                    type: boolean
+                  docker:
+                    description: Specifies docker image and optional docker credentials
+                      when lifecycle is set to docker
+                    properties:
+                      credentials:
+                        description: (Attributes) Defines login credentials for private
+                          docker repositories (see below for nested schema)
+                        properties:
+                          env:
+                            description: |-
+                              Env is a reference to an environment variable that contains credentials
+                              that must be used to connect to the provider.
+                            properties:
+                              name:
+                                description: Name is the name of an environment variable.
+                                type: string
+                            required:
+                            - name
+                            type: object
+                          fs:
+                            description: |-
+                              Fs is a reference to a filesystem location that contains credentials that
+                              must be used to connect to the provider.
+                            properties:
+                              path:
+                                description: Path is a filesystem path.
+                                type: string
+                            required:
+                            - path
+                            type: object
+                          secretRef:
+                            description: |-
+                              A SecretRef is a reference to a secret key that contains the credentials
+                              that must be used to connect to the provider.
+                            properties:
+                              key:
+                                description: The key to select.
+                                type: string
+                              name:
+                                description: Name of the secret.
+                                type: string
+                              namespace:
+                                description: Namespace of the secret.
+                                type: string
+                            required:
+                            - key
+                            - name
+                            - namespace
+                            type: object
+                          source:
+                            description: Source of the provider credentials.
+                            enum:
+                            - None
+                            - Secret
+                            - InjectedIdentity
+                            - Environment
+                            - Filesystem
+                            type: string
+                        required:
+                        - source
+                        type: object
+                      image:
+                        description: The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag
+                          or docker image name from the public repo e.g. redis:4.0
+                        type: string
+                    type: object
+                  environment:
+                    description: (NOT SUPPORTED YET) A key-value mapping of environment
+                      variables to be used for the app when running
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: The labels associated with Cloud Foundry resources.
+                      Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    type: object
+                  lifecycle:
+                    default: buildpack
+                    description: Type of the lifecycle; valid values are `buildpack``,
+                      `cnb``, `docker``
+                    enum:
+                    - buildpack
+                    - cnb
+                    - docker
                     type: string
-                  diskQuota:
-                    description: |-
-                      (String) The disk space to be allocated for each application instance.
-                      The disk space to be allocated for each application instance.
+                  log-rate-limit-per-second:
+                    description: 'The log rate limit for all instances of an app.
+                      This attribute requires a unit of measurement: B, K, KB, M,
+                      MB, G, or GB, in either uppercase or lowercase.'
                     type: string
-                  dockerCredentialsSecretRef:
-                    description: (Attributes) Defines login credentials for private
-                      docker repositories (see below for nested schema)
+                  name:
+                    description: The name of the application.
+                    type: string
+                  no-route:
+                    description: When set to true, any routes configuration specified
+                      in the manifest will be ignored and any existing routes will
+                      be removed.
+                    type: boolean
+                  path:
+                    description: (NOT SUPPORTED YET) The path to the app directory
+                      or zip file to push.
+                    type: string
+                  processes:
+                    description: Configures multiple processes to run for an App.
+                      For example, a web application may have a web UI process and
+                      a worker process.
+                    items:
+                      description: ProcessConfiguration defines the process-level
+                        configuration  for the application
+                      properties:
+                        command:
+                          description: The command used to start the process.
+                          type: string
+                        diskQuota:
+                          description: The disk limit for all instance of the web
+                            process type. This attribute requires a unit of measurement,
+                            such as M, MB, G, GB, T, or TB in upper case or lower
+                            case.
+                          type: string
+                        health-check-http-endpoint:
+                          description: The endpoint called to determine if the app
+                            is healthy
+                          type: string
+                        health-check-interval:
+                          description: The interval in seconds between health checks
+                          type: integer
+                        health-check-invocation-timeout:
+                          description: Timeout in seconds for individual health check
+                            requests
+                          type: integer
+                        health-check-type:
+                          description: The type of health check to perform, either
+                            http or tcp or process.
+                          enum:
+                          - http
+                          - port
+                          - process
+                          type: string
+                        instances:
+                          description: The number of instances of the process to run.
+                          type: integer
+                        memory:
+                          description: The amount of memory allocated to each instance
+                            of the process. This attribute requires a unit of measurement,
+                            such as M, MB, G, GB, T, or TB in upper case or lower
+                            case.
+                          type: string
+                        timeout:
+                          description: Timeout in seconds at which the health check
+                            is considered a failure
+                          type: integer
+                        type:
+                          description: The identifier for the process to be configured.
+                          type: string
+                      required:
+                      - type
+                      type: object
+                    type: array
+                  random-route:
+                    description: When set to true, a random route will be created
+                      and mapped to the application. Ignored if routes are specified,
+                      or if no-route is set to true.
+                    type: boolean
+                  readiness-health-check-http-endpoint:
+                    description: The endpoint called to determine if the app is ready
+                    type: string
+                  readiness-health-check-interval:
+                    description: The interval in seconds between readiness health
+                      checks
+                    type: integer
+                  readiness-health-check-invocation-timeout:
+                    description: Timeout in seconds for individual readiness health
+                      check requests
+                    type: integer
+                  readiness-health-check-type:
+                    description: The type of readiness health check to perform, either
+                      http or tcp or process.
+                    enum:
+                    - http
+                    - port
+                    - process
+                    type: string
+                  routes:
+                    description: (NOT SUPPORTED YET) The routes to map to the application
+                      to control its ingress traffic.
+                    items:
+                      description: RouteConfiguration defines the route for the application
+                      properties:
+                        protocol:
+                          description: (Number) The port of the application to map
+                            the tcp route to.
+                          type: string
+                        route:
+                          description: |-
+                            The route id. Route can be defined using the cloudfoundry_route resource
+                            TODO: configure x-ref to cloudfoundry_route
+                          type: string
+                        routeRef:
+                          description: Reference to a Route in route to populate route.
+                          properties:
+                            name:
+                              description: Name of the referenced object.
+                              type: string
+                            policy:
+                              description: Policies for referencing.
+                              properties:
+                                resolution:
+                                  default: Required
+                                  description: |-
+                                    Resolution specifies whether resolution of this reference is required.
+                                    The default is 'Required', which means the reconcile will fail if the
+                                    reference cannot be resolved. 'Optional' means this reference will be
+                                    a no-op if it cannot be resolved.
+                                  enum:
+                                  - Required
+                                  - Optional
+                                  type: string
+                                resolve:
+                                  description: |-
+                                    Resolve specifies when this reference should be resolved. The default
+                                    is 'IfNotPresent', which will attempt to resolve the reference only when
+                                    the corresponding field is not present. Use 'Always' to resolve the
+                                    reference on every reconcile.
+                                  enum:
+                                  - Always
+                                  - IfNotPresent
+                                  type: string
+                              type: object
+                          required:
+                          - name
+                          type: object
+                        routeSelector:
+                          description: Selector for a Route in route to populate route.
+                          properties:
+                            matchControllerRef:
+                              description: |-
+                                MatchControllerRef ensures an object with the same controller reference
+                                as the selecting object is selected.
+                              type: boolean
+                            matchLabels:
+                              additionalProperties:
+                                type: string
+                              description: MatchLabels ensures an object with matching
+                                labels is selected.
+                              type: object
+                            policy:
+                              description: Policies for selection.
+                              properties:
+                                resolution:
+                                  default: Required
+                                  description: |-
+                                    Resolution specifies whether resolution of this reference is required.
+                                    The default is 'Required', which means the reconcile will fail if the
+                                    reference cannot be resolved. 'Optional' means this reference will be
+                                    a no-op if it cannot be resolved.
+                                  enum:
+                                  - Required
+                                  - Optional
+                                  type: string
+                                resolve:
+                                  description: |-
+                                    Resolve specifies when this reference should be resolved. The default
+                                    is 'IfNotPresent', which will attempt to resolve the reference only when
+                                    the corresponding field is not present. Use 'Always' to resolve the
+                                    reference on every reconcile.
+                                  enum:
+                                  - Always
+                                  - IfNotPresent
+                                  type: string
+                              type: object
+                          type: object
+                      type: object
+                    type: array
+                  services:
+                    description: (NOT SUPPORTED YET) Service instances to bind to
+                      the application.
+                    items:
+                      description: ServiceBindingConfiguration defines the service
+                        instance to bind to the application
+                      properties:
+                        binding_name:
+                          description: The name of the service instance to bind to
+                            the application.
+                          type: string
+                        name:
+                          description: |-
+                            The name of the service instance to be bound to.
+                            TODO: configure extract function to get the name of the service instance, default gets the external_name (which is GUID). That would be incorrect.
+                          type: string
+                        parameters:
+                          description: A map of arbitrary key/value paris to be send
+                            to the service broker during binding
+                          type: object
+                          x-kubernetes-preserve-unknown-fields: true
+                        serviceInstanceRef:
+                          description: Reference to a ServiceInstance in service to
+                            populate serviceInstance.
+                          properties:
+                            name:
+                              description: Name of the referenced object.
+                              type: string
+                            policy:
+                              description: Policies for referencing.
+                              properties:
+                                resolution:
+                                  default: Required
+                                  description: |-
+                                    Resolution specifies whether resolution of this reference is required.
+                                    The default is 'Required', which means the reconcile will fail if the
+                                    reference cannot be resolved. 'Optional' means this reference will be
+                                    a no-op if it cannot be resolved.
+                                  enum:
+                                  - Required
+                                  - Optional
+                                  type: string
+                                resolve:
+                                  description: |-
+                                    Resolve specifies when this reference should be resolved. The default
+                                    is 'IfNotPresent', which will attempt to resolve the reference only when
+                                    the corresponding field is not present. Use 'Always' to resolve the
+                                    reference on every reconcile.
+                                  enum:
+                                  - Always
+                                  - IfNotPresent
+                                  type: string
+                              type: object
+                          required:
+                          - name
+                          type: object
+                        serviceInstanceSelector:
+                          description: Selector for a ServiceInstance in service to
+                            populate serviceInstance.
+                          properties:
+                            matchControllerRef:
+                              description: |-
+                                MatchControllerRef ensures an object with the same controller reference
+                                as the selecting object is selected.
+                              type: boolean
+                            matchLabels:
+                              additionalProperties:
+                                type: string
+                              description: MatchLabels ensures an object with matching
+                                labels is selected.
+                              type: object
+                            policy:
+                              description: Policies for selection.
+                              properties:
+                                resolution:
+                                  default: Required
+                                  description: |-
+                                    Resolution specifies whether resolution of this reference is required.
+                                    The default is 'Required', which means the reconcile will fail if the
+                                    reference cannot be resolved. 'Optional' means this reference will be
+                                    a no-op if it cannot be resolved.
+                                  enum:
+                                  - Required
+                                  - Optional
+                                  type: string
+                                resolve:
+                                  description: |-
+                                    Resolve specifies when this reference should be resolved. The default
+                                    is 'IfNotPresent', which will attempt to resolve the reference only when
+                                    the corresponding field is not present. Use 'Always' to resolve the
+                                    reference on every reconcile.
+                                  enum:
+                                  - Always
+                                  - IfNotPresent
+                                  type: string
+                              type: object
+                          type: object
+                      type: object
+                    type: array
+                  space:
+                    description: Space associated guid.
+                    type: string
+                  spaceRef:
+                    description: Reference to a Space CR to populate space.
                     properties:
                       name:
-                        description: Name of the secret.
+                        description: Name of the referenced object.
                         type: string
-                      namespace:
-                        description: Namespace of the secret.
-                        type: string
+                      policy:
+                        description: Policies for referencing.
+                        properties:
+                          resolution:
+                            default: Required
+                            description: |-
+                              Resolution specifies whether resolution of this reference is required.
+                              The default is 'Required', which means the reconcile will fail if the
+                              reference cannot be resolved. 'Optional' means this reference will be
+                              a no-op if it cannot be resolved.
+                            enum:
+                            - Required
+                            - Optional
+                            type: string
+                          resolve:
+                            description: |-
+                              Resolve specifies when this reference should be resolved. The default
+                              is 'IfNotPresent', which will attempt to resolve the reference only when
+                              the corresponding field is not present. Use 'Always' to resolve the
+                              reference on every reconcile.
+                            enum:
+                            - Always
+                            - IfNotPresent
+                            type: string
+                        type: object
                     required:
                     - name
-                    - namespace
                     type: object
-                  dockerImage:
-                    description: |-
-                      (String) The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0
-                      The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0
-                    type: string
-                  environment:
-                    additionalProperties:
-                      type: string
-                    description: |-
-                      (Map of String) Key/value pairs of custom environment variables to set in your app. Does not include any system or service variables.
-                      Key/value pairs of custom environment variables to set in your app. Does not include any system or service variables.
-                    type: object
-                    x-kubernetes-map-type: granular
-                  healthCheckHttpEndpoint:
-                    description: |-
-                      (String) The endpoint for the http health check type.
-                      The endpoint for the http health check type.
-                    type: string
-                  healthCheckInterval:
-                    description: |-
-                      (Number) The interval in seconds between health checks.
-                      The interval in seconds between health checks.
-                    type: number
-                  healthCheckInvocationTimeout:
-                    description: |-
-                      (Number) The timeout in seconds for the health check requests for http and port health checks.
-                      The timeout in seconds for the health check requests for http and port health checks.
-                    type: number
-                  healthCheckType:
-                    description: |-
-                      (String) The health check type which can be one of 'port', 'process', 'http'.
-                      The health check type which can be one of 'port', 'process', 'http'.
-                    type: string
-                  instances:
-                    description: |-
-                      (Number) The number of app instances that you want to start. Defaults to 1.
-                      The number of app instances that you want to start. Defaults to 1.
-                    type: number
-                  labels:
-                    additionalProperties:
-                      type: string
-                    description: |-
-                      (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-                      The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-                    type: object
-                    x-kubernetes-map-type: granular
-                  logRateLimitPerSecond:
-                    description: |-
-                      (String) The attribute specifies the log rate limit for all instances of an app.
-                      The attribute specifies the log rate limit for all instances of an app.
-                    type: string
-                  memory:
-                    description: |-
-                      (String) The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
-                      The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
-                    type: string
-                  name:
-                    description: |-
-                      (String) The name of the application.
-                      The name of the application.
-                    type: string
-                  noRoute:
-                    description: |-
-                      (Boolean) The attribute with a value of true to prevent a route from being created for your app.
-                      The attribute with a value of true to prevent a route from being created for your app.
-                    type: boolean
-                  orgName:
-                    description: |-
-                      (String) The name of the associated Cloud Foundry organization.
-                      The name of the associated Cloud Foundry organization.
-                    type: string
-                  path:
-                    description: |-
-                      (String) The path to the zip file for the application.
-                      The path to the zip file for the application.
-                    type: string
-                  processes:
-                    description: (Attributes Set) List of configurations for individual
-                      process types. (see below for nested schema)
-                    items:
-                      properties:
-                        command:
-                          description: (String) A custom start command for the application.
-                            This overrides the start command provided by the buildpack.
+                  spaceSelector:
+                    description: Selector for a Space CR to populate space.
+                    properties:
+                      matchControllerRef:
+                        description: |-
+                          MatchControllerRef ensures an object with the same controller reference
+                          as the selecting object is selected.
+                        type: boolean
+                      matchLabels:
+                        additionalProperties:
                           type: string
-                        diskQuota:
-                          description: (String) The disk space to be allocated for
-                            each application instance.
-                          type: string
-                        healthCheckHttpEndpoint:
-                          description: (String) The endpoint for the http health check
-                            type.
-                          type: string
-                        healthCheckInterval:
-                          description: (Number) The interval in seconds between health
-                            checks.
-                          format: int64
-                          type: integer
-                        healthCheckInvocationTimeout:
-                          description: (Number) The timeout in seconds for the health
-                            check requests for http and port health checks.
-                          format: int64
-                          type: integer
-                        healthCheckType:
-                          description: (String) The health check type which can be
-                            one of 'port', 'process', 'http'.
-                          type: string
-                        instances:
-                          description: (Number) The number of app instances that you
-                            want to start. Defaults to 1.
-                          format: int64
-                          type: integer
-                        logRateLimitPerSecond:
-                          description: (String) The attribute specifies the log rate
-                            limit for all instances of an app.
-                          type: string
-                        memory:
-                          description: (String) The memory limit for each application
-                            instance. If not provided, value is computed and retreived
-                            from Cloud Foundry.
-                          type: string
-                        readinessHealthCheckHttpEndpoint:
-                          description: (String) The endpoint for the http readiness
-                            health check type.
-                          type: string
-                        readinessHealthCheckInterval:
-                          description: (Number) The interval in seconds between readiness
-                            health checks.
-                          format: int64
-                          type: integer
-                        readinessHealthCheckInvocationTimeout:
-                          description: (Number) The timeout in seconds for the readiness
-                            health check requests for http and port health checks.
-                          format: int64
-                          type: integer
-                        readinessHealthCheckType:
-                          description: (String) The readiness health check type which
-                            can be one of 'port', 'process', 'http'.
-                          type: string
-                        timeout:
-                          description: check will report failure.
-                          format: int64
-                          type: integer
-                        type:
-                          description: (String) The process type. Can be web or worker.
-                          type: string
-                      type: object
-                    type: array
-                  randomRoute:
-                    description: |-
-                      route attribute to generate a unique route and avoid name collisions.
-                      The random-route attribute to generate a unique route and avoid name collisions.
-                    type: boolean
-                  readinessHealthCheckHttpEndpoint:
-                    description: |-
-                      (String) The endpoint for the http readiness health check type.
-                      The endpoint for the http readiness health check type.
-                    type: string
-                  readinessHealthCheckInterval:
-                    description: |-
-                      (Number) The interval in seconds between readiness health checks.
-                      The interval in seconds between readiness health checks.
-                    type: number
-                  readinessHealthCheckInvocationTimeout:
-                    description: |-
-                      (Number) The timeout in seconds for the readiness health check requests for http and port health checks.
-                      The timeout in seconds for the readiness health check requests for http and port health checks.
-                    type: number
-                  readinessHealthCheckType:
-                    description: |-
-                      (String) The readiness health check type which can be one of 'port', 'process', 'http'.
-                      The readiness health check type which can be one of 'port', 'process', 'http'.
-                    type: string
-                  routes:
-                    description: (Attributes Set) The routes to map to the application
-                      to control its ingress traffic. (see below for nested schema)
-                    items:
-                      properties:
-                        protocol:
-                          description: (String) The protocol to use for the route.
-                            Valid values are http2, http1, and tcp.
-                          type: string
-                        route:
-                          description: (String) The fully route qualified domain name
-                            which will be bound to app
-                          type: string
-                        routeRef:
-                          description: Reference to a Route in resources to populate
-                            route.
-                          properties:
-                            name:
-                              description: Name of the referenced object.
-                              type: string
-                            policy:
-                              description: Policies for referencing.
-                              properties:
-                                resolution:
-                                  default: Required
-                                  description: |-
-                                    Resolution specifies whether resolution of this reference is required.
-                                    The default is 'Required', which means the reconcile will fail if the
-                                    reference cannot be resolved. 'Optional' means this reference will be
-                                    a no-op if it cannot be resolved.
-                                  enum:
-                                  - Required
-                                  - Optional
-                                  type: string
-                                resolve:
-                                  description: |-
-                                    Resolve specifies when this reference should be resolved. The default
-                                    is 'IfNotPresent', which will attempt to resolve the reference only when
-                                    the corresponding field is not present. Use 'Always' to resolve the
-                                    reference on every reconcile.
-                                  enum:
-                                  - Always
-                                  - IfNotPresent
-                                  type: string
-                              type: object
-                          required:
-                          - name
-                          type: object
-                        routeSelector:
-                          description: Selector for a Route in resources to populate
-                            route.
-                          properties:
-                            matchControllerRef:
-                              description: |-
-                                MatchControllerRef ensures an object with the same controller reference
-                                as the selecting object is selected.
-                              type: boolean
-                            matchLabels:
-                              additionalProperties:
-                                type: string
-                              description: MatchLabels ensures an object with matching
-                                labels is selected.
-                              type: object
-                            policy:
-                              description: Policies for selection.
-                              properties:
-                                resolution:
-                                  default: Required
-                                  description: |-
-                                    Resolution specifies whether resolution of this reference is required.
-                                    The default is 'Required', which means the reconcile will fail if the
-                                    reference cannot be resolved. 'Optional' means this reference will be
-                                    a no-op if it cannot be resolved.
-                                  enum:
-                                  - Required
-                                  - Optional
-                                  type: string
-                                resolve:
-                                  description: |-
-                                    Resolve specifies when this reference should be resolved. The default
-                                    is 'IfNotPresent', which will attempt to resolve the reference only when
-                                    the corresponding field is not present. Use 'Always' to resolve the
-                                    reference on every reconcile.
-                                  enum:
-                                  - Always
-                                  - IfNotPresent
-                                  type: string
-                              type: object
-                          type: object
-                      type: object
-                    type: array
-                  serviceBindings:
-                    description: (Attributes Set) Service instances to bind to the
-                      application. (see below for nested schema)
-                    items:
-                      properties:
-                        params:
-                          description: (String) A json object to send to the service
-                            broker during service binding.
-                          type: string
-                        serviceInstance:
-                          description: (String) The service instance name.
-                          type: string
-                        serviceInstanceRef:
-                          description: Reference to a ServiceInstance in resources
-                            to populate serviceInstance.
-                          properties:
-                            name:
-                              description: Name of the referenced object.
-                              type: string
-                            policy:
-                              description: Policies for referencing.
-                              properties:
-                                resolution:
-                                  default: Required
-                                  description: |-
-                                    Resolution specifies whether resolution of this reference is required.
-                                    The default is 'Required', which means the reconcile will fail if the
-                                    reference cannot be resolved. 'Optional' means this reference will be
-                                    a no-op if it cannot be resolved.
-                                  enum:
-                                  - Required
-                                  - Optional
-                                  type: string
-                                resolve:
-                                  description: |-
-                                    Resolve specifies when this reference should be resolved. The default
-                                    is 'IfNotPresent', which will attempt to resolve the reference only when
-                                    the corresponding field is not present. Use 'Always' to resolve the
-                                    reference on every reconcile.
-                                  enum:
-                                  - Always
-                                  - IfNotPresent
-                                  type: string
-                              type: object
-                          required:
-                          - name
-                          type: object
-                        serviceInstanceSelector:
-                          description: Selector for a ServiceInstance in resources
-                            to populate serviceInstance.
-                          properties:
-                            matchControllerRef:
-                              description: |-
-                                MatchControllerRef ensures an object with the same controller reference
-                                as the selecting object is selected.
-                              type: boolean
-                            matchLabels:
-                              additionalProperties:
-                                type: string
-                              description: MatchLabels ensures an object with matching
-                                labels is selected.
-                              type: object
-                            policy:
-                              description: Policies for selection.
-                              properties:
-                                resolution:
-                                  default: Required
-                                  description: |-
-                                    Resolution specifies whether resolution of this reference is required.
-                                    The default is 'Required', which means the reconcile will fail if the
-                                    reference cannot be resolved. 'Optional' means this reference will be
-                                    a no-op if it cannot be resolved.
-                                  enum:
-                                  - Required
-                                  - Optional
-                                  type: string
-                                resolve:
-                                  description: |-
-                                    Resolve specifies when this reference should be resolved. The default
-                                    is 'IfNotPresent', which will attempt to resolve the reference only when
-                                    the corresponding field is not present. Use 'Always' to resolve the
-                                    reference on every reconcile.
-                                  enum:
-                                  - Always
-                                  - IfNotPresent
-                                  type: string
-                              type: object
-                          type: object
-                      type: object
-                    type: array
-                  sidecars:
-                    description: (Attributes Set) The attribute specifies additional
-                      processes to run in the same container as your app (see below
-                      for nested schema)
-                    items:
-                      properties:
-                        command:
-                          description: (String) A custom start command for the application.
-                            This overrides the start command provided by the buildpack.
-                          type: string
-                        memory:
-                          description: (String) The memory limit for each application
-                            instance. If not provided, value is computed and retreived
-                            from Cloud Foundry.
-                          type: string
-                        name:
-                          description: (String) The name of the application.
-                          type: string
-                        processTypes:
-                          description: (Set of String) List of processes to associate
-                            sidecar with.
-                          items:
+                        description: MatchLabels ensures an object with matching labels
+                          is selected.
+                        type: object
+                      policy:
+                        description: Policies for selection.
+                        properties:
+                          resolution:
+                            default: Required
+                            description: |-
+                              Resolution specifies whether resolution of this reference is required.
+                              The default is 'Required', which means the reconcile will fail if the
+                              reference cannot be resolved. 'Optional' means this reference will be
+                              a no-op if it cannot be resolved.
+                            enum:
+                            - Required
+                            - Optional
                             type: string
-                          type: array
-                          x-kubernetes-list-type: set
-                      type: object
-                    type: array
-                  sourceCodeHash:
-                    description: |-
-                      encoded SHA256 hash of the path specified.
-                      Used to trigger updates. Must be set to a base64-encoded SHA256 hash of the path specified.
-                    type: string
-                  spaceName:
-                    description: |-
-                      (String) The name of the associated Cloud Foundry space.
-                      The name of the associated Cloud Foundry space.
-                    type: string
-                  stack:
-                    description: |-
-                      (String) The base operating system and file system that your application will execute in. Please refer to the docs for more information
-                      The base operating system and file system that your application will execute in. Please refer to the [docs](https://v3-apidocs.cloudfoundry.org/version/3.155.0/index.html#stacks) for more information
-                    type: string
-                  strategy:
-                    description: |-
-                      green', defaults to 'none'.
-                      The deployment strategy to use when deploying the application. Valid values are 'none', 'rolling', and 'blue-green', defaults to 'none'.
-                    type: string
-                  timeout:
-                    description: |-
-                      check will report failure.
-                      Time in seconds at which the health-check will report failure.
-                    type: number
-                type: object
-              initProvider:
-                description: |-
-                  THIS IS A BETA FIELD. It will be honored
-                  unless the Management Policies feature flag is disabled.
-                  InitProvider holds the same fields as ForProvider, with the exception
-                  of Identifier and other resource reference fields. The fields that are
-                  in InitProvider are merged into ForProvider when the resource is created.
-                  The same fields are also added to the terraform ignore_changes hook, to
-                  avoid updating them after creation. This is useful for fields that are
-                  required on creation, but we do not desire to update them after creation,
-                  for example because of an external controller is managing them, like an
-                  autoscaler.
-                properties:
-                  annotations:
-                    additionalProperties:
-                      type: string
-                    description: |-
-                      (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-                      The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-                    type: object
-                    x-kubernetes-map-type: granular
-                  buildpacks:
-                    description: |-
-                      (Set of String) Multiple buildpacks used to stage the application.
-                      Multiple buildpacks used to stage the application.
-                    items:
-                      type: string
-                    type: array
-                    x-kubernetes-list-type: set
-                  command:
-                    description: |-
-                      (String) A custom start command for the application. This overrides the start command provided by the buildpack.
-                      A custom start command for the application. This overrides the start command provided by the buildpack.
-                    type: string
-                  diskQuota:
-                    description: |-
-                      (String) The disk space to be allocated for each application instance.
-                      The disk space to be allocated for each application instance.
-                    type: string
-                  dockerCredentialsSecretRef:
-                    additionalProperties:
-                      type: string
-                    type: object
-                  dockerImage:
-                    description: |-
-                      (String) The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0
-                      The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0
-                    type: string
-                  environment:
-                    additionalProperties:
-                      type: string
-                    description: |-
-                      (Map of String) Key/value pairs of custom environment variables to set in your app. Does not include any system or service variables.
-                      Key/value pairs of custom environment variables to set in your app. Does not include any system or service variables.
-                    type: object
-                    x-kubernetes-map-type: granular
-                  healthCheckHttpEndpoint:
-                    description: |-
-                      (String) The endpoint for the http health check type.
-                      The endpoint for the http health check type.
-                    type: string
-                  healthCheckInterval:
-                    description: |-
-                      (Number) The interval in seconds between health checks.
-                      The interval in seconds between health checks.
-                    type: number
-                  healthCheckInvocationTimeout:
-                    description: |-
-                      (Number) The timeout in seconds for the health check requests for http and port health checks.
-                      The timeout in seconds for the health check requests for http and port health checks.
-                    type: number
-                  healthCheckType:
-                    description: |-
-                      (String) The health check type which can be one of 'port', 'process', 'http'.
-                      The health check type which can be one of 'port', 'process', 'http'.
-                    type: string
-                  instances:
-                    description: |-
-                      (Number) The number of app instances that you want to start. Defaults to 1.
-                      The number of app instances that you want to start. Defaults to 1.
-                    type: number
-                  labels:
-                    additionalProperties:
-                      type: string
-                    description: |-
-                      (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-                      The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-                    type: object
-                    x-kubernetes-map-type: granular
-                  logRateLimitPerSecond:
-                    description: |-
-                      (String) The attribute specifies the log rate limit for all instances of an app.
-                      The attribute specifies the log rate limit for all instances of an app.
-                    type: string
-                  memory:
-                    description: |-
-                      (String) The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
-                      The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
-                    type: string
-                  name:
-                    description: |-
-                      (String) The name of the application.
-                      The name of the application.
-                    type: string
-                  noRoute:
-                    description: |-
-                      (Boolean) The attribute with a value of true to prevent a route from being created for your app.
-                      The attribute with a value of true to prevent a route from being created for your app.
-                    type: boolean
-                  orgName:
-                    description: |-
-                      (String) The name of the associated Cloud Foundry organization.
-                      The name of the associated Cloud Foundry organization.
-                    type: string
-                  path:
-                    description: |-
-                      (String) The path to the zip file for the application.
-                      The path to the zip file for the application.
-                    type: string
-                  processes:
-                    description: (Attributes Set) List of configurations for individual
-                      process types. (see below for nested schema)
-                    items:
-                      properties:
-                        command:
-                          description: (String) A custom start command for the application.
-                            This overrides the start command provided by the buildpack.
-                          type: string
-                        diskQuota:
-                          description: (String) The disk space to be allocated for
-                            each application instance.
-                          type: string
-                        healthCheckHttpEndpoint:
-                          description: (String) The endpoint for the http health check
-                            type.
-                          type: string
-                        healthCheckInterval:
-                          description: (Number) The interval in seconds between health
-                            checks.
-                          format: int64
-                          type: integer
-                        healthCheckInvocationTimeout:
-                          description: (Number) The timeout in seconds for the health
-                            check requests for http and port health checks.
-                          format: int64
-                          type: integer
-                        healthCheckType:
-                          description: (String) The health check type which can be
-                            one of 'port', 'process', 'http'.
-                          type: string
-                        instances:
-                          description: (Number) The number of app instances that you
-                            want to start. Defaults to 1.
-                          format: int64
-                          type: integer
-                        logRateLimitPerSecond:
-                          description: (String) The attribute specifies the log rate
-                            limit for all instances of an app.
-                          type: string
-                        memory:
-                          description: (String) The memory limit for each application
-                            instance. If not provided, value is computed and retreived
-                            from Cloud Foundry.
-                          type: string
-                        readinessHealthCheckHttpEndpoint:
-                          description: (String) The endpoint for the http readiness
-                            health check type.
-                          type: string
-                        readinessHealthCheckInterval:
-                          description: (Number) The interval in seconds between readiness
-                            health checks.
-                          format: int64
-                          type: integer
-                        readinessHealthCheckInvocationTimeout:
-                          description: (Number) The timeout in seconds for the readiness
-                            health check requests for http and port health checks.
-                          format: int64
-                          type: integer
-                        readinessHealthCheckType:
-                          description: (String) The readiness health check type which
-                            can be one of 'port', 'process', 'http'.
-                          type: string
-                        timeout:
-                          description: check will report failure.
-                          format: int64
-                          type: integer
-                        type:
-                          description: (String) The process type. Can be web or worker.
-                          type: string
-                      type: object
-                    type: array
-                  randomRoute:
-                    description: |-
-                      route attribute to generate a unique route and avoid name collisions.
-                      The random-route attribute to generate a unique route and avoid name collisions.
-                    type: boolean
-                  readinessHealthCheckHttpEndpoint:
-                    description: |-
-                      (String) The endpoint for the http readiness health check type.
-                      The endpoint for the http readiness health check type.
-                    type: string
-                  readinessHealthCheckInterval:
-                    description: |-
-                      (Number) The interval in seconds between readiness health checks.
-                      The interval in seconds between readiness health checks.
-                    type: number
-                  readinessHealthCheckInvocationTimeout:
-                    description: |-
-                      (Number) The timeout in seconds for the readiness health check requests for http and port health checks.
-                      The timeout in seconds for the readiness health check requests for http and port health checks.
-                    type: number
-                  readinessHealthCheckType:
-                    description: |-
-                      (String) The readiness health check type which can be one of 'port', 'process', 'http'.
-                      The readiness health check type which can be one of 'port', 'process', 'http'.
-                    type: string
-                  routes:
-                    description: (Attributes Set) The routes to map to the application
-                      to control its ingress traffic. (see below for nested schema)
-                    items:
-                      properties:
-                        protocol:
-                          description: (String) The protocol to use for the route.
-                            Valid values are http2, http1, and tcp.
-                          type: string
-                        route:
-                          description: (String) The fully route qualified domain name
-                            which will be bound to app
-                          type: string
-                        routeRef:
-                          description: Reference to a Route in resources to populate
-                            route.
-                          properties:
-                            name:
-                              description: Name of the referenced object.
-                              type: string
-                            policy:
-                              description: Policies for referencing.
-                              properties:
-                                resolution:
-                                  default: Required
-                                  description: |-
-                                    Resolution specifies whether resolution of this reference is required.
-                                    The default is 'Required', which means the reconcile will fail if the
-                                    reference cannot be resolved. 'Optional' means this reference will be
-                                    a no-op if it cannot be resolved.
-                                  enum:
-                                  - Required
-                                  - Optional
-                                  type: string
-                                resolve:
-                                  description: |-
-                                    Resolve specifies when this reference should be resolved. The default
-                                    is 'IfNotPresent', which will attempt to resolve the reference only when
-                                    the corresponding field is not present. Use 'Always' to resolve the
-                                    reference on every reconcile.
-                                  enum:
-                                  - Always
-                                  - IfNotPresent
-                                  type: string
-                              type: object
-                          required:
-                          - name
-                          type: object
-                        routeSelector:
-                          description: Selector for a Route in resources to populate
-                            route.
-                          properties:
-                            matchControllerRef:
-                              description: |-
-                                MatchControllerRef ensures an object with the same controller reference
-                                as the selecting object is selected.
-                              type: boolean
-                            matchLabels:
-                              additionalProperties:
-                                type: string
-                              description: MatchLabels ensures an object with matching
-                                labels is selected.
-                              type: object
-                            policy:
-                              description: Policies for selection.
-                              properties:
-                                resolution:
-                                  default: Required
-                                  description: |-
-                                    Resolution specifies whether resolution of this reference is required.
-                                    The default is 'Required', which means the reconcile will fail if the
-                                    reference cannot be resolved. 'Optional' means this reference will be
-                                    a no-op if it cannot be resolved.
-                                  enum:
-                                  - Required
-                                  - Optional
-                                  type: string
-                                resolve:
-                                  description: |-
-                                    Resolve specifies when this reference should be resolved. The default
-                                    is 'IfNotPresent', which will attempt to resolve the reference only when
-                                    the corresponding field is not present. Use 'Always' to resolve the
-                                    reference on every reconcile.
-                                  enum:
-                                  - Always
-                                  - IfNotPresent
-                                  type: string
-                              type: object
-                          type: object
-                      type: object
-                    type: array
-                  serviceBindings:
-                    description: (Attributes Set) Service instances to bind to the
-                      application. (see below for nested schema)
-                    items:
-                      properties:
-                        params:
-                          description: (String) A json object to send to the service
-                            broker during service binding.
-                          type: string
-                        serviceInstance:
-                          description: (String) The service instance name.
-                          type: string
-                        serviceInstanceRef:
-                          description: Reference to a ServiceInstance in resources
-                            to populate serviceInstance.
-                          properties:
-                            name:
-                              description: Name of the referenced object.
-                              type: string
-                            policy:
-                              description: Policies for referencing.
-                              properties:
-                                resolution:
-                                  default: Required
-                                  description: |-
-                                    Resolution specifies whether resolution of this reference is required.
-                                    The default is 'Required', which means the reconcile will fail if the
-                                    reference cannot be resolved. 'Optional' means this reference will be
-                                    a no-op if it cannot be resolved.
-                                  enum:
-                                  - Required
-                                  - Optional
-                                  type: string
-                                resolve:
-                                  description: |-
-                                    Resolve specifies when this reference should be resolved. The default
-                                    is 'IfNotPresent', which will attempt to resolve the reference only when
-                                    the corresponding field is not present. Use 'Always' to resolve the
-                                    reference on every reconcile.
-                                  enum:
-                                  - Always
-                                  - IfNotPresent
-                                  type: string
-                              type: object
-                          required:
-                          - name
-                          type: object
-                        serviceInstanceSelector:
-                          description: Selector for a ServiceInstance in resources
-                            to populate serviceInstance.
-                          properties:
-                            matchControllerRef:
-                              description: |-
-                                MatchControllerRef ensures an object with the same controller reference
-                                as the selecting object is selected.
-                              type: boolean
-                            matchLabels:
-                              additionalProperties:
-                                type: string
-                              description: MatchLabels ensures an object with matching
-                                labels is selected.
-                              type: object
-                            policy:
-                              description: Policies for selection.
-                              properties:
-                                resolution:
-                                  default: Required
-                                  description: |-
-                                    Resolution specifies whether resolution of this reference is required.
-                                    The default is 'Required', which means the reconcile will fail if the
-                                    reference cannot be resolved. 'Optional' means this reference will be
-                                    a no-op if it cannot be resolved.
-                                  enum:
-                                  - Required
-                                  - Optional
-                                  type: string
-                                resolve:
-                                  description: |-
-                                    Resolve specifies when this reference should be resolved. The default
-                                    is 'IfNotPresent', which will attempt to resolve the reference only when
-                                    the corresponding field is not present. Use 'Always' to resolve the
-                                    reference on every reconcile.
-                                  enum:
-                                  - Always
-                                  - IfNotPresent
-                                  type: string
-                              type: object
-                          type: object
-                      type: object
-                    type: array
-                  sidecars:
-                    description: (Attributes Set) The attribute specifies additional
-                      processes to run in the same container as your app (see below
-                      for nested schema)
-                    items:
-                      properties:
-                        command:
-                          description: (String) A custom start command for the application.
-                            This overrides the start command provided by the buildpack.
-                          type: string
-                        memory:
-                          description: (String) The memory limit for each application
-                            instance. If not provided, value is computed and retreived
-                            from Cloud Foundry.
-                          type: string
-                        name:
-                          description: (String) The name of the application.
-                          type: string
-                        processTypes:
-                          description: (Set of String) List of processes to associate
-                            sidecar with.
-                          items:
+                          resolve:
+                            description: |-
+                              Resolve specifies when this reference should be resolved. The default
+                              is 'IfNotPresent', which will attempt to resolve the reference only when
+                              the corresponding field is not present. Use 'Always' to resolve the
+                              reference on every reconcile.
+                            enum:
+                            - Always
+                            - IfNotPresent
                             type: string
-                          type: array
-                          x-kubernetes-list-type: set
-                      type: object
-                    type: array
-                  sourceCodeHash:
-                    description: |-
-                      encoded SHA256 hash of the path specified.
-                      Used to trigger updates. Must be set to a base64-encoded SHA256 hash of the path specified.
-                    type: string
-                  spaceName:
-                    description: |-
-                      (String) The name of the associated Cloud Foundry space.
-                      The name of the associated Cloud Foundry space.
-                    type: string
+                        type: object
+                    type: object
                   stack:
-                    description: |-
-                      (String) The base operating system and file system that your application will execute in. Please refer to the docs for more information
-                      The base operating system and file system that your application will execute in. Please refer to the [docs](https://v3-apidocs.cloudfoundry.org/version/3.155.0/index.html#stacks) for more information
+                    description: (NOT SUPPORTED YET) The root filesystem to use with
+                      the buildpack, for example, cflinuxfs4.
                     type: string
-                  strategy:
-                    description: |-
-                      green', defaults to 'none'.
-                      The deployment strategy to use when deploying the application. Valid values are 'none', 'rolling', and 'blue-green', defaults to 'none'.
-                    type: string
-                  timeout:
-                    description: |-
-                      check will report failure.
-                      Time in seconds at which the health-check will report failure.
-                    type: number
                 type: object
               managementPolicies:
                 default:
@@ -1137,316 +713,30 @@ spec:
             required:
             - forProvider
             type: object
-            x-kubernetes-validations:
-            - message: spec.forProvider.name is a required parameter
-              rule: '!(''*'' in self.managementPolicies || ''Create'' in self.managementPolicies
-                || ''Update'' in self.managementPolicies) || has(self.forProvider.name)
-                || (has(self.initProvider) && has(self.initProvider.name))'
-            - message: spec.forProvider.orgName is a required parameter
-              rule: '!(''*'' in self.managementPolicies || ''Create'' in self.managementPolicies
-                || ''Update'' in self.managementPolicies) || has(self.forProvider.orgName)
-                || (has(self.initProvider) && has(self.initProvider.orgName))'
-            - message: spec.forProvider.spaceName is a required parameter
-              rule: '!(''*'' in self.managementPolicies || ''Create'' in self.managementPolicies
-                || ''Update'' in self.managementPolicies) || has(self.forProvider.spaceName)
-                || (has(self.initProvider) && has(self.initProvider.spaceName))'
           status:
             description: AppStatus defines the observed state of App.
             properties:
               atProvider:
                 properties:
-                  annotations:
-                    additionalProperties:
-                      type: string
-                    description: |-
-                      (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-                      The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-                    type: object
-                    x-kubernetes-map-type: granular
-                  buildpacks:
-                    description: |-
-                      (Set of String) Multiple buildpacks used to stage the application.
-                      Multiple buildpacks used to stage the application.
-                    items:
-                      type: string
-                    type: array
-                    x-kubernetes-list-type: set
-                  command:
-                    description: |-
-                      (String) A custom start command for the application. This overrides the start command provided by the buildpack.
-                      A custom start command for the application. This overrides the start command provided by the buildpack.
+                  appManifest:
+                    description: The yaml representation of the environment variables.
                     type: string
                   createdAt:
-                    description: |-
-                      (String) The date and time when the resource was created in RFC3339 format.
-                      The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
-                    type: string
-                  diskQuota:
-                    description: |-
-                      (String) The disk space to be allocated for each application instance.
-                      The disk space to be allocated for each application instance.
-                    type: string
-                  dockerImage:
-                    description: |-
-                      (String) The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0
-                      The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0
-                    type: string
-                  environment:
-                    additionalProperties:
-                      type: string
-                    description: |-
-                      (Map of String) Key/value pairs of custom environment variables to set in your app. Does not include any system or service variables.
-                      Key/value pairs of custom environment variables to set in your app. Does not include any system or service variables.
-                    type: object
-                    x-kubernetes-map-type: granular
-                  healthCheckHttpEndpoint:
-                    description: |-
-                      (String) The endpoint for the http health check type.
-                      The endpoint for the http health check type.
-                    type: string
-                  healthCheckInterval:
-                    description: |-
-                      (Number) The interval in seconds between health checks.
-                      The interval in seconds between health checks.
-                    type: number
-                  healthCheckInvocationTimeout:
-                    description: |-
-                      (Number) The timeout in seconds for the health check requests for http and port health checks.
-                      The timeout in seconds for the health check requests for http and port health checks.
-                    type: number
-                  healthCheckType:
-                    description: |-
-                      (String) The health check type which can be one of 'port', 'process', 'http'.
-                      The health check type which can be one of 'port', 'process', 'http'.
+                    description: The date and time when the resource was created in
+                      [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                   id:
-                    description: (String) The GUID of the object.
-                    type: string
-                  instances:
-                    description: |-
-                      (Number) The number of app instances that you want to start. Defaults to 1.
-                      The number of app instances that you want to start. Defaults to 1.
-                    type: number
-                  labels:
-                    additionalProperties:
-                      type: string
-                    description: |-
-                      (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-                      The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-                    type: object
-                    x-kubernetes-map-type: granular
-                  logRateLimitPerSecond:
-                    description: |-
-                      (String) The attribute specifies the log rate limit for all instances of an app.
-                      The attribute specifies the log rate limit for all instances of an app.
-                    type: string
-                  memory:
-                    description: |-
-                      (String) The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
-                      The memory limit for each application instance. If not provided, value is computed and retreived from Cloud Foundry.
+                    description: The GUID of the Cloud Foundry resource
                     type: string
                   name:
-                    description: |-
-                      (String) The name of the application.
-                      The name of the application.
+                    description: The name of the application.
                     type: string
-                  noRoute:
-                    description: |-
-                      (Boolean) The attribute with a value of true to prevent a route from being created for your app.
-                      The attribute with a value of true to prevent a route from being created for your app.
-                    type: boolean
-                  orgName:
-                    description: |-
-                      (String) The name of the associated Cloud Foundry organization.
-                      The name of the associated Cloud Foundry organization.
+                  state:
+                    description: the State of the application.
                     type: string
-                  path:
-                    description: |-
-                      (String) The path to the zip file for the application.
-                      The path to the zip file for the application.
-                    type: string
-                  processes:
-                    description: (Attributes Set) List of configurations for individual
-                      process types. (see below for nested schema)
-                    items:
-                      properties:
-                        command:
-                          description: (String) A custom start command for the application.
-                            This overrides the start command provided by the buildpack.
-                          type: string
-                        diskQuota:
-                          description: (String) The disk space to be allocated for
-                            each application instance.
-                          type: string
-                        healthCheckHttpEndpoint:
-                          description: (String) The endpoint for the http health check
-                            type.
-                          type: string
-                        healthCheckInterval:
-                          description: (Number) The interval in seconds between health
-                            checks.
-                          format: int64
-                          type: integer
-                        healthCheckInvocationTimeout:
-                          description: (Number) The timeout in seconds for the health
-                            check requests for http and port health checks.
-                          format: int64
-                          type: integer
-                        healthCheckType:
-                          description: (String) The health check type which can be
-                            one of 'port', 'process', 'http'.
-                          type: string
-                        instances:
-                          description: (Number) The number of app instances that you
-                            want to start. Defaults to 1.
-                          format: int64
-                          type: integer
-                        logRateLimitPerSecond:
-                          description: (String) The attribute specifies the log rate
-                            limit for all instances of an app.
-                          type: string
-                        memory:
-                          description: (String) The memory limit for each application
-                            instance. If not provided, value is computed and retreived
-                            from Cloud Foundry.
-                          type: string
-                        readinessHealthCheckHttpEndpoint:
-                          description: (String) The endpoint for the http readiness
-                            health check type.
-                          type: string
-                        readinessHealthCheckInterval:
-                          description: (Number) The interval in seconds between readiness
-                            health checks.
-                          format: int64
-                          type: integer
-                        readinessHealthCheckInvocationTimeout:
-                          description: (Number) The timeout in seconds for the readiness
-                            health check requests for http and port health checks.
-                          format: int64
-                          type: integer
-                        readinessHealthCheckType:
-                          description: (String) The readiness health check type which
-                            can be one of 'port', 'process', 'http'.
-                          type: string
-                        timeout:
-                          description: check will report failure.
-                          format: int64
-                          type: integer
-                        type:
-                          description: (String) The process type. Can be web or worker.
-                          type: string
-                      type: object
-                    type: array
-                  randomRoute:
-                    description: |-
-                      route attribute to generate a unique route and avoid name collisions.
-                      The random-route attribute to generate a unique route and avoid name collisions.
-                    type: boolean
-                  readinessHealthCheckHttpEndpoint:
-                    description: |-
-                      (String) The endpoint for the http readiness health check type.
-                      The endpoint for the http readiness health check type.
-                    type: string
-                  readinessHealthCheckInterval:
-                    description: |-
-                      (Number) The interval in seconds between readiness health checks.
-                      The interval in seconds between readiness health checks.
-                    type: number
-                  readinessHealthCheckInvocationTimeout:
-                    description: |-
-                      (Number) The timeout in seconds for the readiness health check requests for http and port health checks.
-                      The timeout in seconds for the readiness health check requests for http and port health checks.
-                    type: number
-                  readinessHealthCheckType:
-                    description: |-
-                      (String) The readiness health check type which can be one of 'port', 'process', 'http'.
-                      The readiness health check type which can be one of 'port', 'process', 'http'.
-                    type: string
-                  routes:
-                    description: (Attributes Set) The routes to map to the application
-                      to control its ingress traffic. (see below for nested schema)
-                    items:
-                      properties:
-                        protocol:
-                          description: (String) The protocol to use for the route.
-                            Valid values are http2, http1, and tcp.
-                          type: string
-                        route:
-                          description: (String) The fully route qualified domain name
-                            which will be bound to app
-                          type: string
-                      type: object
-                    type: array
-                  serviceBindings:
-                    description: (Attributes Set) Service instances to bind to the
-                      application. (see below for nested schema)
-                    items:
-                      properties:
-                        params:
-                          description: (String) A json object to send to the service
-                            broker during service binding.
-                          type: string
-                        serviceInstance:
-                          description: (String) The service instance name.
-                          type: string
-                      type: object
-                    type: array
-                  sidecars:
-                    description: (Attributes Set) The attribute specifies additional
-                      processes to run in the same container as your app (see below
-                      for nested schema)
-                    items:
-                      properties:
-                        command:
-                          description: (String) A custom start command for the application.
-                            This overrides the start command provided by the buildpack.
-                          type: string
-                        memory:
-                          description: (String) The memory limit for each application
-                            instance. If not provided, value is computed and retreived
-                            from Cloud Foundry.
-                          type: string
-                        name:
-                          description: (String) The name of the application.
-                          type: string
-                        processTypes:
-                          description: (Set of String) List of processes to associate
-                            sidecar with.
-                          items:
-                            type: string
-                          type: array
-                          x-kubernetes-list-type: set
-                      type: object
-                    type: array
-                  sourceCodeHash:
-                    description: |-
-                      encoded SHA256 hash of the path specified.
-                      Used to trigger updates. Must be set to a base64-encoded SHA256 hash of the path specified.
-                    type: string
-                  spaceName:
-                    description: |-
-                      (String) The name of the associated Cloud Foundry space.
-                      The name of the associated Cloud Foundry space.
-                    type: string
-                  stack:
-                    description: |-
-                      (String) The base operating system and file system that your application will execute in. Please refer to the docs for more information
-                      The base operating system and file system that your application will execute in. Please refer to the [docs](https://v3-apidocs.cloudfoundry.org/version/3.155.0/index.html#stacks) for more information
-                    type: string
-                  strategy:
-                    description: |-
-                      green', defaults to 'none'.
-                      The deployment strategy to use when deploying the application. Valid values are 'none', 'rolling', and 'blue-green', defaults to 'none'.
-                    type: string
-                  timeout:
-                    description: |-
-                      check will report failure.
-                      Time in seconds at which the health-check will report failure.
-                    type: number
                   updatedAt:
-                    description: |-
-                      (String) The date and time when the resource was updated in RFC3339 format.
-                      The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: The date and time when the resource was updated in
+                      [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                 type: object
               conditions:
