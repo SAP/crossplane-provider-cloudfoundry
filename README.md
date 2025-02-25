@@ -1,7 +1,7 @@
 # Provider CloudFoundry
 
 `provider-cloudfoundry` is a [Crossplane](https://crossplane.io/) provider for managing your CloudFoundry resources using the
-CloudFoundry V3 API. 
+CloudFoundry V3 API.
 
 ## Getting Started
 

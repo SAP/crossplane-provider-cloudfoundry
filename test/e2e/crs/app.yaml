@@ -1,0 +1,18 @@
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+kind: App
+metadata:
+  namespace: default
+  name: my-app
+spec:
+  forProvider:
+    name: hello-app
+    spaceRef:
+      name: my-space
+    lifecycle: docker
+    docker:
+      image: loud/hello_co:latest
+    processes:
+      - type: web
+        health-check-type: http
+        health-check-http-endpoint: "/"
+    random-route: true
