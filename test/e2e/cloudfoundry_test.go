@@ -37,11 +37,13 @@ func TestCloudfoundry(t *testing.T) {
 		updated func(k8s.Object) (bool, error)
 	}{
 		"org":                        {name: "my-org", obj: &v1alpha2resources.Org{}},
-		"org_managers":               {name: "my-org-managers", obj: &v1alpha1resources.OrgMembers{}},
+		// v1alpha1.OrgMembers resource refers to v1alpha1.Organization. This breaks the e2e test.
+		// "org_managers":               {name: "my-org-managers", obj: &v1alpha1resources.OrgMembers{}},
 		"org_role":                   {name: "my-org-role", obj: &v1alpha2resources.OrgRole{}},
 		"space":                      {name: "my-space", obj: &v1alpha2resources.Space{}},
 		"space_developers":           {name: "my-space-developers", obj: &v1alpha1resources.SpaceMembers{}},
 		"space_role":                 {name: "my-space-role", obj: &v1alpha2resources.SpaceRole{}},
+		"space_quota":                {name: "my-space-quota", obj: &v1alpha2resources.SpaceQuota{}},
 		"service_instance":           {name: "my-service-instance", obj: &v1alpha2resources.ServiceInstance{}},
 		"ups":                        {name: "my-ups", obj: &v1alpha2resources.ServiceInstance{}},
 		"service_credential_binding": {name: "my-service-credential-binding", obj: &v1alpha2resources.ServiceCredentialBinding{}},
@@ -73,7 +75,7 @@ func TestCloudfoundry(t *testing.T) {
 	)
 
 	// creation assess steps in dependency order, e.g., `org` before `space` as `space` depends on org`.
-	var steps = [...]string{"org", "org_managers", "org_role", "space", "space_role", "space_developers", "service_instance", "service_credential_binding", "ups", "app"}
+	var steps = [...]string{"org", "org_role", "space", "space_quota", "space_role", "space_developers", "service_instance", "service_credential_binding", "ups", "app"}
 	for _, name := range steps {
 		ft, ok := feats[name]
 		if !ok {

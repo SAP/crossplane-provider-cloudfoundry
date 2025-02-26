@@ -217,6 +217,48 @@ func (mg *Space) ResolveReferences(ctx context.Context, c client.Reader) error {
 	return nil
 }
 
+// ResolveReferences of this SpaceQuota.
+func (mg *SpaceQuota) ResolveReferences(ctx context.Context, c client.Reader) error {
+	r := reference.NewAPIResolver(c, mg)
+
+	var rsp reference.ResolutionResponse
+	var err error
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Org),
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.OrgRef,
+		Selector:     mg.Spec.ForProvider.OrgSelector,
+		To: reference.To{
+			List:    &OrgList{},
+			Managed: &Org{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.Org")
+	}
+	mg.Spec.ForProvider.Org = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.OrgRef = rsp.ResolvedReference
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.InitProvider.Org),
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.InitProvider.OrgRef,
+		Selector:     mg.Spec.InitProvider.OrgSelector,
+		To: reference.To{
+			List:    &OrgList{},
+			Managed: &Org{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.InitProvider.Org")
+	}
+	mg.Spec.InitProvider.Org = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.InitProvider.OrgRef = rsp.ResolvedReference
+
+	return nil
+}
+
 // ResolveReferences of this SpaceRole.
 func (mg *SpaceRole) ResolveReferences(ctx context.Context, c client.Reader) error {
 	r := reference.NewAPIResolver(c, mg)
