@@ -47,7 +47,7 @@ func GenerateSpaceQuota(resp *resource.SpaceQuota) *v1alpha2.SpaceQuota {
 		}
 		slices.SortFunc(cr.Status.AtProvider.Spaces, func(a, b *string) int {
 			if a != nil && b != nil {
-				strings.Compare(*a, *b)
+				return strings.Compare(*a, *b)
 			}
 			return 0
 		})

@@ -497,6 +497,7 @@ spec:
               forProvider:
                 properties:
                   allowSsh:
+                    default: false
                     description: |-
                       (Boolean) Allows SSH to application containers via the CF CLI.
                       Allows SSH to application containers via the CF CLI.

@@ -27,6 +27,120 @@ import (
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+// ResolveReferences of this App.
+func (mg *App) ResolveReferences(ctx context.Context, c client.Reader) error {
+	r := reference.NewAPIResolver(c, mg)
+
+	var rsp reference.ResolutionResponse
+	var err error
+
+	for i3 := 0; i3 < len(mg.Spec.ForProvider.Routes); i3++ {
+		rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+			CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Routes[i3].Route),
+			Extract:      reference.ExternalName(),
+			Reference:    mg.Spec.ForProvider.Routes[i3].RouteRef,
+			Selector:     mg.Spec.ForProvider.Routes[i3].RouteSelector,
+			To: reference.To{
+				List:    &RouteList{},
+				Managed: &Route{},
+			},
+		})
+		if err != nil {
+			return errors.Wrap(err, "mg.Spec.ForProvider.Routes[i3].Route")
+		}
+		mg.Spec.ForProvider.Routes[i3].Route = reference.ToPtrValue(rsp.ResolvedValue)
+		mg.Spec.ForProvider.Routes[i3].RouteRef = rsp.ResolvedReference
+
+	}
+	for i3 := 0; i3 < len(mg.Spec.ForProvider.ServiceBinding); i3++ {
+		rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+			CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.ServiceBinding[i3].ServiceInstance),
+			Extract:      reference.ExternalName(),
+			Reference:    mg.Spec.ForProvider.ServiceBinding[i3].ServiceInstanceRef,
+			Selector:     mg.Spec.ForProvider.ServiceBinding[i3].ServiceInstanceSelector,
+			To: reference.To{
+				List:    &ServiceInstanceList{},
+				Managed: &ServiceInstance{},
+			},
+		})
+		if err != nil {
+			return errors.Wrap(err, "mg.Spec.ForProvider.ServiceBinding[i3].ServiceInstance")
+		}
+		mg.Spec.ForProvider.ServiceBinding[i3].ServiceInstance = reference.ToPtrValue(rsp.ResolvedValue)
+		mg.Spec.ForProvider.ServiceBinding[i3].ServiceInstanceRef = rsp.ResolvedReference
+
+	}
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Space),
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.SpaceRef,
+		Selector:     mg.Spec.ForProvider.SpaceSelector,
+		To: reference.To{
+			List:    &SpaceList{},
+			Managed: &Space{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.Space")
+	}
+	mg.Spec.ForProvider.Space = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.SpaceRef = rsp.ResolvedReference
+
+	for i3 := 0; i3 < len(mg.Spec.InitProvider.Routes); i3++ {
+		rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+			CurrentValue: reference.FromPtrValue(mg.Spec.InitProvider.Routes[i3].Route),
+			Extract:      reference.ExternalName(),
+			Reference:    mg.Spec.InitProvider.Routes[i3].RouteRef,
+			Selector:     mg.Spec.InitProvider.Routes[i3].RouteSelector,
+			To: reference.To{
+				List:    &RouteList{},
+				Managed: &Route{},
+			},
+		})
+		if err != nil {
+			return errors.Wrap(err, "mg.Spec.InitProvider.Routes[i3].Route")
+		}
+		mg.Spec.InitProvider.Routes[i3].Route = reference.ToPtrValue(rsp.ResolvedValue)
+		mg.Spec.InitProvider.Routes[i3].RouteRef = rsp.ResolvedReference
+
+	}
+	for i3 := 0; i3 < len(mg.Spec.InitProvider.ServiceBinding); i3++ {
+		rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+			CurrentValue: reference.FromPtrValue(mg.Spec.InitProvider.ServiceBinding[i3].ServiceInstance),
+			Extract:      reference.ExternalName(),
+			Reference:    mg.Spec.InitProvider.ServiceBinding[i3].ServiceInstanceRef,
+			Selector:     mg.Spec.InitProvider.ServiceBinding[i3].ServiceInstanceSelector,
+			To: reference.To{
+				List:    &ServiceInstanceList{},
+				Managed: &ServiceInstance{},
+			},
+		})
+		if err != nil {
+			return errors.Wrap(err, "mg.Spec.InitProvider.ServiceBinding[i3].ServiceInstance")
+		}
+		mg.Spec.InitProvider.ServiceBinding[i3].ServiceInstance = reference.ToPtrValue(rsp.ResolvedValue)
+		mg.Spec.InitProvider.ServiceBinding[i3].ServiceInstanceRef = rsp.ResolvedReference
+
+	}
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.InitProvider.Space),
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.InitProvider.SpaceRef,
+		Selector:     mg.Spec.InitProvider.SpaceSelector,
+		To: reference.To{
+			List:    &SpaceList{},
+			Managed: &Space{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.InitProvider.Space")
+	}
+	mg.Spec.InitProvider.Space = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.InitProvider.SpaceRef = rsp.ResolvedReference
+
+	return nil
+}
+
 // ResolveReferences of this OrgMembers.
 func (mg *OrgMembers) ResolveReferences(ctx context.Context, c client.Reader) error {
 	r := reference.NewAPIResolver(c, mg)

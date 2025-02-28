@@ -36,7 +36,7 @@ func TestCloudfoundry(t *testing.T) {
 		// updated checks if resource is updated, normally by observing a new value on managed field.
 		updated func(k8s.Object) (bool, error)
 	}{
-		"org":                        {name: "my-org", obj: &v1alpha2resources.Org{}},
+		"org": {name: "my-org", obj: &v1alpha2resources.Org{}},
 		// v1alpha1.OrgMembers resource refers to v1alpha1.Organization. This breaks the e2e test.
 		// "org_managers":               {name: "my-org-managers", obj: &v1alpha1resources.OrgMembers{}},
 		"org_role":                   {name: "my-org-role", obj: &v1alpha2resources.OrgRole{}},
@@ -59,6 +59,7 @@ func TestCloudfoundry(t *testing.T) {
 				t.Fatalf("test org %s not accessible", testOrgName)
 			}
 			_ = deleteSpace(ctx, org, feats["space"].name)
+			_ = deleteQuota(ctx, org, feats["space_quota"].name)
 			_ = deleteDomain(ctx, org, "dev.orchestrator.io")
 
 			if err := ApplyResources(ctx, cfg, dir); err != nil {
@@ -75,7 +76,7 @@ func TestCloudfoundry(t *testing.T) {
 	)
 
 	// creation assess steps in dependency order, e.g., `org` before `space` as `space` depends on org`.
-	var steps = [...]string{"org", "org_role", "space", "space_quota", "space_role", "space_developers", "service_instance", "service_credential_binding", "ups", "app"}
+	var steps = [...]string{"org", "org_role", "space", "space_role", "space_developers", "space_quota", "service_instance", "service_credential_binding", "ups"}
 	for _, name := range steps {
 		ft, ok := feats[name]
 		if !ok {
@@ -261,6 +262,25 @@ func deleteDomain(ctx context.Context, org string, domain string) error {
 	if err == nil {
 		klog.V(4).InfoS("found test domain! cleaning up")
 		_, err = cfClient.Domains.Delete(ctx, s.GUID)
+		return err
+	}
+	return nil
+}
+
+func deleteQuota(ctx context.Context, org string, quota string) error {
+	cfClient, err := getCfClient()
+	if err != nil {
+		klog.V(4).InfoS("cannot get connect to cloudfoundry")
+		return err
+	}
+	s, err := cfClient.SpaceQuotas.Single(ctx,
+		&client.SpaceQuotaListOptions{
+			OrganizationGUIDs: client.Filter{Values: []string{org}},
+			Names:             client.Filter{Values: []string{quota}},
+		})
+	if err == nil {
+		klog.V(4).InfoS("found test spaceQuota! cleaning up")
+		_, err = cfClient.SpaceQuotas.Delete(ctx, s.GUID)
 		return err
 	}
 	return nil

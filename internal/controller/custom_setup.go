@@ -22,6 +22,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/serviceinstance"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/servicekey"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/space"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/spacequota"
 )
 
 // CustomSetup creates all controllers with the supplied logger and adds them to
@@ -40,6 +41,7 @@ func CustomSetup(mgr ctrl.Manager, o controller.Options) error {
 		serviceinstance.Setup,
 		servicekey.Setup,
 		servicecredentialbinding.Setup,
+		spacequota.Setup,
 	} {
 		if err := setup(mgr, o); err != nil {
 			return err

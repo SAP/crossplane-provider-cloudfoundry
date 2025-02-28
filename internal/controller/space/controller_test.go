@@ -23,6 +23,7 @@ var (
 	errBoom = errors.New("boom")
 	name    = "my-space"
 	guid    = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
+	org     = "3d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 )
 
 type modifier func(*v1alpha2.Space)
@@ -35,19 +36,19 @@ func withExternalName(name string) modifier {
 
 func withName(name string) modifier {
 	return func(r *v1alpha2.Space) {
-		r.Spec.ForProvider.Name = &name
+		r.Spec.ForProvider.Name = name
 	}
 }
 
 func withID(guid string) modifier {
 	return func(r *v1alpha2.Space) {
-		r.Status.AtProvider.ID = &guid
+		r.Status.AtProvider.ID = guid
 	}
 }
 
 func withAllowSSH(allowSSH bool) modifier {
 	return func(r *v1alpha2.Space) {
-		r.Spec.ForProvider.AllowSSH = &allowSSH
+		r.Spec.ForProvider.AllowSSH = allowSSH
 	}
 }
 
@@ -133,6 +134,10 @@ func TestObserve(t *testing.T) {
 					fake.SpaceNil,
 					fake.ErrNoResultReturned,
 				)
+				m.On("Single").Return(
+					fake.SpaceNil,
+					fake.ErrNoResultReturned,
+				)
 
 				return &MockSpaceFeature{m, f}
 			},
@@ -188,20 +193,48 @@ func TestObserve(t *testing.T) {
 			},
 			kube: &test.MockClient{},
 		},
+		"Should adopt and update external-name": {
+			args: args{
+				mg: fakeSpace(withName("existing-space"), withOrg(org)),
+			},
+			want: want{
+				mg: fakeSpace(withName("existing-space"),
+					withExternalName(guid), withAllowSSH(false), withOrg(org),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
+				err: nil,
+			},
+			service: func() *MockSpaceFeature {
+				m := &fake.MockSpace{}
+				f := &fake.MockFeature{}
+
+				m.On("Single").Return(
+					&fake.NewSpace().SetName("existing-space").SetGUID(guid).SetRelationships(org).Space,
+					nil,
+				)
+				f.On("IsSSHEnabled").Return(
+					false,
+					nil,
+				)
+
+				return &MockSpaceFeature{m, f}
+			},
+			kube: &test.MockClient{},
+		},
 		"Successful": {
 			args: args{
 				mg: fakeSpace(
-					withExternalName(guid),
+					withExternalName(guid), withName(name), withOrg(org),
 				),
 			},
 			want: want{
 				mg: fakeSpace(
 					withExternalName(guid),
 					withName(name),
-					withAllowSSH(true),
-					withOrg(guid),
+					withAllowSSH(false),
+					withOrg(org),
 				),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
 				err: nil,
 			},
 			service: func() *MockSpaceFeature {
@@ -209,12 +242,12 @@ func TestObserve(t *testing.T) {
 				f := &fake.MockFeature{}
 
 				m.On("Get", guid).Return(
-					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(guid).Space,
+					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(org).Space,
 					nil,
 				)
 
 				f.On("IsSSHEnabled").Return(
-					true,
+					false,
 					nil,
 				)
 
