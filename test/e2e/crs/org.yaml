@@ -5,7 +5,7 @@ metadata:
   namespace: default
   name: my-org
 spec:
-  forProvider: 
+  forProvider:
     name: cf-ci-e2e
   managementPolicies:
     - Observe

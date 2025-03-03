@@ -9,7 +9,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 // ServiceKey defines interfaces to the ServiceKey resource

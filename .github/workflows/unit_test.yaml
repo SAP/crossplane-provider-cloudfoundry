@@ -5,7 +5,7 @@ name: Unit-Tests
 
 on:
   workflow_dispatch:
-  workflow_call: 
+  workflow_call:
 
 jobs:
 
@@ -24,7 +24,5 @@ jobs:
       - name: Build
         run: go build -v ./...
 
-      - name: Unit-Test Init
-        run: make test.init
       - name: Unit-Test Run
-        run: make test.run
+        run: go test ./...

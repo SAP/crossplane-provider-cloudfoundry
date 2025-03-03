@@ -15,12 +15,12 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
-	apisv1alpha1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1alpha1"
-	apisv1beta1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1beta1"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
-	scb "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/features"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
+	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	scb "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
 const (

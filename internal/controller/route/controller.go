@@ -22,11 +22,11 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	apisv1alpha1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1alpha1"
-	apisv1beta1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1beta1"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/features"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
+	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
 const (

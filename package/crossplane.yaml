@@ -4,7 +4,7 @@ metadata:
   name: provider-cloudfoundry
   annotations:
     meta.crossplane.io/maintainer: SAP Cloud Orchestrator Crossplane Maintainers <CloudOrchestrator@sap.com>
-    meta.crossplane.io/source: github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry
+    meta.crossplane.io/source: github.com/SAP/crossplane-provider-cloudfoundry
     meta.crossplane.io/license: Apache-2.0
     friendly-name.meta.crossplane.io: Provider Cloud Foundry
     meta.crossplane.io/description: |

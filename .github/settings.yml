@@ -10,10 +10,10 @@ repository:
   description: Crossplane Provider for Cloud Foundry
 
   # A URL with more information about the repository
-  homepage: 
+  homepage:
 
   # A comma-separated list of topics to set on the repository
-  topics: 
+  topics:
 
   # Either `true` to enable issues for this repository, `false` to disable them.
   has_issues: true
@@ -37,7 +37,7 @@ repository:
 
   # Either `true` to allow merging pull requests with a merge commit, or `false`
   # to prevent merging pull requests with merge commits.
-  allow_merge_commit: false 
+  allow_merge_commit: false
 
   # Either `true` to allow rebase-merging pull requests, or `false` to prevent
   # rebase-merging.
@@ -111,7 +111,7 @@ teams:
     permission: push
 
 branches:
-  - name: main 
+  - name: main
     # https://docs.github.com/en/rest/reference/repos#update-branch-protection
     # Branch Protection settings. Set to null to disable
     protection:

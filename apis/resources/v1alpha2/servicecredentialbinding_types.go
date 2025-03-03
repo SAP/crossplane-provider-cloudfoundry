@@ -32,7 +32,7 @@ type ServiceCredentialBindingParameters struct {
 	Name *string `json:"name,omitempty"`
 
 	// The ID of the Service Instance the key should be associated with.
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.ServiceInstance
+	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.ServiceInstance
 	// +kubebuilder:validation:Optional
 	ServiceInstance *string `json:"serviceInstance,omitempty"`
 

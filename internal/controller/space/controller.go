@@ -13,16 +13,15 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
-	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
-	apisv1alpha1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1alpha1"
-	apisv1beta1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1beta1"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/space"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/features"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
+	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/space"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
 const (
@@ -126,21 +125,11 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errNotSpace)
 	}
-	if meta.GetExternalName(cr) == "" {
-		return managed.ExternalObservation{}, nil
-	}
 
-	// TODO: external_name are set to metadata.name by default.
-	if meta.GetExternalName(cr) == "" {
-		return managed.ExternalObservation{}, nil
-	}
+	// Check if the external resource exists
+	guid := meta.GetExternalName(cr)
 
-	// get by external name or by matching spec
-	s, err := c.client.Get(ctx, meta.GetExternalName(cr))
-	// if clients.ErrorIsNotFound(err) {
-	// 	// match spec
-	// 	s, err = c.s.Single(ctx, space.GenerateListOption(cr.Spec.ForProvider))
-	// }
+	s, err := space.GetByIDOrSpec(ctx, c.client, guid, cr.Spec.ForProvider)
 
 	// not found or error
 	if err != nil {
@@ -149,8 +138,9 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		}
 		return managed.ExternalObservation{ResourceExists: false}, errors.Wrap(err, errGet)
 	}
-	if s.Relationships == nil {
-		return managed.ExternalObservation{}, errors.New(errGet)
+
+	if s == nil {
+		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
 	// ssh
@@ -160,19 +150,20 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
 	}
 
-	cr.SetConditions(xpv1.Available())
-
-	space.LateInitialize(&cr.Spec.ForProvider, s, ssh)
-
-	cr.Status.AtProvider = space.GenerateObservation(s, ssh)
-
-	if err := c.kube.Status().Update(ctx, cr); err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, errUpdate)
+	resourceLateInitialized := space.LateInitialize(cr, s, ssh)
+	// update external name, if needed
+	if guid != s.GUID {
+		meta.SetExternalName(cr, s.GUID)
+		resourceLateInitialized = true // force update
 	}
 
+	cr.Status.AtProvider = space.GenerateObservation(s, ssh)
+	cr.SetConditions(xpv1.Available())
+
 	return managed.ExternalObservation{
-		ResourceExists:   true,
-		ResourceUpToDate: space.IsUpToDate(cr.Spec.ForProvider, s, ssh),
+		ResourceExists:          true,
+		ResourceUpToDate:        space.IsUpToDate(cr.Spec.ForProvider, s, ssh),
+		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
 }
 
@@ -197,12 +188,11 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	// enable SSH if allowed
-	if !ptr.Deref(cr.Spec.ForProvider.AllowSSH, false) {
+	if cr.Spec.ForProvider.AllowSSH {
 		err = c.feature.EnableSSH(ctx, s.GUID, true)
 		if err != nil {
 			return managed.ExternalCreation{}, errors.Wrap(err, errEnableSSH)
 		}
-		cr.Status.AtProvider.AllowSSH = ptr.To(true)
 	}
 
 	return managed.ExternalCreation{
@@ -220,21 +210,21 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	// assert that ID is set
-	if cr.Status.AtProvider.ID == nil {
+	if !clients.IsValidGUID(cr.Status.AtProvider.ID) {
 		return managed.ExternalUpdate{}, errors.New(errUpdate)
 	}
 
 	// reconcile SSH
-	if ptr.Deref(cr.Spec.ForProvider.AllowSSH, false) != ptr.Deref(cr.Status.AtProvider.AllowSSH, false) {
-		err := c.feature.EnableSSH(ctx, *cr.Status.AtProvider.ID, ptr.Deref(cr.Spec.ForProvider.AllowSSH, false))
+	if cr.Spec.ForProvider.AllowSSH != cr.Status.AtProvider.AllowSSH {
+		err := c.feature.EnableSSH(ctx, cr.Status.AtProvider.ID, cr.Spec.ForProvider.AllowSSH)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errEnableSSH)
 		}
 	}
 
 	// rename
-	if ptr.Deref(cr.Spec.ForProvider.Name, "") != ptr.Deref(cr.Status.AtProvider.Name, "") {
-		_, err := c.client.Update(ctx, *cr.Status.AtProvider.ID, space.GenerateUpdate(cr.Spec.ForProvider))
+	if cr.Spec.ForProvider.Name != cr.Status.AtProvider.Name {
+		_, err := c.client.Update(ctx, cr.Status.AtProvider.ID, space.GenerateUpdate(cr.Spec.ForProvider))
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 		}
@@ -252,11 +242,11 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	cr.SetConditions(xpv1.Deleting())
 
 	// assert that ID is set
-	if cr.Status.AtProvider.ID == nil {
+	if !clients.IsValidGUID(cr.Status.AtProvider.ID) {
 		return errors.New(errDelete)
 	}
 
-	_, err := c.client.Delete(ctx, *cr.Status.AtProvider.ID)
+	_, err := c.client.Delete(ctx, cr.Status.AtProvider.ID)
 	if err != nil {
 		return errors.Wrap(err, errDelete)
 	}

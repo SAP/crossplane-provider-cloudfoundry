@@ -14,9 +14,9 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/fake"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 )
 
 var (

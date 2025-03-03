@@ -1,0 +1,13 @@
+---
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+kind: SpaceQuota
+metadata:
+  name: my-space-quota
+spec:
+  forProvider:
+    name: test-quota
+    orgRef:
+      name: my-org
+    allowPaidServicePlans: false
+    spacesRefs:
+      - name: my-space

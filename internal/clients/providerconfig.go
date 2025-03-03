@@ -11,12 +11,11 @@ import (
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/crossplane/upjet/pkg/terraform"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1beta1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 )
 
 // CfCredentials used to authenticate with the provider
@@ -27,14 +26,6 @@ type CfCredentials struct {
 	Password string `json:"password"`
 	Passcode string `json:"passcode"`
 }
-
-// FIXME: keys do not match with btp-account connection details
-const (
-	keyBaseURL     = "api_url"
-	keyUser        = "user"
-	keyPassword    = "password"
-	keySsoPasscode = "sso_passcode"
-)
 
 const (
 	// error messages
@@ -47,48 +38,6 @@ const (
 	errUnmarshalEndpoint    = "cannot unmarshal cloudfoundry endpoint as JSON"
 	errNoEndpoint           = "no API endpoint is configured in ProviderConfig"
 )
-
-// TerraformSetupBuilder builds Terraform a terraform.SetupFn function which
-// returns Terraform provider setup configuration
-func TerraformSetupBuilder(version, providerSource, providerVersion string) terraform.SetupFn {
-	return func(ctx context.Context, client client.Client, mg resource.Managed) (terraform.Setup, error) {
-		ps := terraform.Setup{
-			Version: version,
-			Requirement: terraform.ProviderRequirement{
-				Source:  providerSource,
-				Version: providerVersion,
-			},
-		}
-
-		pc, err := getProviderConfig(ctx, client, mg)
-		if err != nil {
-			return ps, errors.Wrap(err, errGetProviderConfig)
-		}
-
-		t := resource.NewProviderConfigUsageTracker(client, &v1beta1.ProviderConfigUsage{})
-		if err := t.Track(ctx, mg); err != nil {
-			return ps, errors.Wrap(err, errTrackUsage)
-		}
-
-		cred, err := getCredentials(ctx, client, pc)
-		if err != nil {
-			return ps, errors.Wrap(err, errExtractCredentials)
-		}
-		url, err := getEndpoint(ctx, client, pc)
-		if err != nil {
-			return ps, errors.Wrap(err, errExtractEndpoint)
-		}
-
-		ps.Configuration = map[string]any{}
-		ps.Configuration[keyBaseURL] = *url
-		// use email
-		ps.Configuration[keyUser] = cred.Email
-		ps.Configuration[keyPassword] = cred.Password
-		ps.Configuration[keySsoPasscode] = cred.Passcode
-
-		return ps, nil
-	}
-}
 
 // CloudFoundryClientFn is a function that builds a CF Client
 type CloudFoundryClientFn func(context.Context, client.Client, resource.Managed) (*cfv3.Client, error)

@@ -65,7 +65,7 @@ type SpaceRoleParameters struct {
 	// (String) The guid of the space to assign the role to
 	// The guid of the space to assign the role to
 	// +crossplane:generate:reference:type=Space
-	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/config.ExternalID()
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	Space *string `json:"space,omitempty" tf:"space,omitempty"`
 
 	// Reference to a Space in resources to populate space.

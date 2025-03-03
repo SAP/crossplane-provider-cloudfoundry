@@ -65,7 +65,7 @@ type OrgRoleParameters struct {
 	// (String) The guid of the organization to assign the role to
 	// The guid of the organization to assign the role to
 	// +crossplane:generate:reference:type=Org
-	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/config.ExternalID()
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	Org *string `json:"org,omitempty" tf:"org,omitempty"`
 
 	// Reference to a Organization in resources to populate org.

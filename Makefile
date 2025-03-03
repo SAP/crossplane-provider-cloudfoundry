@@ -3,18 +3,8 @@
 
 PROJECT_NAME := provider-$(PROVIDER_NAME)
 PROJECT_NAME := crossplane-provider-cloudfoundry
-PROJECT_REPO := github.tools.sap/cloud-orchestration/$(PROJECT_NAME)
+PROJECT_REPO := github.com/SAP/$(PROJECT_NAME)
 
-
-export TERRAFORM_VERSION := 1.5.4
-
-export TERRAFORM_PROVIDER_SOURCE := cloudfoundry/cloudfoundry
-export TERRAFORM_PROVIDER_REPO := https://github.com/cloudfoundry/terraform-provider-cloudfoundry
-export TERRAFORM_PROVIDER_VERSION := 1.1.0
-export TERRAFORM_PROVIDER_DOWNLOAD_NAME := terraform-provider-cloudfoundry
-export TERRAFORM_PROVIDER_DOWNLOAD_URL_PREFIX ?= https://releases.hashicorp.com/$(TERRAFORM_PROVIDER_DOWNLOAD_NAME)/$(TERRAFORM_PROVIDER_VERSION)
-export TERRAFORM_NATIVE_PROVIDER_BINARY := terraform-provider-cloudfoundry_$(TERRAFORM_PROVIDER_VERSION)_x5
-export TERRAFORM_DOCS_PATH := docs/resources
 
 PLATFORMS ?= linux_amd64 linux_arm64
 
@@ -42,7 +32,7 @@ NPROCS ?= 1
 GO_TEST_PARALLEL := $(shell echo $$(( $(NPROCS) / 2 )))
 
 GO_REQUIRED_VERSION ?= 1.22
-GO_STATIC_PACKAGES = $(GO_PROJECT)/cmd/provider $(GO_PROJECT)/cmd/generator
+GO_STATIC_PACKAGES = $(GO_PROJECT)/cmd/provider
 GO_LDFLAGS += -X $(GO_PROJECT)/internal/version.Version=$(VERSION)
 GO_SUBDIRS += cmd internal apis
 GO111MODULE = on
@@ -95,57 +85,6 @@ fallthrough: submodules
 	@echo Initial setup complete. Running make again . . .
 	@make
 
-# ====================================================================================
-# Setup Terraform for fetching provider schema
-TERRAFORM := $(TOOLS_HOST_DIR)/terraform-$(TERRAFORM_VERSION)
-TERRAFORM_WORKDIR := $(WORK_DIR)/terraform
-TERRAFORM_PROVIDER_SCHEMA := config/schema.json
-
-terraform.buildvars: common.buildvars
-	@echo TERRAFORM_VERSION=$(TERRAFORM_VERSION)
-	@echo TERRAFORM_PROVIDER_SOURCE=$(TERRAFORM_PROVIDER_SOURCE)
-	@echo TERRAFORM_PROVIDER_REPO=$(TERRAFORM_PROVIDER_REPO)
-	@echo TERRAFORM_PROVIDER_VERSION=$(TERRAFORM_PROVIDER_VERSION)
-	@echo TERRAFORM_PROVIDER_DOWNLOAD_NAME=$(TERRAFORM_PROVIDER_DOWNLOAD_NAME)
-	@echo TERRAFORM_NATIVE_PROVIDER_BINARY=$(TERRAFORM_NATIVE_PROVIDER_BINARY)
-	@echo TERRAFORM_DOCS_PATH=$(TERRAFORM_DOCS_PATH)
-	@echo TERRAFORM=$(TERRAFORM)
-	@echo TERRAFORM_WORKDIR=$(TERRAFORM_WORKDIR)
-	@echo TERRAFORM_PROVIDER_SCHEMA=$(TERRAFORM_PROVIDER_SCHEMA)
-
-$(TERRAFORM_PROVIDER_SCHEMA): $(TERRAFORM)
-	@$(INFO) generating provider schema for $(TERRAFORM_PROVIDER_SOURCE) $(TERRAFORM_PROVIDER_VERSION)
-	@mkdir -p $(TERRAFORM_WORKDIR)
-	@echo '{"terraform":[{"required_providers":[{"provider":{"source":"'"$(TERRAFORM_PROVIDER_SOURCE)"'","version":"'"$(TERRAFORM_PROVIDER_VERSION)"'"}}],"required_version":"'"$(TERRAFORM_VERSION)"'"}]}' > $(TERRAFORM_WORKDIR)/main.tf.json
-	@echo $(TERRAFORM_PROVIDER_VERSION)
-	@$(TERRAFORM) -chdir=$(TERRAFORM_WORKDIR) init > $(TERRAFORM_WORKDIR)/terraform-logs.txt 2>&1
-	@echo $(TERRAFORM_WORKDIR)
-	@$(TERRAFORM) -chdir=$(TERRAFORM_WORKDIR) providers schema -json=true > $(TERRAFORM_PROVIDER_SCHEMA) 2>> $(TERRAFORM_WORKDIR)/terraform-logs.txt
-	@echo $(TERRAFORM)
-	@echo $(TERRAFORM_PROVIDER_SOURCE)
-	@$(OK) generating provider schema for $(TERRAFORM_PROVIDER_SOURCE) $(TERRAFORM_PROVIDER_VERSION)
-
-$(TERRAFORM):
-	@$(INFO) installing terraform $(HOSTOS)-$(HOSTARCH)
-	@mkdir -p $(TOOLS_HOST_DIR)/tmp-terraform
-	@curl -fsSL https://releases.hashicorp.com/terraform/$(TERRAFORM_VERSION)/terraform_$(TERRAFORM_VERSION)_$(SAFEHOST_PLATFORM).zip -o $(TOOLS_HOST_DIR)/tmp-terraform/terraform.zip
-	@unzip $(TOOLS_HOST_DIR)/tmp-terraform/terraform.zip -d $(TOOLS_HOST_DIR)/tmp-terraform
-	@mv $(TOOLS_HOST_DIR)/tmp-terraform/terraform $(TERRAFORM)
-	@rm -fr $(TOOLS_HOST_DIR)/tmp-terraform
-	@$(OK) installing terraform $(HOSTOS)-$(HOSTARCH)
-
-
-pull-docs:
-	@$(INFO) pull-docs called
-	@if [ ! -d "$(WORK_DIR)/$(TERRAFORM_PROVIDER_SOURCE)" ]; then \
-  		mkdir -p "$(WORK_DIR)/$(TERRAFORM_PROVIDER_SOURCE)" && \
-		git clone -c advice.detachedHead=false --depth 1 --filter=blob:none --branch "v$(TERRAFORM_PROVIDER_VERSION)" --sparse "$(TERRAFORM_PROVIDER_REPO)" "$(WORK_DIR)/$(TERRAFORM_PROVIDER_SOURCE)"; \
-	fi
-	@git -C "$(WORK_DIR)/$(TERRAFORM_PROVIDER_SOURCE)" sparse-checkout set "$(TERRAFORM_DOCS_PATH)"
-
-generate.init: $(TERRAFORM_PROVIDER_SCHEMA) pull-docs
-
-.PHONY: $(TERRAFORM_PROVIDER_SCHEMA) pull-docs terraform.buildvars
 # ====================================================================================
 # Targets
 
@@ -220,7 +159,7 @@ e2e: local-deploy uptest
 # Updated End to End Testing following BTP Provider
 
 .PHONY: test-acceptance
-test-acceptance:  $(KIND) $(HELM3) build 
+test-acceptance:  $(KIND) $(HELM3) build
 	@$(INFO) running integration tests
 	@$(INFO) Skipping long running tests
 	@echo UUT_CONFIG=$$UUT_CONFIG
@@ -232,7 +171,7 @@ test-acceptance:  $(KIND) $(HELM3) build
 	@case `tail -n 1 test-output.log` in \
      		*FAIL*) echo "❌ Error: Test failed"; exit 1 ;; \
      		*) echo "✅ All tests passed"; $(OK) integration tests passed ;; \
-     esac	
+     esac
 
 .PHONY: cobertura submodules fallthrough run crds.clean dev-debug dev-clean demo-cluster demo-install demo-clean demo-debug
 

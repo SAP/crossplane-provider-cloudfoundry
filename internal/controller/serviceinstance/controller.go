@@ -24,12 +24,12 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
-	apisv1alpha1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1alpha1"
-	apisv1beta1 "github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/v1beta1"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/serviceinstance"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/features"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
+	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/serviceinstance"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
 const (
@@ -138,15 +138,22 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}
 
 	// Check if the external resource exists
-	r, err := c.serviceinstance.MatchSingle(ctx, cr.Spec.ForProvider)
+	guid := meta.GetExternalName(cr)
+	r, err := serviceinstance.GetByIDOrSpec(ctx, c.serviceinstance, guid, cr.Spec.ForProvider)
+
 	if err != nil {
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalObservation{ResourceExists: false}, nil
+		}
 		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
 	}
 	if r == nil {
 		return managed.ExternalObservation{}, nil
 	}
 	// resource exists, set the external name
-	meta.SetExternalName(cr, r.GUID)
+	if guid != r.GUID {
+		meta.SetExternalName(cr, r.GUID)
+	}
 
 	// Update atProvider from the retrieved the service instance
 	serviceinstance.UpdateObservation(&cr.Status.AtProvider, r)
@@ -185,6 +192,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 			return managed.ExternalObservation{}, errors.Wrap(err, errSecret)
 		}
 		upToDate := serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r) && jsonContain(cr.Status.AtProvider.Credentials, desiredCredentials)
+
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
 	default:
 		// should never reach here
@@ -370,17 +378,11 @@ func (s *servicePlanInitializer) Initialize(ctx context.Context, mg resource.Man
 		}
 	}
 
-	// Already initialized, do nothing.
-	// NOTE: Do we allow update service plan of existing service instance??
-	if cr.Spec.ForProvider.ServicePlan != nil && cr.Spec.ForProvider.ServicePlan.ID != nil {
-		return nil
-	}
-
+	//  We need to initialize the service plan in each reconciliation, in order to detect an update service_plan of existing service.
 	cf, err := clients.CloudfoundryClientBuilder(ctx, s.kube, mg)
 	if err != nil {
 		return errors.Wrapf(err, "Cannot initialize service plan")
 	}
-
 	opt := client.NewServicePlanListOptions()
 	opt.ServiceOfferingNames.EqualTo(*cr.Spec.ForProvider.ServicePlan.Offering)
 	opt.Names.EqualTo(*cr.Spec.ForProvider.ServicePlan.Plan)

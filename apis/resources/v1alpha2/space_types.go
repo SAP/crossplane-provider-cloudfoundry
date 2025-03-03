@@ -9,7 +9,6 @@ package v1alpha2
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/utils/ptr"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 )
@@ -38,9 +37,9 @@ type SpaceInitParameters struct {
 	// The name of the Space in Cloud Foundry
 	Name *string `json:"name,omitempty" tf:"name,omitempty"`
 
-	// (String) The guid of the organization to create the space in 
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org
-	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/config.ExternalID()
+	// (String) The guid of the organization to create the space in
+	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	Org *string `json:"org,omitempty" tf:"org,omitempty"`
 
 	// Reference to a Organization in resources to populate org.
@@ -56,7 +55,7 @@ type SpaceObservation struct {
 
 	// (Boolean) Allows SSH to application containers via the CF CLI.
 	// Allows SSH to application containers via the CF CLI.
-	AllowSSH *bool `json:"allowSsh,omitempty" tf:"allow_ssh,omitempty"`
+	AllowSSH bool `json:"allowSsh,omitempty" tf:"allow_ssh,omitempty"`
 
 	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
 	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
@@ -68,7 +67,7 @@ type SpaceObservation struct {
 	CreatedAt *string `json:"createdAt,omitempty" tf:"created_at,omitempty"`
 
 	// (String) The GUID of the object.
-	ID *string `json:"id,omitempty" tf:"id,omitempty"`
+	ID string `json:"id,omitempty"`
 
 	// (String) The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization
 	// The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization
@@ -81,11 +80,11 @@ type SpaceObservation struct {
 
 	// (String) The name of the Space in Cloud Foundry
 	// The name of the Space in Cloud Foundry
-	Name *string `json:"name,omitempty" tf:"name,omitempty"`
+	Name string `json:"name,omitempty" tf:"name,omitempty"`
 
 	// (String) The ID of the Org within which to create the space
 	// The ID of the Org within which to create the space
-	Org *string `json:"org,omitempty" tf:"org,omitempty"`
+	Org string `json:"org,omitempty" tf:"org,omitempty"`
 
 	// (String) The space quota applied to the space. To assign a space quota, use the space quota resource instead.
 	// The space quota applied to the space. To assign a space quota, use the space quota resource instead.
@@ -101,7 +100,8 @@ type SpaceParameters struct {
 	// (Boolean) Allows SSH to application containers via the CF CLI.
 	// Allows SSH to application containers via the CF CLI.
 	// +kubebuilder:validation:Optional
-	AllowSSH *bool `json:"allowSsh,omitempty" tf:"allow_ssh,omitempty"`
+	// +kubebuilder:default=false
+	AllowSSH bool `json:"allowSsh,omitempty" tf:"allow_ssh,omitempty"`
 
 	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
 	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
@@ -122,12 +122,12 @@ type SpaceParameters struct {
 
 	// (String) The name of the Space in Cloud Foundry
 	// The name of the Space in Cloud Foundry
-	// +kubebuilder:validation:Optional
-	Name *string `json:"name,omitempty" tf:"name,omitempty"`
+	// +kubebuilder:validation:Required
+	Name string `json:"name,omitempty" tf:"name,omitempty"`
 
-	// (String) The guid of the organization to create the space in 
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org
-	// +crossplane:generate:reference:extractor=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/config.ExternalID()
+	// (String) The guid of the organization to create the space in
+	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	Org *string `json:"org,omitempty" tf:"org,omitempty"`
 
 	// Reference to a Organization in resources to populate org.
@@ -203,5 +203,5 @@ func init() {
 
 // GetID returns ID of external resource managed by this CR.
 func (r *Space) GetID() string {
-	return ptr.Deref(r.Status.AtProvider.ID, "")
+	return r.Status.AtProvider.ID
 }

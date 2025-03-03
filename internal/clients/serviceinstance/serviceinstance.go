@@ -8,10 +8,11 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 )
 
 // ServiceInstance defines interfaces to the ServiceInstance resource
@@ -69,6 +70,15 @@ func NewClient(config *config.Config) (*Client, error) {
 		return nil, err
 	}
 	return &Client{cf.ServiceInstances, cf.Jobs}, nil
+}
+
+// GetByIDOrSpec retrieves external resource by GUID or by matching CR's ForProvider spec
+func GetByIDOrSpec(ctx context.Context, c *Client, guid string, spec v1alpha2.ServiceInstanceParameters) (*resource.ServiceInstance, error) {
+	if _, err := uuid.Parse(guid); err == nil {
+		return c.Get(ctx, guid)
+	}
+
+	return c.MatchSingle(ctx, spec)
 }
 
 // Get retrieves external resource using GUID

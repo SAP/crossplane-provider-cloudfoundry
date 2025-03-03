@@ -8,7 +8,6 @@ spec:
     roleType: Developers
     members:
     - username: co-test-user@groups.sap.com
-    - username: dl_65faab09346a9101347c1723@global.corp.sap
     - username: lasse.friedrich@sap.com
     spaceRef:
       name: my-space

@@ -11,7 +11,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"k8s.io/utils/ptr"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 )
 
 // OrgQuota is the interface that defines the methods that a OrgQuota

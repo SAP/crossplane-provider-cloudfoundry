@@ -13,9 +13,9 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/utils/ptr"
 
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients"
-	"github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/internal/clients/job"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 )
 
 // serviceCredentialBinding defines interfaces to CloudFoundry ServiceCredentialBinding resource

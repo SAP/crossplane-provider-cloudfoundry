@@ -31,7 +31,8 @@ type ServiceKeyParameters struct {
 	ParamsSecretRef *v1.SecretReference `json:"paramsSecretRef,omitempty"`
 
 	// The ID of the Service Instance the key should be associated with.
-	// +crossplane:generate:reference:type=github.tools.sap/cloud-orchestration/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.ServiceInstance
+	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1.ServiceInstance
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	// +kubebuilder:validation:Optional
 	ServiceInstance *string `json:"serviceInstance,omitempty"`
 
@@ -69,6 +70,7 @@ type ServiceKeyStatus struct {
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:deprecatedversion:warning="v1alpha1/ServiceKey is deprecated. Use v1alpha2/ServiceCredentialBinding with type:key instead"
 type ServiceKey struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

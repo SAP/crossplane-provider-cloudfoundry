@@ -30,15 +30,9 @@ img.publish:
 img.build.shared:
 	echo $(IMAGE_TEMP_DIR)
 	@cp Dockerfile $(IMAGE_TEMP_DIR) || $(FAIL)
-	@cp terraformrc.hcl $(IMAGE_TEMP_DIR) || $(FAIL)
 	@cp $(OUTPUT_DIR)/bin/$(OS)_$(ARCH)/provider $(IMAGE_TEMP_DIR) || $(FAIL)
 	@cd $(IMAGE_TEMP_DIR) && $(SED_CMD) 's|BASEIMAGE|$(OSBASEIMAGE)|g' Dockerfile || $(FAIL)
 	@docker build $(BUILD_ARGS) \
-		--build-arg TERRAFORM_VERSION=$(TERRAFORM_VERSION) \
-		--build-arg TERRAFORM_PROVIDER_SOURCE=$(TERRAFORM_PROVIDER_SOURCE) \
-		--build-arg TERRAFORM_PROVIDER_VERSION=$(TERRAFORM_PROVIDER_VERSION) \
-		--build-arg TERRAFORM_PROVIDER_DOWNLOAD_NAME=$(TERRAFORM_PROVIDER_DOWNLOAD_NAME) \
-		--build-arg TERRAFORM_NATIVE_PROVIDER_BINARY=$(TERRAFORM_NATIVE_PROVIDER_BINARY) \
 		--build-arg GIT_COMMIT="${COMMIT_HASH}" \
 		--build-arg BUILD_TIMESTAMP="$(TIME_LONG)" \
 		-t $(IMAGE) \

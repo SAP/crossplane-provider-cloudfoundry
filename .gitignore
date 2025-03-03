@@ -14,3 +14,4 @@ cover.out
 #ignore dev.env
 dev.env
 *~
+/test/e2e/logs/
