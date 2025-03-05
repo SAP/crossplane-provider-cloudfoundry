@@ -28,12 +28,12 @@ on:
       CF_ENVIRONMENT:
         description: contains the URL of the CF API endpoint
         required: true
-      USER_WHERE_ROLES_GET_ASSIGNED_EMAIL:
-        description: contains the email of a technical user (different to TECHNICAL_USER_EMAIL)
-        required: true
-      TECHNICAL_USER_EMAIL:
-        description: contains the email of the BTP_TECHNICAL_USER
-        required: true
+      # USER_WHERE_ROLES_GET_ASSIGNED_EMAIL:
+      #   description: contains the email of a technical user (different to TECHNICAL_USER_EMAIL)
+      #   required: true
+      # TECHNICAL_USER_EMAIL:
+      #   description: contains the email of the BTP_TECHNICAL_USER
+      #   required: true
 
 permissions:
   contents: read
@@ -71,5 +71,5 @@ jobs:
         env:
           CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
           CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
-          USER_WHERE_ROLES_GET_ASSIGNED_EMAIL: ${{ secrets.USER_WHERE_ROLES_GET_ASSIGNED_EMAIL }}
-          TECHNICAL_USER_EMAIL: ${{ secrets.TECHNICAL_USER_EMAIL }}
+          # USER_WHERE_ROLES_GET_ASSIGNED_EMAIL: ${{ secrets.USER_WHERE_ROLES_GET_ASSIGNED_EMAIL }}
+          # TECHNICAL_USER_EMAIL: ${{ secrets.TECHNICAL_USER_EMAIL }}
