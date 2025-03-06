@@ -2,6 +2,7 @@ package role
 
 import (
 	"context"
+	"errors"
 	"time"
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
@@ -9,7 +10,10 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 )
+
+const ErrOrgNotSpecified = "Org is not specified"
 
 // OrgRoleType converts string to OrganizationRoleType enum
 func OrgRoleType(roleType v1alpha2.OrgRoleType) resource.OrganizationRoleType {
@@ -27,55 +31,42 @@ func OrgRoleType(roleType v1alpha2.OrgRoleType) resource.OrganizationRoleType {
 	}
 }
 
-// GetOrgRole returns the role of a user in an organization if the role matches the spec
-func GetOrgRole(ctx context.Context, client Role, spec *v1alpha2.OrgRoleParameters) (*resource.Role, error) {
+// GetOrgRole returns the role of a user in an organization by guid or by  matching the spec
+func GetOrgRole(ctx context.Context, client Role, guid string, spec v1alpha2.OrgRoleParameters) (*resource.Role, error) {
+
+	if clients.IsValidGUID(guid) {
+		return client.Get(ctx, guid)
+	}
+
+	return findOrgRole(ctx, client, spec)
+}
+
+// findOrgRole returns the role of a user in an organization if the role matches the spec
+func findOrgRole(ctx context.Context, client Role, spec v1alpha2.OrgRoleParameters) (*resource.Role, error) {
+	opts, err := NewOrgRoleListOptions(spec)
+	if err != nil {
+		return nil, err
+	}
 	// list all users with the role
-	roles, users, err := client.ListIncludeUsersAll(ctx, NewOrgRoleListOptions(spec))
+	roles, users, err := client.ListIncludeUsersAll(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 
-	var noUserRelation resource.ToOneRelationship
-	// list of all org users with the specified role type
-	roleMap := make(map[string]*resource.Role)
-	for _, ro := range roles {
-		if ro.Relationships.User == noUserRelation {
-			continue
-		}
-		roleMap[ro.Relationships.User.Data.GUID] = ro
-	}
-
-	m := make(map[string]*resource.Role)
-	for _, u := range users {
-		m[toMemberKey(u)] = roleMap[u.GUID]
-	}
-
-	// check if the user is included in the list of users with the role
-	member := toMember(ptr.Deref(spec.Username, ""), ptr.Deref(spec.Origin, "sap.ids"))
-	r, ok := m[member.key()]
-	if !ok {
-		return nil, nil
-	}
-	return r, nil
+	return findRole(roles, users, spec.Username, ptr.Deref(spec.Origin, "sap.ids"), OrgRoleType(spec.Type).String())
 }
 
 // NewOrgRoleListOptions returns a list options for the given OrgRoleParameters
-func NewOrgRoleListOptions(spec *v1alpha2.OrgRoleParameters) *cfv3.RoleListOptions {
+func NewOrgRoleListOptions(spec v1alpha2.OrgRoleParameters) (*cfv3.RoleListOptions, error) {
 	opts := cfv3.NewRoleListOptions()
 
-	if spec.Org != nil {
-		opts.OrganizationGUIDs.EqualTo(*spec.Org)
+	if spec.Org == nil {
+		return nil, errors.New(ErrOrgNotSpecified)
 	}
+	opts.OrganizationGUIDs.EqualTo(*spec.Org)
 
-	var emptyOrgRoleType v1alpha2.OrgRoleType
-	if spec.Type != emptyOrgRoleType {
-		opts.WithOrganizationRoleType(OrgRoleType(spec.Type))
-	}
-
-	if spec.User != nil {
-		opts.UserGUIDs.EqualTo(*spec.User)
-	}
-	return opts
+	opts.WithOrganizationRoleType(OrgRoleType(spec.Type))
+	return opts, nil
 }
 
 // GenerateOrgRoleObservation takes an Role resource and returns *OrgRoleObservation.
@@ -88,19 +79,4 @@ func GenerateOrgRoleObservation(o *resource.Role) v1alpha2.OrgRoleObservation {
 		UpdatedAt: ptr.To(o.UpdatedAt.Format(time.RFC3339)),
 	}
 	return obs
-}
-
-// LateInitializeOrgRole fills the unassigned fields with values from a Role resource.
-func LateInitializeOrgRole(spec v1alpha2.OrgRoleParameters, from *resource.Role) {
-	if spec.User == nil {
-		spec.User = &from.Relationships.User.Data.GUID
-	}
-
-	// TODO: ADD labels and annotations
-}
-
-// IsOrgRoleUpToDate checks whether current state is up-to-date compared to the given
-// set of parameters.
-func IsOrgRoleUpToDate(spec v1alpha2.OrgRoleParameters, observed *resource.Role) bool {
-	return true
 }

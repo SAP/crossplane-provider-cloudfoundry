@@ -6,8 +6,6 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/pkg/errors"
 
-	"github.com/google/go-cmp/cmp"
-
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -122,16 +120,26 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errWrongKind)
 	}
 
-	// Fetch the role object using the CloudFoundry API according to the specified parameters
-	r, err := role.GetSpaceRole(ctx, c.role, &cr.Spec.ForProvider)
+	// Fetch the role object using the CloudFoundry API by guid or according to the specified parameters
+	guid := meta.GetExternalName(cr)
+	r, err := role.GetSpaceRole(ctx, c.role, guid, cr.Spec.ForProvider)
+
 	if err != nil {
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalObservation{ResourceExists: false}, nil
+		}
 		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
 	}
+
 	if r == nil {
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
-	current := cr.Spec.ForProvider.DeepCopy()
+	resourceLateInitialized := false
+	if guid != r.GUID {
+		meta.SetExternalName(cr, r.GUID)
+		resourceLateInitialized = true
+	}
 
 	cr.Status.AtProvider = role.GenerateSpaceRoleObservation(r)
 	cr.Status.SetConditions(xpv1.Available())
@@ -139,7 +147,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	return managed.ExternalObservation{
 		ResourceExists:          cr.Status.AtProvider.ID != nil,
 		ResourceUpToDate:        true,
-		ResourceLateInitialized: !cmp.Equal(current, &cr.Spec.ForProvider),
+		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
 }
 
@@ -151,11 +159,11 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	spec := cr.Spec.ForProvider
-	if spec.Space == nil || spec.Username == nil || spec.Type == "" {
+	if spec.Space == nil || spec.Username == "" || spec.Type == "" {
 		return managed.ExternalCreation{}, errors.New(errCreate)
 	}
 
-	o, err := c.role.CreateSpaceRoleWithUsername(ctx, *spec.Space, *spec.Username, role.SpaceRoleType(spec.Type), ptr.Deref(spec.Origin, "sap.ids"))
+	o, err := c.role.CreateSpaceRoleWithUsername(ctx, *spec.Space, spec.Username, role.SpaceRoleType(spec.Type), ptr.Deref(spec.Origin, "sap.ids"))
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}

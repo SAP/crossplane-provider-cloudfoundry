@@ -49,6 +49,7 @@ func TestCloudfoundry(t *testing.T) {
 		"service_credential_binding": {name: "my-service-credential-binding", obj: &v1alpha2resources.ServiceCredentialBinding{}},
 		"service_key":                {name: "my-service-key", obj: &v1alpha1resources.ServiceKey{}},
 		"route":                      {name: "my-route", obj: &v1alpha1resources.Route{}},
+		"domain":                     {name: "my-domain", obj: &v1alpha2resources.Domain{}},
 		"app":                        {name: "my-app", obj: &v1alpha2resources.App{}},
 	}
 
@@ -76,7 +77,7 @@ func TestCloudfoundry(t *testing.T) {
 	)
 
 	// creation assess steps in dependency order, e.g., `org` before `space` as `space` depends on org`.
-	var steps = [...]string{"org", "org_role", "space", "space_role", "space_developers", "space_quota", "service_instance", "service_credential_binding", "ups"}
+	var steps = [...]string{"org", "org_role", "space", "space_role", "space_developers", "space_quota", "service_instance", "service_credential_binding", "ups", "domain"}
 	for _, name := range steps {
 		ft, ok := feats[name]
 		if !ok {

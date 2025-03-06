@@ -97,7 +97,7 @@ spec:
                   name:
                     description: |-
                       (String) The name of the domain;must be between 3 ~ 253 characters and follow RFC 1035
-                      The name of the domain;must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035)
+                      The name of the domain;must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035).
                     type: string
                   org:
                     description: |-

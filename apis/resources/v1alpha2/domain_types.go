@@ -62,7 +62,7 @@ type DomainObservation struct {
 
 type DomainParameters struct {
 	// (String) The name of the domain;must be between 3 ~ 253 characters and follow RFC 1035
-	// The name of the domain;must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035)
+	// The name of the domain;must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035).
 	// +kubebuilder:validation:Required
 	Name string `json:"name,omitempty"`
 
