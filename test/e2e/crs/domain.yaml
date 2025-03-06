@@ -6,7 +6,7 @@ metadata:
   name: my-domain
 spec:
   forProvider:
-    name: dev.orchestrator3.io
+    name: dev.orchestrator.io
     orgRef:
       name: my-org
     internal: false

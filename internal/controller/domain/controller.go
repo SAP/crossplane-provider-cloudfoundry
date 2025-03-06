@@ -1,4 +1,4 @@
-package org
+package domain
 
 import (
 	"context"
@@ -20,39 +20,42 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
-	scv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
+	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	pcv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
-	org "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/org"
+	domain "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/domain"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
 const (
-	resourceType         = "Organization"
+	resourceType         = "Domain"
 	externalSystem       = "Cloud Foundry"
-	errNotOrgKind        = "managed resource is not of kind " + resourceType
+	errNotDomainKind     = "managed resource is not of kind " + resourceType
 	errTrackUsage        = "cannot track usage"
 	errGetProviderConfig = "cannot get ProviderConfig or resolve credential references"
 	errGetClient         = "cannot create a client to talk to the API of" + externalSystem
-	errGetResource       = "cannot get " + externalSystem + " organization according to the specified parameters"
-	errCreate            = "cannot create " + externalSystem + " organization"
+	errGetResource       = "cannot get " + externalSystem + " domain according to the specified parameters"
+	errCreate            = "cannot create " + externalSystem + " domain"
 	errGet               = "cannot get " + resourceType + " in " + externalSystem
+	errDelete            = "cannot delete" + resourceType
+	errUpdate            = "cannot update" + resourceType
 )
 
 // Setup adds a controller that reconciles Org resources.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
-	name := managed.ControllerName(v1alpha2.Org_GroupKind)
+	name := managed.ControllerName(v1alpha2.Domain_GroupKind)
 
 	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
 	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
-		cps = append(cps, connection.NewDetailsManager(mgr.GetClient(), scv1alpha1.StoreConfigGroupVersionKind))
+		cps = append(cps, connection.NewDetailsManager(mgr.GetClient(), apisv1alpha1.StoreConfigGroupVersionKind))
 	}
 
 	options := []managed.ReconcilerOption{
+
 		managed.WithExternalConnecter(&connector{
 			kube:        mgr.GetClient(),
-			newClientFn: org.NewClient,
 			usage:       resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
+			newClientFn: domain.NewClient,
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
@@ -64,13 +67,13 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	r := managed.NewReconciler(mgr,
-		resource.ManagedKind(v1alpha2.Org_GroupVersionKind),
+		resource.ManagedKind(v1alpha2.Domain_GroupVersionKind),
 		options...)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
-		For(&v1alpha2.Org{}).
+		For(&v1alpha2.Domain{}).
 		Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 }
 
@@ -78,7 +81,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 type connector struct {
 	kube        k8s.Client
 	usage       resource.Tracker
-	newClientFn func(config *config.Config) (org.Client, error)
+	newClientFn func(config *config.Config) (domain.Client, error)
 }
 
 // Connect typically produces an ExternalClient by:
@@ -87,8 +90,8 @@ type connector struct {
 // 3. Getting the credentials specified by the ProviderConfig.
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
-	if _, ok := mg.(*v1alpha2.Org); !ok {
-		return nil, errors.New(errNotOrgKind)
+	if _, ok := mg.(*v1alpha2.Domain); !ok {
+		return nil, errors.New(errNotDomainKind)
 	}
 
 	if err := c.usage.Track(ctx, mg); err != nil {
@@ -110,20 +113,20 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 
 // An external is a managed.ExternalConnecter that is using the CloudFoundry API to observe and modify resources.
 type external struct {
-	client org.Client
+	client domain.Client
 	kube   k8s.Client
 }
 
-// Observe managed resource Org
+// Observe managed resource Domain
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
-	cr, ok := mg.(*v1alpha2.Org)
+	cr, ok := mg.(*v1alpha2.Domain)
 	if !ok {
-		return managed.ExternalObservation{}, errors.New(errNotOrgKind)
+		return managed.ExternalObservation{}, errors.New(errNotDomainKind)
 	}
 
-	orgId := meta.GetExternalName(cr)
+	domainID := meta.GetExternalName(cr)
 
-	o, err := org.GetByIDOrName(ctx, c.client, orgId, cr.Spec.ForProvider.Name)
+	d, err := domain.GetByIDOrName(ctx, c.client, domainID, cr.Spec.ForProvider.Name)
 
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
@@ -133,33 +136,35 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.Wrap(err, errGetResource)
 	}
 
-	org.LateInitialize(&cr.Spec.ForProvider, o)
+	resourceLateInitialized := domain.LateInitialize()
 
 	// set the external name to the GUID
-	if orgId != o.GUID {
-		meta.SetExternalName(cr, o.GUID)
+	if domainID != d.GUID {
+		meta.SetExternalName(cr, d.GUID)
+		resourceLateInitialized = true
 	}
 
-	cr.Status.AtProvider = org.GenerateObservation(o)
+	cr.SetConditions(xpv1.Available())
 
-	if !ptr.Deref(cr.Status.AtProvider.Suspended, false) {
-		cr.Status.SetConditions(xpv1.Available())
-	}
+	cr.Status.AtProvider = domain.GenerateObservation(d)
 
 	return managed.ExternalObservation{
-		ResourceExists:   cr.Status.AtProvider.ID != nil,
-		ResourceUpToDate: org.IsUpToDate(cr.Spec.ForProvider, o),
+		ResourceExists:          cr.Status.AtProvider.ID != nil,
+		ResourceUpToDate:        domain.IsUpToDate(cr.Spec.ForProvider, d),
+		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
 }
 
-// Create a managed resource Org
+// Create a managed resource Domain
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
-	cr, ok := mg.(*v1alpha2.Org)
+	cr, ok := mg.(*v1alpha2.Domain)
 	if !ok {
-		return managed.ExternalCreation{}, errors.New(errNotOrgKind)
+		return managed.ExternalCreation{}, errors.New(errNotDomainKind)
 	}
 
-	o, err := c.client.Create(ctx, org.GenerateCreate(cr.Spec.ForProvider))
+	cr.SetConditions(xpv1.Creating())
+
+	o, err := c.client.Create(ctx, domain.GenerateCreate(cr.Spec.ForProvider))
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
@@ -173,14 +178,25 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}, nil
 }
 
-// Update managed resource Org
+// Update managed resource Domain
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
-	_, ok := mg.(*v1alpha2.Org)
+	cr, ok := mg.(*v1alpha2.Domain)
 	if !ok {
-		return managed.ExternalUpdate{}, errors.New(errNotOrgKind)
+		return managed.ExternalUpdate{}, errors.New(errNotDomainKind)
 	}
 
-	// Do nothing, as Org is observe-only
+	// assert that ID is set
+	if cr.Status.AtProvider.ID == nil {
+		return managed.ExternalUpdate{}, errors.New(errUpdate)
+	}
+
+	// rename resource
+	if cr.Name != ptr.Deref(cr.Status.AtProvider.Name, "") {
+		_, err := c.client.Update(ctx, *cr.Status.AtProvider.ID, domain.GenerateUpdate(cr.Spec.ForProvider))
+		if err != nil {
+			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
+		}
+	}
 
 	return managed.ExternalUpdate{
 		// Optionally return any details that may be required to connect to the
@@ -189,13 +205,22 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}, nil
 }
 
-// Delete managed resource Org
+// Delete managed resource Domain
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha2.Org)
+	cr, ok := mg.(*v1alpha2.Domain)
 	if !ok {
-		return errors.New(errNotOrgKind)
+		return errors.New(errNotDomainKind)
 	}
-	// Do nothing, as Org is observe-only
 	cr.SetConditions(xpv1.Deleting())
+
+	// assert that ID is set
+	if cr.Status.AtProvider.ID == nil {
+		return errors.New(errDelete)
+	}
+
+	_, err := c.client.Delete(ctx, *cr.Status.AtProvider.ID)
+	if err != nil {
+		return errors.Wrap(err, errDelete)
+	}
 	return nil
 }

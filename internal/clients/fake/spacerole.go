@@ -55,7 +55,7 @@ func (m *MockSpaceRole) Delete(context.Context, string) (string, error) {
 
 // ListIncludeUsersAll mocks SpaceRole.ListIncludeUsersAll
 func (m *MockSpaceRole) ListIncludeUsersAll(ctx context.Context, opts *client.RoleListOptions) ([]*resource.Role, []*resource.User, error) {
-	args := m.Called(opts)
+	args := m.Called()
 	return args.Get(0).([]*resource.Role), args.Get(1).([]*resource.User), args.Error(2)
 }
 

@@ -10,6 +10,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/app"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/domain"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/org"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgmembers"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgquota"
@@ -42,6 +43,7 @@ func CustomSetup(mgr ctrl.Manager, o controller.Options) error {
 		servicekey.Setup,
 		servicecredentialbinding.Setup,
 		spacequota.Setup,
+		domain.Setup,
 	} {
 		if err := setup(mgr, o); err != nil {
 			return err

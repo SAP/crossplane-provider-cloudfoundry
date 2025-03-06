@@ -20,7 +20,6 @@ import (
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/google/go-cmp/cmp"
 
-	resources "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources"
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
@@ -221,7 +220,7 @@ func (e *external) ResolveReferences(ctx context.Context, cr *v1alpha2.SpaceQuot
 
 	mrsp, err = r.ResolveMultiple(ctx, reference.MultiResolutionRequest{
 		CurrentValues: reference.FromPtrValues(cr.Spec.ForProvider.Spaces),
-		Extract:       resources.ExternalID(),
+		Extract:       reference.ExternalName(),
 		References:    cr.Spec.ForProvider.SpacesRefs,
 		Selector:      cr.Spec.ForProvider.SpacesSelector,
 		To: reference.To{

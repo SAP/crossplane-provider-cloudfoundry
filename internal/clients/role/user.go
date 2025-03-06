@@ -3,6 +3,7 @@ package role
 import (
 	"strings"
 
+	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 )
 
@@ -15,41 +16,29 @@ type Member struct {
 	Origin string `json:"origin,omitempty"`
 }
 
-// Key return a formatted string identifying the Member
-func (u *Member) key() string {
-	if u.Origin == "" {
-		u.Origin = "sap.ids"
-	}
-	// username and origin should be case insensitive / lower case
-	return strings.ToLower(u.Username + " (" + u.Origin + ")")
-}
-
-// Equal compares member to other objects
-func (u *Member) Equal(other interface{}) bool {
-	uu, ok := other.(*Member)
-	if !ok {
-		return false
+func findRole(roles []*resource.Role, users []*resource.User, username, origin, roleType string) (*resource.Role, error) {
+	var userGUID string
+	for _, u := range users {
+		if strings.EqualFold(u.Username, username) && strings.EqualFold(u.Origin, origin) {
+			userGUID = u.GUID
+			break
+		}
 	}
 
-	if u.Origin == "" {
-		return u.Username == uu.Username
+	if userGUID == "" {
+		return nil, cfv3.ErrNoResultsReturned
 	}
 
-	return u.Username == uu.Username && u.Origin == uu.Origin
-}
+	var noUserRelation resource.ToOneRelationship
+	// list of all org users with the specified role type
+	for _, ro := range roles {
+		if ro.Relationships.User == noUserRelation {
+			continue
+		}
+		if ro.Relationships.User.Data.GUID == userGUID && strings.EqualFold(ro.Type, roleType) {
+			return ro, nil
+		}
 
-// toMember converts a username and origin to a Member
-func toMember(username string, origin string) *Member {
-	return &Member{
-		Username: username,
-		Origin:   origin,
 	}
-}
-
-func toMemberKey(u *resource.User) string {
-	m := Member{
-		Username: u.Username,
-		Origin:   u.Origin,
-	}
-	return m.key()
+	return nil, cfv3.ErrNoResultsReturned
 }

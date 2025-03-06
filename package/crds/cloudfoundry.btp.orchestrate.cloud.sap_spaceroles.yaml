@@ -159,19 +159,20 @@ spec:
                         type: object
                     type: object
                   type:
+                    allOf:
+                    - enum:
+                      - Developer
+                      - Auditor
+                      - Manager
+                      - Supporter
+                    - enum:
+                      - Developer
+                      - Auditor
+                      - Manager
+                      - Supporter
                     description: |-
                       (String) SpaceRole type; see Valid role types
                       SpaceRole type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types)
-                    enum:
-                    - Developer
-                    - Auditor
-                    - Manager
-                    - Supporter
-                    type: string
-                  user:
-                    description: |-
-                      (String) The guid of the cloudfoundry user to assign the role with
-                      The guid of the cloudfoundry user to assign the role with
                     type: string
                   username:
                     description: |-

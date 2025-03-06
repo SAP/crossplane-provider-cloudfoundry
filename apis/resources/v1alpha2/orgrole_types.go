@@ -78,7 +78,8 @@ type OrgRoleParameters struct {
 
 	// (String) OrgRole type; see Valid role types
 	// OrgRole type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types)
-	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Enum=User;Auditor;Manager;BillingManager
 	Type OrgRoleType `json:"type,omitempty" tf:"type,omitempty"`
 
 	// (String) The identity provider for the UAA user
@@ -86,15 +87,10 @@ type OrgRoleParameters struct {
 	// +kubebuilder:validation:Optional
 	Origin *string `json:"origin,omitempty" tf:"origin,omitempty"`
 
-	// (String) The guid of the cloudfoundry user to assign the role with
-	// The guid of the cloudfoundry user to assign the role with
-	// +kubebuilder:validation:Optional
-	User *string `json:"user,omitempty" tf:"user,omitempty"`
-
 	// (String) The username of the cloudfoundry user to assign the role with
 	// The username of the cloudfoundry user to assign the role with
-	// +kubebuilder:validation:Optional
-	Username *string `json:"username,omitempty" tf:"username,omitempty"`
+	// +kubebuilder:validation:Required
+	Username string `json:"username,omitempty" tf:"username,omitempty"`
 
 }
 

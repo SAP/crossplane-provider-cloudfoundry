@@ -161,19 +161,20 @@ spec:
                       The identity provider for the UAA user
                     type: string
                   type:
+                    allOf:
+                    - enum:
+                      - User
+                      - Auditor
+                      - Manager
+                      - BillingManager
+                    - enum:
+                      - User
+                      - Auditor
+                      - Manager
+                      - BillingManager
                     description: |-
                       (String) OrgRole type; see Valid role types
                       OrgRole type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types)
-                    enum:
-                    - User
-                    - Auditor
-                    - Manager
-                    - BillingManager
-                    type: string
-                  user:
-                    description: |-
-                      (String) The guid of the cloudfoundry user to assign the role with
-                      The guid of the cloudfoundry user to assign the role with
                     type: string
                   username:
                     description: |-

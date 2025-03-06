@@ -4,8 +4,6 @@ import (
 	"context"
 	"testing"
 
-	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
-
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/google/go-cmp/cmp"
@@ -19,17 +17,23 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
+	role "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/role"
 )
 
 var (
 	errBoom      = errors.New("boom")
+	errSpace     = errors.New(role.ErrSpaceNotSpecified)
 	resourceName = "my-space-roles"
 	guidSpace    = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69u"
+	guidRole     = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69r"
 
 	guidNoRefUser   = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 	guidHealthyUser = "1d1b0d04-d537-4e4e-8c6f-f09ca0e7f11f"
 
 	healthyRole = &cfresource.Role{
+		Resource: cfresource.Resource{
+			GUID: guidRole},
+		Type: "space_manager",
 		Relationships: cfresource.RoleSpaceUserOrganizationRelationships{
 			Space: cfresource.ToOneRelationship{
 				Data: &cfresource.Relationship{
@@ -44,14 +48,9 @@ var (
 				Data: &cfresource.Relationship{
 					GUID: guidNoRefUser}}}}
 
-	noUserRole = &cfresource.Role{
-		Relationships: cfresource.RoleSpaceUserOrganizationRelationships{
-			Space: cfresource.ToOneRelationship{
-				Data: &cfresource.Relationship{
-					GUID: guidSpace}}}}
-
 	healthyUser = &cfresource.User{
-		Username: "",
+		Username: "user1",
+		Origin:   "sap.ids",
 		Resource: cfresource.Resource{
 			GUID: guidHealthyUser}}
 )
@@ -66,7 +65,7 @@ func withType(roleType v1alpha2.SpaceRoleType) modifier {
 
 func withUsername(username string) modifier {
 	return func(r *v1alpha2.SpaceRole) {
-		r.Spec.ForProvider.Username = &username
+		r.Spec.ForProvider.Username = username
 	}
 }
 
@@ -137,7 +136,7 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
-		"OrgRelationNotSet": {
+		"SpaceRelationNotSet": {
 			args: args{
 				mg: fakeSpaceRole(),
 			},
@@ -146,35 +145,13 @@ func TestObserve(t *testing.T) {
 				obs: managed.ExternalObservation{
 					ResourceExists: false,
 				},
-				err: nil,
+				err: errors.Wrapf(errSpace, errGet),
 			},
 			service: func() *fake.MockSpaceRole {
 				m := &fake.MockSpaceRole{}
 
-				m.On("ListIncludeUsersAll", cfv3.NewRoleListOptions()).Return(
+				m.On("ListIncludeUsersAll").Return(
 					[]*cfresource.Role{noSpaceRole},
-					[]*cfresource.User{healthyUser},
-					nil,
-				)
-				return m
-			},
-		},
-		"UserRelationNotSet": {
-			args: args{
-				mg: fakeSpaceRole(),
-			},
-			want: want{
-				mg: fakeSpaceRole(),
-				obs: managed.ExternalObservation{
-					ResourceExists: false,
-				},
-				err: nil,
-			},
-			service: func() *fake.MockSpaceRole {
-				m := &fake.MockSpaceRole{}
-
-				m.On("ListIncludeUsersAll", cfv3.NewRoleListOptions()).Return(
-					[]*cfresource.Role{noUserRole},
 					[]*cfresource.User{healthyUser},
 					nil,
 				)
@@ -184,10 +161,10 @@ func TestObserve(t *testing.T) {
 		// This tests whether the external API is reachable
 		"Boom!": {
 			args: args{
-				mg: fakeSpaceRole(),
+				mg: fakeSpaceRole(withSpace("my-space"), withUsername("my-space-manager"), withType(v1alpha2.SpaceRoleType("Manager"))),
 			},
 			want: want{
-				mg:  fakeSpaceRole(),
+				mg:  fakeSpaceRole(withSpace("my-space"), withUsername("my-space-manager"), withType(v1alpha2.SpaceRoleType("Manager"))),
 				obs: managed.ExternalObservation{},
 				err: errors.Wrap(errBoom, errGet),
 			},
@@ -197,7 +174,7 @@ func TestObserve(t *testing.T) {
 				var emptyRole []*cfresource.Role
 				var emptyUser []*cfresource.User
 
-				m.On("ListIncludeUsersAll", cfv3.NewRoleListOptions()).Return(
+				m.On("ListIncludeUsersAll").Return(
 					emptyRole,
 					emptyUser,
 					errBoom,
@@ -207,17 +184,17 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful": {
 			args: args{
-				mg: fakeSpaceRole(),
+				mg: fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha2.SpaceRoleType("Manager"))),
 			},
 			want: want{
-				mg:  fakeSpaceRole(),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				mg:  fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha2.SpaceRoleType("Manager"))),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
 			service: func() *fake.MockSpaceRole {
 				m := &fake.MockSpaceRole{}
 
-				m.On("ListIncludeUsersAll", cfv3.NewRoleListOptions()).Return(
+				m.On("ListIncludeUsersAll").Return(
 					[]*cfresource.Role{healthyRole},
 					[]*cfresource.User{healthyUser},
 					nil,
