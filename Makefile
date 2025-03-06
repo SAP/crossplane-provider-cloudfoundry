@@ -195,3 +195,14 @@ crossplane.help:
 help-special: crossplane.help
 
 .PHONY: crossplane.help help-special
+
+PUBLISH_IMAGES ?= crossplane/provider-cloudfoundry crossplane/provider-btp-cloudfoundry
+
+.PONY: publish
+publish:
+	@$(INFO) "Publishing images $(PUBLISH_IMAGES) to $(DOCKER_REGISTRY)"
+	@for image in $(PUBLISH_IMAGES); do \
+		echo "Publishing image $(DOCKER_REGISTRY)/$${image}:$(VERSION)"; \
+		docker push $(DOCKER_REGISTRY)/$${image}:$(VERSION); \
+	done
+	@$(OK) "Publishing images $(PUBLISH_IMAGES) to $(DOCKER_REGISTRY)"
