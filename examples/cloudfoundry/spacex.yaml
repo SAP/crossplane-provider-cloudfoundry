@@ -6,7 +6,7 @@ metadata:
   annotations:
     crossplane.io/external-name: cf-dev
 spec:
-  forProvider: 
+  forProvider:
     name: cf-dev
 
 ---
@@ -33,12 +33,12 @@ metadata:
 spec:
   forProvider:
     roleType: Developers
-    spaceRef: 
+    spaceRef:
       name: my-space
       policy:
         resolve: Always
     members:
-    - username: cloudorchestrator@sap.com
-    - username: daniel.lou@sap.com
+    - username: 2@sap.com
+    - username: 1@sap.com
     - username: dl_65faab09346a9101347c1723@global.corp.sap
     enforcementPolicy: Strict
