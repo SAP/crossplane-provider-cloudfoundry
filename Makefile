@@ -57,8 +57,6 @@ DOCKER_REGISTRY ?= crossplane
 IMAGES = $(PROJECT_NAME) $(PROJECT_NAME)-controller
 -include build/makelib/image.mk
 
-
-
 export UUT_CONFIG = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME)):$(VERSION)
 export UUT_CONTROLLER=$(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME))-controller:$(VERSION)
 export E2E_IMAGES = {"crossplane/provider-cloudfoundry":"$(UUT_CONFIG)","crossplane/provider-cloudfoundry-controller":"$(UUT_CONTROLLER)"}
@@ -76,7 +74,7 @@ build.init: $(UP)
 
 # run `make help` to see the targets and options
 
-# We want submodules to be set up the first time `make` is run.
+# we want submodules to be set up the first time `make` is run.
 # We manage the build/ folder and its Makefiles as a submodule.
 # The first time `make` is run, the includes of build/*.mk files will
 # all fail, and this target will be run. The next time, the default as defined
@@ -196,7 +194,7 @@ help-special: crossplane.help
 
 .PHONY: crossplane.help help-special
 
-PUBLISH_IMAGES ?= crossplane/provider-cloudfoundry crossplane/provider-btp-cloudfoundry
+PUBLISH_IMAGES ?= crossplane/provider-cloudfoundry crossplane/provider-cloudfoundry-controller
 
 .PONY: publish
 publish:
