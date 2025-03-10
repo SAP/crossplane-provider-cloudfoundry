@@ -9,5 +9,5 @@ spec:
     type: "Auditor"
     orgRef:
       name: my-org
-    username: "daniel.lou@sap.com"
+    username: "1@sap.com"
     origin: sap.ids

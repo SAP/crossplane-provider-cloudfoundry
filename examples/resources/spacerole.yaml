@@ -9,7 +9,7 @@ spec:
     type: Auditor
     spaceRef:
       name: my-space
-    username: lasse.friedrich@sap.com
+    username: 3@sap.com
     origin: sap.ids
 
 ---
@@ -23,7 +23,7 @@ spec:
     type: Developer
     spaceRef:
       name: my-space
-    username: daniel.lou@sap.com
+    username: 1@sap.com
     origin: sap.ids
 
 ---

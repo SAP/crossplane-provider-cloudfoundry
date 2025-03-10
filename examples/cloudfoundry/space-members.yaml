@@ -33,13 +33,13 @@ metadata:
 spec:
   forProvider:
     roleType: Developers
-    spaceRef: 
+    spaceRef:
       name: my-space
       policy:
         resolve: Always
     members:
     - username: mirza@groups.sap.com
-    - username: daniel.lou@sap.com
+    - username: 1@sap.com
     enforcementPolicy: Strict
 
 ---
@@ -51,7 +51,7 @@ metadata:
 spec:
   forProvider:
     roleType: Supporters
-    spaceRef: 
+    spaceRef:
       name: my-space
       policy:
         resolve: Always

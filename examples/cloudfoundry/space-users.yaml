@@ -5,12 +5,10 @@ metadata:
   name: my-space-users
 spec:
   forProvider:
-    developers: 
-    - "cloudorchestrator@sap.com"
-    - "daniel.lou@sap.com"
-    spaceRef: 
+    developers:
+    - "2@sap.com"
+    - "1@sap.com"
+    spaceRef:
       name: my-space
       policy:
         resolve: Always
-
-
