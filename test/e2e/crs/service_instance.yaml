@@ -3,13 +3,13 @@
 apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
 kind: ServiceInstance
 metadata:
-  name: my-service-instance
+  name: e2e-service-instance
 spec:
   forProvider:
     type: managed
-    name: my-service-instance
+    name: e2e-service-instance
     spaceRef: 
-      name: my-space
+      name: e2e-space
       policy: 
         resolve: Always
     servicePlan:

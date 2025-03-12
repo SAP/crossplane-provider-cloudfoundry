@@ -2,15 +2,15 @@
 apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
 kind: Route
 metadata:
-  name: my-route
+  name: e2e-route
 spec:
   forProvider:
     domainRef: 
-      name: my-domain
+      name: e2e-domain
       policy:
         resolve: Always
     host: hello-co
     spaceRef:
-      name: my-space
+      name: e2e-space
       policy:
         resolve: Always

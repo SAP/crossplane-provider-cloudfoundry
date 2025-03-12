@@ -3,10 +3,10 @@ apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
 kind: Domain
 metadata:
   namespace: default
-  name: my-domain
+  name: e2e-domain
 spec:
   forProvider:
-    name: dev.orchestrator.io
+    name: e2e.orchestrator.io
     orgRef:
-      name: my-org
+      name: e2e-org
     internal: false

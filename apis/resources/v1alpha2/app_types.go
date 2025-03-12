@@ -124,7 +124,8 @@ type RouteConfiguration struct {
 	Protocol *string `json:"protocol,omitempty"`
 
 	// The route id. Route can be defined using the cloudfoundry_route resource
-	// TODO: configure x-ref to cloudfoundry_route
+	// +crossplane:generate:reference:type=Route
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.CloudFoundryName()
 	// +kubebuilder:validation:Optional
 	Route *string `json:"route,omitempty"`
 

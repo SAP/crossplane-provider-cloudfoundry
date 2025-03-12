@@ -200,7 +200,6 @@ func configServices(forProvider v1alpha2.AppParameters) (*operation.AppManifestS
 	return nil, nil
 }
 
-// TODO: This implementation is not complete. Logic of referencing the routes is still missing
 // configRoutes map the routes from app spec
 func configRoutes(forProvider v1alpha2.AppParameters) *operation.AppManifestRoutes {
 	if len(forProvider.Routes) > 0 {

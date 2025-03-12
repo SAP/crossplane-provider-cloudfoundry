@@ -9,7 +9,6 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/google/uuid"
-	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
@@ -50,15 +49,19 @@ func NewClient(cfv3 *client.Client) ServiceCredentialBinding {
 // GetByIDOrSearch returns a ServiceCredentialBinding resource by guid or by spec
 func GetByIDOrSearch(ctx context.Context, scbClient ServiceCredentialBinding, guid string, forProvider v1alpha2.ServiceCredentialBindingParameters) (*resource.ServiceCredentialBinding, error) {
 	if err := uuid.Validate(guid); err != nil {
-		return scbClient.Single(ctx, newListOptions(forProvider))
+		opts, err := newListOptions(forProvider)
+		if err != nil {
+			return nil, err
+		}
+		return scbClient.Single(ctx, opts)
 	}
 
 	return scbClient.Get(ctx, guid)
 }
 
 // Create creates a ServiceCredentialBinding resource
-func Create(ctx context.Context, scbClient ServiceCredentialBinding, spec v1alpha2.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBinding, error) {
-	opt, err := newCreateOption(spec, params)
+func Create(ctx context.Context, scbClient ServiceCredentialBinding, forProvider v1alpha2.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBinding, error) {
+	opt, err := newCreateOption(forProvider, params)
 	if err != nil {
 		return nil, err
 	}
@@ -74,7 +77,13 @@ func Create(ctx context.Context, scbClient ServiceCredentialBinding, spec v1alph
 			return nil, err
 		}
 	}
-	return scbClient.Single(ctx, newListOptions(spec))
+
+	opts, err := newListOptions(forProvider)
+	if err != nil {
+		return nil, err
+	}
+	return scbClient.Single(ctx, opts)
+
 }
 
 // Update updates labels and annotations of a ServiceCredentialBinding resource
@@ -114,19 +123,31 @@ func GetConnectionDetails(ctx context.Context, scbClient ServiceCredentialBindin
 }
 
 // newListOptions generates ServiceCredentialBindingListOptions according to CR's ForProvider spec
-func newListOptions(spec v1alpha2.ServiceCredentialBindingParameters) *client.ServiceCredentialBindingListOptions {
+func newListOptions(spec v1alpha2.ServiceCredentialBindingParameters) (*client.ServiceCredentialBindingListOptions, error) {
 	// if external-name is not set, search by Name and Space
 	opt := client.NewServiceCredentialBindingListOptions()
 	opt.Type.EqualTo(spec.Type)
-	opt.Names.EqualTo(ptr.Deref(spec.Name, ""))
 
-	if spec.ServiceInstance != nil {
-		opt.ServiceInstanceGUIDs.EqualTo(*spec.ServiceInstance)
+	if spec.ServiceInstance == nil {
+		return nil, errors.New(ErrServiceInstanceMissing)
 	}
-	if spec.App != nil {
+	opt.ServiceInstanceGUIDs.EqualTo(*spec.ServiceInstance)
+
+	if spec.Type == "app" {
+		if spec.App == nil {
+			return nil, errors.New(ErrAppMissing)
+		}
 		opt.AppGUIDs.EqualTo(*spec.App)
 	}
-	return opt
+
+	if spec.Type == "key" {
+		if spec.Name == nil {
+			return nil, errors.New(ErrNameMissing)
+		}
+		opt.Names.EqualTo(*spec.Name)
+	}
+
+	return opt, nil
 }
 
 // newCreateOption generates ServiceCredentialBindingCreate according to CR's ForProvider spec

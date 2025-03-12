@@ -174,8 +174,8 @@ func (r *Route) GetID() string {
 	return r.Status.AtProvider.GUID
 }
 
-// CloudFoundryName implements Namable reference interface
-func (r *Route) CloudFoundryName() string {
+// GetCloudFoundryName implements Namable reference interface
+func (r *Route) GetCloudFoundryName() string {
 	if r.Status.AtProvider.URL != nil {
 		return *r.Status.AtProvider.URL
 	}

@@ -12,6 +12,9 @@ spec:
     lifecycle: docker
     docker:
       image: loud/hello_co:latest
+    routes:
+      - routeRef:
+          name: my-cfapps-route
     processes:
       - type: web
         health-check-type: http
@@ -31,6 +34,9 @@ spec:
     lifecycle: docker
     docker:
       image: loud/hello_co:latest
+    routes:
+      - routeRef:
+          name: my-route
     processes:
       - type: web
         health-check-type: http

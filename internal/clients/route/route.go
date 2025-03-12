@@ -101,7 +101,7 @@ func (c *Client) Delete(ctx context.Context, guid string) error {
 // FormatListOption generates the list options for the client.
 func FormatListOption(forProvider v1alpha2.RouteParameters) (*client.RouteListOptions, error) {
 
-	if forProvider.Space == nil && forProvider.Domain == nil {
+	if forProvider.Space == nil || forProvider.Domain == nil {
 		return nil, fmt.Errorf("Space and Domain are required")
 	}
 	opts := client.NewRouteListOptions()

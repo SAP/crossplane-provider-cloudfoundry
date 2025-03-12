@@ -1510,9 +1510,8 @@ spec:
                             the tcp route to.
                           type: string
                         route:
-                          description: |-
-                            The route id. Route can be defined using the cloudfoundry_route resource
-                            TODO: configure x-ref to cloudfoundry_route
+                          description: The route id. Route can be defined using the
+                            cloudfoundry_route resource
                           type: string
                         routeRef:
                           description: Reference to a Route in route to populate route.

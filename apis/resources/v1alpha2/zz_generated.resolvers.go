@@ -49,6 +49,24 @@ func (mg *App) ResolveReferences(ctx context.Context, c client.Reader) error {
 	mg.Spec.ForProvider.SpaceRef.Space = reference.ToPtrValue(rsp.ResolvedValue)
 	mg.Spec.ForProvider.SpaceRef.SpaceRef = rsp.ResolvedReference
 
+	for i3 := 0; i3 < len(mg.Spec.ForProvider.Routes); i3++ {
+		rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+			CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Routes[i3].Route),
+			Extract:      resources.CloudFoundryName(),
+			Reference:    mg.Spec.ForProvider.Routes[i3].RouteRef,
+			Selector:     mg.Spec.ForProvider.Routes[i3].RouteSelector,
+			To: reference.To{
+				List:    &RouteList{},
+				Managed: &Route{},
+			},
+		})
+		if err != nil {
+			return errors.Wrap(err, "mg.Spec.ForProvider.Routes[i3].Route")
+		}
+		mg.Spec.ForProvider.Routes[i3].Route = reference.ToPtrValue(rsp.ResolvedValue)
+		mg.Spec.ForProvider.Routes[i3].RouteRef = rsp.ResolvedReference
+
+	}
 	for i3 := 0; i3 < len(mg.Spec.ForProvider.Services); i3++ {
 		rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 			CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Services[i3].Name),
