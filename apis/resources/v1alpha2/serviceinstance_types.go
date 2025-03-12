@@ -95,7 +95,7 @@ type Managed struct {
 
 	// Same as `Parameters`, supplied as a Secret reference. Ignored if `Parameters` or `JSONParam` is set.
 	// +kubebuilder:validation:Optional
-	ParametersSecretRef *SecretReference `json:"parametersSecretRef,omitempty" tf:"-"`
+	ParametersSecretRef *v1.SecretKeySelector `json:"parametersSecretRef,omitempty" tf:"-"`
 
 
 	// MaintenanceInfo describes the version of the service instance
@@ -120,7 +120,7 @@ type UserProvided struct {
 
 	// Same as `Credentials`, supplied as a Secret reference. Ignored if `Credentials` or `JSONCredentials` is set.
 	// +kubebuilder:validation:Optional
-	CredentialsSecretRef *SecretReference `json:"credentialsSecretRef,omitempty"`
+	CredentialsSecretRef *v1.SecretKeySelector `json:"credentialsSecretRef,omitempty"`
 
 	// URL to which requests for bound routes will be forwarded; only shown when type is user-provided.
 	// +kubebuilder:validation:Optional
@@ -211,19 +211,6 @@ type MaintenanceInfo struct {
 	Version *string `json:"version,omitempty" tf:"version,omitempty"`
 }
 
-// SecretReference defines parameters applicable for user-provided service instance
-type SecretReference struct {
-	// Name of the secret.
-	Name string `json:"name"`
-
-	// Namespace of the secret.
-	Namespace string `json:"namespace"`
-
-	// The optional key to select. If key is not specified, the entire key-value map of secret is used
-	// +optional
-	Key *string `json:"key,omitempty"`
-}
-
 // ServicePlanParameters define a service plan
 type ServicePlanParameters struct {
 	// The ID of the service plan
@@ -307,4 +294,12 @@ var (
 
 func init() {
 	SchemeBuilder.Register(&ServiceInstance{}, &ServiceInstanceList{})
+}
+
+// GetName implements Nameable interface
+func (r *ServiceInstance) GetCloudFoundryName() string {
+	if r.Spec.ForProvider.Name == nil {
+		return ""
+	}
+	return *r.Spec.ForProvider.Name
 }

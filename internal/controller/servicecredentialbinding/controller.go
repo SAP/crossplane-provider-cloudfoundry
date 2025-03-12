@@ -161,8 +161,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 		return managed.ExternalObservation{
 			ResourceExists:    true,
-			ResourceUpToDate:  scb.IsUpToDate(ctx, c.scbClient, cr.Spec.ForProvider, *serviceBinding),
-			ConnectionDetails: scb.GetBindingDetails(ctx, c.scbClient, serviceBinding.GUID, cr.Spec.ConnectionDetailsAsJSON),
+			ResourceUpToDate:  scb.IsUpToDate(ctx, cr.Spec.ForProvider, *serviceBinding),
+			ConnectionDetails: scb.GetConnectionDetails(ctx, c.scbClient, serviceBinding.GUID, cr.Spec.ConnectionDetailsAsJSON),
 		}, nil
 	}
 
@@ -177,9 +177,13 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
 	}
 
+	params, err := extractParameters(ctx, c.kube, cr.Spec.ForProvider)
+	if err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, "cannot extract specified parameters")
+	}
 	cr.SetConditions(xpv1.Creating())
 
-	serviceBinding, err := scb.Create(ctx, c.scbClient, cr.Spec.ForProvider)
+	serviceBinding, err := scb.Create(ctx, c.scbClient, cr.Spec.ForProvider, params)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
@@ -191,12 +195,16 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Update a ServiceCredentialBinding resource.
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
-	_, ok := mg.(*v1alpha2.ServiceCredentialBinding)
+	cr, ok := mg.(*v1alpha2.ServiceCredentialBinding)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errWrongCRType)
 	}
 
-	// Nothing to do, since none of the `ForProvider` parameters are updatable.
+	_, err := scb.Update(ctx, c.scbClient, cr.GetID(), cr.Spec.ForProvider)
+	if err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
+	}
+
 	return managed.ExternalUpdate{}, nil
 }
 
@@ -208,14 +216,25 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	}
 	cr.SetConditions(xpv1.Deleting())
 
-	if cr.Status.AtProvider.ID == nil {
-		return nil
-	}
-
-	_, err := c.scbClient.Delete(ctx, *cr.Status.AtProvider.ID)
+	err := scb.Delete(ctx, c.scbClient, cr.GetID())
 	if err != nil {
 		return errors.Wrap(err, errDelete)
 	}
 
 	return nil
+}
+
+// extractParameters returns the parameters or credentials from the spec
+func extractParameters(ctx context.Context, kube k8s.Client, spec v1alpha2.ServiceCredentialBindingParameters) ([]byte, error) {
+	// If the spec has yaml parameters use those and only those.
+	if spec.Parameters != nil {
+		return spec.Parameters.Raw, nil
+	}
+
+	if spec.ParametersSecretRef != nil {
+		return clients.SecretRefToJSONRawMessage(ctx, kube, spec.ParametersSecretRef)
+	}
+
+	// If the spec has no parameters or secret ref, return nil
+	return nil, nil
 }

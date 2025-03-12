@@ -1,8 +1,7 @@
 # ====================================================================================
 # Setup Project
-
-PROJECT_NAME := provider-$(PROVIDER_NAME)
-PROJECT_NAME := crossplane-provider-cloudfoundry
+BASE_NAME := cloudfoundry
+PROJECT_NAME := crossplane-provider-$(BASE_NAME)
 PROJECT_REPO := github.com/SAP/$(PROJECT_NAME)
 
 
@@ -54,16 +53,15 @@ UPTEST_VERSION = v0.11.1
 # ====================================================================================
 # Setup Images
 DOCKER_REGISTRY ?= crossplane
-IMAGES = $(PROJECT_NAME) $(PROJECT_NAME)-controller
+IMAGES = $(BASE_NAME) $(BASE_NAME)-controller
+
 -include build/makelib/image.mk
 
-export UUT_CONFIG = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME)):$(VERSION)
-export UUT_CONTROLLER=$(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME))-controller:$(VERSION)
-export E2E_IMAGES = {"crossplane/provider-cloudfoundry":"$(UUT_CONFIG)","crossplane/provider-cloudfoundry-controller":"$(UUT_CONTROLLER)"}
 
-# NOTE(hasheddan): we force image building to happen prior to xpkg build so that
-# we ensure image is present in daemon.
-xpkg.build.crossplane-provider-cloudfoundry-controller: do.build.images
+
+export UUT_CONFIG = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME)):$(VERSION)
+export UUT_CONTROLLER = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME))-controller:$(VERSION)
+export E2E_IMAGES = {"package":"$(UUT_CONFIG)","controller":"$(UUT_CONTROLLER)"}
 
 # NOTE(hasheddan): we ensure up is installed prior to running platform-specific
 # build steps in parallel to avoid encountering an installation race condition.
@@ -74,7 +72,7 @@ build.init: $(UP)
 
 # run `make help` to see the targets and options
 
-# we want submodules to be set up the first time `make` is run.
+# We want submodules to be set up the first time `make` is run.
 # We manage the build/ folder and its Makefiles as a submodule.
 # The first time `make` is run, the includes of build/*.mk files will
 # all fail, and this target will be run. The next time, the default as defined
@@ -162,6 +160,7 @@ test-acceptance:  $(KIND) $(HELM3) build
 	@$(INFO) Skipping long running tests
 	@echo UUT_CONFIG=$$UUT_CONFIG
 	@echo UUT_CONTROLLER=$$UUT_CONTROLLER
+	@$(INFO) ${E2E_IMAGES}
 	@echo "E2E_IMAGES=$$E2E_IMAGES"
 	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -run '$(testFilter)' 2>&1 | tee test-output.log
 	@echo "===========Test Summary==========="
@@ -170,7 +169,6 @@ test-acceptance:  $(KIND) $(HELM3) build
      		*FAIL*) echo "❌ Error: Test failed"; exit 1 ;; \
      		*) echo "✅ All tests passed"; $(OK) integration tests passed ;; \
      esac
-
 .PHONY: cobertura submodules fallthrough run crds.clean dev-debug dev-clean demo-cluster demo-install demo-clean demo-debug
 
 # ====================================================================================
@@ -193,14 +191,3 @@ crossplane.help:
 help-special: crossplane.help
 
 .PHONY: crossplane.help help-special
-
-PUBLISH_IMAGES ?= crossplane/provider-cloudfoundry crossplane/provider-cloudfoundry-controller
-
-.PONY: publish
-publish:
-	@$(INFO) "Publishing images $(PUBLISH_IMAGES) to $(DOCKER_REGISTRY)"
-	@for image in $(PUBLISH_IMAGES); do \
-		echo "Publishing image $(DOCKER_REGISTRY)/$${image}:$(VERSION)"; \
-		docker push $(DOCKER_REGISTRY)/$${image}:$(VERSION); \
-	done
-	@$(OK) "Publishing images $(PUBLISH_IMAGES) to $(DOCKER_REGISTRY)"

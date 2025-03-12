@@ -21,3 +21,20 @@ func ExternalID() reference.ExtractValueFn {
 		return o.GetID()
 	}
 }
+
+// Nameable return name for references.
+type Nameable interface {
+	GetCloudFoundryName() string
+}
+
+// CloudFoundryName is ExtractValueFn to retrieve the resource name in a Cloud Foundry  for a nameable resource.
+func CloudFoundryName() reference.ExtractValueFn {
+	return func(mg resource.Managed) string {
+		o, ok := mg.(Nameable)
+		// If the resource is not referenceable, return zero string
+		if !ok {
+			return ""
+		}
+		return o.GetCloudFoundryName()
+	}
+}

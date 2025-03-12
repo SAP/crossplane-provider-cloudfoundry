@@ -1510,9 +1510,8 @@ spec:
                             the tcp route to.
                           type: string
                         route:
-                          description: |-
-                            The route id. Route can be defined using the cloudfoundry_route resource
-                            TODO: configure x-ref to cloudfoundry_route
+                          description: The route id. Route can be defined using the
+                            cloudfoundry_route resource
                           type: string
                         routeRef:
                           description: Reference to a Route in route to populate route.
@@ -1602,9 +1601,8 @@ spec:
                             the application.
                           type: string
                         name:
-                          description: |-
-                            The name of the service instance to be bound to.
-                            TODO: configure extract function to get the name of the service instance, default gets the external_name (which is GUID). That would be incorrect.
+                          description: The name of the service instance to be bound
+                            to.
                           type: string
                         parameters:
                           description: A map of arbitrary key/value paris to be send
@@ -1950,7 +1948,7 @@ spec:
                     description: The date and time when the resource was created in
                       [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
-                  id:
+                  guid:
                     description: The GUID of the Cloud Foundry resource
                     type: string
                   name:

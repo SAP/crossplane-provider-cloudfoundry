@@ -1,14 +1,16 @@
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
 kind: Route
 metadata:
-  name: my-route
+  name: e2e-route
 spec:
   forProvider:
-    domain: 
-      name: cfapps.eu12.hana.ondemand.com
-    hostname: hello-co
+    domainRef: 
+      name: e2e-domain
+      policy:
+        resolve: Always
+    host: hello-co
     spaceRef:
-      name: my-space
+      name: e2e-space
       policy:
         resolve: Always

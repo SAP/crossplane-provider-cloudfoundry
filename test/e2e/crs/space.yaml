@@ -3,9 +3,9 @@ apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
 kind: Space
 metadata:
   namespace: default
-  name: my-space
+  name: e2e-space
 spec:
   forProvider:
-    name: my-space
+    name: e2e-space
     orgRef:
-      name:  my-org
+      name:  e2e-org

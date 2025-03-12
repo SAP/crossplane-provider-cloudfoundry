@@ -9,8 +9,6 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/nsf/jsondiff"
 	"github.com/pkg/errors"
-	v1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/types"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -296,40 +294,10 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	return nil
 }
 
-// extractSecret extracts parameters/credentials from a secret reference.
-func extractSecret(ctx context.Context, kube k8s.Client, s *v1alpha2.SecretReference) (json.RawMessage, error) {
-	if s == nil {
-		return nil, nil
-	}
-
-	secret := &v1.Secret{}
-	if err := kube.Get(ctx, types.NamespacedName{Namespace: s.Namespace, Name: s.Name}, secret); err != nil {
-		return nil, errors.Wrap(err, errSecret)
-	}
-
-	// if key is specified, return data from the specific secret key
-	if s.Key != nil {
-		return secret.Data[*s.Key], nil
-	}
-
-	// if key is not specified, return all data from the secret
-	cred := make(map[string]string)
-	for key, value := range secret.Data {
-		cred[key] = string(value)
-	}
-	buf, err := json.Marshal(cred)
-	if err != nil {
-		return nil, err
-	}
-	return buf, nil
-}
-
 // extractCredentialSpec returns the parameters or credentials from the spec
 func extractCredentialSpec(ctx context.Context, kube k8s.Client, spec v1alpha2.ServiceInstanceParameters) ([]byte, error) {
-
 	// If the spec has yaml parameters use those and only those.
 	if spec.Parameters != nil {
-		// Unmarshal the YAML into the map.
 		return spec.Parameters.Raw, nil
 	}
 
@@ -338,14 +306,14 @@ func extractCredentialSpec(ctx context.Context, kube k8s.Client, spec v1alpha2.S
 			return []byte(*spec.JSONParams), nil
 		}
 
-		return extractSecret(ctx, kube, spec.ParametersSecretRef)
+		return clients.SecretRefToJSONRawMessage(ctx, kube, spec.ParametersSecretRef)
 	}
 
 	if spec.Type == v1alpha2.UserProvidedService {
 		if spec.JSONCredentials != nil {
 			return []byte(*spec.JSONCredentials), nil
 		}
-		return extractSecret(ctx, kube, spec.CredentialsSecretRef)
+		return clients.SecretRefToJSONRawMessage(ctx, kube, spec.CredentialsSecretRef)
 	}
 	return nil, nil
 }

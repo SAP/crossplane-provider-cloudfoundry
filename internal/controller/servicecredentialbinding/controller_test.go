@@ -17,12 +17,16 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
 )
 
 var (
-	errBoom = errors.New("boom")
-	name    = "my-service-credential-binding"
-	guid    = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
+	errBoom                   = errors.New("boom")
+	errServiceInstanceMissing = errors.New(servicecredentialbinding.ErrServiceInstanceMissing)
+	errAppMissing             = errors.New(servicecredentialbinding.ErrAppMissing)
+	name                      = "my-service-credential-binding"
+	guid                      = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
+	serviceInstanceGUID       = "3d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 )
 
 type modifier func(*v1alpha2.ServiceCredentialBinding)
@@ -33,15 +37,9 @@ func withExternalName(name string) modifier {
 	}
 }
 
-func withServiceInstanceRef(serviceCredentialBinding string) modifier {
+func withServiceInstanceID(guid string) modifier {
 	return func(r *v1alpha2.ServiceCredentialBinding) {
-		r.Spec.ForProvider.ServiceInstanceRef.Name = serviceCredentialBinding
-	}
-}
-
-func withServiceInstanceID(guid *string) modifier {
-	return func(r *v1alpha2.ServiceCredentialBinding) {
-		r.Spec.ForProvider.ServiceInstance = guid
+		r.Spec.ForProvider.ServiceInstance = &guid
 	}
 }
 
@@ -49,9 +47,12 @@ func withConditions(c ...xpv1.Condition) modifier {
 	return func(i *v1alpha2.ServiceCredentialBinding) { i.Status.SetConditions(c...) }
 }
 
-func withStatus(s v1alpha2.ServiceCredentialBindingObservation) modifier {
+func withStatus(guid string) modifier {
+	o := v1alpha2.ServiceCredentialBindingObservation{}
+	o.GUID = guid
+
 	return func(r *v1alpha2.ServiceCredentialBinding) {
-		r.Status.AtProvider = s
+		r.Status.AtProvider = o
 	}
 }
 
@@ -108,10 +109,10 @@ func TestObserve(t *testing.T) {
 		},
 		"ExternalNameNotSet": {
 			args: args{
-				mg: serviceCredentialBinding("key", withServiceInstanceRef("my-test-instance")),
+				mg: serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID)),
 			},
 			want: want{
-				mg: serviceCredentialBinding("key", withServiceInstanceRef("my-test-instance")),
+				mg: serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID)),
 				obs: managed.ExternalObservation{
 					ResourceExists: false,
 				},
@@ -128,7 +129,7 @@ func TestObserve(t *testing.T) {
 		},
 		"Boom!": {
 			args: args{
-				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceRef("my-test-instance")),
+				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID)),
 			},
 			want: want{
 				mg:  serviceCredentialBinding("key", withExternalName(guid)),
@@ -150,7 +151,7 @@ func TestObserve(t *testing.T) {
 		},
 		"NotFound": {
 			args: args{
-				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceRef("my-test-instance")),
+				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID)),
 			},
 			want: want{
 				mg:  serviceCredentialBinding("key", withExternalName(guid)),
@@ -173,14 +174,14 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful": {
 			args: args{
-				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceRef("my-test-instance")),
+				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID)),
 			},
 			want: want{
 				mg: serviceCredentialBinding(
 					"key",
 					withExternalName(guid),
-					withStatus(v1alpha2.ServiceCredentialBindingObservation{ID: &guid}),
-					withServiceInstanceRef("my-test-instance"),
+					withStatus(guid),
+					withServiceInstanceID(serviceInstanceGUID),
 					withConditions(xpv1.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ConnectionDetails: managed.ConnectionDetails{}},
@@ -189,11 +190,11 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("GetDetails", guid).Return(
@@ -205,14 +206,14 @@ func TestObserve(t *testing.T) {
 		},
 		"CreateFailed": {
 			args: args{
-				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceRef("my-test-instance")),
+				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID)),
 			},
 			want: want{
 				mg: serviceCredentialBinding(
 					"key",
 					withExternalName(guid),
-					withServiceInstanceRef("my-test-instance"),
-					withStatus(v1alpha2.ServiceCredentialBindingObservation{ID: &guid}),
+					withServiceInstanceID(serviceInstanceGUID),
+					withStatus(guid),
 					withConditions(xpv1.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
@@ -221,11 +222,11 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationFailed).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationFailed).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationFailed).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationFailed).ServiceCredentialBinding,
 					nil,
 				)
 				return m
@@ -233,13 +234,13 @@ func TestObserve(t *testing.T) {
 		},
 		"UpdateFailed": {
 			args: args{
-				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceRef("my-test-instance")),
+				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID)),
 			},
 			want: want{
 				mg: serviceCredentialBinding("key",
 					withExternalName(guid),
-					withServiceInstanceRef("my-test-instance"),
-					withStatus(v1alpha2.ServiceCredentialBindingObservation{ID: &guid}),
+					withServiceInstanceID(serviceInstanceGUID),
+					withStatus(guid),
 					withConditions(xpv1.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
@@ -248,11 +249,11 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").SetLastOperation(v1alpha2.LastOperationUpdate, v1alpha2.LastOperationFailed).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationUpdate, v1alpha2.LastOperationFailed).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").SetLastOperation(v1alpha2.LastOperationUpdate, v1alpha2.LastOperationFailed).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationUpdate, v1alpha2.LastOperationFailed).ServiceCredentialBinding,
 					nil,
 				)
 				return m
@@ -260,13 +261,13 @@ func TestObserve(t *testing.T) {
 		},
 		"InProgress": {
 			args: args{
-				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceRef("my-test-instance")),
+				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID)),
 			},
 			want: want{
 				mg: serviceCredentialBinding("key",
 					withExternalName(guid),
-					withStatus(v1alpha2.ServiceCredentialBindingObservation{ID: &guid}),
-					withServiceInstanceRef("my-test-instance"),
+					withStatus(guid),
+					withServiceInstanceID(serviceInstanceGUID),
 					withConditions(xpv1.Unavailable()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -275,11 +276,11 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationInProgress).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationInProgress).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationInProgress).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationInProgress).ServiceCredentialBinding,
 					nil,
 				)
 				return m
@@ -336,10 +337,10 @@ func TestCreate(t *testing.T) {
 	}{
 		"Successful": {
 			args: args{
-				mg: serviceCredentialBinding("key", withServiceInstanceRef("my-test-instance"), withServiceInstanceID(&guid)),
+				mg: serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID)),
 			},
 			want: want{
-				mg:  serviceCredentialBinding("key", withServiceInstanceRef("my-test-instance"), withConditions(xpv1.Creating()), withExternalName(guid), withServiceInstanceID(&guid)),
+				mg:  serviceCredentialBinding("key", withConditions(xpv1.Creating()), withExternalName(guid), withServiceInstanceID(serviceInstanceGUID)),
 				obs: managed.ExternalCreation{},
 				err: nil,
 			},
@@ -347,23 +348,81 @@ func TestCreate(t *testing.T) {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Create").Return(
 					"JOB123",
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("PollComplete").Return(nil)
 				return m
 			},
 		},
-		"CannotPollCreationJob": {
+		"Should fail if Service Instance is missing": {
 			args: args{
-				mg: serviceCredentialBinding("key", withServiceInstanceRef("my-test-instance")),
+				mg: serviceCredentialBinding("key"),
 			},
 			want: want{
-				mg:  serviceCredentialBinding("key", withServiceInstanceRef("my-test-instance"), withConditions(xpv1.Creating())),
+				mg: serviceCredentialBinding("key",
+					withConditions(xpv1.Creating()),
+				),
+				obs: managed.ExternalCreation{},
+				err: errors.Wrap(errServiceInstanceMissing, errCreate),
+			},
+			service: func() *fake.MockServiceCredentialBinding {
+				m := &fake.MockServiceCredentialBinding{}
+
+				m.On("Create").Return(
+					"JOB123",
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).ServiceCredentialBinding,
+					nil,
+				)
+
+				m.On("Single").Return(
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).ServiceCredentialBinding,
+					nil,
+				)
+				m.On("PollComplete").Return(nil)
+
+				return m
+			},
+		},
+		"Should fail if App is missing for type app": {
+			args: args{
+				mg: serviceCredentialBinding("app", withServiceInstanceID(serviceInstanceGUID)),
+			},
+			want: want{
+				mg: serviceCredentialBinding("app", withServiceInstanceID(serviceInstanceGUID),
+					withConditions(xpv1.Creating()),
+				),
+				obs: managed.ExternalCreation{},
+				err: errors.Wrap(errAppMissing, errCreate),
+			},
+			service: func() *fake.MockServiceCredentialBinding {
+				m := &fake.MockServiceCredentialBinding{}
+
+				m.On("Create").Return(
+					"JOB123",
+					&fake.NewServiceCredentialBinding("app").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).ServiceCredentialBinding,
+					nil,
+				)
+
+				m.On("Single").Return(
+					&fake.NewServiceCredentialBinding("app").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).ServiceCredentialBinding,
+					nil,
+				)
+				m.On("PollComplete").Return(nil)
+
+				return m
+			},
+		},
+		"CannotPollCreationJob": {
+			args: args{
+				mg: serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID)),
+			},
+			want: want{
+				mg:  serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withConditions(xpv1.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -372,12 +431,12 @@ func TestCreate(t *testing.T) {
 
 				m.On("Create").Return(
 					"JOB123",
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).ServiceCredentialBinding,
 					nil,
 				)
 
 				m.On("Single").Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("PollComplete").Return(errBoom)
@@ -387,10 +446,10 @@ func TestCreate(t *testing.T) {
 		},
 		"AlreadyExist": {
 			args: args{
-				mg: serviceCredentialBinding("key", withServiceInstanceRef("my-test-instance")),
+				mg: serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID)),
 			},
 			want: want{
-				mg:  serviceCredentialBinding("key", withServiceInstanceRef("my-test-instance"), withConditions(xpv1.Creating())),
+				mg:  serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withConditions(xpv1.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -401,11 +460,11 @@ func TestCreate(t *testing.T) {
 					errBoom,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("Get").Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef("my-test-instance").ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("PollComplete").Return(nil)
@@ -470,10 +529,10 @@ func TestDelete(t *testing.T) {
 
 		"DoesNotExist": {
 			args: args{
-				mg: serviceCredentialBinding("key", withServiceInstanceRef("my-test-instance"), withExternalName(guid), withStatus(v1alpha2.ServiceCredentialBindingObservation{ID: &guid})),
+				mg: serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName(guid), withStatus(guid)),
 			},
 			want: want{
-				mg:  serviceCredentialBinding("key", withServiceInstanceRef("my-test-instance"), withExternalName(guid), withStatus(v1alpha2.ServiceCredentialBindingObservation{ID: &guid}), withConditions(xpv1.Deleting())),
+				mg:  serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName(guid), withStatus(guid), withConditions(xpv1.Deleting())),
 				obs: managed.ExternalUpdate{},
 				err: errors.Wrap(errBoom, errDelete),
 			},

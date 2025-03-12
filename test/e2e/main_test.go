@@ -18,10 +18,11 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/pkg/errors"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"sigs.k8s.io/e2e-framework/klient/decoder"
 	resources "sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/support/kind"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 
 	"sigs.k8s.io/e2e-framework/pkg/env"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
@@ -31,9 +32,8 @@ var testenv env.Environment
 var testOrgName = "cf-ci-e2e"
 
 var (
-	UUT_IMAGES_KEY     = "E2E_IMAGES"
-	UUT_CONFIG_KEY     = "crossplane/provider-cloudfoundry"
-	UUT_CONTROLLER_KEY = "crossplane/provider-cloudfoundry-controller"
+	UUT_CONFIG_KEY     = "package"
+	UUT_CONTROLLER_KEY = "controller"
 	ENDPOINT_KEY       = "apiEndpoint"
 	CREDENTIALS_KEY    = "credentials"
 )

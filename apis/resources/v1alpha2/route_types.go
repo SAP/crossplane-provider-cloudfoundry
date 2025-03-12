@@ -1,4 +1,4 @@
-package v1alpha1
+package v1alpha2
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -9,35 +9,37 @@ import (
 
 // RouteObservation observations for routes
 type RouteObservation struct {
+	Resource `json:",inline"`
 
-	// The complete endpoint with path if set for the route
-	Endpoint *string `json:"endpoint,omitempty"`
+	// Protocol of the route
+	// +kubebuilder:validation:Optional
+	Protocol *string `json:"protocol,omitempty"`
 
-	// The GUID of the route
-	ID *string `json:"id,omitempty"`
+	// The host name of the route
+	// +kubebuilder:validation:Optional
+	Host *string `json:"host,omitempty"`
+
+	// The path of the route
+	// +kubebuilder:validation:Optional
+	Path *string `json:"path,omitempty"`
+
+	// The URL of the route
+	// +kubebuilder:validation:Optional
+	URL *string `json:"url,omitempty"`
+
+	// The route options
+	// +kubebuilder:validation:Optional
+	Options *RouteOptions `json:"options,omitempty"`
+
+	// One or more route mapping(s) that will map this route to application(s). Can be repeated multiple times to load balance route traffic among multiple applications.
+	// +kubebuilder:validation:Optional
+	Destinations []RouteDestination `json:"destinations,omitempty"`
 }
 
 // RouteParameters parameters for Routes
 type RouteParameters struct {
-
-	// The domain to map the host name to. If not provided the default application domain will be used.
-	// +kubebuilder:validation:Required
-	Domain DomainParameters `json:"domain,omitempty"`
-
-	// The application's host name. This is required for shared domains.
-	// +kubebuilder:validation:Optional
-	Hostname *string `json:"hostname,omitempty"`
-
-	// A path for an HTTP route.
-	// +kubebuilder:validation:Optional
-	Path *string `json:"path,omitempty"`
-
-	// The port to associate with the route for a TCP route. Conflicts with random_port.
-	// +kubebuilder:validation:Optional
-	Port *int `json:"port,omitempty"`
-
 	// The ID of the space to create the route in.
-	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1.Space
+	// +crossplane:generate:reference:type=Space
 	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	// +kubebuilder:validation:Optional
 	Space *string `json:"space,omitempty"`
@@ -50,37 +52,71 @@ type RouteParameters struct {
 	// +kubebuilder:validation:Optional
 	SpaceSelector *v1.Selector `json:"spaceSelector,omitempty"`
 
-	// One or more route mapping(s) that will map this route to application(s). Can be repeated multiple times to load balance route traffic among multiple applications.
+	// The ID of the domain of the route
+	// +crossplane:generate:reference:type=Domain
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	// +kubebuilder:validation:Optional
-	Destinations []DestinationParameters `json:"destinations,omitempty"`
-}
+	Domain *string `json:"domain,omitempty"`
 
-// DomainParameters parameters for domain.
-type DomainParameters struct {
-
-	// The ID of the Domain.
+	// Reference to a Domain in domain to populate domain.
 	// +kubebuilder:validation:Optional
-	ID *string `json:"id,omitempty"`
+	DomainRef *v1.Reference `json:"domainRef,omitempty"`
 
-	// The name of the Domain.
+	// Selector for a Domain in domain to populate domain.
 	// +kubebuilder:validation:Optional
-	Name *string `json:"name,omitempty"`
-}
+	DomainSelector *v1.Selector `json:"domainSelector,omitempty"`
 
-// DestinationObservation observation for destinations
-type DestinationObservation struct {
-}
+	// The application's host name. This is required for shared domains.
+	// +kubebuilder:validation:Optional
+	Host *string `json:"host,omitempty"`
 
-// DestinationParameters parameters for Destinations
-type DestinationParameters struct {
-
-	// The ID of the application to map this route to.
-	// +kubebuilder:validation:Required
-	App *string `json:"app"`
+	// A path for an HTTP route.
+	// +kubebuilder:validation:Optional
+	Path *string `json:"path,omitempty"`
 
 	// The port to associate with the route for a TCP route. Conflicts with random_port.
 	// +kubebuilder:validation:Optional
 	Port *int `json:"port,omitempty"`
+
+	// The route options
+	// +kubebuilder:validation:Optional
+	Options *RouteOptions `json:"options,omitempty"`
+}
+
+// RouteOptions parameters for domain.
+type RouteOptions struct {
+	// The load-balancer associated with this route. Valid values are ‘round-robin’ and ‘least-connections’
+	// +kubebuilder:validation:Optional
+	LoadBalancing string `json:"loadbalancing,omitempty"`
+}
+
+// RouteDestination describes a route destinations
+type RouteDestination struct {
+	// The destination GUID
+	GUID string `json:"guid,omitempty"`
+
+	// The ID of the application to map this route to.
+	// +kubebuilder:validation:Required
+	App *RouteDestinationApp `json:"app,omitempty"`
+
+	// The port to associate with the route for a TCP route. Conflicts with random_port.
+	// +kubebuilder:validation:Optional
+	Port *int `json:"port,omitempty"`
+}
+
+// DestinationApp describes a destination application
+type RouteDestinationApp struct {
+	GUID string `json:"guid,omitempty"`
+
+	// The process type of the destination.
+	// +kubebuilder:validation:Optional
+	Process *string `json:"process,omitempty"`
+
+	// Port on the destination application
+	// +kubebuilder:validation:Optional
+	Port *int `json:"port,omitempty"`
+
+	Protocol *string `json:"protocol,omitempty"`
 }
 
 // RouteSpec defines the desired state of Route
@@ -96,7 +132,7 @@ type RouteStatus struct {
 }
 
 // +kubebuilder:object:root=true
-// +kubebuilder:deprecatedversion:warning="v1alpha1/Route is deprecated. Use v1alpha2/Route"
+// +kubebuilder:storageversion
 
 // Route is the Schema for the Routes API. Provides a Cloud Foundry route resource.
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
@@ -131,4 +167,17 @@ var (
 
 func init() {
 	SchemeBuilder.Register(&Route{}, &RouteList{})
+}
+
+// GetID returns the ID of the route
+func (r *Route) GetID() string {
+	return r.Status.AtProvider.GUID
+}
+
+// GetCloudFoundryName implements Namable reference interface
+func (r *Route) GetCloudFoundryName() string {
+	if r.Status.AtProvider.URL != nil {
+		return *r.Status.AtProvider.URL
+	}
+	return ""
 }

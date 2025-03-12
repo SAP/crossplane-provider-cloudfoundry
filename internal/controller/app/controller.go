@@ -1,14 +1,16 @@
 package app
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
 
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/docker/cli/cli/config/configfile"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
@@ -24,7 +26,6 @@ import (
 	pcv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/app"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
@@ -102,17 +103,15 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	}
 
 	return &external{
-		client:    app.NewAppClient(cf),
-		kube:      c.kube,
-		jobClient: cf.Jobs,
+		client: app.NewAppClient(cf),
+		kube:   c.kube,
 	}, nil
 }
 
 // An external provide clients to operate both Kubernetes resources and Cloud Foundry resources.
 type external struct {
-	client    *app.Client
-	jobClient job.Job
-	kube      k8s.Client
+	client *app.Client
+	kube   k8s.Client
 }
 
 // Observe managed resource
@@ -132,11 +131,12 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.Wrap(err, errObserveResource)
 	}
 
-	app.LateInitialize(&cr.Spec.ForProvider, res)
+	lateInitialized := false
 
 	// Update external_name if it is not set or different
 	if guid != res.GUID {
 		meta.SetExternalName(cr, res.GUID)
+		lateInitialized = true
 	}
 
 	// Update the status of the resource
@@ -157,8 +157,9 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}
 
 	return managed.ExternalObservation{
-		ResourceExists:   true,
-		ResourceUpToDate: app.IsUpToDate(cr.Spec.ForProvider, res),
+		ResourceExists:          true,
+		ResourceUpToDate:        app.IsUpToDate(cr.Spec.ForProvider, cr.Status.AtProvider),
+		ResourceLateInitialized: lateInitialized,
 	}, nil
 }
 
@@ -169,9 +170,14 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errWrongKind)
 	}
 
+	dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
+	if err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, errSecret)
+	}
+
 	cr.SetConditions(xpv1.Creating())
 
-	application, err := c.client.CreateAndPush(ctx, cr.Spec.ForProvider, getDockerCredential(ctx, c.kube))
+	application, err := c.client.CreateAndPush(ctx, cr.Spec.ForProvider, dockerCredentials)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreateResource)
 	}
@@ -181,6 +187,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Update managed resource
+// Only rename is supported for now
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
 	cr, ok := mg.(*v1alpha2.App)
 	if !ok {
@@ -192,7 +199,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errUpdateResource + ": No valid GUID found for the App")
 	}
 
-	_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider, getDockerCredential(ctx, c.kube))
+	_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
 	}
@@ -213,12 +220,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	}
 
 	cr.SetConditions(xpv1.Deleting())
-	jobGUID, err := c.client.Delete(ctx, guid)
-	if err != nil {
-		return errors.Wrap(err, errDeleteResource)
-	}
-
-	err = job.PollJobComplete(ctx, c.jobClient, jobGUID)
+	err := c.client.Delete(ctx, guid)
 	if err != nil {
 		return errors.Wrap(err, errDeleteResource)
 	}
@@ -226,17 +228,33 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	return nil
 }
 
-func getDockerCredential(ctx context.Context, kube k8s.Client) app.DockerCredentialExtractor {
-	return func(credentials v1alpha2.DockerCredentials) (*app.DockerCredentials, error) {
-		buf, err := resource.CommonCredentialExtractor(ctx, credentials.Source, kube, credentials.CommonCredentialSelectors)
-		if err != nil {
-			return nil, errors.Wrap(err, errSecret)
-		}
-
-		s := &app.DockerCredentials{}
-		if err := json.Unmarshal(buf, s); err != nil {
-			return nil, errors.Wrap(err, errSecret)
-		}
-		return s, nil
+// getDockerCredential extracts the Docker credentials from the secret
+func getDockerCredential(ctx context.Context, kube k8s.Client, forProvider v1alpha2.AppParameters) (*app.DockerCredentials, error) {
+	// return immediately if the lifecycle is not docker or credentials are not provided
+	if forProvider.Lifecycle != "docker" || forProvider.Docker == nil || forProvider.Docker.Credentials == nil {
+		return nil, nil
 	}
+
+	buf, err := resource.CommonCredentialExtractor(ctx, forProvider.Docker.Credentials.Source, kube, forProvider.Docker.Credentials.CommonCredentialSelectors)
+	if err != nil {
+		return nil, errors.Wrap(err, errSecret)
+	}
+
+	// Parse the JSON to a configfile
+	configfile := configfile.New("")
+	err = configfile.LoadFromReader(bytes.NewReader(buf))
+	if err != nil {
+		return nil, errors.Wrap(err, errSecret)
+	}
+
+	// TODO: support multiple authentication contexts?
+	s := &app.DockerCredentials{}
+	if configfile.AuthConfigs != nil {
+		for _, authConfig := range configfile.AuthConfigs {
+			s.Username = authConfig.Username
+			s.Password = authConfig.Password
+		}
+	}
+
+	return s, nil
 }

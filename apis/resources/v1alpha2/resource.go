@@ -3,7 +3,7 @@ package v1alpha2
 // Resource is a generic struct that represents a Cloud Foundry resource.
 type Resource struct {
 	// The GUID of the Cloud Foundry resource
-	ID string `json:"id,omitempty"`
+	GUID string `json:"guid,omitempty"`
 
 	// The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	CreatedAt *string `json:"createdAt,omitempty"`

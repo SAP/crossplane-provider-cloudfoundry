@@ -20,6 +20,7 @@ import (
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/google/go-cmp/cmp"
 
+	resources "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources"
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
@@ -55,6 +56,9 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
 		managed.WithPollInterval(o.PollInterval),
+		managed.WithInitializers(initializer{
+			client: mgr.GetClient(),
+		}),
 	}
 
 	if o.Features.Enabled(features.EnableBetaManagementPolicies) {
@@ -78,6 +82,65 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 type connector struct {
 	kube  k8s.Client
 	usage resource.Tracker
+}
+
+// ResolveReferences resolves the references in the managed resources
+// using the crossplane reference resolution algorithm.
+func ResolveReferences(ctx context.Context, mg *v1alpha2.SpaceQuota, client k8s.Reader) error {
+	r := reference.NewAPIResolver(client, mg)
+
+	var rsp reference.ResolutionResponse
+	var err error
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Org),
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.OrgRef,
+		Selector:     mg.Spec.ForProvider.OrgSelector,
+		To: reference.To{
+			List:    &v1alpha2.OrgList{},
+			Managed: &v1alpha2.Org{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.Org")
+	}
+	mg.Spec.ForProvider.Org = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.OrgRef = rsp.ResolvedReference
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.InitProvider.Org),
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.InitProvider.OrgRef,
+		Selector:     mg.Spec.InitProvider.OrgSelector,
+		To: reference.To{
+			List:    &v1alpha2.OrgList{},
+			Managed: &v1alpha2.Org{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.InitProvider.Org")
+	}
+	mg.Spec.InitProvider.Org = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.InitProvider.OrgRef = rsp.ResolvedReference
+
+	return nil
+}
+
+// initializer type implements the managed.Initializer interface
+type initializer struct {
+	client k8s.Reader
+}
+
+// Initialize method resolves the references which are not resolved by
+// the crossplane reconciler.
+func (i initializer) Initialize(ctx context.Context, mg resource.Managed) error {
+	cr, ok := mg.(*v1alpha2.SpaceQuota)
+	if !ok {
+		return errors.New(errUnexpectedObject)
+	}
+
+	return ResolveReferences(ctx, cr, i.client)
 }
 
 // isUpToDate function checks whether an managed resource is up to
@@ -211,31 +274,6 @@ type external struct {
 		*cfresource.SpaceQuota) (bool, error)
 }
 
-// ResolveReferences resolves the references in the managed resources
-// using the crossplane reference resolution algorithm.
-func (e *external) ResolveReferences(ctx context.Context, cr *v1alpha2.SpaceQuota) error {
-	r := reference.NewAPIResolver(e.kube, cr)
-	var mrsp reference.MultiResolutionResponse
-	var err error
-
-	mrsp, err = r.ResolveMultiple(ctx, reference.MultiResolutionRequest{
-		CurrentValues: reference.FromPtrValues(cr.Spec.ForProvider.Spaces),
-		Extract:       reference.ExternalName(),
-		References:    cr.Spec.ForProvider.SpacesRefs,
-		Selector:      cr.Spec.ForProvider.SpacesSelector,
-		To: reference.To{
-			List:    &v1alpha2.SpaceList{},
-			Managed: &v1alpha2.Space{},
-		},
-	})
-	if err != nil {
-		return errors.Wrap(err, "mg.Spec.ForProvider.Org")
-	}
-	cr.Spec.ForProvider.Spaces = reference.ToPtrValues(mrsp.ResolvedValues)
-	cr.Spec.ForProvider.SpacesRefs = mrsp.ResolvedReferences
-	return nil
-}
-
 // Observe generates observation for a space
 func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
 	cr, ok := mg.(*v1alpha2.SpaceQuota)
@@ -265,11 +303,6 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "isUpToDate check failed")
 		}
-	}
-
-	err = e.ResolveReferences(ctx, cr)
-	if err != nil {
-		return managed.ExternalObservation{ResourceExists: true}, errors.Wrap(err, errResolveReferences)
 	}
 
 	return managed.ExternalObservation{

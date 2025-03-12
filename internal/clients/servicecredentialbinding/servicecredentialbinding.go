@@ -3,19 +3,22 @@ package servicecredentialbinding
 import (
 	"context"
 	"encoding/json"
-	"reflect"
-
-	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
+	"errors"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/google/uuid"
-	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
+)
+
+const (
+	ErrServiceInstanceMissing = "ServiceInstance is required for key/app binding"
+	ErrAppMissing             = "App is required for app binding"
+	ErrNameMissing            = "Name is required for key binding"
+	ErrBindingTypeUnknown     = "Unknown binding type. Supported types are key and app"
 )
 
 // serviceCredentialBinding defines interfaces to CloudFoundry ServiceCredentialBinding resource
@@ -43,63 +46,25 @@ func NewClient(cfv3 *client.Client) ServiceCredentialBinding {
 	}{cfv3.ServiceCredentialBindings, cfv3.Jobs}
 }
 
-// NewListOptions generates ServiceCredentialBindingListOptions according to CR's ForProvider spec
-func NewListOptions(spec v1alpha2.ServiceCredentialBindingParameters) *client.ServiceCredentialBindingListOptions {
-	// if external-name is not set, search by Name and Space
-	opt := client.NewServiceCredentialBindingListOptions()
-	opt.Type.EqualTo(spec.Type)
-	opt.Names.EqualTo(ptr.Deref(spec.Name, ""))
-
-	if spec.ServiceInstance != nil {
-		opt.ServiceInstanceGUIDs.EqualTo(ptr.Deref(spec.ServiceInstance, ""))
-	}
-	if spec.App != nil {
-		opt.AppGUIDs.EqualTo(ptr.Deref(spec.App, ""))
-	}
-	return opt
-}
-
-// NewCreateOption generates ServiceCredentialBindingCreate according to CR's ForProvider spec
-func NewCreateOption(spec v1alpha2.ServiceCredentialBindingParameters) *resource.ServiceCredentialBindingCreate {
-
-	if spec.ServiceInstance == nil {
-		return nil
-	}
-
-	var opt *resource.ServiceCredentialBindingCreate
-	if spec.Type == "key" {
-		opt = resource.NewServiceCredentialBindingCreateKey(*spec.ServiceInstance, *spec.Name)
-	} else {
-		opt = resource.NewServiceCredentialBindingCreateApp(*spec.ServiceInstance, *spec.App)
-	}
-
-	opt.WithName(*spec.Name)
-
-	if spec.Parameters != nil {
-		opt.WithJSONParameters(string(spec.Parameters.Raw))
-	}
-	return opt
-}
-
 // GetByIDOrSearch returns a ServiceCredentialBinding resource by guid or by spec
 func GetByIDOrSearch(ctx context.Context, scbClient ServiceCredentialBinding, guid string, forProvider v1alpha2.ServiceCredentialBindingParameters) (*resource.ServiceCredentialBinding, error) {
-	var r *resource.ServiceCredentialBinding
-
-	err := uuid.Validate(guid)
-	if err != nil { // guid is not a valid UUID, do a search.
-		r, err = scbClient.Single(ctx, NewListOptions(forProvider))
-	} else { // guid is a valid UUID
-		r, err = scbClient.Get(ctx, guid) // do a get first
-		if clients.ErrorIsNotFound(err) { // if not found, do a search.
-			r, err = scbClient.Single(ctx, NewListOptions(forProvider))
+	if err := uuid.Validate(guid); err != nil {
+		opts, err := newListOptions(forProvider)
+		if err != nil {
+			return nil, err
 		}
+		return scbClient.Single(ctx, opts)
 	}
-	return r, err
+
+	return scbClient.Get(ctx, guid)
 }
 
 // Create creates a ServiceCredentialBinding resource
-func Create(ctx context.Context, scbClient ServiceCredentialBinding, spec v1alpha2.ServiceCredentialBindingParameters) (*resource.ServiceCredentialBinding, error) {
-	opt := NewCreateOption(spec)
+func Create(ctx context.Context, scbClient ServiceCredentialBinding, forProvider v1alpha2.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBinding, error) {
+	opt, err := newCreateOption(forProvider, params)
+	if err != nil {
+		return nil, err
+	}
 
 	// usually the binding is not ready yet at this point and is empty
 	jobGUID, binding, err := scbClient.Create(ctx, opt)
@@ -111,54 +76,30 @@ func Create(ctx context.Context, scbClient ServiceCredentialBinding, spec v1alph
 		if err := job.PollJobComplete(ctx, scbClient, jobGUID); err != nil {
 			return nil, err
 		}
-
-		// get the binding after the job is completed
-		lo := cfclient.NewServiceCredentialBindingListOptions()
-
-		lo.ServiceInstanceGUIDs.EqualTo(*spec.ServiceInstance)
-		lo.Names.EqualTo(*spec.Name)
-
-		return scbClient.Single(ctx, lo)
 	}
 
-	return binding, nil
+	opts, err := newListOptions(forProvider)
+	if err != nil {
+		return nil, err
+	}
+	return scbClient.Single(ctx, opts)
+
 }
 
-// UpdateObservation updates the CR's AtProvider status from the observed resource
-func UpdateObservation(observation *v1alpha2.ServiceCredentialBindingObservation, r *resource.ServiceCredentialBinding) {
-	observation.ID = &r.Resource.GUID
-	observation.LastOperation = &v1alpha2.LastOperation{
-		Type:        r.LastOperation.Type,
-		State:       r.LastOperation.State,
-		Description: r.LastOperation.Description,
-		UpdatedAt:   r.LastOperation.UpdatedAt.String(),
-		CreatedAt:   r.LastOperation.CreatedAt.String(),
-	}
+// Update updates labels and annotations of a ServiceCredentialBinding resource
+func Update(ctx context.Context, scbClient ServiceCredentialBinding, guid string, spec v1alpha2.ServiceCredentialBindingParameters) (*resource.ServiceCredentialBinding, error) {
+	opt := newUpdateOption(spec)
+	return scbClient.Update(ctx, guid, opt)
 }
 
-// IsUpToDate checks whether the CR is up to date with the observed resource
-func IsUpToDate(ctx context.Context, scbClient ServiceCredentialBinding, spec v1alpha2.ServiceCredentialBindingParameters, r resource.ServiceCredentialBinding) bool {
-	if ptr.Deref(spec.Name, "") != ptr.Deref(r.Name, "") {
-		return false
-	}
-
-	if spec.Parameters != nil {
-		appliedParameters, err := scbClient.GetParameters(ctx, r.GUID)
-		if err != nil {
-			return false
-		}
-
-		var specParams map[string]string
-		if err := json.Unmarshal(spec.Parameters.Raw, &specParams); err != nil {
-			return false
-		}
-		return reflect.DeepEqual(appliedParameters, specParams)
-	}
-	return true
+// Delete deletes a ServiceCredentialBinding resource
+func Delete(ctx context.Context, scbClient ServiceCredentialBinding, guid string) error {
+	_, err := scbClient.Delete(ctx, guid)
+	return err
 }
 
-// GetBindingDetails returns the connection details of the ServiceCredentialBinding details
-func GetBindingDetails(ctx context.Context, scbClient ServiceCredentialBinding, guid string, asJSON bool) managed.ConnectionDetails {
+// GetConnectionDetails returns the connection details of the ServiceCredentialBinding details
+func GetConnectionDetails(ctx context.Context, scbClient ServiceCredentialBinding, guid string, asJSON bool) managed.ConnectionDetails {
 	bindingDetails, err := scbClient.GetDetails(ctx, guid)
 	if err != nil {
 		return nil
@@ -179,4 +120,91 @@ func GetBindingDetails(ctx context.Context, scbClient ServiceCredentialBinding, 
 	}
 
 	return connectDetails
+}
+
+// newListOptions generates ServiceCredentialBindingListOptions according to CR's ForProvider spec
+func newListOptions(spec v1alpha2.ServiceCredentialBindingParameters) (*client.ServiceCredentialBindingListOptions, error) {
+	// if external-name is not set, search by Name and Space
+	opt := client.NewServiceCredentialBindingListOptions()
+	opt.Type.EqualTo(spec.Type)
+
+	if spec.ServiceInstance == nil {
+		return nil, errors.New(ErrServiceInstanceMissing)
+	}
+	opt.ServiceInstanceGUIDs.EqualTo(*spec.ServiceInstance)
+
+	if spec.Type == "app" {
+		if spec.App == nil {
+			return nil, errors.New(ErrAppMissing)
+		}
+		opt.AppGUIDs.EqualTo(*spec.App)
+	}
+
+	if spec.Type == "key" {
+		if spec.Name == nil {
+			return nil, errors.New(ErrNameMissing)
+		}
+		opt.Names.EqualTo(*spec.Name)
+	}
+
+	return opt, nil
+}
+
+// newCreateOption generates ServiceCredentialBindingCreate according to CR's ForProvider spec
+func newCreateOption(spec v1alpha2.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBindingCreate, error) {
+	if spec.ServiceInstance == nil {
+		return nil, errors.New(ErrServiceInstanceMissing)
+	}
+
+	var opt *resource.ServiceCredentialBindingCreate
+	switch spec.Type {
+	case "key":
+		if spec.Name == nil {
+			return nil, errors.New(ErrNameMissing)
+		}
+
+		opt = resource.NewServiceCredentialBindingCreateKey(*spec.ServiceInstance, *spec.Name)
+	case "app":
+		if spec.App == nil {
+			return nil, errors.New(ErrAppMissing)
+		}
+		opt = resource.NewServiceCredentialBindingCreateApp(*spec.ServiceInstance, *spec.App)
+
+		// for app binding, binding name is optional
+		if spec.Name != nil {
+			opt.WithName(*spec.Name)
+		}
+	default:
+		return nil, errors.New(ErrBindingTypeUnknown)
+	}
+
+	if params != nil {
+		opt.WithJSONParameters(string(params))
+	}
+	return opt, nil
+}
+
+// newUpdateOption generates ServiceCredentialBindingUpdate according to CR's ForProvider spec
+func newUpdateOption(spec v1alpha2.ServiceCredentialBindingParameters) *resource.ServiceCredentialBindingUpdate {
+	opt := &resource.ServiceCredentialBindingUpdate{}
+	// TODO: implement update option. SCB support only updates for labels and annotations. No other fields can be updated. Labels and annotations are not supported yet, so for now we return an empty update option.
+	return opt
+}
+
+// UpdateObservation updates the CR's AtProvider status from the observed resource
+func UpdateObservation(observation *v1alpha2.ServiceCredentialBindingObservation, r *resource.ServiceCredentialBinding) {
+	observation.GUID = r.Resource.GUID
+	observation.LastOperation = &v1alpha2.LastOperation{
+		Type:        r.LastOperation.Type,
+		State:       r.LastOperation.State,
+		Description: r.LastOperation.Description,
+		UpdatedAt:   r.LastOperation.UpdatedAt.String(),
+		CreatedAt:   r.LastOperation.CreatedAt.String(),
+	}
+}
+
+// IsUpToDate checks whether the CR is up to date with the observed resource
+func IsUpToDate(ctx context.Context, spec v1alpha2.ServiceCredentialBindingParameters, r resource.ServiceCredentialBinding) bool {
+	// SCB support updates for labels and metadata only. This is to be implemented. For now return true
+	return true
 }

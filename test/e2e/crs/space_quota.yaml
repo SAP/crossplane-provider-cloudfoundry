@@ -2,12 +2,14 @@
 apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
 kind: SpaceQuota
 metadata:
-  name: my-space-quota
+  name: e2e-space-quota
 spec:
   forProvider:
-    name: my-space-quota
+    name: e2e-space-quota
     orgRef:
-      name: my-org
+      name: e2e-org
     allowPaidServicePlans: false
     spacesRefs:
-      - name: my-space
+      - name: e2e-space
+        policy:
+          resolve: Always

@@ -36,32 +36,37 @@ func TestCloudfoundry(t *testing.T) {
 		// updated checks if resource is updated, normally by observing a new value on managed field.
 		updated func(k8s.Object) (bool, error)
 	}{
-		"org": {name: "my-org", obj: &v1alpha2resources.Org{}},
+		"org": {name: "e2e-org", obj: &v1alpha2resources.Org{}},
 		// v1alpha1.OrgMembers resource refers to v1alpha1.Organization. This breaks the e2e test.
 		// "org_managers":               {name: "my-org-managers", obj: &v1alpha1resources.OrgMembers{}},
-		"org_role":                   {name: "my-org-role", obj: &v1alpha2resources.OrgRole{}},
-		"space":                      {name: "my-space", obj: &v1alpha2resources.Space{}},
-		"space_developers":           {name: "my-space-developers", obj: &v1alpha1resources.SpaceMembers{}},
-		"space_role":                 {name: "my-space-role", obj: &v1alpha2resources.SpaceRole{}},
-		"space_quota":                {name: "my-space-quota", obj: &v1alpha2resources.SpaceQuota{}},
-		"service_instance":           {name: "my-service-instance", obj: &v1alpha2resources.ServiceInstance{}},
-		"ups":                        {name: "my-ups", obj: &v1alpha2resources.ServiceInstance{}},
-		"service_credential_binding": {name: "my-service-credential-binding", obj: &v1alpha2resources.ServiceCredentialBinding{}},
-		"service_key":                {name: "my-service-key", obj: &v1alpha1resources.ServiceKey{}},
-		"route":                      {name: "my-route", obj: &v1alpha1resources.Route{}},
-		"domain":                     {name: "my-domain", obj: &v1alpha2resources.Domain{}},
-		"app":                        {name: "my-app", obj: &v1alpha2resources.App{}},
+		"org_role":            {name: "e2e-org-role", obj: &v1alpha2resources.OrgRole{}},
+		"space":               {name: "e2e-space", obj: &v1alpha2resources.Space{}},
+		"space_developers":    {name: "e2e-space-developers", obj: &v1alpha1resources.SpaceMembers{}},
+		"space_role":          {name: "e2e-space-role", obj: &v1alpha2resources.SpaceRole{}},
+		"space_quota":         {name: "e2e-space-quota", obj: &v1alpha2resources.SpaceQuota{}},
+		"service_instance":    {name: "e2e-service-instance", obj: &v1alpha2resources.ServiceInstance{}},
+		"ups":                 {name: "e2e-ups", obj: &v1alpha2resources.ServiceInstance{}},
+		"service_binding_key": {name: "e2e-service-binding-key", obj: &v1alpha2resources.ServiceCredentialBinding{}},
+		"service_binding_app": {name: "e2e-service-binding-app", obj: &v1alpha2resources.ServiceCredentialBinding{}},
+		"route":               {name: "e2e-route", obj: &v1alpha2resources.Route{}},
+		"domain":              {name: "e2e-domain", obj: &v1alpha2resources.Domain{}},
+		"app":                 {name: "e2e-app", obj: &v1alpha2resources.App{}},
 	}
 
 	var feat = features.New("CO-159 cloudfoundry e2e test").Setup(
 		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			org, err := orgID(ctx, testOrgName)
+			cfClient, err := getCfClient()
+			if err != nil {
+				t.Fatalf("cannot connect to cloudfoundry")
+			}
+
+			org, err := orgID(ctx, cfClient, testOrgName)
 			if err != nil {
 				t.Fatalf("test org %s not accessible", testOrgName)
 			}
-			_ = deleteSpace(ctx, org, feats["space"].name)
-			_ = deleteQuota(ctx, org, feats["space_quota"].name)
-			_ = deleteDomain(ctx, org, "dev.orchestrator.io")
+			_ = deleteSpace(ctx, cfClient, org, feats["space"].name)
+			_ = deleteQuota(ctx, cfClient, org, feats["space_quota"].name)
+			_ = deleteDomain(ctx, cfClient, org, "e2e.orchestrator.io")
 
 			if err := ApplyResources(ctx, cfg, dir); err != nil {
 				t.Fatal("error applying resources", err)
@@ -72,12 +77,24 @@ func TestCloudfoundry(t *testing.T) {
 		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			// ignore errors as most, if not all, resources should be deleted in the deletion tests.
 			_ = UnapplyResources(ctx, cfg, dir)
+			cfClient, err := getCfClient()
+			if err != nil {
+				t.Fatalf("cannot connect to cloudfoundry")
+			}
+
+			org, err := orgID(ctx, cfClient, testOrgName)
+			if err != nil {
+				t.Fatalf("test org %s not accessible", testOrgName)
+			}
+			_ = deleteSpace(ctx, cfClient, org, feats["space"].name)
+			_ = deleteQuota(ctx, cfClient, org, feats["space_quota"].name)
+			_ = deleteDomain(ctx, cfClient, org, "e2e.orchestrator.io")
 			return ctx
 		},
 	)
 
 	// creation assess steps in dependency order, e.g., `org` before `space` as `space` depends on org`.
-	var steps = [...]string{"org", "org_role", "space", "space_role", "space_developers", "space_quota", "service_instance", "service_credential_binding", "ups", "domain"}
+	var steps = [...]string{"org", "org_role", "space", "space_role", "space_developers", "space_quota", "service_instance", "service_key", "ups", "domain", "route", "app", "service_binding"}
 	for _, name := range steps {
 		ft, ok := feats[name]
 		if !ok {
@@ -209,13 +226,7 @@ func ResourceDeleted(cfg *envconf.Config, object k8s.Object) wait2.ConditionWith
 	return conditions.New(cr).ResourceDeleted(object)
 }
 
-func orgID(ctx context.Context, org string) (string, error) {
-	cfClient, err := getCfClient()
-	if err != nil {
-		klog.V(4).InfoS("cannot get connect to cloudfoundry")
-		return "", err
-	}
-
+func orgID(ctx context.Context, cfClient *client.Client, org string) (string, error) {
 	s, err := cfClient.Organizations.Single(ctx,
 		&client.OrganizationListOptions{
 			Names: client.Filter{Values: []string{org}},
@@ -228,12 +239,7 @@ func orgID(ctx context.Context, org string) (string, error) {
 	return s.GUID, nil
 }
 
-func deleteSpace(ctx context.Context, org string, space string) error {
-	cfClient, err := getCfClient()
-	if err != nil {
-		klog.V(4).InfoS("cannot get connect to cloudfoundry")
-		return err
-	}
+func deleteSpace(ctx context.Context, cfClient *client.Client, org string, space string) error {
 	s, err := cfClient.Spaces.Single(ctx,
 		&client.SpaceListOptions{
 			OrganizationGUIDs: client.Filter{Values: []string{org}},
@@ -249,12 +255,7 @@ func deleteSpace(ctx context.Context, org string, space string) error {
 
 }
 
-func deleteDomain(ctx context.Context, org string, domain string) error {
-	cfClient, err := getCfClient()
-	if err != nil {
-		klog.V(4).InfoS("cannot get connect to cloudfoundry")
-		return err
-	}
+func deleteDomain(ctx context.Context, cfClient *client.Client, org string, domain string) error {
 	s, err := cfClient.Domains.Single(ctx,
 		&client.DomainListOptions{
 			OrganizationGUIDs: client.Filter{Values: []string{org}},
@@ -268,12 +269,7 @@ func deleteDomain(ctx context.Context, org string, domain string) error {
 	return nil
 }
 
-func deleteQuota(ctx context.Context, org string, quota string) error {
-	cfClient, err := getCfClient()
-	if err != nil {
-		klog.V(4).InfoS("cannot get connect to cloudfoundry")
-		return err
-	}
+func deleteQuota(ctx context.Context, cfClient *client.Client, org string, quota string) error {
 	s, err := cfClient.SpaceQuotas.Single(ctx,
 		&client.SpaceQuotaListOptions{
 			OrganizationGUIDs: client.Filter{Values: []string{org}},

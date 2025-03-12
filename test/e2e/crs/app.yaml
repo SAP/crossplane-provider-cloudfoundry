@@ -2,12 +2,14 @@ apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
 kind: App
 metadata:
   namespace: default
-  name: my-app
+  name: e2e-app
 spec:
   forProvider:
-    name: hello-app
+    name: e2e-app
     spaceRef:
-      name: my-space
+      name: e2e-space
+      policy:
+        resolve: Always
     lifecycle: docker
     docker:
       image: loud/hello_co:latest
@@ -15,4 +17,8 @@ spec:
       - type: web
         health-check-type: http
         health-check-http-endpoint: "/"
-    random-route: true
+    routes:
+      - routeRef: 
+          name: e2e-route
+          policy:
+            resolve: Always

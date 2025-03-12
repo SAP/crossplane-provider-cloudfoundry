@@ -1,16 +1,16 @@
 apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
 kind: ServiceCredentialBinding
 metadata:
-  name: my-service-credential-binding
+  name: e2e-service-binding-key
 spec:
   forProvider:
-    name: my-service-credential-binding
+    name: e2e-service-binding-key
     type: key
     serviceInstanceRef:
-      name: my-service-instance
+      name: e2e-service-instance
       policy:
         resolve: Always
   connectionDetailsAsJSON: false
   writeConnectionSecretToRef:
-    name: my-service-credential
+    name: e2e-service-credential
     namespace: default

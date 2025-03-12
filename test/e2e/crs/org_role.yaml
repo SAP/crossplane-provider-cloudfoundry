@@ -2,10 +2,10 @@ apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
 kind: OrgRole
 metadata:
   namespace: default
-  name: my-org-role
+  name: e2e-org-role
 spec:
   forProvider:
     type: "Auditor"
     orgRef:
-      name: my-org
+      name: e2e-org
     username: "co-test-user@groups.sap.com"

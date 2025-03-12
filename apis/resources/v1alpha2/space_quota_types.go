@@ -29,8 +29,6 @@ type SpaceQuotaInitParameters struct {
 
 	// (String) The ID of the Org within which to create the space quota
 	// The ID of the Org within which to create the space quota
-	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org
-	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	Org *string `json:"org,omitempty" tf:"org,omitempty"`
 
 	// Reference to a Org in resources to populate org.
@@ -43,6 +41,8 @@ type SpaceQuotaInitParameters struct {
 
 	// (Set of String) Set of space GUIDs to which this space quota would be assigned.
 	// Set of space GUIDs to which this space quota would be assigned.
+	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Space
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	// +listType=set
 	Spaces []*string `json:"spaces,omitempty" tf:"spaces,omitempty"`
 
@@ -173,8 +173,6 @@ type SpaceQuotaParameters struct {
 
 	// (String) The ID of the Org within which to create the space quota
 	// The ID of the Org within which to create the space quota
-	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Org
-	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	// +kubebuilder:validation:Optional
 	Org *string `json:"org,omitempty" tf:"org,omitempty"`
 
@@ -188,6 +186,8 @@ type SpaceQuotaParameters struct {
 
 	// (Set of String) Set of space GUIDs to which this space quota would be assigned.
 	// Set of space GUIDs to which this space quota would be assigned.
+	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2.Space
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	// +kubebuilder:validation:Optional
 	// +listType=set
 	Spaces []*string `json:"spaces,omitempty" tf:"spaces,omitempty"`

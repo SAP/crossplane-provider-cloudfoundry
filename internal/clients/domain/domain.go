@@ -114,31 +114,34 @@ func GenerateUpdate(spec v1alpha2.DomainParameters) *resource.DomainUpdate {
 //
 //nolint:gocyclo
 func IsUpToDate(spec v1alpha2.DomainParameters, observed *resource.Domain) bool {
-	if spec.Name != observed.Name {
-		return false
-	}
+	// domain update does not support rename and change of many attributes, and can only update labels and annotations. we can safely return true for now
 
-	if spec.Internal != nil && *spec.Internal != observed.Internal {
-		return false
-	}
+	// if spec.Name != observed.Name {
+	// 	return false
+	// }
 
-	if spec.RouterGroup != nil && (observed.RouterGroup == nil || *spec.RouterGroup != observed.RouterGroup.GUID) {
-		return false
-	}
+	// if spec.Internal != nil && *spec.Internal != observed.Internal {
+	// 	return false
+	// }
 
-	if spec.Org != nil && (observed.Relationships.Organization == nil || *spec.Org != observed.Relationships.Organization.Data.GUID) {
-		return false
-	}
+	// if spec.RouterGroup != nil && (observed.RouterGroup == nil || *spec.RouterGroup != observed.RouterGroup.GUID) {
+	// 	return false
+	// }
 
-	if observed.Relationships.SharedOrganizations != nil && len(spec.SharedOrgs) != len(observed.Relationships.SharedOrganizations.Data) {
-		return false
-	}
+	// // Some domains are not organization-scoped, it returns Relationships.Organization.Data nil. Since update of org is support, we can omit this checks
+	// // if spec.Org != nil && (observed.Relationships.Organization == nil || *spec.Org != observed.Relationships.Organization.Data.GUID) {
+	// //		return false
+	// //	}
 
-	for i, org := range spec.SharedOrgs {
-		if *org != observed.Relationships.SharedOrganizations.Data[i].GUID {
-			return false
-		}
-	}
+	// if observed.Relationships.SharedOrganizations != nil && len(spec.SharedOrgs) != len(observed.Relationships.SharedOrganizations.Data) {
+	// 	return false
+	// }
+
+	// for i, org := range spec.SharedOrgs {
+	// 	if *org != observed.Relationships.SharedOrganizations.Data[i].GUID {
+	// 		return false
+	// 	}
+	// }
 
 	return true
 }
