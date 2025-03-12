@@ -38,7 +38,7 @@ spec:
       policy:
         resolve: Always
     members:
-    - username: 2@sap.com
-    - username: 1@sap.com
-    - username: dl_65faab09346a9101347c1723@global.corp.sap
+    - username: 2@example.com
+    - username: 1@example.com
+    - username: dl_65faab09346a9101347c1723@example.com
     enforcementPolicy: Strict

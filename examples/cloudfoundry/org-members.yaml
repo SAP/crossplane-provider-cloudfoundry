@@ -17,13 +17,13 @@ metadata:
   name: my-org-auditors
 spec:
   forProvider:
-    roleType: Auditors 
-    orgRef: 
+    roleType: Auditors
+    orgRef:
       name: my-org
       policy:
         resolve: Always
     members:
-    - username: co-test-user@groups.sap.com
+    - username: co-test-user@example.com
     enforcementPolicy: Strict
 
 ---
@@ -35,10 +35,10 @@ metadata:
 spec:
   forProvider:
     roleType: Users
-    orgRef: 
+    orgRef:
       name: my-org
       policy:
         resolve: Always
     members:
-    - username: co-test-user@groups.sap.com
+    - username: co-test-user@example.com
     enforcementPolicy: Lax

@@ -6,8 +6,8 @@ metadata:
 spec:
   forProvider:
     developers:
-    - "2@sap.com"
-    - "1@sap.com"
+    - "2@example.com"
+    - "1@example.com"
     spaceRef:
       name: my-space
       policy:

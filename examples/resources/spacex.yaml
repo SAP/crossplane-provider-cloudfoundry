@@ -35,7 +35,7 @@ spec:
     type: Developer
     spaceRef:
       name: my-space
-    username: 5@global.corp.sap
+    username: 5@example.com
     origin: sap.ids
 
 ---
@@ -49,5 +49,5 @@ spec:
     type: Developer
     spaceRef:
       name: my-space
-    username: 1@sap.com
+    username: 1@example.com
     origin: sap.ids

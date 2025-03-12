@@ -8,4 +8,4 @@ spec:
     type: "Auditor"
     orgRef:
       name: e2e-org
-    username: "co-test-user@groups.sap.com"
+    username: "co-test-user@example.com"

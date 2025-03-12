@@ -38,8 +38,8 @@ spec:
       policy:
         resolve: Always
     members:
-    - username: mirza@groups.sap.com
-    - username: 1@sap.com
+    - username: mirza@example.com
+    - username: 1@example.com
     enforcementPolicy: Strict
 
 ---
@@ -56,5 +56,5 @@ spec:
       policy:
         resolve: Always
     members:
-    - username: mirza@groups.sap.com
+    - username: mirza@example.com
     enforcementPolicy: Lax

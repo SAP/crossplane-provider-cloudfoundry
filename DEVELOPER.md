@@ -11,8 +11,8 @@ Ensure you have the following tools installed:
 - make
 - docker
 - kind
-- kubectl 
-- k9s   
+- kubectl
+- k9s
 
 ## Developing
 
@@ -32,7 +32,7 @@ git checkout -b <branch-name>
 
 init and update submodules:
 
-```console  
+```console
 make submodules
 ```
 
@@ -55,7 +55,7 @@ To test the provider with a local kind cluster, first run:
 make dev-debug
 ```
 
-This create a dev cluster, install crossplane, and install the provider. You can use `k9s` to check the status of the cluster. You can also use `kubectl` to apply and test custom resources. 
+This create a dev cluster, install crossplane, and install the provider. You can use `k9s` to check the status of the cluster. You can also use `kubectl` to apply and test custom resources.
 
 Then, in another terminal, run
 
@@ -84,4 +84,4 @@ make build
 For filing bugs, suggesting improvements, or requesting new features, please
 open an [issue](https://github.com/SAP/crossplane-provider-cloudfoundry/issues).
 
-<a href="mailto:Daniel.Lou@sap.com">![owner](/Rep_Lou.png)</a>
+<a href="mailto:Daniel.Lou@example.com">![owner](/Rep_Lou.png)</a>

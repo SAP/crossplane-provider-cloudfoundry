@@ -55,4 +55,4 @@ Many internal stakeholders want to use Crossplane to manage their applications a
 For filing bugs, suggesting improvements, or requesting new features, please
 open an [issue](https://github.com/SAP/crossplane-provider-cloudfoundry/issues).
 
-<a href="mailto:Daniel.Lou@sap.com">![owner](/Rep_Lou.png)</a>
+<a href="mailto:Daniel.Lou@example.com">![owner](/Rep_Lou.png)</a>

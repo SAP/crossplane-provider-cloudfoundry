@@ -10,4 +10,4 @@ spec:
       name: e2e-space
       policy:
         resolve: Always
-    username: "dl_673efb6870d04101363fc6b3@global.corp.sap"
+    username: "123@example.com"

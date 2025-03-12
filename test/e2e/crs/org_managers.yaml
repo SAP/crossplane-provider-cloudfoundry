@@ -7,7 +7,7 @@ spec:
   forProvider:
     roleType: Managers
     members:
-    - username: co-test-user@groups.sap.com
+    - username: co-test-user@example.com
     orgRef:
       name: e2e-org
     enforcementPolicy: Lax
