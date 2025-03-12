@@ -8,6 +8,8 @@ spec:
     name: hello-app
     spaceRef:
       name: my-space
+      policy:
+        resolve: Always
     lifecycle: docker
     docker:
       image: loud/hello_co:latest

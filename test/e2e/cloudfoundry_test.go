@@ -77,7 +77,7 @@ func TestCloudfoundry(t *testing.T) {
 	)
 
 	// creation assess steps in dependency order, e.g., `org` before `space` as `space` depends on org`.
-	var steps = [...]string{"org", "org_role", "space", "space_role", "space_developers", "space_quota", "service_instance", "service_credential_binding", "ups", "domain"}
+	var steps = [...]string{"org", "org_role", "space", "space_role", "space_developers", "space_quota", "service_instance", "service_credential_binding", "ups", "domain", "route"}
 	for _, name := range steps {
 		ft, ok := feats[name]
 		if !ok {

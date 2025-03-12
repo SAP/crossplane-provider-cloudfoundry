@@ -8,4 +8,6 @@ spec:
     type: "Developer"
     spaceRef:
       name: my-space
+      policy:
+        resolve: Always
     username: "dl_673efb6870d04101363fc6b3@global.corp.sap"

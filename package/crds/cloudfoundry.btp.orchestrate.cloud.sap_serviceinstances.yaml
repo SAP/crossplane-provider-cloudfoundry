@@ -608,8 +608,7 @@ spec:
                       Ignored if `Credentials` or `JSONCredentials` is set.
                     properties:
                       key:
-                        description: The optional key to select. If key is not specified,
-                          the entire key-value map of secret is used
+                        description: The key to select.
                         type: string
                       name:
                         description: Name of the secret.
@@ -618,6 +617,7 @@ spec:
                         description: Namespace of the secret.
                         type: string
                     required:
+                    - key
                     - name
                     - namespace
                     type: object
@@ -659,8 +659,7 @@ spec:
                       Ignored if `Parameters` or `JSONParam` is set.
                     properties:
                       key:
-                        description: The optional key to select. If key is not specified,
-                          the entire key-value map of secret is used
+                        description: The key to select.
                         type: string
                       name:
                         description: Name of the secret.
@@ -669,6 +668,7 @@ spec:
                         description: Namespace of the secret.
                         type: string
                     required:
+                    - key
                     - name
                     - namespace
                     type: object

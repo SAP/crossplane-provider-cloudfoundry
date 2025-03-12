@@ -17,6 +17,7 @@ spec:
     credentialsSecretRef: 
         name: dynatrace-credentials
         namespace: crossplane-system
+        key: "" # to select the whole secret
 
 ---  
 apiVersion: v1

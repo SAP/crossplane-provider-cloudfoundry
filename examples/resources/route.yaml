@@ -5,11 +5,9 @@ metadata:
   name: my-route
 spec:
   forProvider:
-    domainRef: 
+    domainRef:
       name: my-domain
-      policy:
-        resolve: Always
-    host: hello-co
+    host: hello-cf-app
     spaceRef:
       name: my-space
       policy:

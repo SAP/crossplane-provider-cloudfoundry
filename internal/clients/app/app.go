@@ -1,10 +1,9 @@
+//go:build !goverter
+
 package app
 
 import (
 	"context"
-	"errors"
-	"fmt"
-	"os"
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -14,6 +13,8 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
 )
 
 // AppClient defines the interface to communicate with Cloud Foundry App resource.
@@ -39,15 +40,21 @@ type ManifestClient interface {
 type Client struct {
 	AppClient
 	PushClient
+	job.Job
+	servicecredentialbinding.ServiceCredentialBinding
 }
 
 // NewAppClient returns a new AppClient.
 func NewAppClient(client *client.Client) *Client {
 	return &Client{
-		AppClient:  client.Applications,
-		PushClient: NewPushClient(client),
+		AppClient:                client.Applications,
+		PushClient:               NewPushClient(client),
+		Job:                      client.Jobs,
+		ServiceCredentialBinding: servicecredentialbinding.NewClient(client),
 	}
 }
+
+type DockerCredentials resource.DockerCredentials
 
 // GetByIDOrSpec gets the App by GUID or spec.
 func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, spec v1alpha2.AppParameters) (*resource.App, error) {
@@ -60,31 +67,10 @@ func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, spec v1alpha2.A
 }
 
 // CreateAndPush creates and pushes an app to the Cloud Foundry.
-func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha2.AppParameters, dockerCredentialExtractor DockerCredentialExtractor) (*resource.App, error) {
-	manifest := newManifestFromSpec(spec)
-	switch spec.Lifecycle {
-	case "docker":
-		if spec.Docker == nil {
-			return nil, errors.New("docker lifecycle requires docker spec")
-		}
-		manifest.Docker = &operation.AppManifestDocker{
-			Image:    spec.Docker.Image,
-			Username: "",
-		}
-		if spec.Docker.Credentials != nil {
-			credentials, err := dockerCredentialExtractor(*spec.Docker.Credentials)
-			if err == nil {
-				manifest.Docker.Username = credentials.Username
-				err = os.Setenv("CF_DOCKER_PASSWORD", credentials.Password)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-	case "buildpack":
-		return nil, errors.New("buildpack lifecycle is not supported")
-	default:
-		return nil, fmt.Errorf("unknown lifecycle: %s", spec.Lifecycle)
+func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha2.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
+	manifest, err := newManifestFromSpec(spec, dockerCredentials)
+	if err != nil {
+		return nil, err
 	}
 
 	application, err := c.AppClient.Create(ctx, newCreateOption(spec))
@@ -95,23 +81,40 @@ func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha2.AppParameters,
 }
 
 // Update updates an app in the Cloud Foundry.
-func (c *Client) Update(ctx context.Context, guid string, spec v1alpha2.AppParameters, dockerCredentialExtractor DockerCredentialExtractor) (*resource.App, error) {
+func (c *Client) Update(ctx context.Context, guid string, spec v1alpha2.AppParameters) (*resource.App, error) {
 	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(spec))
 	if err != nil {
 		return nil, err
 	}
-
-	//TODO: We need to check where app manifest is change and push is required.
-
 	return application, nil
+}
 
+// Delete deletes an app in the Cloud Foundry.
+func (c *Client) Delete(ctx context.Context, guid string) error {
+	jobGUID, err := c.AppClient.Delete(ctx, guid)
+
+	if err != nil {
+		return err
+	}
+	return job.PollJobComplete(ctx, c.Job, jobGUID)
+}
+
+// ReconcileServiceBinding updates an app in the Cloud Foundry.
+func (c *Client) ReconcileServiceBinding(ctx context.Context, guid string, spec v1alpha2.AppParameters, ymlManifest string) error {
+
+	for _, s := range DiffServiceBindings(spec, ymlManifest) {
+		if err := bindService(ctx, c.ServiceCredentialBinding, s); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // GenerateObservation takes an App resource and returns *AppObservation.
 func GenerateObservation(res *resource.App) v1alpha2.AppObservation {
 	obs := v1alpha2.AppObservation{}
 
-	obs.ID = res.GUID
+	obs.GUID = res.GUID
 	obs.Name = res.Name
 	obs.State = res.State
 	obs.CreatedAt = ptr.To(res.CreatedAt.Format(time.RFC3339))
@@ -120,17 +123,39 @@ func GenerateObservation(res *resource.App) v1alpha2.AppObservation {
 	return obs
 }
 
-// LateInitialize fills the unassigned fields with values from a App resource.
-func LateInitialize(spec *v1alpha2.AppParameters, res *resource.App) {
-	// Do nothing yet
-}
-
 // IsUpToDate checks whether current state is up-to-date compared to the given
 // set of parameters.
-func IsUpToDate(spec v1alpha2.AppParameters, res *resource.App) bool {
+func IsUpToDate(spec v1alpha2.AppParameters, status v1alpha2.AppObservation) bool {
 	// rename or update ssh setting
-	return spec.Name == res.Name
+	return spec.Name == status.Name
 
+}
+
+// DiffServiceBindings checks whether current state is up-to-date compared to the given
+func DiffServiceBindings(spec v1alpha2.AppParameters, ymlManifest string) []v1alpha2.ServiceBindingConfiguration {
+	if len(spec.Services) == 0 {
+		return nil
+	}
+
+	appManifest, err := getAppManifest(spec.Name, ymlManifest)
+	if err != nil {
+		return nil
+	}
+	services := make(map[string]operation.AppManifestService)
+	if appManifest.Services != nil {
+		for _, service := range *appManifest.Services {
+			services[service.Name] = service
+		}
+	}
+
+	var missingServices []v1alpha2.ServiceBindingConfiguration
+	for _, service := range spec.Services {
+		if _, ok := services[ptr.Deref(service.Name, "")]; !ok {
+			return append(missingServices, service)
+		}
+	}
+
+	return missingServices
 }
 
 // newListOption maps spec to AppListOptions
@@ -197,4 +222,10 @@ func newUpdateOption(spec v1alpha2.AppParameters) *resource.AppUpdate {
 		Lifecycle: lifecycle,
 		Metadata:  &resource.Metadata{},
 	}
+}
+
+// newManifestFromSpec creates a manifest from the given spec.
+func bindService(ctx context.Context, scbClient servicecredentialbinding.ServiceCredentialBinding, s v1alpha2.ServiceBindingConfiguration) error {
+	// TODO: Implement the binding logic
+	return nil
 }

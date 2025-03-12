@@ -2,7 +2,12 @@ package app
 
 import (
 	"context"
+	"encoding/json"
 	"io"
+	"os"
+
+	"github.com/pkg/errors"
+	"gopkg.in/yaml.v2"
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
@@ -16,15 +21,6 @@ type PushClient interface {
 	Push(ctx context.Context, application *resource.App, manifest *operation.AppManifest, zipFile io.Reader) (*resource.App, error)
 	GenerateManifest(ctx context.Context, appGUID string) (string, error)
 }
-
-// DockerCredentials represents the docker credentials
-type DockerCredentials struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-}
-
-// DockerCredentialExtractor is a function that extracts the docker credentials from the secret
-type DockerCredentialExtractor func(credentials v1alpha2.DockerCredentials) (*DockerCredentials, error)
 
 // pushClient implements PushClient
 type pushClient struct {
@@ -68,27 +64,85 @@ func (p *pushClient) GenerateManifest(ctx context.Context, appGUID string) (stri
 }
 
 // newManifest maps the app spec to the manifest
-func newManifestFromSpec(appSpec v1alpha2.AppParameters) *operation.AppManifest {
-	manifest := operation.NewAppManifest(appSpec.Name)
-	configRoutes(manifest, appSpec)
-	configServices(manifest, appSpec)
-	configProcess(manifest, appSpec)
-	configReadinessCheck(manifest, appSpec)
-	if appSpec.LogRateLimitPerSecond != nil {
-		manifest.LogRateLimitPerSecond = *appSpec.LogRateLimitPerSecond
+//
+//nolint:gocyclo
+func newManifestFromSpec(forProvider v1alpha2.AppParameters, dockerCredentials *DockerCredentials) (*operation.AppManifest, error) {
+	manifest := operation.NewAppManifest(forProvider.Name)
+
+	if forProvider.Lifecycle == "docker" {
+		docker, err := configDocker(forProvider, dockerCredentials)
+		if err != nil {
+			return nil, err
+		}
+		manifest.Docker = docker
 	}
-	return manifest
+
+	services, err := configServices(forProvider)
+	if err != nil {
+		return nil, err
+	}
+	manifest.Services = services
+
+	if forProvider.NoRoute {
+		manifest.NoRoute = true
+	}
+	if forProvider.RandomRoute {
+		manifest.RandomRoute = true
+	}
+	if forProvider.DefaultRoute {
+		manifest.DefaultRoute = true
+	}
+	manifest.Routes = configRoutes(forProvider)
+
+	manifest.Processes = configProcess(forProvider)
+
+	if forProvider.ReadinessHealthCheckType != nil {
+		manifest.ReadinessHealthCheckType = *forProvider.ReadinessHealthCheckType
+	}
+
+	if forProvider.ReadinessHealthCheckHTTPEndpoint != nil {
+		manifest.ReadinessHealthCheckHttpEndpoint = *forProvider.ReadinessHealthCheckHTTPEndpoint
+	}
+
+	if forProvider.ReadinessHealthCheckInterval != nil {
+		manifest.ReadinessHealthCheckInterval = *forProvider.ReadinessHealthCheckInterval
+	}
+
+	if forProvider.ReadinessHealthCheckInvocationTimeout != nil {
+		manifest.ReadinessHealthInvocationTimeout = *forProvider.ReadinessHealthCheckInvocationTimeout
+	}
+
+	if forProvider.LogRateLimitPerSecond != nil {
+		manifest.LogRateLimitPerSecond = *forProvider.LogRateLimitPerSecond
+	}
+	return manifest, nil
+}
+
+func configDocker(forProvider v1alpha2.AppParameters, dockerCredentials *DockerCredentials) (*operation.AppManifestDocker, error) {
+
+	if forProvider.Docker == nil {
+		return nil, errors.New("docker lifecycle requires docker spec")
+	}
+	docker := &operation.AppManifestDocker{
+		Image: forProvider.Docker.Image,
+	}
+
+	if dockerCredentials != nil {
+		docker.Username = dockerCredentials.Username
+		err := os.Setenv("CF_DOCKER_PASSWORD", dockerCredentials.Password)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return docker, nil
 }
 
 // configProcess map the process from app spec
-func configProcess(manifest *operation.AppManifest, appSpec v1alpha2.AppParameters) {
-	if manifest == nil {
-		return
-	}
-
-	if len(appSpec.Processes) > 0 {
+func configProcess(forProvider v1alpha2.AppParameters) *operation.AppManifestProcesses {
+	if len(forProvider.Processes) > 0 {
 		var processes operation.AppManifestProcesses
-		for _, process := range appSpec.Processes {
+		for _, process := range forProvider.Processes {
 			processManifest := operation.AppManifestProcess{}
 			if process.Type != nil {
 				processManifest.Type = operation.AppProcessType(*process.Type)
@@ -111,81 +165,70 @@ func configProcess(manifest *operation.AppManifest, appSpec v1alpha2.AppParamete
 
 			processes = append(processes, processManifest)
 		}
-		manifest.Processes = &processes
+		return &processes
 	}
+	return nil
 
 }
 
-func configReadinessCheck(manifest *operation.AppManifest, appSpec v1alpha2.AppParameters) {
-	if manifest == nil {
-		return
-	}
-	if appSpec.ReadinessHealthCheckType != nil {
-		manifest.ReadinessHealthCheckType = *appSpec.ReadinessHealthCheckType
-	}
-
-	if appSpec.ReadinessHealthCheckHTTPEndpoint != nil {
-		manifest.ReadinessHealthCheckHttpEndpoint = *appSpec.ReadinessHealthCheckHTTPEndpoint
-	}
-
-	if appSpec.ReadinessHealthCheckInterval != nil {
-		manifest.ReadinessHealthCheckInterval = *appSpec.ReadinessHealthCheckInterval
-	}
-
-	if appSpec.ReadinessHealthCheckInvocationTimeout != nil {
-		manifest.ReadinessHealthInvocationTimeout = *appSpec.ReadinessHealthCheckInvocationTimeout
-	}
-}
-
-// TODO: This implementation is not complete
 // configServices map the services from app spec
-func configServices(manifest *operation.AppManifest, appSpec v1alpha2.AppParameters) {
-	if manifest == nil {
-		return
-	}
-
-	if len(appSpec.Services) > 0 {
+func configServices(forProvider v1alpha2.AppParameters) (*operation.AppManifestServices, error) {
+	if len(forProvider.Services) > 0 {
 		var services operation.AppManifestServices
-		for _, service := range appSpec.Services {
+		for _, service := range forProvider.Services {
 			if service.Name != nil {
-				services = append(services, operation.AppManifestService{
+				m := operation.AppManifestService{
 					Name: *service.Name,
-				})
+				}
+
+				if service.BindingName != "" {
+					m.BindingName = service.BindingName
+				}
+				if service.Parameters.Raw != nil {
+					// Convert to map[string]interface{}
+					var params map[string]interface{}
+					if err := json.Unmarshal(service.Parameters.Raw, &params); err != nil {
+						return nil, errors.Wrap(err, "failed to unmarshal service parameters")
+					}
+					m.Parameters = params
+				}
+				services = append(services, m)
 			}
 		}
-		manifest.Services = &services
+		return &services, nil
 	}
+	return nil, nil
 }
 
 // TODO: This implementation is not complete. Logic of referencing the routes is still missing
 // configRoutes map the routes from app spec
-func configRoutes(manifest *operation.AppManifest, appSpec v1alpha2.AppParameters) {
-	if manifest == nil {
-		return
-	}
-
-	if appSpec.NoRoute {
-		manifest.NoRoute = true
-		return
-	}
-
-	if len(appSpec.Routes) > 0 {
+func configRoutes(forProvider v1alpha2.AppParameters) *operation.AppManifestRoutes {
+	if len(forProvider.Routes) > 0 {
 		var routes operation.AppManifestRoutes
-		for _, route := range appSpec.Routes {
+		for _, route := range forProvider.Routes {
 			if route.Route != nil {
 				routes = append(routes, operation.AppManifestRoute{
 					Route: *route.Route,
 				})
 			}
 		}
-		manifest.Routes = &routes
-		return
+		return &routes
 	}
+	return nil
+}
 
-	if appSpec.RandomRoute {
-		manifest.RandomRoute = true
-		return
+// getAppManifest returns the app manifest from the manifest file
+func getAppManifest(appName string, strManifest string) (*operation.AppManifest, error) {
+
+	m := operation.Manifest{}
+	err := yaml.Unmarshal([]byte(strManifest), &m)
+	if err != nil {
+		return nil, err
 	}
-
-	manifest.DefaultRoute = true
+	for _, app := range m.Applications {
+		if app.Name == appName {
+			return app, nil
+		}
+	}
+	return nil, errors.New("app not found in manifest")
 }

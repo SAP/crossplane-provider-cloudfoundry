@@ -11,3 +11,5 @@ spec:
     allowPaidServicePlans: false
     spacesRefs:
       - name: my-space
+        policy:
+          resolve: Always

@@ -13,9 +13,7 @@ import (
 
 // ServiceCredentialBindingObservation defines the observed state of ServiceCredentialBinding
 type ServiceCredentialBindingObservation struct {
-	// The GUID of the service instance.
-	ID *string `json:"id,omitempty" tf:"id,omitempty"`
-
+	Resource `json:",inline"`
 	// LastOperation describes the last operation performed on the service credential binding.
 	LastOperation *LastOperation `json:"lastOperation,omitempty"`
 }
@@ -27,7 +25,7 @@ type ServiceCredentialBindingParameters struct {
 	// +kubebuilder:validation:Enum=key;app
 	Type string `json:"type,omitempty"`
 
-	// The name of the Service Key in Cloud Foundry.
+	// The name of the Service Key in Cloud Foundry. Required if Type is "key".
 	// +kubebuilder:validation:Optional
 	Name *string `json:"name,omitempty"`
 
@@ -45,12 +43,25 @@ type ServiceCredentialBindingParameters struct {
 	ServiceInstanceSelector *v1.Selector `json:"serviceInstanceSelector,omitempty"`
 
 	// The ID of an App  that should be bound to. Required if Type is "app".
+	// +crossplane:generate:reference:type=App
 	// +kubebuilder:validation:Optional
 	App *string `json:"app,omitempty"`
 
-	// Arbitrary parameters in the form of stringified JSON object to pass to the service bind handler.
+	// Reference to an App CR to populate app.
+	// +kubebuilder:validation:Optional
+	AppRef *v1.Reference `json:"appRef,omitempty"`
+
+	// Selector for an App CR to populate app.
+	// +kubebuilder:validation:Optional
+	AppSelector *v1.Selector `json:"appSelector,omitempty"`
+
+	// An optional JSON object to pass parameters to the service broker .
 	// +kubebuilder:validation:Optional
 	Parameters *runtime.RawExtension `json:"parameters,omitempty"`
+
+	// Use a reference to a secret to pass parameters to the service broker. Ignored if parameters is set.
+	// +kubebuilder:validation:Optional
+	ParametersSecretRef *v1.SecretKeySelector `json:"parametersSecretRef,omitempty"`
 }
 
 // ServiceCredentialBindingSpec defines the desired state of ServiceCredentialBinding
@@ -106,4 +117,9 @@ var (
 
 func init() {
 	SchemeBuilder.Register(&ServiceCredentialBinding{}, &ServiceCredentialBindingList{})
+}
+
+// Implements Referenceable interface
+func (s *ServiceCredentialBinding) GetID() string {
+	return s.Status.AtProvider.GUID
 }

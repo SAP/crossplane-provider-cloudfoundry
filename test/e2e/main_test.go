@@ -31,9 +31,8 @@ var testenv env.Environment
 var testOrgName = "cf-ci-e2e"
 
 var (
-	UUT_IMAGES_KEY     = "E2E_IMAGES"
-	UUT_CONFIG_KEY     = "crossplane/provider-cloudfoundry"
-	UUT_CONTROLLER_KEY = "crossplane/provider-cloudfoundry-controller"
+	UUT_CONFIG_KEY     = "package"
+	UUT_CONTROLLER_KEY = "controller"
 	ENDPOINT_KEY       = "apiEndpoint"
 	CREDENTIALS_KEY    = "credentials"
 )

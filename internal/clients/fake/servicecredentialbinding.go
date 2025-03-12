@@ -104,8 +104,8 @@ func (s *ServiceCredentialBinding) SetGUID(guid string) *ServiceCredentialBindin
 }
 
 // SetServiceInstanceRef assigns ServiceCredentialBinding ServiceInstanceRef
-func (s *ServiceCredentialBinding) SetServiceInstanceRef(name string) *ServiceCredentialBinding {
-	s.Relationships = resource.ServiceCredentialBindingRelationships{ServiceInstance: &resource.ToOneRelationship{Data: &resource.Relationship{GUID: name}}}
+func (s *ServiceCredentialBinding) SetServiceInstanceRef(guid string) *ServiceCredentialBinding {
+	s.Relationships = resource.ServiceCredentialBindingRelationships{ServiceInstance: &resource.ToOneRelationship{Data: &resource.Relationship{GUID: guid}}}
 	return s
 }
 

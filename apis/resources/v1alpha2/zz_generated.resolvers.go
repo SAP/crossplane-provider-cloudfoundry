@@ -52,7 +52,7 @@ func (mg *App) ResolveReferences(ctx context.Context, c client.Reader) error {
 	for i3 := 0; i3 < len(mg.Spec.ForProvider.Services); i3++ {
 		rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 			CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Services[i3].Name),
-			Extract:      reference.ExternalName(),
+			Extract:      resources.CloudFoundryName(),
 			Reference:    mg.Spec.ForProvider.Services[i3].ServiceInstanceRef,
 			Selector:     mg.Spec.ForProvider.Services[i3].ServiceInstanceSelector,
 			To: reference.To{
@@ -123,6 +123,48 @@ func (mg *OrgRole) ResolveReferences(ctx context.Context, c client.Reader) error
 	return nil
 }
 
+// ResolveReferences of this Route.
+func (mg *Route) ResolveReferences(ctx context.Context, c client.Reader) error {
+	r := reference.NewAPIResolver(c, mg)
+
+	var rsp reference.ResolutionResponse
+	var err error
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Space),
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.SpaceRef,
+		Selector:     mg.Spec.ForProvider.SpaceSelector,
+		To: reference.To{
+			List:    &SpaceList{},
+			Managed: &Space{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.Space")
+	}
+	mg.Spec.ForProvider.Space = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.SpaceRef = rsp.ResolvedReference
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Domain),
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.DomainRef,
+		Selector:     mg.Spec.ForProvider.DomainSelector,
+		To: reference.To{
+			List:    &DomainList{},
+			Managed: &Domain{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.Domain")
+	}
+	mg.Spec.ForProvider.Domain = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.DomainRef = rsp.ResolvedReference
+
+	return nil
+}
+
 // ResolveReferences of this ServiceCredentialBinding.
 func (mg *ServiceCredentialBinding) ResolveReferences(ctx context.Context, c client.Reader) error {
 	r := reference.NewAPIResolver(c, mg)
@@ -145,6 +187,22 @@ func (mg *ServiceCredentialBinding) ResolveReferences(ctx context.Context, c cli
 	}
 	mg.Spec.ForProvider.ServiceInstance = reference.ToPtrValue(rsp.ResolvedValue)
 	mg.Spec.ForProvider.ServiceInstanceRef = rsp.ResolvedReference
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.App),
+		Extract:      reference.ExternalName(),
+		Reference:    mg.Spec.ForProvider.AppRef,
+		Selector:     mg.Spec.ForProvider.AppSelector,
+		To: reference.To{
+			List:    &AppList{},
+			Managed: &App{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.App")
+	}
+	mg.Spec.ForProvider.App = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.AppRef = rsp.ResolvedReference
 
 	return nil
 }
@@ -221,40 +279,40 @@ func (mg *Space) ResolveReferences(ctx context.Context, c client.Reader) error {
 func (mg *SpaceQuota) ResolveReferences(ctx context.Context, c client.Reader) error {
 	r := reference.NewAPIResolver(c, mg)
 
-	var rsp reference.ResolutionResponse
+	var mrsp reference.MultiResolutionResponse
 	var err error
 
-	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
-		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Org),
-		Extract:      resources.ExternalID(),
-		Reference:    mg.Spec.ForProvider.OrgRef,
-		Selector:     mg.Spec.ForProvider.OrgSelector,
+	mrsp, err = r.ResolveMultiple(ctx, reference.MultiResolutionRequest{
+		CurrentValues: reference.FromPtrValues(mg.Spec.ForProvider.Spaces),
+		Extract:       resources.ExternalID(),
+		References:    mg.Spec.ForProvider.SpacesRefs,
+		Selector:      mg.Spec.ForProvider.SpacesSelector,
 		To: reference.To{
-			List:    &OrgList{},
-			Managed: &Org{},
+			List:    &SpaceList{},
+			Managed: &Space{},
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "mg.Spec.ForProvider.Org")
+		return errors.Wrap(err, "mg.Spec.ForProvider.Spaces")
 	}
-	mg.Spec.ForProvider.Org = reference.ToPtrValue(rsp.ResolvedValue)
-	mg.Spec.ForProvider.OrgRef = rsp.ResolvedReference
+	mg.Spec.ForProvider.Spaces = reference.ToPtrValues(mrsp.ResolvedValues)
+	mg.Spec.ForProvider.SpacesRefs = mrsp.ResolvedReferences
 
-	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
-		CurrentValue: reference.FromPtrValue(mg.Spec.InitProvider.Org),
-		Extract:      resources.ExternalID(),
-		Reference:    mg.Spec.InitProvider.OrgRef,
-		Selector:     mg.Spec.InitProvider.OrgSelector,
+	mrsp, err = r.ResolveMultiple(ctx, reference.MultiResolutionRequest{
+		CurrentValues: reference.FromPtrValues(mg.Spec.InitProvider.Spaces),
+		Extract:       resources.ExternalID(),
+		References:    mg.Spec.InitProvider.SpacesRefs,
+		Selector:      mg.Spec.InitProvider.SpacesSelector,
 		To: reference.To{
-			List:    &OrgList{},
-			Managed: &Org{},
+			List:    &SpaceList{},
+			Managed: &Space{},
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "mg.Spec.InitProvider.Org")
+		return errors.Wrap(err, "mg.Spec.InitProvider.Spaces")
 	}
-	mg.Spec.InitProvider.Org = reference.ToPtrValue(rsp.ResolvedValue)
-	mg.Spec.InitProvider.OrgRef = rsp.ResolvedReference
+	mg.Spec.InitProvider.Spaces = reference.ToPtrValues(mrsp.ResolvedValues)
+	mg.Spec.InitProvider.SpacesRefs = mrsp.ResolvedReferences
 
 	return nil
 }

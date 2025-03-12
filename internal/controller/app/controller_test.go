@@ -47,7 +47,7 @@ func withConditions(c ...xpv1.Condition) modifier {
 
 func withStatus(guid, state string) modifier {
 	o := v1alpha2.AppObservation{}
-	o.ID = guid
+	o.GUID = guid
 	o.State = state
 
 	return func(r *v1alpha2.App) {
@@ -165,6 +165,29 @@ func TestObserve(t *testing.T) {
 				)
 				return m
 			},
+		},
+		"Should adopt": {
+			args: args{
+				mg: newApp("docker", withSpace(space)),
+			},
+			want: want{
+				mg:  newApp("docker", withExternalName(guid), withSpace(space)),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				m.On("Get", guid).Return(
+					fake.AppNil,
+					fake.ErrNoResultReturned,
+				)
+				m.On("Single").Return(
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					nil,
+				)
+				return m
+			},
+			kube: &test.MockClient{},
 		},
 		"NotFound": {
 			args: args{

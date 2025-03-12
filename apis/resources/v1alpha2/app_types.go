@@ -100,7 +100,7 @@ type AppParameters struct {
 	ResourceMetadata `json:",inline"`
 }
 
-type DockerCredentials struct {
+type DockerCredentialsSecretRef struct {
 	// Source of the provider credentials.
 	// +kubebuilder:validation:Enum=None;Secret;InjectedIdentity;Environment;Filesystem
 	Source                         xpv1.CredentialsSource `json:"source"`
@@ -114,7 +114,7 @@ type DockerConfiguration struct {
 
 	// (Attributes) Defines login credentials for private docker repositories (see below for nested schema)
 	// +kubebuilder:validation:Optional
-	Credentials *DockerCredentials `json:"credentials,omitempty"`
+	Credentials *DockerCredentialsSecretRef `json:"credentials,omitempty"`
 }
 
 // RouteConfiguration defines the route for the application
@@ -143,8 +143,7 @@ type ServiceBindingConfiguration struct {
 	// +crossplane:generate:reference:type=ServiceInstance
 	// +crossplane:generate:reference:refFieldName=ServiceInstanceRef
 	// +crossplane:generate:reference:selectorFieldName=ServiceInstanceSelector
-	// TODO: configure extract function to get the name of the service instance, default gets the external_name (which is GUID). That would be incorrect.
-	// +kubebuilder:validation:Optional
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.CloudFoundryName()
 	Name *string `json:"name,omitempty"`
 
 	// Reference to a ServiceInstance in service to populate serviceInstance.
@@ -298,4 +297,9 @@ var (
 
 func init() {
 	SchemeBuilder.Register(&App{}, &AppList{})
+}
+
+// implement Referenceable interface
+func (s *App) GetID() string {
+	return s.Status.AtProvider.GUID
 }
