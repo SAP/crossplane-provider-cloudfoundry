@@ -13,7 +13,7 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup scan configuration
         id: setup
@@ -25,6 +25,11 @@ jobs:
           ALLOWED_DOMAINS="example\.com|test\.com|developer\.example\.org"
           echo "ℹ️ Allowed email domains: ${ALLOWED_DOMAINS//\\/}"
           echo "ALLOWED_DOMAINS=$ALLOWED_DOMAINS" >> $GITHUB_ENV
+
+          # Configure allowed API endpoints (pipe-separated for grep)
+          ALLOWED_API_ENDPOINTS="git\.k8s\.io|my-route-service\.example\.com|api\.example\.org|github\.com|charts\.crossplane\.io|docs\.github\.com|v3-apidocs\.cloudfoundry\.org|zip\.com|apache\.org|docs\.renovatebot\.com|crossplane\.io|v3-apidocs\.cloudfoundry\.space|releases\.hashicorp\.com|probot\.github\.io|facebook\.github\.io"
+          echo "ℹ️ Allowed API endpoints: ${ALLOWED_API_ENDPOINTS//\\/}"
+          echo "ALLOWED_API_ENDPOINTS=$ALLOWED_API_ENDPOINTS" >> $GITHUB_ENV
 
           # Directories to exclude
           EXCLUDE_DIRS=".git build .github/workflows"
@@ -210,6 +215,109 @@ jobs:
           # Clean up temporary file
           rm "$PHONE_TEMP_FILE"
 
+      - name: Check for unauthorized API endpoints
+        id: api-check
+        shell: bash
+        run: |
+          echo "🌐 Starting API endpoint check"
+
+          # Get environment variables
+          ALLOWED_API_ENDPOINTS="${{ env.ALLOWED_API_ENDPOINTS }}"
+          EXCLUDE_PATTERN="${{ env.EXCLUDE_PATTERN }}"
+          TOTAL_FILES="${{ env.TOTAL_FILES }}"
+
+          # API endpoint patterns
+          # HTTP/HTTPS URLs
+          URL_PATTERN='https?://[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](\.[a-zA-Z]{2,})+(/[a-zA-Z0-9\-._~:/?#[\]@!$&'\''()*+,;=]*)?'
+          # Domain with path but no protocol
+          DOMAIN_PATH_PATTERN='[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](\.[a-zA-Z]{2,})+(/[a-zA-Z0-9\-._~:/?#[\]@!$&'\''()*+,;=]*)?'
+
+          echo "ℹ️ Using API endpoint patterns to detect URLs and domains"
+
+          # Create temporary file to store results
+          API_TEMP_FILE=$(mktemp)
+          echo "ℹ️ Created temporary file for results: $API_TEMP_FILE"
+
+          echo "🔍 Scanning files for unauthorized API endpoints..."
+
+          # Counter for progress reporting
+          CHECKED_FILES=0
+          FOUND_ENDPOINTS=0
+          UNAUTHORIZED_ENDPOINTS=0
+
+          # Find all files, excluding binary files and specified directories/files
+          eval "find . -type f $EXCLUDE_PATTERN" | while read -r file; do
+            # Update and show progress every 100 files
+            CHECKED_FILES=$((CHECKED_FILES + 1))
+            if [ $((CHECKED_FILES % 100)) -eq 0 ]; then
+              echo "ℹ️ Progress: Checked $CHECKED_FILES/$TOTAL_FILES files"
+            fi
+
+            # Skip binary files
+            if file "$file" | grep -q "text"; then
+              # Check for URLs with protocol
+              URLS_IN_FILE=$(grep -oE "$URL_PATTERN" "$file" 2>/dev/null || true)
+
+              if [ -n "$URLS_IN_FILE" ]; then
+                URL_COUNT=$(echo "$URLS_IN_FILE" | wc -l)
+                FOUND_ENDPOINTS=$((FOUND_ENDPOINTS + URL_COUNT))
+
+                echo "$URLS_IN_FILE" | while read -r url; do
+                  # Extract domain from URL
+                  domain=$(echo "$url" | sed -E 's|https?://([^/]+).*|\1|')
+
+                  # Check if domain is in allowed list
+                  if ! echo "$domain" | grep -iE "^($ALLOWED_API_ENDPOINTS)$" > /dev/null; then
+                    echo "$file: $url" >> "$API_TEMP_FILE"
+                    UNAUTHORIZED_ENDPOINTS=$((UNAUTHORIZED_ENDPOINTS + 1))
+                  fi
+                done
+              fi
+
+              # Check for domains with paths but no protocol
+              DOMAINS_IN_FILE=$(grep -oE "$DOMAIN_PATH_PATTERN" "$file" 2>/dev/null | grep -v -E '(com\.|org\.|net\.|io\.|edu\.)' || true)
+
+              if [ -n "$DOMAINS_IN_FILE" ]; then
+                DOMAIN_COUNT=$(echo "$DOMAINS_IN_FILE" | wc -l)
+                FOUND_ENDPOINTS=$((FOUND_ENDPOINTS + DOMAIN_COUNT))
+
+                echo "$DOMAINS_IN_FILE" | while read -r domain_path; do
+                  # Extract domain from domain+path
+                  domain=$(echo "$domain_path" | sed -E 's|([^/]+).*|\1|')
+
+                  # Check if domain is in allowed list
+                  if ! echo "$domain" | grep -iE "^($ALLOWED_API_ENDPOINTS)$" > /dev/null; then
+                    echo "$file: $domain_path" >> "$API_TEMP_FILE"
+                    UNAUTHORIZED_ENDPOINTS=$((UNAUTHORIZED_ENDPOINTS + 1))
+                  fi
+                done
+              fi
+            fi
+          done
+
+          echo "✅ API endpoint scan complete! Checked $CHECKED_FILES files"
+          echo "ℹ️ Found $FOUND_ENDPOINTS total potential API endpoints"
+
+          # Check unauthorized API endpoints
+          API_COUNT=$(wc -l < "$API_TEMP_FILE" || echo 0)
+          echo "ℹ️ Detected $API_COUNT unauthorized API endpoints"
+          echo "API_VIOLATIONS=$API_COUNT" >> $GITHUB_ENV
+
+          if [ -s "$API_TEMP_FILE" ]; then
+            echo "❌ Found unauthorized API endpoints:"
+            cat "$API_TEMP_FILE" | while read -r line; do
+              echo "  - $line"
+            done
+            echo "UNAUTHORIZED_APIS=true" >> $GITHUB_ENV
+            echo "::error::Found $API_COUNT unauthorized API endpoints"
+            cp "$API_TEMP_FILE" api_violations.txt
+          else
+            echo "✅ No unauthorized API endpoints found"
+          fi
+
+          # Clean up temporary file
+          rm "$API_TEMP_FILE"
+
       - name: Check results and fail if violations found
         id: results
         shell: bash
@@ -218,8 +326,9 @@ jobs:
 
           EMAIL_VIOLATIONS="${{ env.EMAIL_VIOLATIONS }}"
           PHONE_VIOLATIONS="${{ env.PHONE_VIOLATIONS }}"
+          API_VIOLATIONS="${{ env.API_VIOLATIONS }}"
 
-          TOTAL_VIOLATIONS=$((EMAIL_VIOLATIONS + PHONE_VIOLATIONS))
+          TOTAL_VIOLATIONS=$((EMAIL_VIOLATIONS + PHONE_VIOLATIONS + API_VIOLATIONS))
           echo "ℹ️ Total violations found: $TOTAL_VIOLATIONS"
 
           if [ "$TOTAL_VIOLATIONS" -gt 0 ]; then
@@ -238,6 +347,14 @@ jobs:
               if [ -f "phone_violations.txt" ]; then
                 echo "    Phone violations:"
                 cat phone_violations.txt | sed 's/^/      /'
+              fi
+            fi
+
+            if [ "$API_VIOLATIONS" -gt 0 ]; then
+              echo "  - $API_VIOLATIONS unauthorized API endpoints"
+              if [ -f "api_violations.txt" ]; then
+                echo "    API endpoint violations:"
+                cat api_violations.txt | sed 's/^/      /'
               fi
             fi
 
