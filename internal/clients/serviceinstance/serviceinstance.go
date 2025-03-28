@@ -10,6 +10,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
@@ -154,6 +155,11 @@ func (c *Client) Create(ctx context.Context, spec v1alpha2.ServiceInstanceParame
 
 // createManaged creates a managed service instance according to CR's ForProvider spec
 func (c *Client) createManaged(ctx context.Context, spec v1alpha2.ServiceInstanceParameters, params json.RawMessage) (*resource.ServiceInstance, error) {
+
+	// throw error if no space is provided
+	if ptr.Deref(spec.Space, "") == "" {
+		return nil, errors.New("no space reference provided")
+	}
 
 	opt := resource.NewServiceInstanceCreateManaged(*spec.Name, *spec.Space, *spec.ServicePlan.ID)
 
