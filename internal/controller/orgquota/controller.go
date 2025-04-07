@@ -15,7 +15,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/orgquota"
@@ -49,7 +49,7 @@ var _ managed.ExternalConnecter = &externalConnecter{}
 // Connect method connects to the provider specified by the supplied
 // managed resource and produce an ExternalClient.
 func (c *externalConnecter) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
-	if _, ok := mg.(*v1alpha2.OrgQuota); !ok {
+	if _, ok := mg.(*v1alpha1.OrgQuota); !ok {
 		return nil, errors.New(errNotOrgQuota)
 	}
 
@@ -73,7 +73,7 @@ func (c *externalConnecter) Connect(ctx context.Context, mg resource.Managed) (m
 // Setup function builds a new controller that will be started by the
 // provided Manager.
 func Setup(mgr ctrl.Manager, controllerOptions controller.Options) error {
-	name := managed.ControllerName(v1alpha2.OrgQuota_GroupKind)
+	name := managed.ControllerName(v1alpha1.OrgQuota_GroupKind)
 
 	options := []managed.ReconcilerOption{
 		managed.WithExternalConnecter(&externalConnecter{
@@ -91,13 +91,13 @@ func Setup(mgr ctrl.Manager, controllerOptions controller.Options) error {
 	}
 
 	r := managed.NewReconciler(mgr,
-		resource.ManagedKind(v1alpha2.OrgQuota_GroupVersionKind),
+		resource.ManagedKind(v1alpha1.OrgQuota_GroupVersionKind),
 		options...)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(controllerOptions.ForControllerRuntime()).
-		For(&v1alpha2.OrgQuota{}).
+		For(&v1alpha1.OrgQuota{}).
 		Complete(ratelimiter.NewReconciler(name, r, controllerOptions.GlobalRateLimiter))
 }
 
@@ -114,7 +114,7 @@ var _ managed.ExternalClient = &externalClient{}
 // Observe the external resource the supplied Managed resource
 // represents, if any.
 func (e *externalClient) Observe(ctx context.Context, res resource.Managed) (managed.ExternalObservation, error) {
-	managedOrgQuota, ok := res.(*v1alpha2.OrgQuota)
+	managedOrgQuota, ok := res.(*v1alpha1.OrgQuota)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errNotOrgQuota)
 	}
@@ -154,7 +154,7 @@ func (e *externalClient) Observe(ctx context.Context, res resource.Managed) (man
 // Managed resource. Called when Observe reports that the associated
 // external resource does not exist.
 func (e *externalClient) Create(ctx context.Context, res resource.Managed) (managed.ExternalCreation, error) {
-	managedOrgQuota, ok := res.(*v1alpha2.OrgQuota)
+	managedOrgQuota, ok := res.(*v1alpha1.OrgQuota)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errNotOrgQuota)
 	}
@@ -179,7 +179,7 @@ func (e *externalClient) Create(ctx context.Context, res resource.Managed) (mana
 // resource, if necessary. Called unless Observe reports that the
 // associated external resource is up to date.
 func (e *externalClient) Update(ctx context.Context, res resource.Managed) (managed.ExternalUpdate, error) {
-	managedOrgQuota, ok := res.(*v1alpha2.OrgQuota)
+	managedOrgQuota, ok := res.(*v1alpha1.OrgQuota)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errNotOrgQuota)
 	}
@@ -200,7 +200,7 @@ func (e *externalClient) Update(ctx context.Context, res resource.Managed) (mana
 // Delete the external resource upon deletion of its associated Managed
 // resource. Called when the managed resource has been deleted.
 func (e *externalClient) Delete(ctx context.Context, res resource.Managed) error {
-	managedOrgQuota, ok := res.(*v1alpha2.OrgQuota)
+	managedOrgQuota, ok := res.(*v1alpha1.OrgQuota)
 	if !ok {
 		return errors.New(errNotOrgQuota)
 	}

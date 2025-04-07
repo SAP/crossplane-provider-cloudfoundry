@@ -15,7 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 // Mock mocks RouteService interface
@@ -23,17 +23,17 @@ type Mock struct {
 	mock.Mock
 }
 
-func (m *Mock) GetByIDOrSpec(ctx context.Context, guid string, forProvider v1alpha2.RouteParameters) (*v1alpha2.RouteObservation, error) {
+func (m *Mock) GetByIDOrSpec(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, error) {
 	args := m.Called(guid)
-	return args.Get(0).(*v1alpha2.RouteObservation), args.Error(1)
+	return args.Get(0).(*v1alpha1.RouteObservation), args.Error(1)
 }
 
-func (m *Mock) Create(ctx context.Context, forProvider v1alpha2.RouteParameters) (string, error) {
+func (m *Mock) Create(ctx context.Context, forProvider v1alpha1.RouteParameters) (string, error) {
 	args := m.Called()
 	return args.String(0), args.Error(1)
 }
 
-func (m *Mock) Update(ctx context.Context, guid string, forProvider v1alpha2.RouteParameters) error {
+func (m *Mock) Update(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) error {
 	args := m.Called()
 	return args.Error(0)
 }
@@ -49,34 +49,34 @@ var (
 	guid           = "33fd5b0b-4f3b-4b1b-8b3d-3b5f7b4b3b4b"
 	name           = "test-route"
 	errBoom        = errors.New("boom")
-	nilObservation *v1alpha2.RouteObservation
+	nilObservation *v1alpha1.RouteObservation
 )
 
-type modifier func(*v1alpha2.Route)
+type modifier func(*v1alpha1.Route)
 
 func withExternalName(guid string) modifier {
-	return func(r *v1alpha2.Route) {
+	return func(r *v1alpha1.Route) {
 		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = guid
 	}
 }
 
 func withHost(host string) modifier {
-	return func(r *v1alpha2.Route) {
+	return func(r *v1alpha1.Route) {
 		r.Spec.ForProvider.Host = &host
 	}
 }
 
-func fakeRoute(m ...modifier) *v1alpha2.Route {
-	r := &v1alpha2.Route{
+func fakeRoute(m ...modifier) *v1alpha1.Route {
+	r := &v1alpha1.Route{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Finalizers:  []string{},
 			Annotations: map[string]string{},
 		},
-		Spec: v1alpha2.RouteSpec{
-			ForProvider: v1alpha2.RouteParameters{
-				Space:  &spaceGUID,
-				Domain: &domainGUID,
+		Spec: v1alpha1.RouteSpec{
+			ForProvider: v1alpha1.RouteParameters{
+				SpaceRef: v1alpha1.SpaceRef{Space: &spaceGUID},
+				Domain:   &domainGUID,
 			},
 		},
 	}
@@ -87,11 +87,11 @@ func fakeRoute(m ...modifier) *v1alpha2.Route {
 	return r
 }
 
-func fakeRouteObservation(id string) *v1alpha2.RouteObservation {
-	res := v1alpha2.Resource{
+func fakeRouteObservation(id string) *v1alpha1.RouteObservation {
+	res := v1alpha1.Resource{
 		GUID: id,
 	}
-	r := &v1alpha2.RouteObservation{
+	r := &v1alpha1.RouteObservation{
 		Resource: res,
 	}
 	return r
@@ -104,7 +104,7 @@ func TestObserve(t *testing.T) {
 	}
 
 	type want struct {
-		mg  *v1alpha2.Route
+		mg  *v1alpha1.Route
 		obs managed.ExternalObservation
 		err error
 	}
@@ -246,9 +246,9 @@ func TestObserve(t *testing.T) {
 			}
 			obs, err := c.Observe(context.Background(), tc.args.mg)
 
-			var Domain *v1alpha2.Domain
+			var Domain *v1alpha1.Domain
 			if tc.args.mg != nil {
-				Domain, _ = tc.args.mg.(*v1alpha2.Domain)
+				Domain, _ = tc.args.mg.(*v1alpha1.Domain)
 			}
 
 			if tc.want.err != nil && err != nil {

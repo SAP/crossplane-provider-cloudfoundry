@@ -29,8 +29,35 @@ func (l *AppList) GetItems() []resource.Managed {
 	return items
 }
 
+// GetItems of this DomainList.
+func (l *DomainList) GetItems() []resource.Managed {
+	items := make([]resource.Managed, len(l.Items))
+	for i := range l.Items {
+		items[i] = &l.Items[i]
+	}
+	return items
+}
+
 // GetItems of this OrgMembersList.
 func (l *OrgMembersList) GetItems() []resource.Managed {
+	items := make([]resource.Managed, len(l.Items))
+	for i := range l.Items {
+		items[i] = &l.Items[i]
+	}
+	return items
+}
+
+// GetItems of this OrgQuotaList.
+func (l *OrgQuotaList) GetItems() []resource.Managed {
+	items := make([]resource.Managed, len(l.Items))
+	for i := range l.Items {
+		items[i] = &l.Items[i]
+	}
+	return items
+}
+
+// GetItems of this OrgRoleList.
+func (l *OrgRoleList) GetItems() []resource.Managed {
 	items := make([]resource.Managed, len(l.Items))
 	for i := range l.Items {
 		items[i] = &l.Items[i]
@@ -49,6 +76,15 @@ func (l *OrganizationList) GetItems() []resource.Managed {
 
 // GetItems of this RouteList.
 func (l *RouteList) GetItems() []resource.Managed {
+	items := make([]resource.Managed, len(l.Items))
+	for i := range l.Items {
+		items[i] = &l.Items[i]
+	}
+	return items
+}
+
+// GetItems of this ServiceCredentialBindingList.
+func (l *ServiceCredentialBindingList) GetItems() []resource.Managed {
 	items := make([]resource.Managed, len(l.Items))
 	for i := range l.Items {
 		items[i] = &l.Items[i]
@@ -85,6 +121,24 @@ func (l *SpaceList) GetItems() []resource.Managed {
 
 // GetItems of this SpaceMembersList.
 func (l *SpaceMembersList) GetItems() []resource.Managed {
+	items := make([]resource.Managed, len(l.Items))
+	for i := range l.Items {
+		items[i] = &l.Items[i]
+	}
+	return items
+}
+
+// GetItems of this SpaceQuotaList.
+func (l *SpaceQuotaList) GetItems() []resource.Managed {
+	items := make([]resource.Managed, len(l.Items))
+	for i := range l.Items {
+		items[i] = &l.Items[i]
+	}
+	return items
+}
+
+// GetItems of this SpaceRoleList.
+func (l *SpaceRoleList) GetItems() []resource.Managed {
 	items := make([]resource.Managed, len(l.Items))
 	for i := range l.Items {
 		items[i] = &l.Items[i]

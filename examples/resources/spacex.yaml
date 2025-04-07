@@ -1,4 +1,4 @@
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Org
 metadata:
   namespace: default
@@ -10,7 +10,7 @@ spec:
     name: cf-dev
 
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Space
 metadata:
   namespace: default
@@ -25,7 +25,7 @@ spec:
         resolve: Always
 
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: SpaceRole
 metadata:
   namespace: default
@@ -39,7 +39,7 @@ spec:
     origin: sap.ids
 
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: SpaceRole
 metadata:
   namespace: default

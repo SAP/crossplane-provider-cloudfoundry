@@ -15,7 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/app"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 )
@@ -27,53 +27,53 @@ var (
 	guid    = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 )
 
-type modifier func(*v1alpha2.App)
+type modifier func(*v1alpha1.App)
 
 func withExternalName(name string) modifier {
-	return func(r *v1alpha2.App) {
+	return func(r *v1alpha1.App) {
 		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
 func withSpace(space string) modifier {
-	return func(r *v1alpha2.App) {
+	return func(r *v1alpha1.App) {
 		r.Spec.ForProvider.Space = &space
 	}
 }
 
 func withConditions(c ...xpv1.Condition) modifier {
-	return func(i *v1alpha2.App) { i.Status.SetConditions(c...) }
+	return func(i *v1alpha1.App) { i.Status.SetConditions(c...) }
 }
 
 func withStatus(guid, state string) modifier {
-	o := v1alpha2.AppObservation{}
+	o := v1alpha1.AppObservation{}
 	o.GUID = guid
 	o.State = state
 
-	return func(r *v1alpha2.App) {
+	return func(r *v1alpha1.App) {
 		r.Status.AtProvider = o
 	}
 }
 
 func withImage(image string) modifier {
-	return func(r *v1alpha2.App) {
-		r.Spec.ForProvider.Docker = &v1alpha2.DockerConfiguration{Image: image}
+	return func(r *v1alpha1.App) {
+		r.Spec.ForProvider.Docker = &v1alpha1.DockerConfiguration{Image: image}
 	}
 }
 
-func newApp(typ string, m ...modifier) *v1alpha2.App {
-	r := &v1alpha2.App{
+func newApp(typ string, m ...modifier) *v1alpha1.App {
+	r := &v1alpha1.App{
 
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Finalizers:  []string{},
 			Annotations: map[string]string{},
 		},
-		Spec: v1alpha2.AppSpec{
-			ForProvider: v1alpha2.AppParameters{Name: name, Lifecycle: typ},
+		Spec: v1alpha1.AppSpec{
+			ForProvider: v1alpha1.AppParameters{Name: name, Lifecycle: typ},
 		},
-		Status: v1alpha2.AppStatus{
-			AtProvider: v1alpha2.AppObservation{},
+		Status: v1alpha1.AppStatus{
+			AtProvider: v1alpha1.AppObservation{},
 		},
 	}
 

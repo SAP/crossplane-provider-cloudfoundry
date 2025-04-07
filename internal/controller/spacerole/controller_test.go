@@ -15,7 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 	role "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/role"
 )
@@ -55,47 +55,47 @@ var (
 			GUID: guidHealthyUser}}
 )
 
-type modifier func(*v1alpha2.SpaceRole)
+type modifier func(*v1alpha1.SpaceRole)
 
-func withType(roleType v1alpha2.SpaceRoleType) modifier {
-	return func(r *v1alpha2.SpaceRole) {
+func withType(roleType string) modifier {
+	return func(r *v1alpha1.SpaceRole) {
 		r.Spec.ForProvider.Type = roleType
 	}
 }
 
 func withUsername(username string) modifier {
-	return func(r *v1alpha2.SpaceRole) {
+	return func(r *v1alpha1.SpaceRole) {
 		r.Spec.ForProvider.Username = username
 	}
 }
 
 func withSpace(space string) modifier {
-	return func(r *v1alpha2.SpaceRole) {
+	return func(r *v1alpha1.SpaceRole) {
 		r.Spec.ForProvider.Space = &space
 	}
 }
 
 func withOrigin(origin string) modifier {
-	return func(r *v1alpha2.SpaceRole) {
+	return func(r *v1alpha1.SpaceRole) {
 		r.Spec.ForProvider.Origin = &origin
 	}
 }
 
 func withExternalName(name string) modifier {
-	return func(r *v1alpha2.SpaceRole) {
+	return func(r *v1alpha1.SpaceRole) {
 		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
-func fakeSpaceRole(m ...modifier) *v1alpha2.SpaceRole {
-	r := &v1alpha2.SpaceRole{
+func fakeSpaceRole(m ...modifier) *v1alpha1.SpaceRole {
+	r := &v1alpha1.SpaceRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        resourceName,
 			Finalizers:  []string{},
 			Annotations: map[string]string{},
 		},
-		Spec: v1alpha2.SpaceRoleSpec{
-			ForProvider: v1alpha2.SpaceRoleParameters{},
+		Spec: v1alpha1.SpaceRoleSpec{
+			ForProvider: v1alpha1.SpaceRoleParameters{},
 		},
 	}
 
@@ -161,10 +161,10 @@ func TestObserve(t *testing.T) {
 		// This tests whether the external API is reachable
 		"Boom!": {
 			args: args{
-				mg: fakeSpaceRole(withSpace("my-space"), withUsername("my-space-manager"), withType(v1alpha2.SpaceRoleType("Manager"))),
+				mg: fakeSpaceRole(withSpace("my-space"), withUsername("my-space-manager"), withType(v1alpha1.SpaceManager)),
 			},
 			want: want{
-				mg:  fakeSpaceRole(withSpace("my-space"), withUsername("my-space-manager"), withType(v1alpha2.SpaceRoleType("Manager"))),
+				mg:  fakeSpaceRole(withSpace("my-space"), withUsername("my-space-manager"), withType(v1alpha1.SpaceManager)),
 				obs: managed.ExternalObservation{},
 				err: errors.Wrap(errBoom, errGet),
 			},
@@ -184,10 +184,10 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful": {
 			args: args{
-				mg: fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha2.SpaceRoleType("Manager"))),
+				mg: fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager)),
 			},
 			want: want{
-				mg:  fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha2.SpaceRoleType("Manager"))),
+				mg:  fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager)),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
@@ -253,7 +253,7 @@ func TestCreate(t *testing.T) {
 		"Successful": {
 			args: args{
 				mg: fakeSpaceRole(
-					withType(v1alpha2.SpaceRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withUsername("user1@test.com"),
 					withSpace("my-space"),
 					withOrigin("my-origin"),
@@ -261,7 +261,7 @@ func TestCreate(t *testing.T) {
 			},
 			want: want{
 				mg: fakeSpaceRole(
-					withType(v1alpha2.SpaceRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withUsername("user1@test.com"),
 					withSpace("my-space"),
 					withOrigin("my-origin"),
@@ -311,14 +311,14 @@ func TestCreate(t *testing.T) {
 		"NoOrg": {
 			args: args{
 				mg: fakeSpaceRole(
-					withType(v1alpha2.SpaceRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withUsername("my-space-manager"),
 					withOrigin("my-origin"),
 				),
 			},
 			want: want{
 				mg: fakeSpaceRole(
-					withType(v1alpha2.SpaceRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withUsername("my-space-manager"),
 					withOrigin("my-origin"),
 				),
@@ -339,14 +339,14 @@ func TestCreate(t *testing.T) {
 		"NoUsername": {
 			args: args{
 				mg: fakeSpaceRole(
-					withType(v1alpha2.SpaceRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withSpace("my-space"),
 					withOrigin("my-origin"),
 				),
 			},
 			want: want{
 				mg: fakeSpaceRole(
-					withType(v1alpha2.SpaceRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withSpace("my-space"),
 					withOrigin("my-origin"),
 				),
@@ -368,7 +368,7 @@ func TestCreate(t *testing.T) {
 		"AlreadyExist": {
 			args: args{
 				mg: fakeSpaceRole(
-					withType(v1alpha2.SpaceRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withUsername("my-space-manager"),
 					withSpace("my-space"),
 					withOrigin("my-origin"),
@@ -376,7 +376,7 @@ func TestCreate(t *testing.T) {
 			},
 			want: want{
 				mg: fakeSpaceRole(
-					withType(v1alpha2.SpaceRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withUsername("my-space-manager"),
 					withSpace("my-space"),
 					withOrigin("my-origin"),

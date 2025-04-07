@@ -1,0 +1,14 @@
+---
+# create a new space with a specific name
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  namespace: default
+  name: e2e-space
+spec:
+  forProvider:
+    name: e2e-space
+    orgRef:
+      name:  e2e-org
+      policy:
+        resolve: Always

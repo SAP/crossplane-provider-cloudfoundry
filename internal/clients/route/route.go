@@ -8,7 +8,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 )
 
@@ -33,7 +33,7 @@ func NewClient(cf *client.Client) *Client {
 }
 
 // GetByIDOrSpec returns a Route by ID or by forProvider Spec.
-func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, forProvider v1alpha2.RouteParameters) (*v1alpha2.RouteObservation, error) {
+func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, error) {
 	var r *resource.Route
 	var err error
 	if clients.IsValidGUID(guid) {
@@ -58,7 +58,7 @@ func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, forProvider v1a
 }
 
 // Create creates a Route and returns the GUID or error
-func (c *Client) Create(ctx context.Context, forProvider v1alpha2.RouteParameters) (string, error) {
+func (c *Client) Create(ctx context.Context, forProvider v1alpha1.RouteParameters) (string, error) {
 	opts, err := FormatCreateOption(forProvider)
 	if err != nil {
 		return "", err
@@ -72,7 +72,7 @@ func (c *Client) Create(ctx context.Context, forProvider v1alpha2.RouteParameter
 }
 
 // Update updates a Route
-func (c *Client) Update(ctx context.Context, guid string, forProvider v1alpha2.RouteParameters) error {
+func (c *Client) Update(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) error {
 	if !clients.IsValidGUID(guid) {
 		return fmt.Errorf("invalid Route GUID")
 	}
@@ -99,7 +99,7 @@ func (c *Client) Delete(ctx context.Context, guid string) error {
 }
 
 // FormatListOption generates the list options for the client.
-func FormatListOption(forProvider v1alpha2.RouteParameters) (*client.RouteListOptions, error) {
+func FormatListOption(forProvider v1alpha1.RouteParameters) (*client.RouteListOptions, error) {
 
 	if forProvider.Space == nil || forProvider.Domain == nil {
 		return nil, fmt.Errorf("Space and Domain are required")
@@ -124,7 +124,7 @@ func FormatListOption(forProvider v1alpha2.RouteParameters) (*client.RouteListOp
 }
 
 // FormatCreateOption generates the RouteCreate from the forProvider spec
-func FormatCreateOption(forProvider v1alpha2.RouteParameters) (*resource.RouteCreate, error) {
+func FormatCreateOption(forProvider v1alpha1.RouteParameters) (*resource.RouteCreate, error) {
 	if forProvider.Space == nil || forProvider.Domain == nil {
 		return nil, fmt.Errorf("Space and Domain are required")
 	}
@@ -147,7 +147,7 @@ func FormatCreateOption(forProvider v1alpha2.RouteParameters) (*resource.RouteCr
 }
 
 // FormatUpdateOption generates the RouteCreate from an *RouteParameters
-func FormatUpdateOption(forProvider v1alpha2.RouteParameters) *resource.RouteUpdate {
+func FormatUpdateOption(forProvider v1alpha1.RouteParameters) *resource.RouteUpdate {
 	// client supports only updating metadata
 	return &resource.RouteUpdate{
 		Metadata: &resource.Metadata{},
@@ -155,13 +155,13 @@ func FormatUpdateOption(forProvider v1alpha2.RouteParameters) *resource.RouteUpd
 }
 
 // GenerateObservation takes an Route resource and returns *RouteObservation.
-func GenerateObservation(o *resource.Route) v1alpha2.RouteObservation {
-	resource := v1alpha2.Resource{
+func GenerateObservation(o *resource.Route) v1alpha1.RouteObservation {
+	resource := v1alpha1.Resource{
 		GUID:      o.GUID,
 		CreatedAt: strToPtr(o.CreatedAt.Format(time.RFC3339)),
 		UpdatedAt: strToPtr(o.UpdatedAt.Format(time.RFC3339)),
 	}
-	obs := v1alpha2.RouteObservation{Resource: resource}
+	obs := v1alpha1.RouteObservation{Resource: resource}
 
 	obs.URL = strToPtr(o.URL)
 	obs.Host = strToPtr(o.Host)
@@ -169,13 +169,13 @@ func GenerateObservation(o *resource.Route) v1alpha2.RouteObservation {
 	obs.Protocol = strToPtr(o.Protocol)
 
 	if o.Destinations != nil {
-		obs.Destinations = make([]v1alpha2.RouteDestination, 0, len(o.Destinations))
+		obs.Destinations = make([]v1alpha1.RouteDestination, 0, len(o.Destinations))
 		for _, d := range o.Destinations {
 			if d.GUID == nil {
 				continue
 			}
 
-			rd := v1alpha2.RouteDestination{
+			rd := v1alpha1.RouteDestination{
 				GUID: *d.GUID,
 			}
 			if d.Port != nil {
@@ -183,7 +183,7 @@ func GenerateObservation(o *resource.Route) v1alpha2.RouteObservation {
 			}
 
 			if d.App.GUID != nil {
-				rd.App = &v1alpha2.RouteDestinationApp{GUID: *d.App.GUID}
+				rd.App = &v1alpha1.RouteDestinationApp{GUID: *d.App.GUID}
 				if d.App.Process != nil {
 					proc := *d.App.Process
 					rd.App.Process = strToPtr(proc.Type)
@@ -199,7 +199,7 @@ func GenerateObservation(o *resource.Route) v1alpha2.RouteObservation {
 
 // IsUpToDate checks whether current state is up-to-date compared to the given
 // set of parameters.
-func IsUpToDate(forProvider v1alpha2.RouteParameters, atProvider v1alpha2.RouteObservation) bool {
+func IsUpToDate(forProvider v1alpha1.RouteParameters, atProvider v1alpha1.RouteObservation) bool {
 	// Routes are mostly immutable, expect for metadata
 	return true
 }

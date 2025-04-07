@@ -1,5 +1,5 @@
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Org
 metadata:
   namespace: default

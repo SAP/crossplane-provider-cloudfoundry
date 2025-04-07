@@ -1,0 +1,15 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceMembers
+metadata:
+  name: e2e-space-developers
+spec:
+  forProvider:
+    roleType: Developers
+    members:
+    - username: user1@example.com
+    - username: user2@example.com
+    spaceRef:
+      name: e2e-space
+      policy:
+        resolve: Always
+    enforcementPolicy: Lax

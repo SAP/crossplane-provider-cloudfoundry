@@ -1,36 +1,13 @@
 
-# current: external-data
----
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
-kind: ServiceInstance
-metadata:
-  name: my-service-instance-v1
-  annotations:
-    crossplane.io/external-data: |
-      {
-        "service_plan": {
-          "offering": "auditlog-management",
-          "plan": "default"
-        }
-      }
-spec:
-  forProvider:
-    name: my-audit-log
-    spaceRef: 
-      name: my-space
-      policy:
-        resolve: Always
-
----
 # CR to create a managed ServiceInstance
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceInstance
 metadata:
-  name: my-service-instance-v2
+  name: my-service-instance
 spec:
   forProvider:
     type: managed
-    name: my-application-log-2
+    name: my-application-log
     spaceRef: 
       name: my-space
       policy: 
@@ -38,10 +15,12 @@ spec:
     servicePlan:
       offering: application-logs
       plan: lite
-    jsonParams: |
-      {
-        "foo": "bar"
-      }
-    paramsSecretRef:
-      name: secretParameters
-      namespace: default
+    parameters: 
+      foo: bar
+#    jsonParams: |
+#      {
+#        "foo": "bar"
+#      } 
+#    paramsSecretRef:
+#      name: secretParameters
+#      namespace: default

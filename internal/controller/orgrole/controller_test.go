@@ -15,7 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/role"
 )
@@ -55,47 +55,47 @@ var (
 			GUID: guidHealthyUser}}
 )
 
-type modifier func(*v1alpha2.OrgRole)
+type modifier func(*v1alpha1.OrgRole)
 
-func withType(roleType v1alpha2.OrgRoleType) modifier {
-	return func(r *v1alpha2.OrgRole) {
+func withType(roleType string) modifier {
+	return func(r *v1alpha1.OrgRole) {
 		r.Spec.ForProvider.Type = roleType
 	}
 }
 
 func withUsername(username string) modifier {
-	return func(r *v1alpha2.OrgRole) {
+	return func(r *v1alpha1.OrgRole) {
 		r.Spec.ForProvider.Username = username
 	}
 }
 
 func withOrg(org string) modifier {
-	return func(r *v1alpha2.OrgRole) {
+	return func(r *v1alpha1.OrgRole) {
 		r.Spec.ForProvider.Org = &org
 	}
 }
 
 func withOrigin(origin string) modifier {
-	return func(r *v1alpha2.OrgRole) {
+	return func(r *v1alpha1.OrgRole) {
 		r.Spec.ForProvider.Origin = &origin
 	}
 }
 
 func withExternalName(name string) modifier {
-	return func(r *v1alpha2.OrgRole) {
+	return func(r *v1alpha1.OrgRole) {
 		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
-func fakeOrgRole(m ...modifier) *v1alpha2.OrgRole {
-	r := &v1alpha2.OrgRole{
+func fakeOrgRole(m ...modifier) *v1alpha1.OrgRole {
+	r := &v1alpha1.OrgRole{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        resourceName,
 			Finalizers:  []string{},
 			Annotations: map[string]string{},
 		},
-		Spec: v1alpha2.OrgRoleSpec{
-			ForProvider: v1alpha2.OrgRoleParameters{},
+		Spec: v1alpha1.OrgRoleSpec{
+			ForProvider: v1alpha1.OrgRoleParameters{},
 		},
 	}
 
@@ -184,10 +184,10 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful": {
 			args: args{
-				mg: fakeOrgRole(withOrg(guidOrg), withUsername("user1"), withType(v1alpha2.OrgRoleType("Manager"))),
+				mg: fakeOrgRole(withOrg(guidOrg), withUsername("user1"), withType(v1alpha1.SpaceManager)),
 			},
 			want: want{
-				mg:  fakeOrgRole(withOrg(guidOrg), withUsername("user1"), withExternalName(guidRole), withType(v1alpha2.OrgRoleType("Manager"))),
+				mg:  fakeOrgRole(withOrg(guidOrg), withUsername("user1"), withExternalName(guidRole), withType(v1alpha1.SpaceManager)),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
@@ -253,7 +253,7 @@ func TestCreate(t *testing.T) {
 		"Successful": {
 			args: args{
 				mg: fakeOrgRole(
-					withType(v1alpha2.OrgRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withUsername("user1@test.com"),
 					withOrg("my-org"),
 					withOrigin("sap.ids"),
@@ -261,7 +261,7 @@ func TestCreate(t *testing.T) {
 			},
 			want: want{
 				mg: fakeOrgRole(
-					withType(v1alpha2.OrgRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withUsername("user1@test.com"),
 					withOrg("my-org"),
 					withOrigin("my-origin"),
@@ -311,14 +311,14 @@ func TestCreate(t *testing.T) {
 		"NoOrg": {
 			args: args{
 				mg: fakeOrgRole(
-					withType(v1alpha2.OrgRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withUsername("my-org-manager"),
 					withOrigin("my-origin"),
 				),
 			},
 			want: want{
 				mg: fakeOrgRole(
-					withType(v1alpha2.OrgRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withUsername("my-org-manager"),
 					withOrigin("my-origin"),
 				),
@@ -339,14 +339,14 @@ func TestCreate(t *testing.T) {
 		"NoUsername": {
 			args: args{
 				mg: fakeOrgRole(
-					withType(v1alpha2.OrgRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withOrg("my-org"),
 					withOrigin("my-origin"),
 				),
 			},
 			want: want{
 				mg: fakeOrgRole(
-					withType(v1alpha2.OrgRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withOrg("my-org"),
 					withOrigin("my-origin"),
 				),
@@ -368,7 +368,7 @@ func TestCreate(t *testing.T) {
 		"AlreadyExist": {
 			args: args{
 				mg: fakeOrgRole(
-					withType(v1alpha2.OrgRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withUsername("my-org-manager"),
 					withOrg("my-org"),
 					withOrigin("my-origin"),
@@ -376,7 +376,7 @@ func TestCreate(t *testing.T) {
 			},
 			want: want{
 				mg: fakeOrgRole(
-					withType(v1alpha2.OrgRoleType("Manager")),
+					withType(v1alpha1.SpaceManager),
 					withUsername("my-org-manager"),
 					withOrg("my-org"),
 					withOrigin("my-origin"),

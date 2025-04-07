@@ -14,7 +14,7 @@ import (
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 )
 
@@ -24,49 +24,49 @@ var (
 	guid    = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56a"
 )
 
-type modifier func(*v1alpha2.SpaceQuota)
+type modifier func(*v1alpha1.SpaceQuota)
 
 func withExternalName(name string) modifier {
-	return func(r *v1alpha2.SpaceQuota) {
+	return func(r *v1alpha1.SpaceQuota) {
 		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
 func withName(name string) modifier {
-	return func(r *v1alpha2.SpaceQuota) {
+	return func(r *v1alpha1.SpaceQuota) {
 		r.Spec.ForProvider.Name = &name
 		r.Status.AtProvider.Name = &name
 	}
 }
 
 func withOrg(org string) modifier {
-	return func(r *v1alpha2.SpaceQuota) {
+	return func(r *v1alpha1.SpaceQuota) {
 		r.Spec.ForProvider.Org = &org
 	}
 }
 
 func withID(guid string) modifier {
-	return func(r *v1alpha2.SpaceQuota) {
+	return func(r *v1alpha1.SpaceQuota) {
 		r.Status.AtProvider.ID = &guid
 	}
 }
 
 var zeroTime = time.Time{}.Format(time.RFC3339)
 
-func fakeSpaceQuota(m ...modifier) *v1alpha2.SpaceQuota {
-	r := &v1alpha2.SpaceQuota{
+func fakeSpaceQuota(m ...modifier) *v1alpha1.SpaceQuota {
+	r := &v1alpha1.SpaceQuota{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Finalizers:  []string{},
 			Annotations: map[string]string{},
 		},
-		Spec: v1alpha2.SpaceQuotaSpec{
-			ForProvider: v1alpha2.SpaceQuotaParameters{
+		Spec: v1alpha1.SpaceQuotaSpec{
+			ForProvider: v1alpha1.SpaceQuotaParameters{
 				Spaces: []*string{},
 			},
 		},
-		Status: v1alpha2.SpaceQuotaStatus{
-			AtProvider: v1alpha2.SpaceQuotaObservation{
+		Status: v1alpha1.SpaceQuotaStatus{
+			AtProvider: v1alpha1.SpaceQuotaObservation{
 				CreatedAt: &zeroTime,
 				UpdatedAt: &zeroTime,
 			},
@@ -84,7 +84,7 @@ func TestObserve(t *testing.T) {
 		mg resource.Managed
 	}
 	type want struct {
-		mg  *v1alpha2.SpaceQuota
+		mg  *v1alpha1.SpaceQuota
 		obs managed.ExternalObservation
 		err error
 	}
@@ -197,16 +197,16 @@ func TestObserve(t *testing.T) {
 		c := &external{
 			kube:   &test.MockClient{},
 			client: tc.cfClient,
-			isUpToDate: func(context.Context, *v1alpha2.SpaceQuota, *cfresource.SpaceQuota) (bool, error) {
+			isUpToDate: func(context.Context, *v1alpha1.SpaceQuota, *cfresource.SpaceQuota) (bool, error) {
 				return true, nil
 			},
 		}
 
 		obs, err := c.Observe(context.Background(), tc.args.mg)
 
-		var spaceQuota *v1alpha2.SpaceQuota
+		var spaceQuota *v1alpha1.SpaceQuota
 		if tc.args.mg != nil {
-			spaceQuota, _ = tc.args.mg.(*v1alpha2.SpaceQuota)
+			spaceQuota, _ = tc.args.mg.(*v1alpha1.SpaceQuota)
 		}
 
 		if tc.want.err != nil && err != nil {

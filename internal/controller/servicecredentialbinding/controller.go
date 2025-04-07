@@ -15,7 +15,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
@@ -38,7 +38,7 @@ const (
 
 // Setup adds a controller that reconciles ServiceCredentialBinding CR.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
-	name := managed.ControllerName(v1alpha2.ServiceCredentialBindingGroupKind)
+	name := managed.ControllerName(v1alpha1.ServiceCredentialBindingGroupKind)
 
 	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
 	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
@@ -63,13 +63,13 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	r := managed.NewReconciler(mgr,
-		resource.ManagedKind(v1alpha2.ServiceCredentialBindingGroupVersionKind),
+		resource.ManagedKind(v1alpha1.ServiceCredentialBindingGroupVersionKind),
 		options...)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
-		For(&v1alpha2.ServiceCredentialBinding{}).
+		For(&v1alpha1.ServiceCredentialBinding{}).
 		Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 }
 
@@ -87,7 +87,7 @@ type connector struct {
 // 3. Getting the credentials specified by the ProviderConfig.
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
-	if _, ok := mg.(*v1alpha2.ServiceCredentialBinding); !ok {
+	if _, ok := mg.(*v1alpha1.ServiceCredentialBinding); !ok {
 		return nil, errors.New(errWrongCRType)
 	}
 
@@ -115,7 +115,7 @@ type external struct {
 
 // Observe checks the observed state of the resource and updates the managed resource's status.
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
-	cr, ok := mg.(*v1alpha2.ServiceCredentialBinding)
+	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errWrongCRType)
 	}
@@ -144,19 +144,19 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	scb.UpdateObservation(&cr.Status.AtProvider, serviceBinding)
 
 	switch serviceBinding.LastOperation.State {
-	case v1alpha2.LastOperationInitial, v1alpha2.LastOperationInProgress:
+	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
 		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
 		return managed.ExternalObservation{
 			ResourceExists:   true,
 			ResourceUpToDate: true, // Do not update the resource while the last operation is in progress
 		}, nil
-	case v1alpha2.LastOperationFailed:
+	case v1alpha1.LastOperationFailed:
 		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
 		return managed.ExternalObservation{
-			ResourceExists:   serviceBinding.LastOperation.Type != v1alpha2.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
-			ResourceUpToDate: serviceBinding.LastOperation.Type != v1alpha2.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
+			ResourceExists:   serviceBinding.LastOperation.Type != v1alpha1.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
+			ResourceUpToDate: serviceBinding.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
 		}, nil
-	case v1alpha2.LastOperationSucceeded:
+	case v1alpha1.LastOperationSucceeded:
 		cr.SetConditions(xpv1.Available())
 
 		return managed.ExternalObservation{
@@ -172,7 +172,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 // Create a ServiceCredentialBinding resource.
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
-	cr, ok := mg.(*v1alpha2.ServiceCredentialBinding)
+	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
 	}
@@ -195,7 +195,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Update a ServiceCredentialBinding resource.
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
-	cr, ok := mg.(*v1alpha2.ServiceCredentialBinding)
+	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errWrongCRType)
 	}
@@ -210,7 +210,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Delete a ServiceCredentialBinding resource.
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha2.ServiceCredentialBinding)
+	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
 	if !ok {
 		return errors.New(errWrongCRType)
 	}
@@ -225,7 +225,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 }
 
 // extractParameters returns the parameters or credentials from the spec
-func extractParameters(ctx context.Context, kube k8s.Client, spec v1alpha2.ServiceCredentialBindingParameters) ([]byte, error) {
+func extractParameters(ctx context.Context, kube k8s.Client, spec v1alpha1.ServiceCredentialBindingParameters) ([]byte, error) {
 	// If the spec has yaml parameters use those and only those.
 	if spec.Parameters != nil {
 		return spec.Parameters.Raw, nil

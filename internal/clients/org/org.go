@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/utils/ptr"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 // Client is the interface that defines the methods that a Org client should implement.
@@ -44,7 +44,7 @@ func GetByIDOrName(ctx context.Context, c Client, id, name string) (*resource.Or
 }
 
 // GenerateCreate generates the OrganizationCreate from an *OrgParameters
-func GenerateCreate(spec v1alpha2.OrgParameters) *resource.OrganizationCreate {
+func GenerateCreate(spec v1alpha1.OrgParameters) *resource.OrganizationCreate {
 	// if external-name is not set, search by Name and Space
 	create := &resource.OrganizationCreate{}
 	create.Name = spec.Name
@@ -56,8 +56,8 @@ func GenerateCreate(spec v1alpha2.OrgParameters) *resource.OrganizationCreate {
 }
 
 // GenerateObservation takes an Organization resource and returns *OrgObservation.
-func GenerateObservation(o *resource.Organization) v1alpha2.OrgObservation {
-	obs := v1alpha2.OrgObservation{
+func GenerateObservation(o *resource.Organization) v1alpha1.OrgObservation {
+	obs := v1alpha1.OrgObservation{
 		ID:        ptr.To(o.GUID),
 		CreatedAt: ptr.To(o.CreatedAt.Format(time.RFC3339)),
 		UpdatedAt: ptr.To(o.UpdatedAt.Format(time.RFC3339)),
@@ -76,7 +76,7 @@ func GenerateObservation(o *resource.Organization) v1alpha2.OrgObservation {
 }
 
 // LateInitialize fills the unassigned fields with values from a Organization resource.
-func LateInitialize(spec *v1alpha2.OrgParameters, from *resource.Organization) {
+func LateInitialize(spec *v1alpha1.OrgParameters, from *resource.Organization) {
 	if spec.Suspended == nil {
 		spec.Suspended = from.Suspended
 	}
@@ -85,7 +85,7 @@ func LateInitialize(spec *v1alpha2.OrgParameters, from *resource.Organization) {
 
 // IsUpToDate checks whether current state is up-to-date compared to the given
 // set of parameters.
-func IsUpToDate(spec v1alpha2.OrgParameters, observed *resource.Organization) bool {
+func IsUpToDate(spec v1alpha1.OrgParameters, observed *resource.Organization) bool {
 	// return always true, as for now the Org resource is observe only
 
 	return spec.Name == observed.Name

@@ -1,12 +1,14 @@
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Route
 metadata:
   name: my-route
 spec:
   forProvider:
-    domain:
-      name: cfapps.eu12.hana.ondemand.com
+    domainRef:
+      name: my-domain
+      policy:
+        resolve: Always
     hostname: hello-cf
     spaceRef:
       name: my-space

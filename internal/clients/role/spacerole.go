@@ -10,22 +10,22 @@ import (
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 )
 
 const ErrSpaceNotSpecified = "Space is not specified"
 
 // SpaceRoleType converts string to SpaceRoleType enum
-func SpaceRoleType(roleType v1alpha2.SpaceRoleType) resource.SpaceRoleType {
+func SpaceRoleType(roleType string) resource.SpaceRoleType {
 	switch roleType {
-	case v1alpha2.SpaceAuditor:
+	case v1alpha1.SpaceAuditor, v1alpha1.SpaceAuditors:
 		return resource.SpaceRoleAuditor
-	case v1alpha2.SpaceDeveloper:
+	case v1alpha1.SpaceDeveloper, v1alpha1.SpaceDevelopers:
 		return resource.SpaceRoleDeveloper
-	case v1alpha2.SpaceManager:
+	case v1alpha1.SpaceManager, v1alpha1.SpaceManagers:
 		return resource.SpaceRoleManager
-	case v1alpha2.SpaceSupporter:
+	case v1alpha1.SpaceSupporter, v1alpha1.SpaceSupporters:
 		return resource.SpaceRoleSupporter
 	default:
 		return resource.SpaceRoleNone
@@ -33,7 +33,7 @@ func SpaceRoleType(roleType v1alpha2.SpaceRoleType) resource.SpaceRoleType {
 }
 
 // GetSpaceRole returns the role of a user in a space by guid or by matching the spec
-func GetSpaceRole(ctx context.Context, client Role, guid string, spec v1alpha2.SpaceRoleParameters) (*resource.Role, error) {
+func GetSpaceRole(ctx context.Context, client Role, guid string, spec v1alpha1.SpaceRoleParameters) (*resource.Role, error) {
 	if clients.IsValidGUID(guid) {
 		return client.Get(ctx, guid)
 	}
@@ -41,7 +41,7 @@ func GetSpaceRole(ctx context.Context, client Role, guid string, spec v1alpha2.S
 }
 
 // searchSpaceRole returns the role of a user in a space if the role matches the spec
-func findSpaceRole(ctx context.Context, client Role, spec v1alpha2.SpaceRoleParameters) (*resource.Role, error) {
+func findSpaceRole(ctx context.Context, client Role, spec v1alpha1.SpaceRoleParameters) (*resource.Role, error) {
 
 	opt, err := newSpaceRoleListOptions(spec)
 	if err != nil {
@@ -60,7 +60,7 @@ func findSpaceRole(ctx context.Context, client Role, spec v1alpha2.SpaceRolePara
 }
 
 // newSpaceRoleListOptions returns a list options for the given SpaceRoleParameters
-func newSpaceRoleListOptions(spec v1alpha2.SpaceRoleParameters) (*cfv3.RoleListOptions, error) {
+func newSpaceRoleListOptions(spec v1alpha1.SpaceRoleParameters) (*cfv3.RoleListOptions, error) {
 	opts := cfv3.NewRoleListOptions()
 	opts.WithSpaceRoleType(SpaceRoleType(spec.Type))
 
@@ -74,8 +74,8 @@ func newSpaceRoleListOptions(spec v1alpha2.SpaceRoleParameters) (*cfv3.RoleListO
 }
 
 // GenerateSpaceRoleObservation takes an Role resource and returns *OrgRoleObservation.
-func GenerateSpaceRoleObservation(o *resource.Role) v1alpha2.SpaceRoleObservation {
-	obs := v1alpha2.SpaceRoleObservation{
+func GenerateSpaceRoleObservation(o *resource.Role) v1alpha1.SpaceRoleObservation {
+	obs := v1alpha1.SpaceRoleObservation{
 		ID:        ptr.To(o.GUID),
 		User:      &o.Relationships.User.Data.GUID,
 		Type:      &o.Type,

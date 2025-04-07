@@ -14,8 +14,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
-
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 )
 
@@ -26,47 +25,47 @@ var (
 	org     = "3d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 )
 
-type modifier func(*v1alpha2.Space)
+type modifier func(*v1alpha1.Space)
 
 func withExternalName(name string) modifier {
-	return func(r *v1alpha2.Space) {
+	return func(r *v1alpha1.Space) {
 		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
 func withName(name string) modifier {
-	return func(r *v1alpha2.Space) {
+	return func(r *v1alpha1.Space) {
 		r.Spec.ForProvider.Name = name
 	}
 }
 
 func withID(guid string) modifier {
-	return func(r *v1alpha2.Space) {
+	return func(r *v1alpha1.Space) {
 		r.Status.AtProvider.ID = guid
 	}
 }
 
 func withAllowSSH(allowSSH bool) modifier {
-	return func(r *v1alpha2.Space) {
+	return func(r *v1alpha1.Space) {
 		r.Spec.ForProvider.AllowSSH = allowSSH
 	}
 }
 
 func withOrg(org string) modifier {
-	return func(r *v1alpha2.Space) {
+	return func(r *v1alpha1.Space) {
 		r.Spec.ForProvider.Org = &org
 	}
 }
 
-func fakeSpace(m ...modifier) *v1alpha2.Space {
-	r := &v1alpha2.Space{
+func fakeSpace(m ...modifier) *v1alpha1.Space {
+	r := &v1alpha1.Space{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Finalizers:  []string{},
 			Annotations: map[string]string{},
 		},
-		Spec: v1alpha2.SpaceSpec{
-			ForProvider: v1alpha2.SpaceParameters{},
+		Spec: v1alpha1.SpaceSpec{
+			ForProvider: v1alpha1.SpaceParameters{},
 		},
 	}
 
@@ -88,7 +87,7 @@ func TestObserve(t *testing.T) {
 	}
 
 	type want struct {
-		mg  *v1alpha2.Space
+		mg  *v1alpha1.Space
 		obs managed.ExternalObservation
 		err error
 	}
@@ -269,9 +268,9 @@ func TestObserve(t *testing.T) {
 
 			obs, err := c.Observe(context.Background(), tc.args.mg)
 
-			var space *v1alpha2.Space
+			var space *v1alpha1.Space
 			if tc.args.mg != nil {
-				space, _ = tc.args.mg.(*v1alpha2.Space)
+				space, _ = tc.args.mg.(*v1alpha1.Space)
 			}
 
 			if tc.want.err != nil && err != nil {

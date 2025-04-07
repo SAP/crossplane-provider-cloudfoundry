@@ -13,7 +13,7 @@ import (
 
 // Package type metadata.
 const (
-	Group   = "cloudfoundry.btp.orchestrate.cloud.sap"
+	Group   = "cloudfoundry.crossplane.io"
 	Version = "v1beta1"
 )
 

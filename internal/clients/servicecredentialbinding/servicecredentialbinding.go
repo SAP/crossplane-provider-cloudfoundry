@@ -10,7 +10,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/google/uuid"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 )
 
@@ -47,7 +47,7 @@ func NewClient(cfv3 *client.Client) ServiceCredentialBinding {
 }
 
 // GetByIDOrSearch returns a ServiceCredentialBinding resource by guid or by spec
-func GetByIDOrSearch(ctx context.Context, scbClient ServiceCredentialBinding, guid string, forProvider v1alpha2.ServiceCredentialBindingParameters) (*resource.ServiceCredentialBinding, error) {
+func GetByIDOrSearch(ctx context.Context, scbClient ServiceCredentialBinding, guid string, forProvider v1alpha1.ServiceCredentialBindingParameters) (*resource.ServiceCredentialBinding, error) {
 	if err := uuid.Validate(guid); err != nil {
 		opts, err := newListOptions(forProvider)
 		if err != nil {
@@ -60,7 +60,7 @@ func GetByIDOrSearch(ctx context.Context, scbClient ServiceCredentialBinding, gu
 }
 
 // Create creates a ServiceCredentialBinding resource
-func Create(ctx context.Context, scbClient ServiceCredentialBinding, forProvider v1alpha2.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBinding, error) {
+func Create(ctx context.Context, scbClient ServiceCredentialBinding, forProvider v1alpha1.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBinding, error) {
 	opt, err := newCreateOption(forProvider, params)
 	if err != nil {
 		return nil, err
@@ -87,7 +87,7 @@ func Create(ctx context.Context, scbClient ServiceCredentialBinding, forProvider
 }
 
 // Update updates labels and annotations of a ServiceCredentialBinding resource
-func Update(ctx context.Context, scbClient ServiceCredentialBinding, guid string, spec v1alpha2.ServiceCredentialBindingParameters) (*resource.ServiceCredentialBinding, error) {
+func Update(ctx context.Context, scbClient ServiceCredentialBinding, guid string, spec v1alpha1.ServiceCredentialBindingParameters) (*resource.ServiceCredentialBinding, error) {
 	opt := newUpdateOption(spec)
 	return scbClient.Update(ctx, guid, opt)
 }
@@ -123,7 +123,7 @@ func GetConnectionDetails(ctx context.Context, scbClient ServiceCredentialBindin
 }
 
 // newListOptions generates ServiceCredentialBindingListOptions according to CR's ForProvider spec
-func newListOptions(spec v1alpha2.ServiceCredentialBindingParameters) (*client.ServiceCredentialBindingListOptions, error) {
+func newListOptions(spec v1alpha1.ServiceCredentialBindingParameters) (*client.ServiceCredentialBindingListOptions, error) {
 	// if external-name is not set, search by Name and Space
 	opt := client.NewServiceCredentialBindingListOptions()
 	opt.Type.EqualTo(spec.Type)
@@ -151,7 +151,7 @@ func newListOptions(spec v1alpha2.ServiceCredentialBindingParameters) (*client.S
 }
 
 // newCreateOption generates ServiceCredentialBindingCreate according to CR's ForProvider spec
-func newCreateOption(spec v1alpha2.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBindingCreate, error) {
+func newCreateOption(spec v1alpha1.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBindingCreate, error) {
 	if spec.ServiceInstance == nil {
 		return nil, errors.New(ErrServiceInstanceMissing)
 	}
@@ -185,16 +185,16 @@ func newCreateOption(spec v1alpha2.ServiceCredentialBindingParameters, params js
 }
 
 // newUpdateOption generates ServiceCredentialBindingUpdate according to CR's ForProvider spec
-func newUpdateOption(spec v1alpha2.ServiceCredentialBindingParameters) *resource.ServiceCredentialBindingUpdate {
+func newUpdateOption(spec v1alpha1.ServiceCredentialBindingParameters) *resource.ServiceCredentialBindingUpdate {
 	opt := &resource.ServiceCredentialBindingUpdate{}
 	// TODO: implement update option. SCB support only updates for labels and annotations. No other fields can be updated. Labels and annotations are not supported yet, so for now we return an empty update option.
 	return opt
 }
 
 // UpdateObservation updates the CR's AtProvider status from the observed resource
-func UpdateObservation(observation *v1alpha2.ServiceCredentialBindingObservation, r *resource.ServiceCredentialBinding) {
+func UpdateObservation(observation *v1alpha1.ServiceCredentialBindingObservation, r *resource.ServiceCredentialBinding) {
 	observation.GUID = r.Resource.GUID
-	observation.LastOperation = &v1alpha2.LastOperation{
+	observation.LastOperation = &v1alpha1.LastOperation{
 		Type:        r.LastOperation.Type,
 		State:       r.LastOperation.State,
 		Description: r.LastOperation.Description,
@@ -204,7 +204,7 @@ func UpdateObservation(observation *v1alpha2.ServiceCredentialBindingObservation
 }
 
 // IsUpToDate checks whether the CR is up to date with the observed resource
-func IsUpToDate(ctx context.Context, spec v1alpha2.ServiceCredentialBindingParameters, r resource.ServiceCredentialBinding) bool {
+func IsUpToDate(ctx context.Context, spec v1alpha1.ServiceCredentialBindingParameters, r resource.ServiceCredentialBinding) bool {
 	// SCB support updates for labels and metadata only. This is to be implemented. For now return true
 	return true
 }

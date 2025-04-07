@@ -13,7 +13,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 // PushClient is the interface for pushing an app to the Cloud Foundry
@@ -66,7 +66,7 @@ func (p *pushClient) GenerateManifest(ctx context.Context, appGUID string) (stri
 // newManifest maps the app spec to the manifest
 //
 //nolint:gocyclo
-func newManifestFromSpec(forProvider v1alpha2.AppParameters, dockerCredentials *DockerCredentials) (*operation.AppManifest, error) {
+func newManifestFromSpec(forProvider v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*operation.AppManifest, error) {
 	manifest := operation.NewAppManifest(forProvider.Name)
 
 	if forProvider.Lifecycle == "docker" {
@@ -118,7 +118,7 @@ func newManifestFromSpec(forProvider v1alpha2.AppParameters, dockerCredentials *
 	return manifest, nil
 }
 
-func configDocker(forProvider v1alpha2.AppParameters, dockerCredentials *DockerCredentials) (*operation.AppManifestDocker, error) {
+func configDocker(forProvider v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*operation.AppManifestDocker, error) {
 
 	if forProvider.Docker == nil {
 		return nil, errors.New("docker lifecycle requires docker spec")
@@ -139,7 +139,7 @@ func configDocker(forProvider v1alpha2.AppParameters, dockerCredentials *DockerC
 }
 
 // configProcess map the process from app spec
-func configProcess(forProvider v1alpha2.AppParameters) *operation.AppManifestProcesses {
+func configProcess(forProvider v1alpha1.AppParameters) *operation.AppManifestProcesses {
 	if len(forProvider.Processes) > 0 {
 		var processes operation.AppManifestProcesses
 		for _, process := range forProvider.Processes {
@@ -172,7 +172,7 @@ func configProcess(forProvider v1alpha2.AppParameters) *operation.AppManifestPro
 }
 
 // configServices map the services from app spec
-func configServices(forProvider v1alpha2.AppParameters) (*operation.AppManifestServices, error) {
+func configServices(forProvider v1alpha1.AppParameters) (*operation.AppManifestServices, error) {
 	if len(forProvider.Services) > 0 {
 		var services operation.AppManifestServices
 		for _, service := range forProvider.Services {
@@ -201,7 +201,7 @@ func configServices(forProvider v1alpha2.AppParameters) (*operation.AppManifestS
 }
 
 // configRoutes map the routes from app spec
-func configRoutes(forProvider v1alpha2.AppParameters) *operation.AppManifestRoutes {
+func configRoutes(forProvider v1alpha1.AppParameters) *operation.AppManifestRoutes {
 	if len(forProvider.Routes) > 0 {
 		var routes operation.AppManifestRoutes
 		for _, route := range forProvider.Routes {

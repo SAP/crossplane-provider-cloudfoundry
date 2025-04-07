@@ -1,6 +1,6 @@
 ---
 # CR to observe a managed ServiceInstance
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceInstance
 metadata:
   name: audit-log-import
@@ -20,7 +20,7 @@ spec:
 
 ---
 # CR to observe a first ServiceKey
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceKey
 metadata:
   name: import-audit-log-key
@@ -40,7 +40,7 @@ spec:
 
 ---
 # CR to create a second ServiceKey
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceKey
 metadata:
   name: audit-log-key2
