@@ -1,5 +1,5 @@
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Domain
 metadata:
   namespace: default
@@ -14,7 +14,7 @@ spec:
 
 ---
 # Import an existing domain 
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Domain
 metadata:
   namespace: default

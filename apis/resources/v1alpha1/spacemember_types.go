@@ -7,59 +7,14 @@ import (
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 )
 
-// A SpaceRoleType defines the role type of Cloud Foundry Organization.
-// +kubebuilder:validation:Enum=Developers;Auditors;Managers;Supporters
-type SpaceRoleType string
-
-// StringV3 converts to string accepted by CF V3 API
-func (r SpaceRoleType) StringV3() string {
-	switch r {
-	case SpaceDeveloper:
-		return "space_developer"
-	case SpaceManager:
-		return "space_manager"
-	case SpaceAuditor:
-		return "space_auditor"
-	case SpaceSupporter:
-		return "space_supporter"
-	default:
-		return ""
-	}
-}
-
-const (
-	// SpaceDeveloper specifies the role type space_developer.
-	SpaceDeveloper SpaceRoleType = "Developers"
-
-	// SpaceManager specifies the role type space_manager.
-	SpaceManager SpaceRoleType = "Managers"
-
-	// SpaceAuditor specifies the role type space_auditor.
-	SpaceAuditor SpaceRoleType = "Auditors"
-
-	// SpaceSupporter specifies the role type space_supporter.
-	SpaceSupporter SpaceRoleType = "Supporters"
-)
-
 // SpaceMembersParameters encapsulate role assignments to CloudFoundry Spaces
 type SpaceMembersParameters struct {
-	// Space associated guid.
-	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1.Space
-	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
-	// +kubebuilder:validation:Optional
-	Space *string `json:"space,omitempty"`
-
-	// Reference to a Space CR to populate space.
-	// +kubebuilder:validation:Optional
-	SpaceRef *v1.Reference `json:"spaceRef,omitempty"`
-
-	// Selector for a Space CR to populate space.
-	// +kubebuilder:validation:Optional
-	SpaceSelector *v1.Selector `json:"spaceSelector,omitempty"`
+	SpaceRef `json:",inline"`
 
 	// Space role type to assign to members; see valid role types https://v3-apidocs.cloudfoundry.space/version/3.127.0/index.html#valid-role-types
-	// +required
-	RoleType SpaceRoleType `json:"roleType"`
+	// +kubebuilder:validation:Enum=Developer;Auditor;Manager;Supporter;Developers;Auditors;Managers;Supporters
+	// +kubebuilder:validation:Required
+	RoleType string `json:"roleType"`
 
 	MemberList `json:",inline"`
 }

@@ -16,7 +16,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
@@ -40,7 +40,7 @@ const (
 
 // Setup adds a controller that reconciles Org managed resources.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
-	name := managed.ControllerName(v1alpha2.Space_GroupKind)
+	name := managed.ControllerName(v1alpha1.Space_GroupKind)
 
 	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
 	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
@@ -66,13 +66,13 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	r := managed.NewReconciler(mgr,
-		resource.ManagedKind(v1alpha2.Space_GroupVersionKind),
+		resource.ManagedKind(v1alpha1.Space_GroupVersionKind),
 		options...)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
-		For(&v1alpha2.Space{}).
+		For(&v1alpha1.Space{}).
 		Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 }
 
@@ -90,7 +90,7 @@ type connector struct {
 // 3. Getting the credentials specified by the ProviderConfig.
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
-	if _, ok := mg.(*v1alpha2.Space); !ok {
+	if _, ok := mg.(*v1alpha1.Space); !ok {
 		return nil, errors.New(errNotSpace)
 	}
 
@@ -121,7 +121,7 @@ type external struct {
 
 // Observe generates observation for a space
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
-	cr, ok := mg.(*v1alpha2.Space)
+	cr, ok := mg.(*v1alpha1.Space)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errNotSpace)
 	}
@@ -169,7 +169,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 // Create creates a space
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
-	cr, ok := mg.(*v1alpha2.Space)
+	cr, ok := mg.(*v1alpha1.Space)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errNotSpace)
 	}
@@ -204,7 +204,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Update updates a space
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
-	cr, ok := mg.(*v1alpha2.Space)
+	cr, ok := mg.(*v1alpha1.Space)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errNotSpace)
 	}
@@ -235,7 +235,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Delete deletes a space
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha2.Space)
+	cr, ok := mg.(*v1alpha1.Space)
 	if !ok {
 		return errors.New(errNotSpace)
 	}

@@ -1,0 +1,14 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: OrgRole
+metadata:
+  namespace: default
+  name: e2e-org-role
+spec:
+  forProvider:
+    type: Auditor
+    username: co-test-user@example.com
+    orgRef:
+      name: e2e-org
+      policy:
+        resolve: Always
+

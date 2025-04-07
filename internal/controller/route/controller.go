@@ -17,9 +17,11 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/pkg/reference"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
@@ -28,9 +30,9 @@ import (
 )
 
 type RouteService interface {
-	GetByIDOrSpec(ctx context.Context, guid string, forProvider v1alpha2.RouteParameters) (*v1alpha2.RouteObservation, error)
-	Create(ctx context.Context, forProvider v1alpha2.RouteParameters) (string, error)
-	Update(ctx context.Context, guid string, forProvider v1alpha2.RouteParameters) error
+	GetByIDOrSpec(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, error)
+	Create(ctx context.Context, forProvider v1alpha1.RouteParameters) (string, error)
+	Update(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) error
 	Delete(ctx context.Context, guid string) error
 }
 
@@ -49,7 +51,7 @@ const (
 
 // Setup adds a controller that reconciles Org managed resources.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
-	name := managed.ControllerName(v1alpha2.RouteGroupKind)
+	name := managed.ControllerName(v1alpha1.RouteGroupKind)
 
 	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
 	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
@@ -57,7 +59,9 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	options := []managed.ReconcilerOption{
-		managed.WithInitializers(),
+		managed.WithInitializers(initializer{
+			client: mgr.GetClient(),
+		}),
 		managed.WithExternalConnecter(&connector{
 			kube:        mgr.GetClient(),
 			usage:       resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
@@ -73,13 +77,13 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	r := managed.NewReconciler(mgr,
-		resource.ManagedKind(v1alpha2.RouteGroupVersionKind),
+		resource.ManagedKind(v1alpha1.RouteGroupVersionKind),
 		options...)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
-		For(&v1alpha2.Route{}).
+		For(&v1alpha1.Route{}).
 		Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 }
 
@@ -97,7 +101,7 @@ type connector struct {
 // 3. Getting the credentials specified by the ProviderConfig.
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
-	if _, ok := mg.(*v1alpha2.Route); !ok {
+	if _, ok := mg.(*v1alpha1.Route); !ok {
 		return nil, errors.New(errNotRoute)
 	}
 
@@ -124,7 +128,7 @@ type external struct {
 
 // Observe generates observation for Route's
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
-	cr, ok := mg.(*v1alpha2.Route)
+	cr, ok := mg.(*v1alpha1.Route)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errNotRoute)
 	}
@@ -160,7 +164,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 // Create a route
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
-	cr, ok := mg.(*v1alpha2.Route)
+	cr, ok := mg.(*v1alpha1.Route)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errNotRoute)
 	}
@@ -183,7 +187,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Update updates a route
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
-	cr, ok := mg.(*v1alpha2.Route)
+	cr, ok := mg.(*v1alpha1.Route)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errNotRoute)
 	}
@@ -203,7 +207,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Delete deletes a route
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha2.Route)
+	cr, ok := mg.(*v1alpha1.Route)
 	if !ok {
 		return errors.New(errNotRoute)
 	}
@@ -217,4 +221,46 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 
 	return c.RouteService.Delete(ctx, meta.GetExternalName(cr))
 
+}
+
+// ResolveReferences of this Route.
+func ResolveReferences(ctx context.Context, mg *v1alpha1.Route, c k8s.Reader) error {
+	r := reference.NewAPIResolver(c, mg)
+
+	var rsp reference.ResolutionResponse
+	var err error
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Domain),
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.DomainRef,
+		Selector:     mg.Spec.ForProvider.DomainSelector,
+		To: reference.To{
+			List:    &v1alpha1.DomainList{},
+			Managed: &v1alpha1.Domain{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.Domain")
+	}
+	mg.Spec.ForProvider.Domain = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.DomainRef = rsp.ResolvedReference
+
+	return nil
+}
+
+// initializer type implements the managed.Initializer interface
+type initializer struct {
+	client k8s.Reader
+}
+
+// Initialize method resolves the references which are not resolved by
+// the crossplane reconciler.
+func (i initializer) Initialize(ctx context.Context, mg resource.Managed) error {
+	cr, ok := mg.(*v1alpha1.Route)
+	if !ok {
+		return errors.New(errNotRoute)
+	}
+
+	return ResolveReferences(ctx, cr, i.client)
 }

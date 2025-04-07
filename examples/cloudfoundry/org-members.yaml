@@ -1,16 +1,4 @@
----
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
-kind: Org
-metadata:
-  namespace: default
-  name: my-org
-  annotations:
-    crossplane.io/external-name: cf-dev
-spec:
-  forProvider: {}
-
----
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: OrgMembers
 metadata:
   namespace: default
@@ -27,7 +15,7 @@ spec:
     enforcementPolicy: Strict
 
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: OrgMembers
 metadata:
   namespace: default

@@ -11,7 +11,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"k8s.io/utils/ptr"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 // OrgQuota is the interface that defines the methods that a OrgQuota
@@ -37,7 +37,7 @@ func NewClient(config *config.Config) (OrgQuota, error) {
 // values indicate unset values.
 //
 //nolint:gocyclo
-func GenerateCreateOrUpdate(spec v1alpha2.OrgQuotaParameters) *resource.OrganizationQuotaCreateOrUpdate {
+func GenerateCreateOrUpdate(spec v1alpha1.OrgQuotaParameters) *resource.OrganizationQuotaCreateOrUpdate {
 	name := ptr.Deref(spec.Name, "")
 	createOrUpdate := resource.NewOrganizationQuotaCreate(name)
 	if v := spec.AllowPaidServicePlans; v != nil {
@@ -94,8 +94,8 @@ func intpToFloatp(in *int) *float64 {
 
 // GenerateObservation function takes an OrganizationQuota resource
 // and returns an OrgQuotaObservation.
-func GenerateObservation(o *resource.OrganizationQuota) v1alpha2.OrgQuotaObservation {
-	obs := v1alpha2.OrgQuotaObservation{
+func GenerateObservation(o *resource.OrganizationQuota) v1alpha1.OrgQuotaObservation {
+	obs := v1alpha1.OrgQuotaObservation{
 		AllowPaidServicePlans: o.Services.PaidServicesAllowed,
 		CreatedAt:             ptr.To(o.CreatedAt.Format(time.RFC3339)),
 		ID:                    ptr.To(o.GUID),
@@ -156,7 +156,7 @@ func orgsEqual(orgs1, orgs2 []*string) bool {
 // Status.AtProvider.
 //
 //nolint:gocyclo
-func NeedsReconciliation(orgQuota *v1alpha2.OrgQuota) bool {
+func NeedsReconciliation(orgQuota *v1alpha1.OrgQuota) bool {
 	if ptr.Deref(orgQuota.Spec.ForProvider.Name, "") != ptr.Deref(orgQuota.Status.AtProvider.Name, "") ||
 		!ptr.Equal(orgQuota.Spec.ForProvider.AllowPaidServicePlans, orgQuota.Status.AtProvider.AllowPaidServicePlans) ||
 		!ptr.Equal(orgQuota.Spec.ForProvider.InstanceMemory, orgQuota.Status.AtProvider.InstanceMemory) ||
@@ -197,7 +197,7 @@ func ptrDef[T any](in *T, defValue T) *T {
 // OrganizationQuota resource.
 //
 //nolint:gocyclo
-func LateInitialize(spec *v1alpha2.OrgQuotaParameters, from *resource.OrganizationQuota) bool {
+func LateInitialize(spec *v1alpha1.OrgQuotaParameters, from *resource.OrganizationQuota) bool {
 	slog.Info("LateInitialize invoked")
 	changed := false
 	if spec.Name == nil {

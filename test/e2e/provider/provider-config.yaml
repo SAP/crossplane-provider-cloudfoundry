@@ -1,4 +1,4 @@
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1beta1
+apiVersion: cloudfoundry.crossplane.io/v1beta1
 kind: ProviderConfig
 metadata:
   name: default

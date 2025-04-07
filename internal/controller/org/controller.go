@@ -19,7 +19,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	scv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	pcv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
@@ -41,7 +41,7 @@ const (
 
 // Setup adds a controller that reconciles Org resources.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
-	name := managed.ControllerName(v1alpha2.Org_GroupKind)
+	name := managed.ControllerName(v1alpha1.Org_GroupKind)
 
 	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
 	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
@@ -64,13 +64,13 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	r := managed.NewReconciler(mgr,
-		resource.ManagedKind(v1alpha2.Org_GroupVersionKind),
+		resource.ManagedKind(v1alpha1.Org_GroupVersionKind),
 		options...)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
-		For(&v1alpha2.Org{}).
+		For(&v1alpha1.Organization{}).
 		Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 }
 
@@ -87,7 +87,7 @@ type connector struct {
 // 3. Getting the credentials specified by the ProviderConfig.
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
-	if _, ok := mg.(*v1alpha2.Org); !ok {
+	if _, ok := mg.(*v1alpha1.Organization); !ok {
 		return nil, errors.New(errNotOrgKind)
 	}
 
@@ -116,7 +116,7 @@ type external struct {
 
 // Observe managed resource Org
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
-	cr, ok := mg.(*v1alpha2.Org)
+	cr, ok := mg.(*v1alpha1.Organization)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errNotOrgKind)
 	}
@@ -154,7 +154,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 // Create a managed resource Org
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
-	cr, ok := mg.(*v1alpha2.Org)
+	cr, ok := mg.(*v1alpha1.Organization)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errNotOrgKind)
 	}
@@ -175,7 +175,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Update managed resource Org
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
-	_, ok := mg.(*v1alpha2.Org)
+	_, ok := mg.(*v1alpha1.Organization)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errNotOrgKind)
 	}
@@ -191,7 +191,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Delete managed resource Org
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha2.Org)
+	cr, ok := mg.(*v1alpha1.Organization)
 	if !ok {
 		return errors.New(errNotOrgKind)
 	}

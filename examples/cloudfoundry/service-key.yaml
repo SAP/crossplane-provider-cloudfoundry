@@ -1,16 +1,17 @@
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
-kind: ServiceKey
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceCredentialBinding
 metadata:
   name: my-service-key
 spec:
   forProvider:
+    type: key
     name: my-service-key
-    connectionDetailsAsJSON: false
     serviceInstanceRef:
       name: my-audit-log
       policy:
         resolve: Always
+    connectionDetailsAsJSON: false
   writeConnectionSecretToRef:
     name: my-service-key-secret
     namespace: default

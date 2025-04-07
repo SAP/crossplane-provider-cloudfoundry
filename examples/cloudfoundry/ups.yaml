@@ -12,7 +12,7 @@ stringData:
 
 ---
 # UPS with service credentials from a secret ref
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceInstance
 metadata:
   name: my-ups
@@ -49,7 +49,7 @@ stringData:
     
 ---
 # UPS with service json credentials from a secret key selector
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceInstance
 metadata:
   name: ups-dynatrace-json

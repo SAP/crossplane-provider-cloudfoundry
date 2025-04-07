@@ -21,7 +21,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 
 	resources "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources"
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/spacequota"
@@ -43,7 +43,7 @@ const (
 
 // Setup adds a controller that reconciles space quota managed resources.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
-	name := managed.ControllerName(v1alpha2.SpaceQuota_GroupKind)
+	name := managed.ControllerName(v1alpha1.SpaceQuota_GroupKind)
 
 	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
 	options := []managed.ReconcilerOption{
@@ -67,13 +67,13 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	r := managed.NewReconciler(mgr,
-		resource.ManagedKind(v1alpha2.SpaceQuota_GroupVersionKind),
+		resource.ManagedKind(v1alpha1.SpaceQuota_GroupVersionKind),
 		options...)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
-		For(&v1alpha2.SpaceQuota{}).
+		For(&v1alpha1.SpaceQuota{}).
 		Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 }
 
@@ -86,7 +86,7 @@ type connector struct {
 
 // ResolveReferences resolves the references in the managed resources
 // using the crossplane reference resolution algorithm.
-func ResolveReferences(ctx context.Context, mg *v1alpha2.SpaceQuota, client k8s.Reader) error {
+func ResolveReferences(ctx context.Context, mg *v1alpha1.SpaceQuota, client k8s.Reader) error {
 	r := reference.NewAPIResolver(client, mg)
 
 	var rsp reference.ResolutionResponse
@@ -98,12 +98,12 @@ func ResolveReferences(ctx context.Context, mg *v1alpha2.SpaceQuota, client k8s.
 		Reference:    mg.Spec.ForProvider.OrgRef,
 		Selector:     mg.Spec.ForProvider.OrgSelector,
 		To: reference.To{
-			List:    &v1alpha2.OrgList{},
-			Managed: &v1alpha2.Org{},
+			List:    &v1alpha1.OrganizationList{},
+			Managed: &v1alpha1.Organization{},
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "mg.Spec.ForProvider.Org")
+		return errors.Wrap(err, "mg.Spec.ForProvider.Organization")
 	}
 	mg.Spec.ForProvider.Org = reference.ToPtrValue(rsp.ResolvedValue)
 	mg.Spec.ForProvider.OrgRef = rsp.ResolvedReference
@@ -114,12 +114,12 @@ func ResolveReferences(ctx context.Context, mg *v1alpha2.SpaceQuota, client k8s.
 		Reference:    mg.Spec.InitProvider.OrgRef,
 		Selector:     mg.Spec.InitProvider.OrgSelector,
 		To: reference.To{
-			List:    &v1alpha2.OrgList{},
-			Managed: &v1alpha2.Org{},
+			List:    &v1alpha1.OrganizationList{},
+			Managed: &v1alpha1.Organization{},
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "mg.Spec.InitProvider.Org")
+		return errors.Wrap(err, "mg.Spec.InitProvider.Organization")
 	}
 	mg.Spec.InitProvider.Org = reference.ToPtrValue(rsp.ResolvedValue)
 	mg.Spec.InitProvider.OrgRef = rsp.ResolvedReference
@@ -135,7 +135,7 @@ type initializer struct {
 // Initialize method resolves the references which are not resolved by
 // the crossplane reconciler.
 func (i initializer) Initialize(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha2.SpaceQuota)
+	cr, ok := mg.(*v1alpha1.SpaceQuota)
 	if !ok {
 		return errors.New(errUnexpectedObject)
 	}
@@ -148,7 +148,7 @@ func (i initializer) Initialize(ctx context.Context, mg resource.Managed) error 
 //
 //nolint:gocyclo
 func isUpToDate(ctx context.Context,
-	cr *v1alpha2.SpaceQuota,
+	cr *v1alpha1.SpaceQuota,
 	resp *cfresource.SpaceQuota) (bool, error) {
 	spec := &cr.Spec.ForProvider
 	if v := spec.AllowPaidServicePlans; v != nil {
@@ -243,7 +243,7 @@ func isUpToDate(ctx context.Context,
 // 3. Getting the credentials specified by the ProviderConfig.
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
-	if _, ok := mg.(*v1alpha2.SpaceQuota); !ok {
+	if _, ok := mg.(*v1alpha1.SpaceQuota); !ok {
 		return nil, errors.New(errUnexpectedObject)
 	}
 
@@ -270,13 +270,13 @@ type external struct {
 	kube       k8s.Client
 	client     spacequota.SpaceQuotaClient
 	isUpToDate func(context.Context,
-		*v1alpha2.SpaceQuota,
+		*v1alpha1.SpaceQuota,
 		*cfresource.SpaceQuota) (bool, error)
 }
 
 // Observe generates observation for a space
 func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
-	cr, ok := mg.(*v1alpha2.SpaceQuota)
+	cr, ok := mg.(*v1alpha1.SpaceQuota)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
 	}
@@ -314,7 +314,7 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 // Create creates a space quota
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
-	cr, ok := mg.(*v1alpha2.SpaceQuota)
+	cr, ok := mg.(*v1alpha1.SpaceQuota)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errUnexpectedObject)
 	}
@@ -335,7 +335,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Update updates a space quota
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
-	cr, ok := mg.(*v1alpha2.SpaceQuota)
+	cr, ok := mg.(*v1alpha1.SpaceQuota)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errUnexpectedObject)
 	}
@@ -370,7 +370,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Delete deletes a space quota
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha2.SpaceQuota)
+	cr, ok := mg.(*v1alpha1.SpaceQuota)
 	if !ok {
 		return errors.New(errUnexpectedObject)
 	}

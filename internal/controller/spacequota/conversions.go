@@ -8,15 +8,15 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"k8s.io/utils/ptr"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 // GenerateSpaceQuota returns the current state in the form of
-// *v1alpha2.SpaceQuota.
+// *v1alpha1.SpaceQuota.
 //
 //nolint:gocyclo
-func GenerateSpaceQuota(resp *resource.SpaceQuota) *v1alpha2.SpaceQuota {
-	cr := &v1alpha2.SpaceQuota{}
+func GenerateSpaceQuota(resp *resource.SpaceQuota) *v1alpha1.SpaceQuota {
+	cr := &v1alpha1.SpaceQuota{}
 	if v := resp.Apps.LogRateLimitInBytesPerSecond; v != nil {
 		cr.Status.AtProvider.TotalAppLogRateLimit = ptr.To(float64(*v))
 	}
@@ -74,7 +74,7 @@ func GenerateSpaceQuota(resp *resource.SpaceQuota) *v1alpha2.SpaceQuota {
 // GenerateCreateSpaceQuota returns a create input.
 //
 //nolint:gocyclo
-func GenerateCreateSpaceQuota(cr *v1alpha2.SpaceQuota) *resource.SpaceQuotaCreateOrUpdate {
+func GenerateCreateSpaceQuota(cr *v1alpha1.SpaceQuota) *resource.SpaceQuotaCreateOrUpdate {
 	if cr == nil {
 		return nil
 	}
@@ -133,7 +133,7 @@ func GenerateCreateSpaceQuota(cr *v1alpha2.SpaceQuota) *resource.SpaceQuotaCreat
 // GenerateUpdateSpaceQuota returns a create input.
 //
 //nolint:gocyclo
-func GenerateUpdateSpaceQuota(cr *v1alpha2.SpaceQuota) *resource.SpaceQuotaCreateOrUpdate {
+func GenerateUpdateSpaceQuota(cr *v1alpha1.SpaceQuota) *resource.SpaceQuotaCreateOrUpdate {
 	if cr == nil {
 		return nil
 	}
@@ -254,6 +254,6 @@ func getSpaceStatusHelper(specSpaces, statusSpaces []*string) spaceStatuses {
 
 // getSpaceStatus function returns the spaceStatuses type for a given
 // SpaceQuote managed resource.
-func getSpaceStatus(cr *v1alpha2.SpaceQuota) spaceStatuses {
+func getSpaceStatus(cr *v1alpha1.SpaceQuota) spaceStatuses {
 	return getSpaceStatusHelper(cr.Spec.ForProvider.Spaces, cr.Status.AtProvider.Spaces)
 }

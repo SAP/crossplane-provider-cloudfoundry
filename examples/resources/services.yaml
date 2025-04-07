@@ -16,7 +16,7 @@ stringData:
 
 ---
 # UPS with service json credentials from a secret key selector
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceInstance
 metadata:
   name: my-ups
@@ -35,7 +35,7 @@ spec:
 
 ---
 # CR to create a managed ServiceInstance
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceInstance
 metadata:
   name: my-service-instance
@@ -53,7 +53,7 @@ spec:
 
 ---
 # CR to create a managed ServiceInstance
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceCredentialBinding
 metadata:
   name: my-service-credential-binding

@@ -21,7 +21,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	scv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	pcv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
@@ -30,7 +30,7 @@ import (
 )
 
 var (
-	resourceKind       = v1alpha2.App_Kind
+	resourceKind       = v1alpha1.App_Kind
 	errWrongKind       = "Wrong resource kind (expected " + resourceKind + " resource)"
 	errTrackUsage      = "Cannot track usage"
 	errConnect         = "Cannot connect to Cloud Foundry"
@@ -66,13 +66,13 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	r := managed.NewReconciler(mgr,
-		resource.ManagedKind(v1alpha2.App_GroupVersionKind),
+		resource.ManagedKind(v1alpha1.App_GroupVersionKind),
 		options...)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
-		For(&v1alpha2.App{}).
+		For(&v1alpha1.App{}).
 		Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 }
 
@@ -89,7 +89,7 @@ type connector struct {
 // 3. Getting the credentials specified by the ProviderConfig.
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
-	if _, ok := mg.(*v1alpha2.App); !ok {
+	if _, ok := mg.(*v1alpha1.App); !ok {
 		return nil, errors.New(errWrongKind)
 	}
 
@@ -116,7 +116,7 @@ type external struct {
 
 // Observe managed resource
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
-	cr, ok := mg.(*v1alpha2.App)
+	cr, ok := mg.(*v1alpha1.App)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errWrongKind)
 	}
@@ -165,7 +165,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 // Create managed resource
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
-	cr, ok := mg.(*v1alpha2.App)
+	cr, ok := mg.(*v1alpha1.App)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errWrongKind)
 	}
@@ -189,7 +189,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 // Update managed resource
 // Only rename is supported for now
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
-	cr, ok := mg.(*v1alpha2.App)
+	cr, ok := mg.(*v1alpha1.App)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errWrongKind)
 	}
@@ -209,7 +209,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Delete managed resource
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha2.App)
+	cr, ok := mg.(*v1alpha1.App)
 	if !ok {
 		return errors.New(errWrongKind)
 	}
@@ -229,7 +229,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 }
 
 // getDockerCredential extracts the Docker credentials from the secret
-func getDockerCredential(ctx context.Context, kube k8s.Client, forProvider v1alpha2.AppParameters) (*app.DockerCredentials, error) {
+func getDockerCredential(ctx context.Context, kube k8s.Client, forProvider v1alpha1.AppParameters) (*app.DockerCredentials, error) {
 	// return immediately if the lifecycle is not docker or credentials are not provided
 	if forProvider.Lifecycle != "docker" || forProvider.Docker == nil || forProvider.Docker.Credentials == nil {
 		return nil, nil

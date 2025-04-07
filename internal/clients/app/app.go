@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/utils/ptr"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
 )
@@ -57,7 +57,7 @@ func NewAppClient(client *client.Client) *Client {
 type DockerCredentials resource.DockerCredentials
 
 // GetByIDOrSpec gets the App by GUID or spec.
-func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, spec v1alpha2.AppParameters) (*resource.App, error) {
+func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, spec v1alpha1.AppParameters) (*resource.App, error) {
 	_, err := uuid.Parse(guid)
 	if err == nil {
 		return c.AppClient.Get(ctx, guid)
@@ -67,7 +67,7 @@ func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, spec v1alpha2.A
 }
 
 // CreateAndPush creates and pushes an app to the Cloud Foundry.
-func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha2.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
+func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
 	manifest, err := newManifestFromSpec(spec, dockerCredentials)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha2.AppParameters,
 }
 
 // Update updates an app in the Cloud Foundry.
-func (c *Client) Update(ctx context.Context, guid string, spec v1alpha2.AppParameters) (*resource.App, error) {
+func (c *Client) Update(ctx context.Context, guid string, spec v1alpha1.AppParameters) (*resource.App, error) {
 	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(spec))
 	if err != nil {
 		return nil, err
@@ -100,7 +100,7 @@ func (c *Client) Delete(ctx context.Context, guid string) error {
 }
 
 // ReconcileServiceBinding updates an app in the Cloud Foundry.
-func (c *Client) ReconcileServiceBinding(ctx context.Context, guid string, spec v1alpha2.AppParameters, ymlManifest string) error {
+func (c *Client) ReconcileServiceBinding(ctx context.Context, guid string, spec v1alpha1.AppParameters, ymlManifest string) error {
 
 	for _, s := range DiffServiceBindings(spec, ymlManifest) {
 		if err := bindService(ctx, c.ServiceCredentialBinding, s); err != nil {
@@ -111,8 +111,8 @@ func (c *Client) ReconcileServiceBinding(ctx context.Context, guid string, spec 
 }
 
 // GenerateObservation takes an App resource and returns *AppObservation.
-func GenerateObservation(res *resource.App) v1alpha2.AppObservation {
-	obs := v1alpha2.AppObservation{}
+func GenerateObservation(res *resource.App) v1alpha1.AppObservation {
+	obs := v1alpha1.AppObservation{}
 
 	obs.GUID = res.GUID
 	obs.Name = res.Name
@@ -125,14 +125,14 @@ func GenerateObservation(res *resource.App) v1alpha2.AppObservation {
 
 // IsUpToDate checks whether current state is up-to-date compared to the given
 // set of parameters.
-func IsUpToDate(spec v1alpha2.AppParameters, status v1alpha2.AppObservation) bool {
+func IsUpToDate(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) bool {
 	// rename or update ssh setting
 	return spec.Name == status.Name
 
 }
 
 // DiffServiceBindings checks whether current state is up-to-date compared to the given
-func DiffServiceBindings(spec v1alpha2.AppParameters, ymlManifest string) []v1alpha2.ServiceBindingConfiguration {
+func DiffServiceBindings(spec v1alpha1.AppParameters, ymlManifest string) []v1alpha1.ServiceBindingConfiguration {
 	if len(spec.Services) == 0 {
 		return nil
 	}
@@ -148,7 +148,7 @@ func DiffServiceBindings(spec v1alpha2.AppParameters, ymlManifest string) []v1al
 		}
 	}
 
-	var missingServices []v1alpha2.ServiceBindingConfiguration
+	var missingServices []v1alpha1.ServiceBindingConfiguration
 	for _, service := range spec.Services {
 		if _, ok := services[ptr.Deref(service.Name, "")]; !ok {
 			return append(missingServices, service)
@@ -159,7 +159,7 @@ func DiffServiceBindings(spec v1alpha2.AppParameters, ymlManifest string) []v1al
 }
 
 // newListOption maps spec to AppListOptions
-func newListOption(spec v1alpha2.AppParameters) *client.AppListOptions {
+func newListOption(spec v1alpha1.AppParameters) *client.AppListOptions {
 	opts := &client.AppListOptions{
 		ListOptions: nil,
 	}
@@ -174,7 +174,7 @@ func newListOption(spec v1alpha2.AppParameters) *client.AppListOptions {
 }
 
 // newCreateOption maps spec to AppCreate option
-func newCreateOption(spec v1alpha2.AppParameters) *resource.AppCreate {
+func newCreateOption(spec v1alpha1.AppParameters) *resource.AppCreate {
 	name := spec.Name
 	space := ptr.Deref(spec.Space, "")
 	appCreate := resource.NewAppCreate(name, space)
@@ -198,7 +198,7 @@ func newCreateOption(spec v1alpha2.AppParameters) *resource.AppCreate {
 }
 
 // newUpdateOption map spec to AppCreate option
-func newUpdateOption(spec v1alpha2.AppParameters) *resource.AppUpdate {
+func newUpdateOption(spec v1alpha1.AppParameters) *resource.AppUpdate {
 	var lifecycle *resource.Lifecycle
 	switch spec.Lifecycle {
 	case "buildpack":
@@ -225,7 +225,7 @@ func newUpdateOption(spec v1alpha2.AppParameters) *resource.AppUpdate {
 }
 
 // newManifestFromSpec creates a manifest from the given spec.
-func bindService(ctx context.Context, scbClient servicecredentialbinding.ServiceCredentialBinding, s v1alpha2.ServiceBindingConfiguration) error {
+func bindService(ctx context.Context, scbClient servicecredentialbinding.ServiceCredentialBinding, s v1alpha1.ServiceBindingConfiguration) error {
 	// TODO: Implement the binding logic
 	return nil
 }

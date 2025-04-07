@@ -1,21 +1,11 @@
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
-kind: Org
-metadata:
-  namespace: default
-  name: my-org
-spec:
-  forProvider: {
-    name: cf-dev
-  }
-
----
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Organization
 metadata:
   namespace: default
   name: my-org
-  annotations:
-    crossplane.io/external-name: cf-dev
 spec:
-  forProvider: {}
+  forProvider: 
+    name: cf-dev
+  managementPolicies:
+  - Observe

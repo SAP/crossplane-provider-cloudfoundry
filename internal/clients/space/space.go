@@ -9,7 +9,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"k8s.io/utils/ptr"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 )
 
@@ -37,7 +37,7 @@ func NewClient(config *config.Config) (Space, Feature, error) {
 	return cf.Spaces, cf.SpaceFeatures, nil
 }
 
-func GetByIDOrSpec(ctx context.Context, spaceClient Space, guid string, spec v1alpha2.SpaceParameters) (*resource.Space, error) {
+func GetByIDOrSpec(ctx context.Context, spaceClient Space, guid string, spec v1alpha1.SpaceParameters) (*resource.Space, error) {
 	if clients.IsValidGUID(guid) {
 		return spaceClient.Get(ctx, guid)
 	}
@@ -46,7 +46,7 @@ func GetByIDOrSpec(ctx context.Context, spaceClient Space, guid string, spec v1a
 }
 
 // GenerateListOption generates the list options for the client.
-func GenerateListOption(spec v1alpha2.SpaceParameters) *client.SpaceListOptions {
+func GenerateListOption(spec v1alpha1.SpaceParameters) *client.SpaceListOptions {
 	opts := &client.SpaceListOptions{
 		ListOptions: nil,
 	}
@@ -61,13 +61,13 @@ func GenerateListOption(spec v1alpha2.SpaceParameters) *client.SpaceListOptions 
 }
 
 // GenerateCreate generates the SpaceCreate from an *SpaceParameters
-func GenerateCreate(spec v1alpha2.SpaceParameters) *resource.SpaceCreate {
+func GenerateCreate(spec v1alpha1.SpaceParameters) *resource.SpaceCreate {
 	org := ptr.Deref(spec.Org, "")
 	return resource.NewSpaceCreate(spec.Name, org)
 }
 
 // GenerateUpdate generates the SpaceCreate from an *SpaceParameters
-func GenerateUpdate(spec v1alpha2.SpaceParameters) *resource.SpaceUpdate {
+func GenerateUpdate(spec v1alpha1.SpaceParameters) *resource.SpaceUpdate {
 	return &resource.SpaceUpdate{
 		Name:     spec.Name,
 		Metadata: &resource.Metadata{},
@@ -75,8 +75,8 @@ func GenerateUpdate(spec v1alpha2.SpaceParameters) *resource.SpaceUpdate {
 }
 
 // GenerateObservation takes an Space resource and returns *SpaceObservation.
-func GenerateObservation(o *resource.Space, ssh bool) v1alpha2.SpaceObservation {
-	obs := v1alpha2.SpaceObservation{
+func GenerateObservation(o *resource.Space, ssh bool) v1alpha1.SpaceObservation {
+	obs := v1alpha1.SpaceObservation{
 		ID:        o.GUID,
 		Name:      o.Name,
 		Org:       o.Relationships.Organization.Data.GUID,
@@ -95,14 +95,14 @@ func GenerateObservation(o *resource.Space, ssh bool) v1alpha2.SpaceObservation 
 }
 
 // LateInitialize fills the unassigned fields with values from a Space resource.
-func LateInitialize(cr *v1alpha2.Space, from *resource.Space, ssh bool) bool {
+func LateInitialize(cr *v1alpha1.Space, from *resource.Space, ssh bool) bool {
 	// nothing to late initialize
 	return false
 }
 
 // IsUpToDate checks whether current state is up-to-date compared to the given
 // set of parameters.
-func IsUpToDate(spec v1alpha2.SpaceParameters, observed *resource.Space, ssh bool) bool {
+func IsUpToDate(spec v1alpha1.SpaceParameters, observed *resource.Space, ssh bool) bool {
 	// rename or update ssh setting
 	return spec.Name == observed.Name && (spec.AllowSSH == ssh)
 

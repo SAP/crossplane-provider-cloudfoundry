@@ -1,0 +1,16 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Route
+metadata:
+  name: app-route
+  namespace: app-test
+spec:
+  forProvider:
+    domainRef: 
+      name: app-domain
+      policy:
+        resolve: Always
+    host: app-host
+    spaceRef:
+      name: app-space
+      policy:
+        resolve: Always

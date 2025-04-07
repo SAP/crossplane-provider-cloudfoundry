@@ -15,8 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
-
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 )
 
@@ -26,39 +25,39 @@ var (
 	guid    = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 )
 
-type modifier func(*v1alpha2.Domain)
+type modifier func(*v1alpha1.Domain)
 
 func withExternalName(name string) modifier {
-	return func(r *v1alpha2.Domain) {
+	return func(r *v1alpha1.Domain) {
 		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
 func withName(name string) modifier {
-	return func(r *v1alpha2.Domain) {
+	return func(r *v1alpha1.Domain) {
 		r.Spec.ForProvider.Name = name
 	}
 }
 
 func withConditions(c ...xpv1.Condition) modifier {
-	return func(i *v1alpha2.Domain) { i.Status.SetConditions(c...) }
+	return func(i *v1alpha1.Domain) { i.Status.SetConditions(c...) }
 }
 
 func withID(id string) modifier {
-	return func(r *v1alpha2.Domain) {
+	return func(r *v1alpha1.Domain) {
 		r.Status.AtProvider.ID = &id
 	}
 }
 
-func fakeDomain(m ...modifier) *v1alpha2.Domain {
-	r := &v1alpha2.Domain{
+func fakeDomain(m ...modifier) *v1alpha1.Domain {
+	r := &v1alpha1.Domain{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Finalizers:  []string{},
 			Annotations: map[string]string{},
 		},
-		Spec: v1alpha2.DomainSpec{
-			ForProvider: v1alpha2.DomainParameters{},
+		Spec: v1alpha1.DomainSpec{
+			ForProvider: v1alpha1.DomainParameters{},
 		},
 	}
 
@@ -75,7 +74,7 @@ func TestObserve(t *testing.T) {
 	}
 
 	type want struct {
-		mg  *v1alpha2.Domain
+		mg  *v1alpha1.Domain
 		obs managed.ExternalObservation
 		err error
 	}
@@ -237,9 +236,9 @@ func TestObserve(t *testing.T) {
 			}
 			obs, err := c.Observe(context.Background(), tc.args.mg)
 
-			var Domain *v1alpha2.Domain
+			var Domain *v1alpha1.Domain
 			if tc.args.mg != nil {
-				Domain, _ = tc.args.mg.(*v1alpha2.Domain)
+				Domain, _ = tc.args.mg.(*v1alpha1.Domain)
 			}
 
 			if tc.want.err != nil && err != nil {

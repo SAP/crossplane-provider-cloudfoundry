@@ -1,5 +1,5 @@
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Org
 metadata:
   namespace: default
@@ -13,7 +13,7 @@ spec:
     name: default
 
 ---
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha2
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Space
 metadata:
   namespace: default
@@ -26,7 +26,7 @@ spec:
       name: my-org
 ---
 
-apiVersion: cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: SpaceMembers
 metadata:
   namespace: default

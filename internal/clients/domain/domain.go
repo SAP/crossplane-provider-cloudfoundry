@@ -10,7 +10,7 @@ import (
 	"github.com/google/uuid"
 	"k8s.io/utils/ptr"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 // Client is the interface that defines the methods that a Domain client should implement.
@@ -47,7 +47,7 @@ func GetByIDOrName(ctx context.Context, c Client, id, name string) (*resource.Do
 }
 
 // GenerateCreate generates the DomainCreate from an *DomainParameters.
-func GenerateCreate(spec v1alpha2.DomainParameters) *resource.DomainCreate {
+func GenerateCreate(spec v1alpha1.DomainParameters) *resource.DomainCreate {
 	// if external-name is not set, search by Name and Space
 	create := &resource.DomainCreate{}
 	create.Name = spec.Name
@@ -77,8 +77,8 @@ func GenerateCreate(spec v1alpha2.DomainParameters) *resource.DomainCreate {
 }
 
 // GenerateObservation takes an Domain resource and returns *DomainObservation.
-func GenerateObservation(o *resource.Domain) v1alpha2.DomainObservation {
-	obs := v1alpha2.DomainObservation{
+func GenerateObservation(o *resource.Domain) v1alpha1.DomainObservation {
+	obs := v1alpha1.DomainObservation{
 		ID:        ptr.To(o.GUID),
 		CreatedAt: ptr.To(o.CreatedAt.Format(time.RFC3339)),
 		UpdatedAt: ptr.To(o.UpdatedAt.Format(time.RFC3339)),
@@ -103,7 +103,7 @@ func GenerateObservation(o *resource.Domain) v1alpha2.DomainObservation {
 }
 
 // GenerateUpdate generates the Domain from an *DomainParameters. There is not really an option to update besides labels and annotations
-func GenerateUpdate(spec v1alpha2.DomainParameters) *resource.DomainUpdate {
+func GenerateUpdate(spec v1alpha1.DomainParameters) *resource.DomainUpdate {
 	return &resource.DomainUpdate{
 		Metadata: &resource.Metadata{Labels: spec.Labels, Annotations: spec.Annotations},
 	}
@@ -113,7 +113,7 @@ func GenerateUpdate(spec v1alpha2.DomainParameters) *resource.DomainUpdate {
 // set of parameters.
 //
 //nolint:gocyclo
-func IsUpToDate(spec v1alpha2.DomainParameters, observed *resource.Domain) bool {
+func IsUpToDate(spec v1alpha1.DomainParameters, observed *resource.Domain) bool {
 	// domain update does not support rename and change of many attributes, and can only update labels and annotations. we can safely return true for now
 
 	// if spec.Name != observed.Name {

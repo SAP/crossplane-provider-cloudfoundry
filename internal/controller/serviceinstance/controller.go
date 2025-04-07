@@ -22,7 +22,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
@@ -48,7 +48,7 @@ const (
 
 // Setup adds a controller that reconciles ServiceInstance CR.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
-	name := managed.ControllerName(v1alpha2.ServiceInstance_GroupKind)
+	name := managed.ControllerName(v1alpha1.ServiceInstance_GroupKind)
 
 	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
 	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
@@ -73,13 +73,13 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	r := managed.NewReconciler(mgr,
-		resource.ManagedKind(v1alpha2.ServiceInstance_GroupVersionKind),
+		resource.ManagedKind(v1alpha1.ServiceInstance_GroupVersionKind),
 		options...)
 
 	return ctrl.NewControllerManagedBy(mgr).
 		Named(name).
 		WithOptions(o.ForControllerRuntime()).
-		For(&v1alpha2.ServiceInstance{}).
+		For(&v1alpha1.ServiceInstance{}).
 		Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 }
 
@@ -97,7 +97,7 @@ type connector struct {
 // 3. Getting the credentials specified by the ProviderConfig.
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
-	if _, ok := mg.(*v1alpha2.ServiceInstance); !ok {
+	if _, ok := mg.(*v1alpha1.ServiceInstance); !ok {
 		return nil, errors.New(errWrongCRType)
 	}
 
@@ -130,7 +130,7 @@ type external struct {
 
 // Observe checks if the external resource exists and if it does, it observes it.
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) { //nolint:gocyclo
-	cr, ok := mg.(*v1alpha2.ServiceInstance)
+	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errWrongCRType)
 	}
@@ -157,7 +157,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	serviceinstance.UpdateObservation(&cr.Status.AtProvider, r)
 
 	switch r.LastOperation.State {
-	case v1alpha2.LastOperationInitial, v1alpha2.LastOperationInProgress:
+	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
 		// Set the CR to unavailable and signal that the reconciler should not update the resource
 		cr.SetConditions(xpv1.Unavailable().WithMessage(r.LastOperation.Description))
 		return managed.ExternalObservation{
@@ -165,14 +165,14 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 			ResourceUpToDate: true, // Set to true so that the reconciler do not schedule another update while the last operation is in progress
 		}, nil
 	// If the last operation failed, set the CR to unavailable and signal that the reconciler should retry the last operation
-	case v1alpha2.LastOperationFailed:
+	case v1alpha1.LastOperationFailed:
 		// If the last operation failed, set the CR to unavailable and signal that the reconciler should retry the last operation
 		cr.SetConditions(xpv1.Unavailable().WithMessage(r.LastOperation.Description))
 		return managed.ExternalObservation{
-			ResourceExists:   r.LastOperation.Type != v1alpha2.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
-			ResourceUpToDate: r.LastOperation.Type != v1alpha2.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
+			ResourceExists:   r.LastOperation.Type != v1alpha1.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
+			ResourceUpToDate: r.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
 		}, nil
-	case v1alpha2.LastOperationSucceeded:
+	case v1alpha1.LastOperationSucceeded:
 		// If the last operation succeeded, set the CR to available
 		cr.SetConditions(xpv1.Available())
 		// If parameter drift detection is enable, get actual credentials from the service instance
@@ -202,13 +202,13 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 // Create attempts to create the external resource.
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
-	cr, ok := mg.(*v1alpha2.ServiceInstance)
+	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
 	}
 
 	// If the last operation is create and it failed, clean up the failed service instance before retry create
-	if cr.Status.AtProvider.LastOperation.Type == v1alpha2.LastOperationCreate && cr.Status.AtProvider.LastOperation.State == v1alpha2.LastOperationFailed {
+	if cr.Status.AtProvider.LastOperation.Type == v1alpha1.LastOperationCreate && cr.Status.AtProvider.LastOperation.State == v1alpha1.LastOperationFailed {
 		err := c.serviceinstance.Delete(ctx, cr)
 		if err != nil {
 			return managed.ExternalCreation{}, errors.Wrap(err, errCleanFailed)
@@ -247,7 +247,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Update attempts to update the external resource to reflect the managed resource's desired state.
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
-	cr, ok := mg.(*v1alpha2.ServiceInstance)
+	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errWrongCRType)
 	}
@@ -282,7 +282,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 
 // Delete attempts to delete the external resource.
 func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha2.ServiceInstance)
+	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
 		return errors.New(errWrongCRType)
 	}
@@ -295,13 +295,12 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 }
 
 // extractCredentialSpec returns the parameters or credentials from the spec
-func extractCredentialSpec(ctx context.Context, kube k8s.Client, spec v1alpha2.ServiceInstanceParameters) ([]byte, error) {
-	// If the spec has yaml parameters use those and only those.
-	if spec.Parameters != nil {
-		return spec.Parameters.Raw, nil
-	}
+func extractCredentialSpec(ctx context.Context, kube k8s.Client, spec v1alpha1.ServiceInstanceParameters) ([]byte, error) {
+	if spec.Type == v1alpha1.ManagedService {
+		if spec.Parameters != nil {
+			return spec.Parameters.Raw, nil
+		}
 
-	if spec.Type == v1alpha2.ManagedService {
 		if spec.JSONParams != nil {
 			return []byte(*spec.JSONParams), nil
 		}
@@ -309,7 +308,11 @@ func extractCredentialSpec(ctx context.Context, kube k8s.Client, spec v1alpha2.S
 		return clients.SecretRefToJSONRawMessage(ctx, kube, spec.ParametersSecretRef)
 	}
 
-	if spec.Type == v1alpha2.UserProvidedService {
+	if spec.Type == v1alpha1.UserProvidedService {
+		if spec.Credentials != nil {
+			return spec.Credentials.Raw, nil
+		}
+
 		if spec.JSONCredentials != nil {
 			return []byte(*spec.JSONCredentials), nil
 		}
@@ -325,7 +328,7 @@ type servicePlanInitializer struct {
 
 // Initialize implements crossplane InitializeFn interface
 func (s *servicePlanInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha2.ServiceInstance)
+	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
 		return errors.New("Not a ServiceInstance")
 	}
@@ -336,8 +339,8 @@ func (s *servicePlanInitializer) Initialize(ctx context.Context, mg resource.Man
 	// fallback on crossplane.io/external-data annotation for backward compatibility
 	if cr.Spec.ForProvider.ServicePlan == nil {
 		sp := struct {
-			ServicePlan *v1alpha2.ServicePlanParameters `json:"service_plan"`
-		}{ServicePlan: &v1alpha2.ServicePlanParameters{}}
+			ServicePlan *v1alpha1.ServicePlanParameters `json:"service_plan"`
+		}{ServicePlan: &v1alpha1.ServicePlanParameters{}}
 
 		if data, ok := mg.GetAnnotations()["crossplane.io/external-data"]; ok {
 			if err := json.Unmarshal([]byte(data), &sp); err == nil {

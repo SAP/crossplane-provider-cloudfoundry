@@ -9,7 +9,7 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 )
 
@@ -21,22 +21,22 @@ var (
 	domainGUID = "22fd5b0b-4f3b-4b1b-8b3d-3b5f7b4b3b4b"
 	timezero   = "0001-01-01T00:00:00Z"
 
-	fakeForProvider = v1alpha2.RouteParameters{
-		Space:  &spaceGUID,
-		Domain: &domainGUID,
+	fakeForProvider = v1alpha1.RouteParameters{
+		SpaceRef: v1alpha1.SpaceRef{Space: &spaceGUID},
+		Domain:   &domainGUID,
 	}
 
-	emptyForProvider = v1alpha2.RouteParameters{}
+	emptyForProvider = v1alpha1.RouteParameters{}
 
-	fakeObservation = &v1alpha2.RouteObservation{
-		Resource: v1alpha2.Resource{
+	fakeObservation = &v1alpha1.RouteObservation{
+		Resource: v1alpha1.Resource{
 			GUID:      guid,
 			CreatedAt: &timezero,
 			UpdatedAt: &timezero,
 		},
 		URL: &url,
 	}
-	nilObservation *v1alpha2.RouteObservation
+	nilObservation *v1alpha1.RouteObservation
 
 	errBoom                        = errors.New("boom")
 	errNoResultReturned            = client.ErrNoResultsReturned
@@ -47,11 +47,11 @@ func TestGetByIDOrName(t *testing.T) {
 	type service func() *fake.MockRoute
 	type args struct {
 		guid        string
-		forProvider v1alpha2.RouteParameters
+		forProvider v1alpha1.RouteParameters
 	}
 
 	type want struct {
-		atProvider *v1alpha2.RouteObservation
+		atProvider *v1alpha1.RouteObservation
 		err        error
 	}
 
@@ -180,7 +180,7 @@ func TestGetByIDOrName(t *testing.T) {
 func TestCreate(t *testing.T) {
 	type service func() *fake.MockRoute
 	type args struct {
-		forProvider v1alpha2.RouteParameters
+		forProvider v1alpha1.RouteParameters
 	}
 
 	type want struct {

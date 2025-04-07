@@ -14,8 +14,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
-
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 )
 
@@ -25,29 +24,29 @@ var (
 	guid    = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 )
 
-type modifier func(*v1alpha2.Org)
+type modifier func(*v1alpha1.Organization)
 
 func withExternalName(name string) modifier {
-	return func(r *v1alpha2.Org) {
+	return func(r *v1alpha1.Organization) {
 		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
 func withName(name string) modifier {
-	return func(r *v1alpha2.Org) {
+	return func(r *v1alpha1.Organization) {
 		r.Spec.ForProvider.Name = name
 	}
 }
 
-func fakeOrg(m ...modifier) *v1alpha2.Org {
-	r := &v1alpha2.Org{
+func fakeOrg(m ...modifier) *v1alpha1.Organization {
+	r := &v1alpha1.Organization{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Finalizers:  []string{},
 			Annotations: map[string]string{},
 		},
-		Spec: v1alpha2.OrgSpec{
-			ForProvider: v1alpha2.OrgParameters{},
+		Spec: v1alpha1.OrgSpec{
+			ForProvider: v1alpha1.OrgParameters{},
 		},
 	}
 
@@ -64,7 +63,7 @@ func TestObserve(t *testing.T) {
 	}
 
 	type want struct {
-		mg  *v1alpha2.Org
+		mg  *v1alpha1.Organization
 		obs managed.ExternalObservation
 		err error
 	}
@@ -254,9 +253,9 @@ func TestObserve(t *testing.T) {
 			}
 			obs, err := c.Observe(context.Background(), tc.args.mg)
 
-			var org *v1alpha2.Org
+			var org *v1alpha1.Organization
 			if tc.args.mg != nil {
-				org, _ = tc.args.mg.(*v1alpha2.Org)
+				org, _ = tc.args.mg.(*v1alpha1.Organization)
 			}
 
 			if tc.want.err != nil && err != nil {

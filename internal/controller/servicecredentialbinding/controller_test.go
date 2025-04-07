@@ -15,7 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha2"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
 )
@@ -29,45 +29,45 @@ var (
 	serviceInstanceGUID       = "3d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 )
 
-type modifier func(*v1alpha2.ServiceCredentialBinding)
+type modifier func(*v1alpha1.ServiceCredentialBinding)
 
 func withExternalName(name string) modifier {
-	return func(r *v1alpha2.ServiceCredentialBinding) {
+	return func(r *v1alpha1.ServiceCredentialBinding) {
 		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
 func withServiceInstanceID(guid string) modifier {
-	return func(r *v1alpha2.ServiceCredentialBinding) {
+	return func(r *v1alpha1.ServiceCredentialBinding) {
 		r.Spec.ForProvider.ServiceInstance = &guid
 	}
 }
 
 func withConditions(c ...xpv1.Condition) modifier {
-	return func(i *v1alpha2.ServiceCredentialBinding) { i.Status.SetConditions(c...) }
+	return func(i *v1alpha1.ServiceCredentialBinding) { i.Status.SetConditions(c...) }
 }
 
 func withStatus(guid string) modifier {
-	o := v1alpha2.ServiceCredentialBindingObservation{}
+	o := v1alpha1.ServiceCredentialBindingObservation{}
 	o.GUID = guid
 
-	return func(r *v1alpha2.ServiceCredentialBinding) {
+	return func(r *v1alpha1.ServiceCredentialBinding) {
 		r.Status.AtProvider = o
 	}
 }
 
-func serviceCredentialBinding(typ string, m ...modifier) *v1alpha2.ServiceCredentialBinding {
-	r := &v1alpha2.ServiceCredentialBinding{
+func serviceCredentialBinding(typ string, m ...modifier) *v1alpha1.ServiceCredentialBinding {
+	r := &v1alpha1.ServiceCredentialBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Finalizers:  []string{},
 			Annotations: map[string]string{},
 		},
-		Spec: v1alpha2.ServiceCredentialBindingSpec{
-			ForProvider: v1alpha2.ServiceCredentialBindingParameters{Type: typ, Name: &name, ServiceInstanceRef: &xpv1.Reference{}},
+		Spec: v1alpha1.ServiceCredentialBindingSpec{
+			ForProvider: v1alpha1.ServiceCredentialBindingParameters{Type: typ, Name: &name, ServiceInstanceRef: &xpv1.Reference{}},
 		},
-		Status: v1alpha2.ServiceCredentialBindingStatus{
-			AtProvider: v1alpha2.ServiceCredentialBindingObservation{},
+		Status: v1alpha1.ServiceCredentialBindingStatus{
+			AtProvider: v1alpha1.ServiceCredentialBindingObservation{},
 		},
 	}
 
@@ -190,11 +190,11 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationSucceeded).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("GetDetails", guid).Return(
@@ -222,11 +222,11 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationFailed).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationFailed).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationFailed).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationFailed).ServiceCredentialBinding,
 					nil,
 				)
 				return m
@@ -249,11 +249,11 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationUpdate, v1alpha2.LastOperationFailed).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationUpdate, v1alpha1.LastOperationFailed).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationUpdate, v1alpha2.LastOperationFailed).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationUpdate, v1alpha1.LastOperationFailed).ServiceCredentialBinding,
 					nil,
 				)
 				return m
@@ -276,11 +276,11 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationInProgress).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationInProgress).ServiceCredentialBinding,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha2.LastOperationCreate, v1alpha2.LastOperationInProgress).ServiceCredentialBinding,
+					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationInProgress).ServiceCredentialBinding,
 					nil,
 				)
 				return m
