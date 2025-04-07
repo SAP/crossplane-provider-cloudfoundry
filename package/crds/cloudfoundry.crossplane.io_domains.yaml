@@ -81,6 +81,12 @@ spec:
                       The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
+                  domain:
+                    description: (Deprecated) Domain part of full domain name. If
+                      specified the sub_domain argument needs to be provided and the
+                      name will be computed. If name is provided, domain and sub_domain
+                      will be ignored.
+                    type: string
                   internal:
                     description: |-
                       (to-container) traffic, or external (user-to-container) traffic
@@ -191,6 +197,12 @@ spec:
                       type: string
                     type: array
                     x-kubernetes-list-type: set
+                  subDomain:
+                    description: (Deprecated) Sub-domain part of full domain name.
+                      If specified the domain argument needs to be provided and the
+                      name will be computed. If name is provided, domain and sub_domain
+                      will be ignored.
+                    type: string
                 type: object
               managementPolicies:
                 default:

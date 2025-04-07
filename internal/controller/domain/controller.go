@@ -2,6 +2,7 @@ package domain
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/pkg/errors"
@@ -31,6 +32,7 @@ const (
 	resourceType         = "Domain"
 	externalSystem       = "Cloud Foundry"
 	errNotDomainKind     = "managed resource is not of kind " + resourceType
+	errNameRequired      = "name is required, please set the name attribute"
 	errTrackUsage        = "cannot track usage"
 	errGetProviderConfig = "cannot get ProviderConfig or resolve credential references"
 	errGetClient         = "cannot create a client to talk to the API of" + externalSystem
@@ -60,6 +62,9 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
+		managed.WithInitializers(initializer{
+			client: mgr.GetClient(),
+		}),
 	}
 
 	if o.Features.Enabled(features.EnableBetaManagementPolicies) {
@@ -223,4 +228,30 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 		return errors.Wrap(err, errDelete)
 	}
 	return nil
+}
+
+// initializer type implements the managed.Initializer interface
+type initializer struct {
+	client k8s.Reader
+}
+
+// Initialize method resolves the references which are not resolved by
+// the crossplane reconciler.
+func (i initializer) Initialize(ctx context.Context, mg resource.Managed) error {
+	cr, ok := mg.(*v1alpha1.Domain)
+	if !ok {
+		return errors.New(errNotDomainKind)
+	}
+
+	// check if the name is already set
+	if cr.Spec.ForProvider.Name == "" {
+		// if name is not set, calculate name by domain and subdomain
+		if cr.Spec.ForProvider.SubDomain == nil || cr.Spec.ForProvider.Domain == nil {
+			return errors.New(errNameRequired) // if subdomain is not set
+		}
+
+		cr.Spec.ForProvider.Name = fmt.Sprintf("%s.%s", *cr.Spec.ForProvider.SubDomain, *cr.Spec.ForProvider.Domain)
+	}
+	return nil
+
 }
