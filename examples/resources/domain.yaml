@@ -6,7 +6,8 @@ metadata:
   name: my-domain
 spec:
   forProvider:
-    name: dev.orchestrator.io
+    domain: orchestrator.io
+    subDomain: dev
     orgRef:
       name: my-org
     internal: false
@@ -24,5 +25,7 @@ spec:
     name: cfapps.eu12.hana.ondemand.com
     orgRef:
       name: my-org
+  managementPolicies:
+  - Observe
 
 

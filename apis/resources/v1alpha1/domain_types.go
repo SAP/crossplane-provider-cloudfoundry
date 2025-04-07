@@ -61,9 +61,17 @@ type DomainObservation struct {
 }
 
 type DomainParameters struct {
+	// (Deprecated) Domain part of full domain name. If specified the sub_domain argument needs to be provided and the name will be computed. If name is provided, domain and sub_domain will be ignored.
+	// +kubebuilder:deprecated:warning=The domain field is deprecated and will be removed in a future version. Use the name field instead.
+	Domain *string `json:"domain,omitempty" tf:"domain,omitempty"`
+
+	// (Deprecated) Sub-domain part of full domain name. If specified the domain argument needs to be provided and the name will be computed. If name is provided, domain and sub_domain will be ignored.
+	// +kubebuilder:deprecated:warning=The sub_domain field is deprecated and will be removed in a future version. Use the name field instead.
+	SubDomain *string `json:"subDomain,omitempty" tf:"sub_domain,omitempty"`
+
 	// (String) The name of the domain;must be between 3 ~ 253 characters and follow RFC 1035
 	// The name of the domain;must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035).
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	Name string `json:"name,omitempty"`
 
 	// (to-container) traffic, or external (user-to-container) traffic
