@@ -20,7 +20,6 @@ type SpaceRef struct {
 	// Selector for a `Space` CR to lookup the `guid` of the Cloud Foundry space. Preferred if the reference space is managed by Crossplane.
 	// +kubebuilder:validation:Optional
 	SpaceSelector *v1.Selector `json:"spaceSelector,omitempty"`
-	// Fields relevant  for managed service instances
 }
 
 // OrgRef is a struct that represents the reference to a Organization CR.
