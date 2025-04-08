@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"k8s.io/utils/ptr"
 
@@ -29,12 +28,8 @@ type Feature interface {
 }
 
 // NewClient creates a new cf client and return interfaces for Space and SpaceFeatures
-func NewClient(config *config.Config) (Space, Feature, error) {
-	cf, err := client.New(config)
-	if err != nil {
-		return nil, nil, err
-	}
-	return cf.Spaces, cf.SpaceFeatures, nil
+func NewClient(cf *client.Client) (Space, Feature) {
+	return cf.Spaces, cf.SpaceFeatures
 }
 
 func GetByIDOrSpec(ctx context.Context, spaceClient Space, guid string, spec v1alpha1.SpaceParameters) (*resource.Space, error) {
