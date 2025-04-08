@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/nsf/jsondiff"
 	"github.com/pkg/errors"
 
@@ -20,6 +19,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/pkg/reference"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -27,6 +27,7 @@ import (
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/serviceinstance"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
@@ -60,12 +61,16 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithExternalConnecter(&connector{
 			kube:        mgr.GetClient(),
 			usage:       resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
-			newClientFn: serviceinstance.NewClient}),
+			newClientFn: clients.CloudfoundryClientBuilder}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithTimeout(5 * time.Minute), // increase timeout for long-running operations
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
 		managed.WithPollInterval(o.PollInterval),
+		managed.WithInitializers(&initializer{
+			kube:        mgr.GetClient(),
+			newClientFn: clients.CloudfoundryClientBuilder,
+		}),
 	}
 
 	if o.Features.Enabled(features.EnableBetaManagementPolicies) {
@@ -88,7 +93,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 type connector struct {
 	kube        k8s.Client
 	usage       resource.Tracker
-	newClientFn func(*config.Config) (*serviceinstance.Client, error)
+	newClientFn clients.CloudFoundryClientFn
 }
 
 // Connect typically produces an ExternalClient by:
@@ -105,19 +110,14 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
-	cfg, err := clients.GetCredentialConfig(ctx, c.kube, mg)
-	if err != nil {
-		return nil, errors.Wrap(err, errNewClient)
-	}
-
-	s, err := serviceinstance.NewClient(cfg)
+	cf, err := c.newClientFn(ctx, c.kube, mg)
 	if err != nil {
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
 	return &external{
 		kube:            c.kube,
-		serviceinstance: s,
+		serviceinstance: serviceinstance.NewClient(cf),
 	}, nil
 }
 
@@ -384,4 +384,37 @@ func jsonContain(a, b []byte) bool {
 	opt := jsondiff.DefaultConsoleOptions()
 	diff, _ := jsondiff.Compare(a, b, &opt)
 	return diff == jsondiff.FullMatch || diff == jsondiff.SupersetMatch
+}
+
+type initializer connector
+
+// / Initialize implements the Initializer interface
+func (c *initializer) Initialize(ctx context.Context, mg resource.Managed) error {
+	cr, ok := mg.(*v1alpha1.ServiceInstance)
+	if !ok {
+		return errors.New(errWrongCRType)
+	}
+
+	if cr.Spec.ForProvider.SpaceRef != nil || cr.Spec.ForProvider.SpaceSelector != nil {
+		return cr.ResolveReferences(ctx, c.kube)
+	}
+	if cr.Spec.ForProvider.SpaceName != nil && cr.Spec.ForProvider.OrgName != nil {
+		// spaceName is set, so we need to get the space GUID
+		cf, err := c.newClientFn(ctx, c.kube, mg)
+		if err != nil {
+			return errors.Wrap(err, errNewClient)
+		}
+		spaceClient, _, orgClient := space.NewClient(cf)
+		spaceGUID := space.GetGUID(ctx, orgClient, spaceClient, *cr.Spec.ForProvider.OrgName, *cr.Spec.ForProvider.SpaceName)
+		if spaceGUID == "" {
+			return errors.New("Cannot get space GUID using names")
+		}
+		cr.Spec.ForProvider.Space = reference.ToPtrValue(spaceGUID)
+		return nil
+	}
+
+	if cr.Spec.ForProvider.Space != nil {
+		return errors.New("Cannot get space GUID using names or references.")
+	}
+	return nil
 }

@@ -21,10 +21,10 @@ import (
 )
 
 var (
-	errBoom = errors.New("boom")
-	name    = "my-app"
-	space   = "a46808d1-d09a-4eef-add1-30872dec82f7"
-	guid    = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
+	errBoom   = errors.New("boom")
+	name      = "my-app"
+	spaceGUID = "a46808d1-d09a-4eef-add1-30872dec82f7"
+	guid      = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 )
 
 type modifier func(*v1alpha1.App)
@@ -126,10 +126,10 @@ func TestObserve(t *testing.T) {
 		},
 		"ExternalNameNotSet": {
 			args: args{
-				mg: newApp("docker", withSpace(space)),
+				mg: newApp("docker", withSpace(spaceGUID)),
 			},
 			want: want{
-				mg: newApp("docker", withSpace(space)),
+				mg: newApp("docker", withSpace(spaceGUID)),
 				obs: managed.ExternalObservation{
 					ResourceExists: false,
 				},
@@ -146,7 +146,7 @@ func TestObserve(t *testing.T) {
 		},
 		"Boom!": {
 			args: args{
-				mg: newApp("docker", withExternalName(guid), withSpace(space)),
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 			},
 			want: want{
 				mg:  newApp("docker", withExternalName(guid)),
@@ -168,10 +168,10 @@ func TestObserve(t *testing.T) {
 		},
 		"Should adopt": {
 			args: args{
-				mg: newApp("docker", withSpace(space)),
+				mg: newApp("docker", withSpace(spaceGUID)),
 			},
 			want: want{
-				mg:  newApp("docker", withExternalName(guid), withSpace(space)),
+				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
@@ -191,7 +191,7 @@ func TestObserve(t *testing.T) {
 		},
 		"NotFound": {
 			args: args{
-				mg: newApp("docker", withExternalName(guid), withSpace(space)),
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 			},
 			want: want{
 				mg:  newApp("docker", withExternalName(guid)),
@@ -214,7 +214,7 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful": {
 			args: args{
-				mg: newApp("docker", withExternalName(guid), withSpace(space)),
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 			},
 			want: want{
 				mg: newApp("docker",
@@ -294,11 +294,11 @@ func TestCreate(t *testing.T) {
 	}{
 		"Successful": {
 			args: args{
-				mg: newApp("docker", withImage("docker-image"), withSpace(space)),
+				mg: newApp("docker", withImage("docker-image"), withSpace(spaceGUID)),
 			},
 			want: want{
 				mg: newApp("docker", withImage("docker-image"),
-					withSpace(space),
+					withSpace(spaceGUID),
 					withConditions(xpv1.Creating()),
 					withExternalName(guid)),
 				obs: managed.ExternalCreation{},
@@ -325,11 +325,11 @@ func TestCreate(t *testing.T) {
 
 		"AlreadyExist": {
 			args: args{
-				mg: newApp("docker", withSpace(space), withImage("docker-image")),
+				mg: newApp("docker", withSpace(spaceGUID), withImage("docker-image")),
 			},
 			want: want{
 				mg: newApp("docker", withImage("docker-image"),
-					withSpace(space),
+					withSpace(spaceGUID),
 					withConditions(xpv1.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreateResource),
@@ -408,13 +408,13 @@ func TestUpdate(t *testing.T) {
 		"Successful": {
 			args: args{
 				mg: newApp("docker",
-					withSpace(space),
+					withSpace(spaceGUID),
 					withExternalName(guid),
 					withStatus(guid, "STARTED")),
 			},
 			want: want{
 				mg: newApp("docker",
-					withSpace(space),
+					withSpace(spaceGUID),
 					withExternalName(guid),
 					withStatus(guid, "STARTED")),
 				obs: managed.ExternalUpdate{},
@@ -437,13 +437,13 @@ func TestUpdate(t *testing.T) {
 		"DoesNotExist": {
 			args: args{
 				mg: newApp("docker",
-					withSpace(space),
+					withSpace(spaceGUID),
 					withExternalName(guid),
 					withStatus(guid, "STARTED")),
 			},
 			want: want{
 				mg: newApp("docker",
-					withSpace(space),
+					withSpace(spaceGUID),
 					withExternalName(guid),
 					withStatus(guid, "STARTED")),
 				obs: managed.ExternalUpdate{},

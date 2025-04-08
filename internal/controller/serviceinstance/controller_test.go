@@ -23,7 +23,7 @@ import (
 var (
 	errBoom         = errors.New("boom")
 	name            = "my-service-instance"
-	space           = "a46808d1-d09a-4eef-add1-30872dec82f7"
+	spaceGUID       = "a46808d1-d09a-4eef-add1-30872dec82f7"
 	guid            = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 	servicePlan     = "c595293f-2696-438d-887e-053200ec47c8"
 	jsonCredentials = `{"json":"bar"}`
@@ -54,9 +54,9 @@ func withServicePlan(servicePlan v1alpha1.ServicePlanParameters) modifier {
 	}
 }
 
-func withSpace(space string) modifier {
+func withSpace(spaceGUID string) modifier {
 	return func(r *v1alpha1.ServiceInstance) {
-		r.Spec.ForProvider.Space = &space
+		r.Spec.ForProvider.Space = &spaceGUID
 	}
 }
 
@@ -136,10 +136,10 @@ func TestObserve(t *testing.T) {
 		},
 		"ExternalNameNotSet": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg: serviceInstance("managed", withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withSpace(space)),
+				mg: serviceInstance("managed", withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withSpace(spaceGUID)),
 				obs: managed.ExternalObservation{
 					ResourceExists: false,
 				},
@@ -156,7 +156,7 @@ func TestObserve(t *testing.T) {
 		},
 		"Boom!": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg:  serviceInstance("managed", withExternalName(guid)),
@@ -178,7 +178,7 @@ func TestObserve(t *testing.T) {
 		},
 		"NotFound - Get by GUID when valid GUID is recorded": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg:  serviceInstance("managed", withExternalName(guid)),
@@ -202,7 +202,7 @@ func TestObserve(t *testing.T) {
 
 		"NotFound - fallback on Single when NO valid GUID is recorded in CR": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg:  serviceInstance("managed", withExternalName(guid)),
@@ -225,7 +225,7 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful - Get by GUID": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg: serviceInstance("managed",
@@ -256,7 +256,7 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful - adopt by forProvider spec": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg: serviceInstance("managed",
@@ -287,7 +287,7 @@ func TestObserve(t *testing.T) {
 		},
 		"CreateFailed": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg: serviceInstance("managed",
@@ -318,7 +318,7 @@ func TestObserve(t *testing.T) {
 		},
 		"UpdateFailed": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg: serviceInstance("managed",
@@ -349,7 +349,7 @@ func TestObserve(t *testing.T) {
 		},
 		"InProgress": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg: serviceInstance("managed",
@@ -380,7 +380,7 @@ func TestObserve(t *testing.T) {
 		},
 		"DriftDetectionLoop": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(true)),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(true)),
 			},
 			want: want{
 				mg: serviceInstance("managed",
@@ -413,7 +413,7 @@ func TestObserve(t *testing.T) {
 		},
 		"DriftDetectionBreak": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(false)),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(false)),
 			},
 			want: want{
 				mg: serviceInstance("managed",
@@ -498,10 +498,10 @@ func TestCreate(t *testing.T) {
 	}{
 		"Successful": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating()), withExternalName(guid)),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating()), withExternalName(guid)),
 				obs: managed.ExternalCreation{},
 				err: nil,
 			},
@@ -529,10 +529,10 @@ func TestCreate(t *testing.T) {
 		},
 		"SuccessfulWithParams": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials)),
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials)),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv1.Creating()), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: []byte(jsonCredentials)})),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv1.Creating()), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: []byte(jsonCredentials)})),
 				obs: managed.ExternalCreation{},
 				err: nil,
 			},
@@ -560,10 +560,10 @@ func TestCreate(t *testing.T) {
 		},
 		"CannotPollCreationJob": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating())),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -591,10 +591,10 @@ func TestCreate(t *testing.T) {
 		},
 		"AlreadyExist": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating())),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -679,10 +679,10 @@ func TestUpdate(t *testing.T) {
 	}{
 		"Successful": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
 				obs: managed.ExternalUpdate{},
 				err: nil,
 			},
@@ -710,10 +710,10 @@ func TestUpdate(t *testing.T) {
 		},
 		"SuccessfulWithParams": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}), withCredentials(&jsonCredentials)),
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}), withCredentials(&jsonCredentials)),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: *fake.JSONRawMessage(jsonCredentials)})),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: *fake.JSONRawMessage(jsonCredentials)})),
 				obs: managed.ExternalUpdate{},
 				err: nil,
 			},
@@ -741,10 +741,10 @@ func TestUpdate(t *testing.T) {
 		},
 		"CannotPollCreationJob": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
 				obs: managed.ExternalUpdate{},
 				err: errors.Wrap(errBoom, errUpdate),
 			},
@@ -772,10 +772,10 @@ func TestUpdate(t *testing.T) {
 		},
 		"DoesNotExist": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(space), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
 				obs: managed.ExternalUpdate{},
 				err: errors.Wrap(errBoom, errUpdate),
 			},

@@ -3,7 +3,6 @@ package spacerole
 import (
 	"context"
 
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/pkg/errors"
 
 	"k8s.io/utils/ptr"
@@ -17,6 +16,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/pkg/reference"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -25,6 +25,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 	role "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/role"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
@@ -49,12 +50,16 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	options := []managed.ReconcilerOption{
-		managed.WithExternalConnecter(&connector{kube: mgr.GetClient(), newClientFn: role.NewClient,
+		managed.WithExternalConnecter(&connector{kube: mgr.GetClient(), newClientFn: clients.CloudfoundryClientBuilder,
 			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
+		managed.WithInitializers(&initializer{
+			kube:        mgr.GetClient(),
+			newClientFn: clients.CloudfoundryClientBuilder,
+		}),
 	}
 
 	if o.Features.Enabled(features.EnableBetaManagementPolicies) {
@@ -76,7 +81,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 type connector struct {
 	kube        k8s.Client
 	usage       resource.Tracker
-	newClientFn func(config *config.Config) (role.Role, job.Job, error)
+	newClientFn clients.CloudFoundryClientFn
 }
 
 // Connect typically produces an ExternalClient by:
@@ -93,16 +98,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errTrackUsage)
 	}
 
-	config, err := clients.GetCredentialConfig(ctx, c.kube, mg)
-	if err != nil {
-		return nil, errors.Wrap(err, errGetProviderConfig)
-	}
-
-	role, job, err := c.newClientFn(config)
+	cf, err := c.newClientFn(ctx, c.kube, mg)
 	if err != nil {
 		return nil, errors.Wrap(err, errGetClient)
 	}
 
+	role, job := role.NewClient(cf)
 	return &external{role: role, kube: c.kube, job: job}, nil
 }
 
@@ -213,4 +214,37 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	}
 
 	return job.PollJobComplete(ctx, c.job, jobGUID)
+}
+
+type initializer connector
+
+// / Initialize implements the Initializer interface
+func (c *initializer) Initialize(ctx context.Context, mg resource.Managed) error {
+	cr, ok := mg.(*v1alpha1.SpaceRole)
+	if !ok {
+		return errors.New(errWrongKind)
+	}
+
+	if cr.Spec.ForProvider.SpaceRef != nil || cr.Spec.ForProvider.SpaceSelector != nil {
+		return cr.ResolveReferences(ctx, c.kube)
+	}
+	if cr.Spec.ForProvider.SpaceName != nil && cr.Spec.ForProvider.OrgName != nil {
+		// spaceName is set, so we need to get the space GUID
+		cf, err := c.newClientFn(ctx, c.kube, mg)
+		if err != nil {
+			return errors.Wrap(err, errGetClient)
+		}
+		spaceClient, _, orgClient := space.NewClient(cf)
+		spaceGUID := space.GetGUID(ctx, orgClient, spaceClient, *cr.Spec.ForProvider.OrgName, *cr.Spec.ForProvider.SpaceName)
+		if spaceGUID == "" {
+			return errors.New("Cannot get space GUID using names")
+		}
+		cr.Spec.ForProvider.Space = reference.ToPtrValue(spaceGUID)
+		return nil
+	}
+
+	if cr.Spec.ForProvider.Space != nil {
+		return errors.New("Cannot get space GUID using names or references.")
+	}
+	return nil
 }

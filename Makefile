@@ -194,7 +194,7 @@ help-special: crossplane.help
 
 PUBLISH_IMAGES ?= crossplane/provider-cloudfoundry crossplane/provider-cloudfoundry-controller
 
-.PONY: publish
+.PHONY: publish
 publish:
 	@$(INFO) "Publishing images $(PUBLISH_IMAGES) to $(DOCKER_REGISTRY)"
 	@for image in $(PUBLISH_IMAGES); do \

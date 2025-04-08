@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
@@ -65,12 +64,8 @@ type Client struct {
 }
 
 // NewClient creates a new client instance from a cfclient.ServiceInstance instance.
-func NewClient(config *config.Config) (*Client, error) {
-	cf, err := client.New(config)
-	if err != nil {
-		return nil, err
-	}
-	return &Client{cf.ServiceInstances, cf.Jobs}, nil
+func NewClient(cf *client.Client) *Client {
+	return &Client{cf.ServiceInstances, cf.Jobs}
 }
 
 // GetByIDOrSpec retrieves external resource by GUID or by matching CR's ForProvider spec

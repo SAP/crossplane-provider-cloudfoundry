@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
@@ -21,10 +20,6 @@ type Role interface {
 }
 
 // NewClient returns a new CF client with Role interface
-func NewClient(config *config.Config) (Role, job.Job, error) {
-	cf, err := client.New(config)
-	if err != nil {
-		return nil, nil, err
-	}
-	return cf.Roles, cf.Jobs, nil
+func NewClient(cf *client.Client) (Role, job.Job) {
+	return cf.Roles, cf.Jobs
 }

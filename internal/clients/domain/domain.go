@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/uuid"
 	"k8s.io/utils/ptr"
@@ -26,12 +25,8 @@ type Client interface {
 type Resource resource.Domain
 
 // NewClient creates a new client instance from a cfclient.Domain instance.
-func NewClient(config *config.Config) (Client, error) {
-	cf, err := client.New(config)
-	if err != nil {
-		return nil, err
-	}
-	return cf.Domains, nil
+func NewClient(cf *client.Client) Client {
+	return cf.Domains
 }
 
 // GetByIDOrName returns a domain by ID or Name.
