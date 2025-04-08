@@ -13,6 +13,10 @@ type SpaceRef struct {
 	// +kubebuilder:validation:Optional
 	SpaceName *string `json:"spaceName,omitempty"`
 
+	// The name of the Cloud Foundry organization containing the space.
+	// +kubebuilder:validation:Optional
+	OrgName *string `json:"spaceName,omitempty"`
+
 	// Reference to a `Space` CR to lookup the `guid` of the Cloud Foundry space. Preferred if the reference space is managed by Crossplane.
 	// +kubebuilder:validation:Optional
 	SpaceRef *v1.Reference `json:"spaceRef,omitempty"`
