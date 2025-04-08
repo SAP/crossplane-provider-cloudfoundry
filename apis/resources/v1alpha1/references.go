@@ -3,7 +3,7 @@ package v1alpha1
 import v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 
 // SpaceRef defines a reference to a Cloud Foundry space
-type SpaceRef struct {
+type SpaceReference struct {
 	// The `guid` of the Cloud Foundry space. This field is typically populated using references specified in `spaceRef`, `spaceSelector`, or `spaceName`.
 	// +crossplane:generate:reference:type=Space
 	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
@@ -15,7 +15,7 @@ type SpaceRef struct {
 
 	// The name of the Cloud Foundry organization containing the space.
 	// +kubebuilder:validation:Optional
-	OrgName *string `json:"spaceName,omitempty"`
+	OrgName *string `json:"orgName,omitempty"`
 
 	// Reference to a `Space` CR to lookup the `guid` of the Cloud Foundry space. Preferred if the reference space is managed by Crossplane.
 	// +kubebuilder:validation:Optional
