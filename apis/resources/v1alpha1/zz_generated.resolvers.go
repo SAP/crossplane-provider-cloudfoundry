@@ -34,20 +34,20 @@ func (mg *App) ResolveReferences(ctx context.Context, c client.Reader) error {
 	var err error
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
-		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceRef.Space),
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceReference.Space),
 		Extract:      resources.ExternalID(),
-		Reference:    mg.Spec.ForProvider.SpaceRef.SpaceRef,
-		Selector:     mg.Spec.ForProvider.SpaceRef.SpaceSelector,
+		Reference:    mg.Spec.ForProvider.SpaceReference.SpaceRef,
+		Selector:     mg.Spec.ForProvider.SpaceReference.SpaceSelector,
 		To: reference.To{
 			List:    &SpaceList{},
 			Managed: &Space{},
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "mg.Spec.ForProvider.SpaceRef.Space")
+		return errors.Wrap(err, "mg.Spec.ForProvider.SpaceReference.Space")
 	}
-	mg.Spec.ForProvider.SpaceRef.Space = reference.ToPtrValue(rsp.ResolvedValue)
-	mg.Spec.ForProvider.SpaceRef.SpaceRef = rsp.ResolvedReference
+	mg.Spec.ForProvider.SpaceReference.Space = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.SpaceReference.SpaceRef = rsp.ResolvedReference
 
 	for i3 := 0; i3 < len(mg.Spec.ForProvider.Routes); i3++ {
 		rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
@@ -175,20 +175,20 @@ func (mg *Route) ResolveReferences(ctx context.Context, c client.Reader) error {
 	var err error
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
-		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceRef.Space),
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceReference.Space),
 		Extract:      resources.ExternalID(),
-		Reference:    mg.Spec.ForProvider.SpaceRef.SpaceRef,
-		Selector:     mg.Spec.ForProvider.SpaceRef.SpaceSelector,
+		Reference:    mg.Spec.ForProvider.SpaceReference.SpaceRef,
+		Selector:     mg.Spec.ForProvider.SpaceReference.SpaceSelector,
 		To: reference.To{
 			List:    &SpaceList{},
 			Managed: &Space{},
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "mg.Spec.ForProvider.SpaceRef.Space")
+		return errors.Wrap(err, "mg.Spec.ForProvider.SpaceReference.Space")
 	}
-	mg.Spec.ForProvider.SpaceRef.Space = reference.ToPtrValue(rsp.ResolvedValue)
-	mg.Spec.ForProvider.SpaceRef.SpaceRef = rsp.ResolvedReference
+	mg.Spec.ForProvider.SpaceReference.Space = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.SpaceReference.SpaceRef = rsp.ResolvedReference
 
 	return nil
 }
@@ -243,20 +243,20 @@ func (mg *ServiceInstance) ResolveReferences(ctx context.Context, c client.Reade
 	var err error
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
-		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceRef.Space),
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceReference.Space),
 		Extract:      resources.ExternalID(),
-		Reference:    mg.Spec.ForProvider.SpaceRef.SpaceRef,
-		Selector:     mg.Spec.ForProvider.SpaceRef.SpaceSelector,
+		Reference:    mg.Spec.ForProvider.SpaceReference.SpaceRef,
+		Selector:     mg.Spec.ForProvider.SpaceReference.SpaceSelector,
 		To: reference.To{
 			List:    &SpaceList{},
 			Managed: &Space{},
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "mg.Spec.ForProvider.SpaceRef.Space")
+		return errors.Wrap(err, "mg.Spec.ForProvider.SpaceReference.Space")
 	}
-	mg.Spec.ForProvider.SpaceRef.Space = reference.ToPtrValue(rsp.ResolvedValue)
-	mg.Spec.ForProvider.SpaceRef.SpaceRef = rsp.ResolvedReference
+	mg.Spec.ForProvider.SpaceReference.Space = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.SpaceReference.SpaceRef = rsp.ResolvedReference
 
 	return nil
 }
@@ -321,20 +321,20 @@ func (mg *SpaceMembers) ResolveReferences(ctx context.Context, c client.Reader) 
 	var err error
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
-		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceRef.Space),
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceReference.Space),
 		Extract:      resources.ExternalID(),
-		Reference:    mg.Spec.ForProvider.SpaceRef.SpaceRef,
-		Selector:     mg.Spec.ForProvider.SpaceRef.SpaceSelector,
+		Reference:    mg.Spec.ForProvider.SpaceReference.SpaceRef,
+		Selector:     mg.Spec.ForProvider.SpaceReference.SpaceSelector,
 		To: reference.To{
 			List:    &SpaceList{},
 			Managed: &Space{},
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "mg.Spec.ForProvider.SpaceRef.Space")
+		return errors.Wrap(err, "mg.Spec.ForProvider.SpaceReference.Space")
 	}
-	mg.Spec.ForProvider.SpaceRef.Space = reference.ToPtrValue(rsp.ResolvedValue)
-	mg.Spec.ForProvider.SpaceRef.SpaceRef = rsp.ResolvedReference
+	mg.Spec.ForProvider.SpaceReference.Space = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.SpaceReference.SpaceRef = rsp.ResolvedReference
 
 	return nil
 }
@@ -389,20 +389,20 @@ func (mg *SpaceRole) ResolveReferences(ctx context.Context, c client.Reader) err
 	var err error
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
-		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceRef.Space),
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceReference.Space),
 		Extract:      resources.ExternalID(),
-		Reference:    mg.Spec.ForProvider.SpaceRef.SpaceRef,
-		Selector:     mg.Spec.ForProvider.SpaceRef.SpaceSelector,
+		Reference:    mg.Spec.ForProvider.SpaceReference.SpaceRef,
+		Selector:     mg.Spec.ForProvider.SpaceReference.SpaceSelector,
 		To: reference.To{
 			List:    &SpaceList{},
 			Managed: &Space{},
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "mg.Spec.ForProvider.SpaceRef.Space")
+		return errors.Wrap(err, "mg.Spec.ForProvider.SpaceReference.Space")
 	}
-	mg.Spec.ForProvider.SpaceRef.Space = reference.ToPtrValue(rsp.ResolvedValue)
-	mg.Spec.ForProvider.SpaceRef.SpaceRef = rsp.ResolvedReference
+	mg.Spec.ForProvider.SpaceReference.Space = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.SpaceReference.SpaceRef = rsp.ResolvedReference
 
 	return nil
 }

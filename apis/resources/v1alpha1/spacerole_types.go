@@ -44,7 +44,7 @@ type SpaceRoleObservation struct {
 
 type SpaceRoleParameters struct {
 
-	SpaceRef `json:",inline"`
+	SpaceReference `json:",inline"`
 
 	// (String) SpaceRole type; see Valid role types
 	// SpaceRole type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types)

@@ -38,7 +38,7 @@ type RouteObservation struct {
 
 // RouteParameters parameters for Routes
 type RouteParameters struct {
-	SpaceRef `json:",inline"`
+	SpaceReference `json:",inline"`
 
 	// The ID of the domain of the route
 	// +kubebuilder:validation:Optional

@@ -35,7 +35,7 @@ type AppParameters struct {
 	// +kubebuilder:default=buildpack
 	Lifecycle string `json:"lifecycle,omitempty"`
 
-	SpaceRef `json:",inline"`
+	SpaceReference `json:",inline"`
 
 	// (NOT SUPPORTED YET) An array of one ore more installed buildpack names, e.g., ruby_buildpack, java_buildpack.
 	// +kubebuilder:validation:Optional

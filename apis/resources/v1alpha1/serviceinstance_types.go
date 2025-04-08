@@ -38,7 +38,7 @@ type ServiceInstanceParameters struct {
 	// +kubebuilder:default=managed
 	Type ServiceInstanceType `json:"type"`
 
-	SpaceRef `json:",inline"`
+	SpaceReference `json:",inline"`
 
 	// Fields relevant  for managed service instances
 	Managed `json:",inline"`
