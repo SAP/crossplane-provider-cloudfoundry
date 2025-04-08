@@ -75,8 +75,8 @@ func fakeRoute(m ...modifier) *v1alpha1.Route {
 		},
 		Spec: v1alpha1.RouteSpec{
 			ForProvider: v1alpha1.RouteParameters{
-				SpaceRef: v1alpha1.SpaceRef{Space: &spaceGUID},
-				Domain:   &domainGUID,
+				SpaceReference: v1alpha1.SpaceReference{Space: &spaceGUID},
+				Domain:         &domainGUID,
 			},
 		},
 	}

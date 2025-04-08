@@ -22,8 +22,8 @@ var (
 	timezero   = "0001-01-01T00:00:00Z"
 
 	fakeForProvider = v1alpha1.RouteParameters{
-		SpaceRef: v1alpha1.SpaceRef{Space: &spaceGUID},
-		Domain:   &domainGUID,
+		SpaceReference: v1alpha1.SpaceReference{Space: &spaceGUID},
+		Domain:         &domainGUID,
 	}
 
 	emptyForProvider = v1alpha1.RouteParameters{}

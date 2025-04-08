@@ -102,7 +102,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
-	spaceClient, featureClient := space.NewClient(cf)
+	spaceClient, featureClient, _ := space.NewClient(cf)
 
 	return &external{
 		kube:    c.kube,
