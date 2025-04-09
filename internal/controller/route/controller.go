@@ -24,6 +24,7 @@ import (
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/route"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
@@ -57,9 +58,10 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	options := []managed.ReconcilerOption{
-		managed.WithInitializers(initializer{
-			client: mgr.GetClient(),
-		}),
+		managed.WithInitializers(
+			domainInitializer{client: mgr.GetClient()},
+			spaceInitializer{client: mgr.GetClient()},
+		),
 		managed.WithExternalConnecter(&connector{
 			kube:  mgr.GetClient(),
 			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
@@ -248,12 +250,14 @@ func ResolveReferences(ctx context.Context, mg *v1alpha1.Route, c k8s.Reader) er
 
 // initializer type implements the managed.Initializer interface
 type initializer struct {
-	client k8s.Reader
+	client k8s.Client
 }
+
+type domainInitializer initializer
 
 // Initialize method resolves the references which are not resolved by
 // the crossplane reconciler.
-func (i initializer) Initialize(ctx context.Context, mg resource.Managed) error {
+func (i domainInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
 	cr, ok := mg.(*v1alpha1.Route)
 	if !ok {
 		return errors.New(errNotRoute)
@@ -261,4 +265,19 @@ func (i initializer) Initialize(ctx context.Context, mg resource.Managed) error 
 
 	return ResolveReferences(ctx, cr, i.client)
 
+}
+
+type spaceInitializer initializer
+
+func (s spaceInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
+	cr, ok := mg.(*v1alpha1.SpaceRole)
+	if !ok {
+		return errors.New(errNotRoute)
+	}
+
+	if cr.Spec.ForProvider.SpaceRef != nil || cr.Spec.ForProvider.SpaceSelector != nil {
+		return cr.ResolveReferences(ctx, s.client)
+	}
+
+	return space.ResolveByName(ctx, clients.ClientFnBuilder(ctx, s.client), mg)
 }
