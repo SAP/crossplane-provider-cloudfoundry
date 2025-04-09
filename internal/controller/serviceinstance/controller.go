@@ -56,7 +56,6 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	options := []managed.ReconcilerOption{
-		managed.WithInitializers(&servicePlanInitializer{mgr.GetClient()}),
 		managed.WithExternalConnecter(&connector{
 			kube:  mgr.GetClient(),
 			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
@@ -66,9 +65,10 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
 		managed.WithPollInterval(o.PollInterval),
-		managed.WithInitializers(&initializer{
-			kube: mgr.GetClient(),
-		}),
+		managed.WithInitializers(
+			spaceInitializer{kube: mgr.GetClient()},
+			servicePlanInitializer{kube: mgr.GetClient()},
+		),
 	}
 
 	if o.Features.Enabled(features.EnableBetaManagementPolicies) {
@@ -318,54 +318,6 @@ func extractCredentialSpec(ctx context.Context, kube k8s.Client, spec v1alpha1.S
 	return nil, nil
 }
 
-// A servicePlanInitializer is expected to initialize the service plan of a ServiceInstance
-type servicePlanInitializer struct {
-	kube k8s.Client
-}
-
-// Initialize implements crossplane InitializeFn interface
-func (s *servicePlanInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha1.ServiceInstance)
-	if !ok {
-		return errors.New("Not a ServiceInstance")
-	}
-	if cr.Spec.ForProvider.Type != "managed" {
-		return nil
-	}
-
-	// fallback on crossplane.io/external-data annotation for backward compatibility
-	if cr.Spec.ForProvider.ServicePlan == nil {
-		sp := struct {
-			ServicePlan *v1alpha1.ServicePlanParameters `json:"service_plan"`
-		}{ServicePlan: &v1alpha1.ServicePlanParameters{}}
-
-		if data, ok := mg.GetAnnotations()["crossplane.io/external-data"]; ok {
-			if err := json.Unmarshal([]byte(data), &sp); err == nil {
-				cr.Spec.ForProvider.ServicePlan = sp.ServicePlan
-			}
-		}
-	}
-
-	//  We need to initialize the service plan in each reconciliation, in order to detect an update service_plan of existing service.
-	cf, err := clients.ClientFnBuilder(ctx, s.kube)(mg)
-	if err != nil {
-		return errors.Wrapf(err, "Cannot initialize service plan")
-	}
-	opt := client.NewServicePlanListOptions()
-	opt.ServiceOfferingNames.EqualTo(*cr.Spec.ForProvider.ServicePlan.Offering)
-	opt.Names.EqualTo(*cr.Spec.ForProvider.ServicePlan.Plan)
-
-	// There must be exactly one matching service plan
-	sp, err := cf.ServicePlans.Single(ctx, opt)
-	if err != nil {
-		return errors.Wrapf(err, "Cannot initialize service plan using serviceName/servicePlanName: %s:%s`", *cr.Spec.ForProvider.ServicePlan.Offering, *cr.Spec.ForProvider.ServicePlan.Plan)
-	}
-
-	cr.Spec.ForProvider.ServicePlan.ID = &sp.GUID
-
-	return s.kube.Update(ctx, cr)
-}
-
 // jsonContain returns true if the first JSON message is a superset or identical to the second JSON message
 func jsonContain(a, b []byte) bool {
 	// if b is "{}", it is considered as empty
@@ -383,10 +335,12 @@ func jsonContain(a, b []byte) bool {
 	return diff == jsondiff.FullMatch || diff == jsondiff.SupersetMatch
 }
 
-type initializer connector
+type spaceInitializer struct {
+	kube k8s.Client
+}
 
 // / Initialize implements the Initializer interface
-func (c *initializer) Initialize(ctx context.Context, mg resource.Managed) error {
+func (c spaceInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
 	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
 		return errors.New(errWrongCRType)
@@ -397,4 +351,52 @@ func (c *initializer) Initialize(ctx context.Context, mg resource.Managed) error
 	}
 
 	return space.ResolveByName(ctx, clients.ClientFnBuilder(ctx, c.kube), mg)
+}
+
+// A servicePlanInitializer is expected to initialize the service plan of a ServiceInstance
+type servicePlanInitializer struct {
+	kube k8s.Client
+}
+
+// Initialize implements crossplane InitializeFn interface
+func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
+	cr, ok := mg.(*v1alpha1.ServiceInstance)
+	if !ok {
+		return errors.New(errWrongCRType)
+	}
+	if cr.Spec.ForProvider.Type != "managed" {
+		return nil
+	}
+
+	if cr.Spec.ForProvider.ServicePlan == nil {
+		// fallback on crossplane.io/external-data annotation for backward compatibility
+		sp := struct {
+			ServicePlan *v1alpha1.ServicePlanParameters `json:"service_plan"`
+		}{ServicePlan: &v1alpha1.ServicePlanParameters{}}
+
+		if data, ok := mg.GetAnnotations()["crossplane.io/external-data"]; ok {
+			if err := json.Unmarshal([]byte(data), &sp); err == nil {
+				cr.Spec.ForProvider.ServicePlan = sp.ServicePlan
+			}
+		}
+	}
+
+	//  Lookup service plan during every reconciliation to detect an update service_plan of existing service.
+	cf, err := clients.ClientFnBuilder(ctx, s.kube)(mg)
+	if err != nil {
+		return errors.Wrapf(err, errNewClient)
+	}
+	opt := client.NewServicePlanListOptions()
+	opt.ServiceOfferingNames.EqualTo(*cr.Spec.ForProvider.ServicePlan.Offering)
+	opt.Names.EqualTo(*cr.Spec.ForProvider.ServicePlan.Plan)
+
+	// There must be exactly one matching service plan
+	sp, err := cf.ServicePlans.Single(ctx, opt)
+	if err != nil {
+		return errors.Wrapf(err, "Cannot initialize service plan using serviceName/servicePlanName: %s:%s`", *cr.Spec.ForProvider.ServicePlan.Offering, *cr.Spec.ForProvider.ServicePlan.Plan)
+	}
+
+	cr.Spec.ForProvider.ServicePlan.ID = &sp.GUID
+
+	return s.kube.Update(ctx, cr)
 }
