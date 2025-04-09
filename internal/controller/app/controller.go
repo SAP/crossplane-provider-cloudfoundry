@@ -269,7 +269,7 @@ type spaceInitializer initializer
 
 // / Initialize implements the Initializer interface
 func (c *spaceInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha1.SpaceRole)
+	cr, ok := mg.(*v1alpha1.App)
 	if !ok {
 		return errors.New(errWrongKind)
 	}

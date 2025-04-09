@@ -270,7 +270,7 @@ func (i domainInitializer) Initialize(ctx context.Context, mg resource.Managed) 
 type spaceInitializer initializer
 
 func (s spaceInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha1.SpaceRole)
+	cr, ok := mg.(*v1alpha1.Route)
 	if !ok {
 		return errors.New(errNotRoute)
 	}
