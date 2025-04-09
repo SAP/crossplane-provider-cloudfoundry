@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 )
 
@@ -17,10 +16,6 @@ type SpaceQuotaClient interface {
 	Delete(ctx context.Context, guid string) (string, error)
 }
 
-func New(config *config.Config) (SpaceQuotaClient, error) {
-	cf, err := client.New(config)
-	if err != nil {
-		return nil, err
-	}
-	return cf.SpaceQuotas, nil
+func NewClient(cf *client.Client) SpaceQuotaClient {
+	return cf.SpaceQuotas
 }

@@ -19,7 +19,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/reference"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -59,17 +58,16 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	options := []managed.ReconcilerOption{
 		managed.WithInitializers(&servicePlanInitializer{mgr.GetClient()}),
 		managed.WithExternalConnecter(&connector{
-			kube:        mgr.GetClient(),
-			usage:       resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
-			newClientFn: clients.CloudfoundryClientBuilder}),
+			kube:  mgr.GetClient(),
+			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
+		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithTimeout(5 * time.Minute), // increase timeout for long-running operations
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
 		managed.WithPollInterval(o.PollInterval),
 		managed.WithInitializers(&initializer{
-			kube:        mgr.GetClient(),
-			newClientFn: clients.CloudfoundryClientBuilder,
+			kube: mgr.GetClient(),
 		}),
 	}
 
@@ -91,9 +89,8 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 // A connector is expected to produce an external client when its Connect method
 // is called.
 type connector struct {
-	kube        k8s.Client
-	usage       resource.Tracker
-	newClientFn clients.CloudFoundryClientFn
+	kube  k8s.Client
+	usage resource.Tracker
 }
 
 // Connect typically produces an ExternalClient by:
@@ -110,7 +107,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
-	cf, err := c.newClientFn(ctx, c.kube, mg)
+	cf, err := clients.ClientFnBuilder(ctx, c.kube)(mg)
 	if err != nil {
 		return nil, errors.Wrap(err, errNewClient)
 	}
@@ -350,7 +347,7 @@ func (s *servicePlanInitializer) Initialize(ctx context.Context, mg resource.Man
 	}
 
 	//  We need to initialize the service plan in each reconciliation, in order to detect an update service_plan of existing service.
-	cf, err := clients.CloudfoundryClientBuilder(ctx, s.kube, mg)
+	cf, err := clients.ClientFnBuilder(ctx, s.kube)(mg)
 	if err != nil {
 		return errors.Wrapf(err, "Cannot initialize service plan")
 	}
@@ -398,23 +395,6 @@ func (c *initializer) Initialize(ctx context.Context, mg resource.Managed) error
 	if cr.Spec.ForProvider.SpaceRef != nil || cr.Spec.ForProvider.SpaceSelector != nil {
 		return cr.ResolveReferences(ctx, c.kube)
 	}
-	if cr.Spec.ForProvider.SpaceName != nil && cr.Spec.ForProvider.OrgName != nil {
-		// spaceName is set, so we need to get the space GUID
-		cf, err := c.newClientFn(ctx, c.kube, mg)
-		if err != nil {
-			return errors.Wrap(err, errNewClient)
-		}
-		spaceClient, _, orgClient := space.NewClient(cf)
-		spaceGUID := space.GetGUID(ctx, orgClient, spaceClient, *cr.Spec.ForProvider.OrgName, *cr.Spec.ForProvider.SpaceName)
-		if spaceGUID == "" {
-			return errors.New("Cannot get space GUID using names")
-		}
-		cr.Spec.ForProvider.Space = reference.ToPtrValue(spaceGUID)
-		return nil
-	}
 
-	if cr.Spec.ForProvider.Space != nil {
-		return errors.New("Cannot get space GUID using names or references.")
-	}
-	return nil
+	return space.ResolveByName(ctx, clients.ClientFnBuilder(ctx, c.kube), mg)
 }

@@ -19,7 +19,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/reference"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -55,15 +54,13 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	options := []managed.ReconcilerOption{
 		managed.WithExternalConnecter(
 			&connector{kube: mgr.GetClient(),
-				usage:       resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
-				newClientFn: clients.CloudfoundryClientBuilder,
+				usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
 			}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
-		managed.WithInitializers(&initializer{
-			kube:        mgr.GetClient(),
-			newClientFn: clients.CloudfoundryClientBuilder,
+		managed.WithInitializers(&spaceInitializer{
+			kube: mgr.GetClient(),
 		}),
 	}
 
@@ -84,9 +81,8 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 
 // A connector supplies a function for the Reconciler to create a client to the external CloudFoundry resources.
 type connector struct {
-	kube        k8s.Client
-	usage       resource.Tracker
-	newClientFn clients.CloudFoundryClientFn
+	kube  k8s.Client
+	usage resource.Tracker
 }
 
 // Connect typically produces an ExternalClient by:
@@ -103,7 +99,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errTrackUsage)
 	}
 
-	cf, err := c.newClientFn(ctx, c.kube, mg)
+	cf, err := clients.ClientFnBuilder(ctx, c.kube)(mg)
 	if err != nil {
 		return nil, errors.Wrap(err, errConnect)
 	}
@@ -265,11 +261,15 @@ func getDockerCredential(ctx context.Context, kube k8s.Client, forProvider v1alp
 	return s, nil
 }
 
-type initializer connector
+type initializer struct {
+	kube k8s.Client
+}
+
+type spaceInitializer initializer
 
 // / Initialize implements the Initializer interface
-func (c *initializer) Initialize(ctx context.Context, mg resource.Managed) error {
-	cr, ok := mg.(*v1alpha1.App)
+func (c *spaceInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
+	cr, ok := mg.(*v1alpha1.SpaceRole)
 	if !ok {
 		return errors.New(errWrongKind)
 	}
@@ -277,23 +277,6 @@ func (c *initializer) Initialize(ctx context.Context, mg resource.Managed) error
 	if cr.Spec.ForProvider.SpaceRef != nil || cr.Spec.ForProvider.SpaceSelector != nil {
 		return cr.ResolveReferences(ctx, c.kube)
 	}
-	if cr.Spec.ForProvider.SpaceName != nil && cr.Spec.ForProvider.OrgName != nil {
-		// spaceName is set, so we need to get the space GUID
-		cf, err := c.newClientFn(ctx, c.kube, mg)
-		if err != nil {
-			return errors.Wrap(err, errConnect)
-		}
-		spaceClient, _, orgClient := space.NewClient(cf)
-		spaceGUID := space.GetGUID(ctx, orgClient, spaceClient, *cr.Spec.ForProvider.OrgName, *cr.Spec.ForProvider.SpaceName)
-		if spaceGUID == "" {
-			return errors.New("Cannot get space GUID using names")
-		}
-		cr.Spec.ForProvider.Space = reference.ToPtrValue(spaceGUID)
-		return nil
-	}
 
-	if cr.Spec.ForProvider.Space != nil {
-		return errors.New("Cannot get space GUID using names or references.")
-	}
-	return nil
+	return space.ResolveByName(ctx, clients.ClientFnBuilder(ctx, c.kube), mg)
 }

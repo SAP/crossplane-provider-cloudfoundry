@@ -57,17 +57,12 @@ func (c *externalConnecter) Connect(ctx context.Context, mg resource.Managed) (m
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
-	config, err := clients.GetCredentialConfig(ctx, c.kubeClient, mg)
-	if err != nil {
-		return nil, errors.Wrap(err, errGetProviderConfig)
-	}
-
-	orgQuotaClient, err := c.newClientFn(config)
+	cf, err := clients.ClientFnBuilder(ctx, c.kubeClient)(mg)
 	if err != nil {
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
-	return &externalClient{cloudFoundryClient: orgQuotaClient, kubeClient: c.kubeClient}, nil
+	return &externalClient{cloudFoundryClient: orgquota.NewClient(cf), kubeClient: c.kubeClient}, nil
 }
 
 // Setup function builds a new controller that will be started by the
@@ -79,7 +74,6 @@ func Setup(mgr ctrl.Manager, controllerOptions controller.Options) error {
 		managed.WithExternalConnecter(&externalConnecter{
 			kubeClient:   mgr.GetClient(),
 			usageTracker: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
-			newClientFn:  orgquota.NewClient,
 		}),
 		managed.WithLogger(controllerOptions.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),

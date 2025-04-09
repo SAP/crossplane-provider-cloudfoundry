@@ -146,3 +146,5 @@ func init() {
 func (r *Space) GetID() string {
 	return r.Status.AtProvider.ID
 }
+
+

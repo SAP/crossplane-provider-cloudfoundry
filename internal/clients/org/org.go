@@ -4,13 +4,12 @@ import (
 	"context"
 	"time"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/uuid"
 	"k8s.io/utils/ptr"
-
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 // Client is the interface that defines the methods that a Org client should implement.
@@ -24,12 +23,8 @@ type Client interface {
 type Resource resource.Organization
 
 // NewClient creates a new client instance from a cfclient.ServiceInstance instance.
-func NewClient(config *config.Config) (Client, error) {
-	cf, err := client.New(config)
-	if err != nil {
-		return nil, err
-	}
-	return cf.Organizations, nil
+func NewClient(cf *client.Client) Client {
+	return cf.Organizations
 }
 
 // GetByIDOrName returns an organization by ID or Name.

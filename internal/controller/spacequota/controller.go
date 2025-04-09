@@ -251,16 +251,11 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
-	config, err := clients.GetCredentialConfig(ctx, c.kube, mg)
-	if err != nil {
-		return nil, errors.Wrap(err, errGetProviderConfig)
-	}
-
-	s, err := spacequota.New(config)
+	cf, err := clients.ClientFnBuilder(ctx, c.kube)(mg)
 	if err != nil {
 		return nil, errors.Wrap(err, errNewClient)
 	}
-	return &external{client: s, kube: c.kube, isUpToDate: isUpToDate}, nil
+	return &external{client: spacequota.NewClient(cf), kube: c.kube, isUpToDate: isUpToDate}, nil
 }
 
 // An ExternalClient observes, then either creates, updates, or

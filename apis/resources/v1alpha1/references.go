@@ -1,8 +1,10 @@
 package v1alpha1
 
-import v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+import (
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+)
 
-// SpaceRef defines a reference to a Cloud Foundry space
+// SpaceReference defines a reference to a Cloud Foundry space
 type SpaceReference struct {
 	// The `guid` of the Cloud Foundry space. This field is typically populated using references specified in `spaceRef`, `spaceSelector`, or `spaceName`.
 	// +crossplane:generate:reference:type=Space
