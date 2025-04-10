@@ -5,12 +5,12 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/org"
 )
 
 // Space is the interface that defines the methods that a Space client should implement.
@@ -29,12 +29,9 @@ type Feature interface {
 }
 
 // NewClient creates a new cf client and return interfaces for Space and SpaceFeatures
-func NewClient(config *config.Config) (Space, Feature, error) {
-	cf, err := client.New(config)
-	if err != nil {
-		return nil, nil, err
-	}
-	return cf.Spaces, cf.SpaceFeatures, nil
+func NewClient(cf *client.Client) (Space, Feature, org.Client) {
+
+	return cf.Spaces, cf.SpaceFeatures, cf.Organizations
 }
 
 func GetByIDOrSpec(ctx context.Context, spaceClient Space, guid string, spec v1alpha1.SpaceParameters) (*resource.Space, error) {
@@ -43,6 +40,32 @@ func GetByIDOrSpec(ctx context.Context, spaceClient Space, guid string, spec v1a
 	}
 
 	return spaceClient.Single(ctx, GenerateListOption(spec))
+}
+
+// GetGUID returns the GUID of a space by name. It returns an empty string, if the space does not exist, or there is an error.
+func GetGUID(ctx context.Context, orgClient org.Client, spaceClient Space, orgName, spaceName string) string {
+	opts := &client.SpaceListOptions{
+		ListOptions: nil,
+	}
+
+	if spaceName == "" {
+		return ""
+	}
+	opts.Names = client.Filter{Values: []string{spaceName}}
+
+	if orgName != "" {
+		orgGUID := org.GetGUID(ctx, orgClient, orgName)
+		if orgGUID != "" {
+			opts.OrganizationGUIDs = client.Filter{Values: []string{orgGUID}}
+		}
+	}
+
+	space, err := spaceClient.Single(ctx, opts)
+	if err != nil || space == nil {
+		return ""
+	}
+
+	return space.GUID
 }
 
 // GenerateListOption generates the list options for the client.

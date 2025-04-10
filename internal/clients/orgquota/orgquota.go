@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"k8s.io/utils/ptr"
 
@@ -24,12 +23,8 @@ type OrgQuota interface {
 }
 
 // NewClient creates a new OrgQuota client
-func NewClient(config *config.Config) (OrgQuota, error) {
-	cf, err := client.New(config)
-	if err != nil {
-		return nil, err
-	}
-	return cf.OrganizationQuotas, nil
+func NewClient(cf *client.Client) OrgQuota {
+	return cf.OrganizationQuotas
 }
 
 // GenerateCreate generates the OrgazationQuotaCreateOrUpdate from

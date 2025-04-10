@@ -3,7 +3,6 @@ package spacerole
 import (
 	"context"
 
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/pkg/errors"
 
 	"k8s.io/utils/ptr"
@@ -25,6 +24,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 	role "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/role"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
@@ -49,12 +49,15 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	options := []managed.ReconcilerOption{
-		managed.WithExternalConnecter(&connector{kube: mgr.GetClient(), newClientFn: role.NewClient,
+		managed.WithExternalConnecter(&connector{kube: mgr.GetClient(),
 			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
+		managed.WithInitializers(&initializer{
+			kube: mgr.GetClient(),
+		}),
 	}
 
 	if o.Features.Enabled(features.EnableBetaManagementPolicies) {
@@ -74,9 +77,8 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 
 // A connector supplies a function for the Reconciler to create a client to the external CloudFoundry resources.
 type connector struct {
-	kube        k8s.Client
-	usage       resource.Tracker
-	newClientFn func(config *config.Config) (role.Role, job.Job, error)
+	kube  k8s.Client
+	usage resource.Tracker
 }
 
 // Connect typically produces an ExternalClient by:
@@ -93,16 +95,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errTrackUsage)
 	}
 
-	config, err := clients.GetCredentialConfig(ctx, c.kube, mg)
-	if err != nil {
-		return nil, errors.Wrap(err, errGetProviderConfig)
-	}
-
-	role, job, err := c.newClientFn(config)
+	cf, err := clients.ClientFnBuilder(ctx, c.kube)(mg)
 	if err != nil {
 		return nil, errors.Wrap(err, errGetClient)
 	}
 
+	role, job := role.NewClient(cf)
 	return &external{role: role, kube: c.kube, job: job}, nil
 }
 
@@ -213,4 +211,22 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	}
 
 	return job.PollJobComplete(ctx, c.job, jobGUID)
+}
+
+type initializer struct {
+	kube k8s.Client
+}
+
+// / Initialize implements the Initializer interface
+func (c *initializer) Initialize(ctx context.Context, mg resource.Managed) error {
+	cr, ok := mg.(*v1alpha1.SpaceRole)
+	if !ok {
+		return errors.New(errWrongKind)
+	}
+
+	if cr.Spec.ForProvider.SpaceRef != nil || cr.Spec.ForProvider.SpaceSelector != nil {
+		return cr.ResolveReferences(ctx, c.kube)
+	}
+
+	return space.ResolveByName(ctx, clients.ClientFnBuilder(ctx, c.kube), mg)
 }

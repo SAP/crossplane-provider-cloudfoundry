@@ -39,20 +39,6 @@ const (
 	errNoEndpoint           = "no API endpoint is configured in ProviderConfig"
 )
 
-// CloudFoundryClientFn is a function that builds a CF Client
-type CloudFoundryClientFn func(context.Context, client.Client, resource.Managed) (*cfv3.Client, error)
-
-// CloudfoundryClientBuilder implement CloudFoundryClientFn
-func CloudfoundryClientBuilder(ctx context.Context, client client.Client, mg resource.Managed) (*cfv3.Client, error) {
-
-	cfg, err := GetCredentialConfig(ctx, client, mg)
-	if err != nil {
-		return nil, errors.Wrap(err, "cannot config cloudfoundry client")
-	}
-
-	return cfv3.New(cfg)
-}
-
 // GetCredentialConfig returns a config.Config for the given managed resource
 func GetCredentialConfig(ctx context.Context, client client.Client, mg resource.Managed) (*config.Config, error) {
 	pc, err := getProviderConfig(ctx, client, mg)
@@ -107,4 +93,17 @@ func getEndpoint(ctx context.Context, client client.Client, pc *v1beta1.Provider
 		return &endpoint, nil
 	}
 	return nil, errors.New(errNoEndpoint)
+}
+
+type ClientFn func(resource.Managed) (*cfv3.Client, error)
+
+func ClientFnBuilder(ctx context.Context, client client.Client) func(resource.Managed) (*cfv3.Client, error) {
+	return func(mg resource.Managed) (*cfv3.Client, error) {
+		cfg, err := GetCredentialConfig(ctx, client, mg)
+		if err != nil {
+			return nil, errors.Wrap(err, "cannot config cloudfoundry client")
+		}
+
+		return cfv3.New(cfg)
+	}
 }

@@ -4,13 +4,12 @@ import (
 	"context"
 	"time"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/uuid"
 	"k8s.io/utils/ptr"
-
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 // Client is the interface that defines the methods that a Org client should implement.
@@ -24,12 +23,8 @@ type Client interface {
 type Resource resource.Organization
 
 // NewClient creates a new client instance from a cfclient.ServiceInstance instance.
-func NewClient(config *config.Config) (Client, error) {
-	cf, err := client.New(config)
-	if err != nil {
-		return nil, err
-	}
-	return cf.Organizations, nil
+func NewClient(cf *client.Client) Client {
+	return cf.Organizations
 }
 
 // GetByIDOrName returns an organization by ID or Name.
@@ -41,6 +36,15 @@ func GetByIDOrName(ctx context.Context, c Client, id, name string) (*resource.Or
 	}
 
 	return c.Single(ctx, &client.OrganizationListOptions{Names: client.Filter{Values: []string{name}}})
+}
+
+// GetGUID returns the GUID of an organization by name. It returns an empty string, if the organization does not exist, or there is an error.
+func GetGUID(ctx context.Context, c Client, name string) string {
+	org, err := c.Single(ctx, &client.OrganizationListOptions{Names: client.Filter{Values: []string{name}}})
+	if err != nil || org == nil {
+		return ""
+	}
+	return org.GUID
 }
 
 // GenerateCreate generates the OrganizationCreate from an *OrgParameters

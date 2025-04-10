@@ -26,6 +26,7 @@ import (
 	pcv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/app"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
@@ -53,12 +54,14 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	options := []managed.ReconcilerOption{
 		managed.WithExternalConnecter(
 			&connector{kube: mgr.GetClient(),
-				usage:       resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
-				newClientFn: clients.CloudfoundryClientBuilder,
+				usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
 			}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
+		managed.WithInitializers(&spaceInitializer{
+			kube: mgr.GetClient(),
+		}),
 	}
 
 	if o.Features.Enabled(features.EnableBetaManagementPolicies) {
@@ -78,9 +81,8 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 
 // A connector supplies a function for the Reconciler to create a client to the external CloudFoundry resources.
 type connector struct {
-	kube        k8s.Client
-	usage       resource.Tracker
-	newClientFn clients.CloudFoundryClientFn
+	kube  k8s.Client
+	usage resource.Tracker
 }
 
 // Connect typically produces an ExternalClient by:
@@ -97,7 +99,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errTrackUsage)
 	}
 
-	cf, err := c.newClientFn(ctx, c.kube, mg)
+	cf, err := clients.ClientFnBuilder(ctx, c.kube)(mg)
 	if err != nil {
 		return nil, errors.Wrap(err, errConnect)
 	}
@@ -257,4 +259,24 @@ func getDockerCredential(ctx context.Context, kube k8s.Client, forProvider v1alp
 	}
 
 	return s, nil
+}
+
+type initializer struct {
+	kube k8s.Client
+}
+
+type spaceInitializer initializer
+
+// / Initialize implements the Initializer interface
+func (c *spaceInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
+	cr, ok := mg.(*v1alpha1.App)
+	if !ok {
+		return errors.New(errWrongKind)
+	}
+
+	if cr.Spec.ForProvider.SpaceRef != nil || cr.Spec.ForProvider.SpaceSelector != nil {
+		return cr.ResolveReferences(ctx, c.kube)
+	}
+
+	return space.ResolveByName(ctx, clients.ClientFnBuilder(ctx, c.kube), mg)
 }

@@ -5,8 +5,6 @@ import (
 
 	"github.com/pkg/errors"
 
-	cf "github.com/cloudfoundry/go-cfclient/v3/client"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -26,6 +24,7 @@ import (
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/route"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
@@ -59,13 +58,14 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	}
 
 	options := []managed.ReconcilerOption{
-		managed.WithInitializers(initializer{
-			client: mgr.GetClient(),
-		}),
+		managed.WithInitializers(
+			domainInitializer{client: mgr.GetClient()},
+			spaceInitializer{client: mgr.GetClient()},
+		),
 		managed.WithExternalConnecter(&connector{
-			kube:        mgr.GetClient(),
-			usage:       resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
-			newClientFn: clients.CloudfoundryClientBuilder}),
+			kube:  mgr.GetClient(),
+			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
+		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
@@ -90,9 +90,8 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 // A connector is expected to produce an ExternalClient when its Connect method
 // is called.
 type connector struct {
-	kube        k8s.Client
-	usage       resource.Tracker
-	newClientFn func(context.Context, k8s.Client, resource.Managed) (*cf.Client, error)
+	kube  k8s.Client
+	usage resource.Tracker
 }
 
 // Connect typically produces an ExternalClient by:
@@ -109,12 +108,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
-	cfv3, err := c.newClientFn(ctx, c.kube, mg)
+	cf, err := clients.ClientFnBuilder(ctx, c.kube)(mg)
 	if err != nil {
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
-	return &external{RouteService: route.NewClient(cfv3), kube: c.kube}, nil
+	return &external{RouteService: route.NewClient(cf), kube: c.kube}, nil
 }
 
 // An ExternalClient observes, then either creates, updates, or deletes an
@@ -251,16 +250,34 @@ func ResolveReferences(ctx context.Context, mg *v1alpha1.Route, c k8s.Reader) er
 
 // initializer type implements the managed.Initializer interface
 type initializer struct {
-	client k8s.Reader
+	client k8s.Client
 }
+
+type domainInitializer initializer
 
 // Initialize method resolves the references which are not resolved by
 // the crossplane reconciler.
-func (i initializer) Initialize(ctx context.Context, mg resource.Managed) error {
+func (i domainInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
 	cr, ok := mg.(*v1alpha1.Route)
 	if !ok {
 		return errors.New(errNotRoute)
 	}
 
 	return ResolveReferences(ctx, cr, i.client)
+
+}
+
+type spaceInitializer initializer
+
+func (s spaceInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
+	cr, ok := mg.(*v1alpha1.Route)
+	if !ok {
+		return errors.New(errNotRoute)
+	}
+
+	if cr.Spec.ForProvider.SpaceRef != nil || cr.Spec.ForProvider.SpaceSelector != nil {
+		return cr.ResolveReferences(ctx, s.client)
+	}
+
+	return space.ResolveByName(ctx, clients.ClientFnBuilder(ctx, s.client), mg)
 }

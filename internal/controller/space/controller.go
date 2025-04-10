@@ -3,7 +3,6 @@ package space
 import (
 	"context"
 
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -50,9 +49,8 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	options := []managed.ReconcilerOption{
 
 		managed.WithExternalConnecter(&connector{
-			kube:        mgr.GetClient(),
-			usage:       resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
-			newClientFn: space.NewClient,
+			kube:  mgr.GetClient(),
+			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
@@ -79,9 +77,8 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 // A connector is expected to produce an ExternalClient when its Connect method
 // is called.
 type connector struct {
-	kube        k8s.Client
-	usage       resource.Tracker
-	newClientFn func(*config.Config) (space.Space, space.Feature, error)
+	kube  k8s.Client
+	usage resource.Tracker
 }
 
 // Connect typically produces an ExternalClient by:
@@ -98,17 +95,19 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
-	config, err := clients.GetCredentialConfig(ctx, c.kube, mg)
-	if err != nil {
-		return nil, errors.Wrap(err, errGetProviderConfig)
-	}
-
-	s, f, err := c.newClientFn(config)
+	cf, err := clients.ClientFnBuilder(ctx, c.kube)(mg)
 	if err != nil {
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
-	return &external{client: s, feature: f, kube: c.kube}, nil
+	spaceClient, featureClient, _ := space.NewClient(cf)
+
+	return &external{
+		kube:    c.kube,
+		client:  spaceClient,
+		feature: featureClient,
+	}, nil
+
 }
 
 // An ExternalClient observes, then either creates, updates, or deletes an

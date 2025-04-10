@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 
@@ -55,9 +54,8 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 	options := []managed.ReconcilerOption{
 
 		managed.WithExternalConnecter(&connector{
-			kube:        mgr.GetClient(),
-			usage:       resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
-			newClientFn: domain.NewClient,
+			kube:  mgr.GetClient(),
+			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
@@ -84,9 +82,8 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 
 // A connector supplies a function for the Reconciler to create a client to the external CloudFoundry resources.
 type connector struct {
-	kube        k8s.Client
-	usage       resource.Tracker
-	newClientFn func(config *config.Config) (domain.Client, error)
+	kube  k8s.Client
+	usage resource.Tracker
 }
 
 // Connect typically produces an ExternalClient by:
@@ -103,17 +100,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errTrackUsage)
 	}
 
-	config, err := clients.GetCredentialConfig(ctx, c.kube, mg)
-	if err != nil {
-		return nil, errors.Wrap(err, errGetProviderConfig)
-	}
-
-	client, err := c.newClientFn(config)
+	cf, err := clients.ClientFnBuilder(ctx, c.kube)(mg)
 	if err != nil {
 		return nil, errors.Wrap(err, errGetClient)
 	}
 
-	return &external{client: client, kube: c.kube}, nil
+	return &external{client: domain.NewClient(cf), kube: c.kube}, nil
 }
 
 // An external is a managed.ExternalConnecter that is using the CloudFoundry API to observe and modify resources.

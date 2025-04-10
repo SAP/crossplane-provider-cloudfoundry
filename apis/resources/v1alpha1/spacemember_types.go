@@ -9,7 +9,7 @@ import (
 
 // SpaceMembersParameters encapsulate role assignments to CloudFoundry Spaces
 type SpaceMembersParameters struct {
-	SpaceRef `json:",inline"`
+	SpaceReference `json:",inline"`
 
 	// Space role type to assign to members; see valid role types https://v3-apidocs.cloudfoundry.space/version/3.127.0/index.html#valid-role-types
 	// +kubebuilder:validation:Enum=Developer;Auditor;Manager;Supporter;Developers;Auditors;Managers;Supporters

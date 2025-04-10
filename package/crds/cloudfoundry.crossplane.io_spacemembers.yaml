@@ -103,6 +103,10 @@ spec:
                       - username
                       type: object
                     type: array
+                  orgName:
+                    description: The name of the Cloud Foundry organization containing
+                      the space.
+                    type: string
                   roleType:
                     description: Space role type to assign to members; see valid role
                       types https://v3-apidocs.cloudfoundry.space/version/3.127.0/index.html#valid-role-types
@@ -117,10 +121,19 @@ spec:
                     - Supporters
                     type: string
                   space:
-                    description: Space associated guid.
+                    description: The `guid` of the Cloud Foundry space. This field
+                      is typically populated using references specified in `spaceRef`,
+                      `spaceSelector`, or `spaceName`.
+                    type: string
+                  spaceName:
+                    description: The name of the Cloud Foundry space to lookup the
+                      `guid` of the Space. Use `spaceName` only when the reference
+                      Space is not managed by Crossplane.
                     type: string
                   spaceRef:
-                    description: Reference to a Space CR to populate space.
+                    description: Reference to a `Space` CR to lookup the `guid` of
+                      the Cloud Foundry space. Preferred if the reference space is
+                      managed by Crossplane.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -154,7 +167,9 @@ spec:
                     - name
                     type: object
                   spaceSelector:
-                    description: Selector for a Space CR to populate space.
+                    description: Selector for a `Space` CR to lookup the `guid` of
+                      the Cloud Foundry space. Preferred if the reference space is
+                      managed by Crossplane.
                     properties:
                       matchControllerRef:
                         description: |-

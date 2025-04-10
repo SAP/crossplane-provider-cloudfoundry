@@ -163,6 +163,10 @@ spec:
                           Valid values are ‘round-robin’ and ‘least-connections’
                         type: string
                     type: object
+                  orgName:
+                    description: The name of the Cloud Foundry organization containing
+                      the space.
+                    type: string
                   path:
                     description: A path for an HTTP route.
                     type: string
@@ -171,10 +175,19 @@ spec:
                       Conflicts with random_port.
                     type: integer
                   space:
-                    description: Space associated guid.
+                    description: The `guid` of the Cloud Foundry space. This field
+                      is typically populated using references specified in `spaceRef`,
+                      `spaceSelector`, or `spaceName`.
+                    type: string
+                  spaceName:
+                    description: The name of the Cloud Foundry space to lookup the
+                      `guid` of the Space. Use `spaceName` only when the reference
+                      Space is not managed by Crossplane.
                     type: string
                   spaceRef:
-                    description: Reference to a Space CR to populate space.
+                    description: Reference to a `Space` CR to lookup the `guid` of
+                      the Cloud Foundry space. Preferred if the reference space is
+                      managed by Crossplane.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -208,7 +221,9 @@ spec:
                     - name
                     type: object
                   spaceSelector:
-                    description: Selector for a Space CR to populate space.
+                    description: Selector for a `Space` CR to lookup the `guid` of
+                      the Cloud Foundry space. Preferred if the reference space is
+                      managed by Crossplane.
                     properties:
                       matchControllerRef:
                         description: |-
