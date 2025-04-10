@@ -38,15 +38,6 @@ func GetByIDOrName(ctx context.Context, c Client, id, name string) (*resource.Or
 	return c.Single(ctx, &client.OrganizationListOptions{Names: client.Filter{Values: []string{name}}})
 }
 
-// GetGUID returns the GUID of an organization by name. It returns an empty string, if the organization does not exist, or there is an error.
-func GetGUID(ctx context.Context, c Client, name string) string {
-	org, err := c.Single(ctx, &client.OrganizationListOptions{Names: client.Filter{Values: []string{name}}})
-	if err != nil || org == nil {
-		return ""
-	}
-	return org.GUID
-}
-
 // GenerateCreate generates the OrganizationCreate from an *OrgParameters
 func GenerateCreate(spec v1alpha1.OrgParameters) *resource.OrganizationCreate {
 	// if external-name is not set, search by Name and Space
