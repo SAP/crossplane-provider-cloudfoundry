@@ -304,3 +304,8 @@ func init() {
 func (s *App) GetID() string {
 	return s.Status.AtProvider.GUID
 }
+
+// implement SpaceScoped interface
+func (s *App) GetSpaceRef() *SpaceReference {
+	return &s.Spec.ForProvider.SpaceReference
+}
