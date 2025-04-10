@@ -99,7 +99,7 @@ kind: Space
 metadata:
     name: my-space
     annotations:
-        crossplane.io/external-name: 12345678-1234-1234-1234-123456789012
+        crossplane.io/external-name: 123456e8-1c34-1b34-1234-123d4567a012
 spec:
     forProvider:
         name: dev-space
@@ -107,7 +107,7 @@ spec:
         name: my-org  
 status:
     atProvider:
-        guid: 12345678-1234-1234-1234-123456789012
+        guid: 123456e8-1c34-1b34-1234-123d4567a012
         createdAt: "2024-09-01T12:00:00Z"
         updatedAt: "2024-09-01T12:00:00Z"
         name: dev-space
@@ -121,7 +121,7 @@ kind: Space
 metadata:
     name: my-space
     annotations:
-        crossplane.io/external-name: 12345678-1234-1234-1234-123456789012
+        crossplane.io/external-name: 123456e8-1c34-1b34-1234-123d4567a012
 spec:
     forProvider:
         name: dev-space
@@ -129,7 +129,7 @@ spec:
         name: my-org
 status: 
     atProvider:
-        guid: 12345678-1234-1234-1234-123456789012
+        guid: 123456e8-1c34-1b34-1234-123d4567a012
         createdAt: "2024-09-01T12:00:00Z"
         updatedAt: "2024-09-01T12:00:00Z"
         name: test-space # not the same as spec.forProvider.name
