@@ -34,6 +34,7 @@ func NewClient(cf *client.Client) (Space, Feature, org.Client) {
 	return cf.Spaces, cf.SpaceFeatures, cf.Organizations
 }
 
+// GetByIDOrSpec retrieves a Space by its GUID or by its specifcation.
 func GetByIDOrSpec(ctx context.Context, spaceClient Space, guid string, spec v1alpha1.SpaceParameters) (*resource.Space, error) {
 	if clients.IsValidGUID(guid) {
 		return spaceClient.Get(ctx, guid)
