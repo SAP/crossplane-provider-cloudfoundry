@@ -3,7 +3,6 @@ package orgquota
 import (
 	"context"
 
-	"github.com/cloudfoundry/go-cfclient/v3/config"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
@@ -40,7 +39,6 @@ const (
 type externalConnecter struct {
 	kubeClient   k8s.Client
 	usageTracker resource.Tracker
-	newClientFn  func(*config.Config) (orgquota.OrgQuota, error)
 }
 
 // externalConnecter type implements managed.ExternalConnecter
