@@ -17,7 +17,7 @@ type SpaceObservation struct {
 
 	// (Boolean) Allows SSH to application containers via the CF CLI.
 	// Allows SSH to application containers via the CF CLI.
-	AllowSSH bool `json:"allowSsh,omitempty" tf:"allow_ssh,omitempty"`
+	AllowSSH bool `json:"allowSSH,omitempty" tf:"allow_ssh,omitempty"`
 
 	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
 	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
