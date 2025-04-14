@@ -10,3 +10,14 @@ spec:
     name: cf-dev
   providerConfigRef:
     name: default
+
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  namespace: default
+  name: my-org-dev
+  annotations:
+    crossplane.io/external-name: cf-dev
+spec:
+  forProvider: {}

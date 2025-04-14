@@ -72,6 +72,11 @@ func GenerateObservation(o *resource.Organization) v1alpha1.OrgObservation {
 
 // LateInitialize fills the unassigned fields with values from a Organization resource.
 func LateInitialize(spec *v1alpha1.OrgParameters, from *resource.Organization) {
+
+	if spec.Name == "" {
+		spec.Name = from.Name
+	}
+
 	if spec.Suspended == nil {
 		spec.Suspended = from.Suspended
 	}
