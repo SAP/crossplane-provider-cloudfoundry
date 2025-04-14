@@ -12,8 +12,10 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/app"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/domain"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/org"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgmembers"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgquota"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgrole"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/spacemembers"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/spacerole"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/route"
@@ -30,9 +32,11 @@ func CustomSetup(mgr ctrl.Manager, o controller.Options) error {
 		app.Setup,
 		org.Setup,
 		orgrole.Setup,
+		orgmembers.Setup,
 		orgquota.Setup,
 		space.Setup,
 		spacerole.Setup,
+		spacemembers.Setup,
 		route.Setup,
 		serviceinstance.Setup,
 		servicecredentialbinding.Setup,

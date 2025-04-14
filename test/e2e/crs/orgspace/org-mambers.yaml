@@ -2,7 +2,7 @@ apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: OrgMembers
 metadata:
   namespace: default
-  name: e2e-org-managers
+  name: e2e-org-members
 spec:
   forProvider:
     roleType: Managers

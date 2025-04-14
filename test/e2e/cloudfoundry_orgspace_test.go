@@ -53,7 +53,7 @@ func TestCloudFoundryOrgSpace(t *testing.T) {
 	)
 
 	// creation assess steps in dependency order, e.g., `org` before `space` as `space` depends on org`.
-	var steps = [...]string{"org", "org_role", "space", "space_role", "space_quota"}
+	var steps = [...]string{"org", "org_role", "org_members", "space", "space_role", "space_members", "space_quota"}
 	for _, name := range steps {
 		ft, ok := feats[name]
 		if !ok {
