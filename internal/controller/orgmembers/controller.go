@@ -167,7 +167,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	// Set external names
-	meta.SetExternalName(cr, string(cr.Spec.ForProvider.RoleType)+"@"+*cr.Spec.ForProvider.Org)
+	meta.SetExternalName(cr, cr.Spec.ForProvider.RoleType+"@"+*cr.Spec.ForProvider.Org)
 
 	// Directly set observation instead of external names, as the collection does not have a single identity.
 	cr.Status.AtProvider.AssignedRoles = created.AssignedRoles
@@ -191,7 +191,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	// Update external names
-	meta.SetExternalName(cr, string(cr.Spec.ForProvider.RoleType)+"@"+*cr.Spec.ForProvider.Org)
+	meta.SetExternalName(cr, cr.Spec.ForProvider.RoleType+"@"+*cr.Spec.ForProvider.Org)
 
 	// Directly set observation to the updated
 	cr.Status.AtProvider.AssignedRoles = updated.AssignedRoles
