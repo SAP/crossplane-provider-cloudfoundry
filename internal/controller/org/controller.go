@@ -113,9 +113,15 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errNotOrgKind)
 	}
 
-	orgId := meta.GetExternalName(cr)
+	external_name := meta.GetExternalName(cr)
 
-	o, err := org.GetByIDOrName(ctx, c.client, orgId, cr.Spec.ForProvider.Name)
+	name := cr.Spec.ForProvider.Name
+	// if name is not set, use the external name for backward compatibility
+	if name == "" {
+		name = external_name
+	}
+
+	o, err := org.GetByIDOrName(ctx, c.client, external_name, name)
 
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
@@ -128,8 +134,11 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	org.LateInitialize(&cr.Spec.ForProvider, o)
 
 	// set the external name to the GUID
-	if orgId != o.GUID {
+	if external_name != o.GUID {
 		meta.SetExternalName(cr, o.GUID)
+		if err := c.kube.Update(ctx, cr); err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, errGet)
+		}
 	}
 
 	cr.Status.AtProvider = org.GenerateObservation(o)

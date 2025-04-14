@@ -14,26 +14,6 @@ import (
 )
 
 
-type OrgInitParameters struct {
-
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +mapType=granular
-	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
-
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-	// The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +mapType=granular
-	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
-
-	// (String) The name of the Organization in Cloud Foundry
-	// The name of the Organization in Cloud Foundry
-	Name string `json:"name,omitempty" tf:"name,omitempty"`
-
-	// (Boolean) Whether an organization is suspended or not.
-	// Whether an organization is suspended or not.
-	Suspended *bool `json:"suspended,omitempty" tf:"suspended,omitempty"`
-}
 
 type OrgObservation struct {
 
@@ -100,17 +80,7 @@ type OrgParameters struct {
 type OrgSpec struct {
 	v1.ResourceSpec `json:",inline"`
 	ForProvider     OrgParameters `json:"forProvider"`
-	// THIS IS A BETA FIELD. It will be honored
-	// unless the Management Policies feature flag is disabled.
-	// InitProvider holds the same fields as ForProvider, with the exception
-	// of Identifier and other resource reference fields. The fields that are
-	// in InitProvider are merged into ForProvider when the resource is created.
-	// The same fields are also added to the terraform ignore_changes hook, to
-	// avoid updating them after creation. This is useful for fields that are
-	// required on creation, but we do not desire to update them after creation,
-	// for example because of an external controller is managing them, like an
-	// autoscaler.
-	InitProvider OrgInitParameters `json:"initProvider,omitempty"`
+
 }
 
 // OrgStatus defines the observed state of Org.
@@ -132,7 +102,7 @@ type OrgStatus struct {
 type Organization struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// +kubebuilder:validation:XValidation:rule="!('*' in self.managementPolicies || 'Create' in self.managementPolicies || 'Update' in self.managementPolicies) || has(self.forProvider.name) || (has(self.initProvider) && has(self.initProvider.name))",message="spec.forProvider.name is a required parameter"
+
 	Spec   OrgSpec   `json:"spec"`
 	Status OrgStatus `json:"status,omitempty"`
 }

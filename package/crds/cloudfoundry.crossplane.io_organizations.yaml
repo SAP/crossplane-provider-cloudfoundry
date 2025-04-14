@@ -99,46 +99,6 @@ spec:
                       Whether an organization is suspended or not.
                     type: boolean
                 type: object
-              initProvider:
-                description: |-
-                  THIS IS A BETA FIELD. It will be honored
-                  unless the Management Policies feature flag is disabled.
-                  InitProvider holds the same fields as ForProvider, with the exception
-                  of Identifier and other resource reference fields. The fields that are
-                  in InitProvider are merged into ForProvider when the resource is created.
-                  The same fields are also added to the terraform ignore_changes hook, to
-                  avoid updating them after creation. This is useful for fields that are
-                  required on creation, but we do not desire to update them after creation,
-                  for example because of an external controller is managing them, like an
-                  autoscaler.
-                properties:
-                  annotations:
-                    additionalProperties:
-                      type: string
-                    description: |-
-                      (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-                      The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-                    type: object
-                    x-kubernetes-map-type: granular
-                  labels:
-                    additionalProperties:
-                      type: string
-                    description: |-
-                      (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-                      The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-                    type: object
-                    x-kubernetes-map-type: granular
-                  name:
-                    description: |-
-                      (String) The name of the Organization in Cloud Foundry
-                      The name of the Organization in Cloud Foundry
-                    type: string
-                  suspended:
-                    description: |-
-                      (Boolean) Whether an organization is suspended or not.
-                      Whether an organization is suspended or not.
-                    type: boolean
-                type: object
               managementPolicies:
                 default:
                 - '*'
@@ -306,11 +266,6 @@ spec:
             required:
             - forProvider
             type: object
-            x-kubernetes-validations:
-            - message: spec.forProvider.name is a required parameter
-              rule: '!(''*'' in self.managementPolicies || ''Create'' in self.managementPolicies
-                || ''Update'' in self.managementPolicies) || has(self.forProvider.name)
-                || (has(self.initProvider) && has(self.initProvider.name))'
           status:
             description: OrgStatus defines the observed state of Org.
             properties:
