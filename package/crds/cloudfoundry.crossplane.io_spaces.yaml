@@ -357,7 +357,7 @@ spec:
             properties:
               atProvider:
                 properties:
-                  allowSSH:
+                  allowSsh:
                     description: |-
                       (Boolean) Allows SSH to application containers via the CF CLI.
                       Allows SSH to application containers via the CF CLI.
