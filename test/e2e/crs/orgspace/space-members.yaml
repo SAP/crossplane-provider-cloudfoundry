@@ -1,7 +1,7 @@
 apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: SpaceMembers
 metadata:
-  name: e2e-space-developers
+  name: e2e-space-members
 spec:
   forProvider:
     roleType: Developers
