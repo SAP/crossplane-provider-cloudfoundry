@@ -261,32 +261,6 @@ func (mg *ServiceInstance) ResolveReferences(ctx context.Context, c client.Reade
 	return nil
 }
 
-// ResolveReferences of this ServiceKey.
-func (mg *ServiceKey) ResolveReferences(ctx context.Context, c client.Reader) error {
-	r := reference.NewAPIResolver(c, mg)
-
-	var rsp reference.ResolutionResponse
-	var err error
-
-	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
-		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.ServiceInstance),
-		Extract:      resources.ExternalID(),
-		Reference:    mg.Spec.ForProvider.ServiceInstanceRef,
-		Selector:     mg.Spec.ForProvider.ServiceInstanceSelector,
-		To: reference.To{
-			List:    &ServiceInstanceList{},
-			Managed: &ServiceInstance{},
-		},
-	})
-	if err != nil {
-		return errors.Wrap(err, "mg.Spec.ForProvider.ServiceInstance")
-	}
-	mg.Spec.ForProvider.ServiceInstance = reference.ToPtrValue(rsp.ResolvedValue)
-	mg.Spec.ForProvider.ServiceInstanceRef = rsp.ResolvedReference
-
-	return nil
-}
-
 // ResolveReferences of this Space.
 func (mg *Space) ResolveReferences(ctx context.Context, c client.Reader) error {
 	r := reference.NewAPIResolver(c, mg)

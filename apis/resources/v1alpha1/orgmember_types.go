@@ -40,7 +40,6 @@ type OrgMembersStatus struct {
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
-// +kubebuilder:deprecatedversion:warning="v1alpha1/OrgMembers is deprecated. Use v1alpha1/OrgRole instead"
 type OrgMembers struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

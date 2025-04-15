@@ -101,15 +101,6 @@ func (l *ServiceInstanceList) GetItems() []resource.Managed {
 	return items
 }
 
-// GetItems of this ServiceKeyList.
-func (l *ServiceKeyList) GetItems() []resource.Managed {
-	items := make([]resource.Managed, len(l.Items))
-	for i := range l.Items {
-		items[i] = &l.Items[i]
-	}
-	return items
-}
-
 // GetItems of this SpaceList.
 func (l *SpaceList) GetItems() []resource.Managed {
 	items := make([]resource.Managed, len(l.Items))
