@@ -145,9 +145,12 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	if r == nil {
 		return managed.ExternalObservation{}, nil
 	}
-	// resource exists, set the external name
+	// resource exists, set/update the external name
 	if guid != r.GUID {
 		meta.SetExternalName(cr, r.GUID)
+		if err := c.kube.Update(ctx, cr); err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, errUpdateCR)
+		}
 	}
 
 	// Update atProvider from the retrieved the service instance
