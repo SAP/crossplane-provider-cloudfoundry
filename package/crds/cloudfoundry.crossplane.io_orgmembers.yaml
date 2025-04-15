@@ -31,8 +31,6 @@ spec:
     - jsonPath: .metadata.creationTimestamp
       name: AGE
       type: date
-    deprecated: true
-    deprecationWarning: v1alpha1/OrgMembers is deprecated. Use v1alpha1/OrgRole instead
     name: v1alpha1
     schema:
       openAPIV3Schema:
