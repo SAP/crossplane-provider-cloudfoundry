@@ -84,7 +84,7 @@ type Managed struct {
 
 	// Same as `Parameters`, supplied as a Secret reference. Ignored if `Parameters` or `JSONParam` is set.
 	// +kubebuilder:validation:Optional
-	ParametersSecretRef *v1.SecretKeySelector `json:"parametersSecretRef,omitempty" tf:"-"`
+	ParametersSecretRef *v1.SecretReference `json:"paramsSecretRef,omitempty" tf:"-"`
 
 
 	// MaintenanceInfo describes the version of the service instance
@@ -109,7 +109,7 @@ type UserProvided struct {
 
 	// Same as `Credentials`, supplied as a Secret reference. Ignored if `Credentials` or `JSONCredentials` is set.
 	// +kubebuilder:validation:Optional
-	CredentialsSecretRef *v1.SecretKeySelector `json:"credentialsSecretRef,omitempty"`
+	CredentialsSecretRef *v1.SecretReference `json:"credentialsSecretRef,omitempty"`
 
 	// URL to which requests for bound routes will be forwarded; only shown when type is user-provided.
 	// +kubebuilder:validation:Optional

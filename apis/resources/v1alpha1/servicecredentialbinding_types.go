@@ -61,7 +61,7 @@ type ServiceCredentialBindingParameters struct {
 
 	// Use a reference to a secret to pass parameters to the service broker. Ignored if parameters is set.
 	// +kubebuilder:validation:Optional
-	ParametersSecretRef *v1.SecretKeySelector `json:"parametersSecretRef,omitempty"`
+	ParametersSecretRef *v1.SecretReference `json:"paramsSecretRef,omitempty"`
 
 	// (Deprecated) True to write connectionDetails as single key-value in a secret rather than a map. The key is the metadata.name of the service credential binding CR itself. This is deprecated in favor of the spec.connectionDetailsAsJSON field.
 	// +kubebuilder:validation:Optional

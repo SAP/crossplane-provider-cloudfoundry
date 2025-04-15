@@ -610,7 +610,7 @@ func (in *Managed) DeepCopyInto(out *Managed) {
 	}
 	if in.ParametersSecretRef != nil {
 		in, out := &in.ParametersSecretRef, &out.ParametersSecretRef
-		*out = new(v1.SecretKeySelector)
+		*out = new(v1.SecretReference)
 		**out = **in
 	}
 	in.MaintenanceInfo.DeepCopyInto(&out.MaintenanceInfo)
@@ -2188,7 +2188,7 @@ func (in *ServiceCredentialBindingParameters) DeepCopyInto(out *ServiceCredentia
 	}
 	if in.ParametersSecretRef != nil {
 		in, out := &in.ParametersSecretRef, &out.ParametersSecretRef
-		*out = new(v1.SecretKeySelector)
+		*out = new(v1.SecretReference)
 		**out = **in
 	}
 }
@@ -3545,7 +3545,7 @@ func (in *UserProvided) DeepCopyInto(out *UserProvided) {
 	}
 	if in.CredentialsSecretRef != nil {
 		in, out := &in.CredentialsSecretRef, &out.CredentialsSecretRef
-		*out = new(v1.SecretKeySelector)
+		*out = new(v1.SecretReference)
 		**out = **in
 	}
 }

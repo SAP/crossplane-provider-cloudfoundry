@@ -103,9 +103,6 @@ spec:
                     description: Same as `Credentials`, supplied as a Secret reference.
                       Ignored if `Credentials` or `JSONCredentials` is set.
                     properties:
-                      key:
-                        description: The key to select.
-                        type: string
                       name:
                         description: Name of the secret.
                         type: string
@@ -113,7 +110,6 @@ spec:
                         description: Namespace of the secret.
                         type: string
                     required:
-                    - key
                     - name
                     - namespace
                     type: object
@@ -154,13 +150,10 @@ spec:
                       in a Secret and use the ParametersSecretRef field.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
-                  parametersSecretRef:
+                  paramsSecretRef:
                     description: Same as `Parameters`, supplied as a Secret reference.
                       Ignored if `Parameters` or `JSONParam` is set.
                     properties:
-                      key:
-                        description: The key to select.
-                        type: string
                       name:
                         description: Name of the secret.
                         type: string
@@ -168,7 +161,6 @@ spec:
                         description: Namespace of the secret.
                         type: string
                     required:
-                    - key
                     - name
                     - namespace
                     type: object
