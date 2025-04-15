@@ -84,7 +84,7 @@ type Managed struct {
 
 	// Same as `Parameters`, supplied as a Secret reference. Ignored if `Parameters` or `JSONParam` is set.
 	// +kubebuilder:validation:Optional
-	ParametersSecretRef *v1.SecretKeySelector `json:"parametersSecretRef,omitempty" tf:"-"`
+	ParametersSecretRef *v1.SecretKeySelector `json:"paramsSecretRef,omitempty" tf:"-"`
 
 
 	// MaintenanceInfo describes the version of the service instance
