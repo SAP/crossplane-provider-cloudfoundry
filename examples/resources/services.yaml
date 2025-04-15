@@ -6,13 +6,11 @@ metadata:
   namespace: crossplane-system
 type: Opaque
 stringData:
-  credentials: |
-    {
-      "environmentid": "environmentid",
-      "apitoken": "apitoken",
-      "apiurl": "apiurl",
-      "type": "dynatrace"
-    }
+    environmentid: "environmentid"
+    apitoken: "apitoken"
+    apiurl: "apiurl"
+    type: "dynatrace"
+    
 
 ---
 # UPS with service json credentials from a secret key selector
@@ -31,7 +29,6 @@ spec:
     credentialsSecretRef: 
         name: dynatrace-json-credentials
         namespace: crossplane-system
-        key: credentials
 
 ---
 # CR to create a managed ServiceInstance
