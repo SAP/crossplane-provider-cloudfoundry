@@ -1,0 +1,255 @@
+/*
+Copyright 2022 The Crossplane Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package v1alpha1
+
+import (
+	"crypto/md5"
+	"fmt"
+	"reflect"
+	"slices"
+	"strings"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+)
+
+// MtaParameters are the configurable fields of a Mta.
+type MtaParameters struct {
+	// (Bool) Use blue-green deployment
+	// +kubebuilder:validation:Optional
+	BlueGreenDeploy *bool `json:"blueGreenDeploy,omitempty"`
+
+	// (String) The URL of the deploy service, if a custom one has been used(should be present in the same landscape). By default 'deploy-service.<system-domain>'
+	// The URL of the deploy service, if a custom one has been used(should be present in the same landscape). By default 'deploy-service.<system-domain>'
+	// +kubebuilder:validation:Optional
+	DeployURL *string `json:"deployUrl,omitempty"`
+
+	// (String) The namespace of the MTA. Should be of valid host format
+	// The namespace of the MTA. Should be of valid host format
+	// +kubebuilder:validation:Optional
+	Namespace *string `json:"namespace,omitempty"`
+
+	// (String) The GUID of the space where the MTA will be deployed
+	// The GUID of the space where the MTA will be deployed
+	// +kubebuilder:validation:Optional
+	Space *string `json:"space,omitempty"`
+
+	// Reference to a Space in space to populate space.
+	// +kubebuilder:validation:Optional
+	SpaceRef *xpv1.Reference `json:"spaceRef,omitempty"`
+
+	// Selector for a Space in space to populate space.
+	// +kubebuilder:validation:Optional
+	SpaceSelector *xpv1.Selector `json:"spaceSelector,omitempty"`
+
+	File *File `json:"file,omitempty"`
+
+	Extension *string `json:"extension,omitempty"`
+}
+
+type FileObservation struct {
+	ID *string `json:"id,omitempty"`
+
+	AppInstance *string `json:"appInstance,omitempty"`
+
+	URL *string `json:"url,omitempty"`
+
+	LastOperation *Operation `json:"operation,omitempty"`
+}
+
+// MtaObservation are the observable fields of a Mta.
+type MtaObservation struct {
+	MtaId *string `json:"mtaId,omitempty"`
+
+	MtaExtensionId *string `json:"mtaExtensionId,omitempty"`
+
+	MtaExtensionHash *string `json:"mtaExtensionHash,omitempty"`
+
+	Files *[]FileObservation `json:"files,omitempty"`
+
+	LastOperation *Operation `json:"lastOperation,omitempty"`
+}
+
+type File struct {
+	// Reference to a secret containing a user and an optional password, which is added to the URL of the MTA.
+	// +kubebuilder:validation:Optional
+	CredentialsSecretRef *xpv1.SecretReference `json:"credentialsSecretRef,omitempty"`
+
+	// (String) The remote URL where the MTA archive is present
+	// The remote URL where the MTA archive is present
+	// +kubebuilder:validation:Optional
+	URL *string `json:"url,omitempty"`
+}
+
+// A MtaSpec defines the desired state of a Mta.
+type MtaSpec struct {
+	xpv1.ResourceSpec `json:",inline"`
+	ForProvider       MtaParameters `json:"forProvider"`
+}
+
+// A MtaStatus represents the observed state of a Mta.
+type MtaStatus struct {
+	xpv1.ResourceStatus `json:",inline"`
+	AtProvider          MtaObservation `json:"atProvider,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// A Mta is an example API type.
+// +kubebuilder:printcolumn:name="Ready",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="Synced",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
+// +kubebuilder:printcolumn:name="External-Name",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
+// +kubebuilder:printcolumn:name="Age",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,crossplaneprovidermta}
+type Mta struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+	Spec   MtaSpec   `json:"spec"`
+	Status MtaStatus `json:"status,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// MtaList contains a list of Mta
+type MtaList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []Mta `json:"items"`
+}
+
+// Mta type metadata.
+var (
+	MtaKind             = reflect.TypeOf(Mta{}).Name()
+	MtaGroupKind        = schema.GroupKind{Group: CRDGroup, Kind: MtaKind}.String()
+	MtaKindAPIVersion   = MtaKind + "." + CRDGroupVersion.String()
+	MtaGroupVersionKind = CRDGroupVersion.WithKind(MtaKind)
+)
+
+func init() {
+	SchemeBuilder.Register(&Mta{}, &MtaList{})
+}
+
+func (m *Mta) AllFiles() []File {
+	files := []File{}
+
+	if m.Spec.ForProvider.File != nil {
+		files = append(files, *m.Spec.ForProvider.File)
+	}
+
+	return files
+}
+
+func (m *Mta) HasExtension() bool {
+	return m.Spec.ForProvider.Extension != nil
+}
+
+func (m *Mta) IsExtensionAlreadyUploaded() bool {
+	return m.Status.AtProvider.MtaExtensionId != nil
+}
+
+func (m *Mta) HasExtensionChanged() bool {
+	var desired string
+	if m.Spec.ForProvider.Extension != nil {
+		desired = fmt.Sprintf("%x", md5.Sum([]byte(*m.Spec.ForProvider.Extension)))
+	} else {
+		desired = ""
+	}
+
+	var actual string
+	if m.Status.AtProvider.MtaExtensionHash != nil {
+		actual = *m.Status.AtProvider.MtaExtensionHash
+	} else {
+		actual = ""
+	}
+
+	if strings.ToLower(desired) != strings.ToLower(actual) {
+		return true
+	}
+	return false
+}
+
+func (m *Mta) FindFileObservation(file *File) *FileObservation {
+	if m.Status.AtProvider.Files == nil {
+		return nil
+	}
+
+	for _, f := range *m.Status.AtProvider.Files {
+		if f.URL != nil && *f.URL == *file.URL {
+			return &f
+		}
+	}
+
+	return nil
+}
+
+func (m *Mta) HasChangedUrls() bool {
+	files := m.AllFiles()
+
+	for _, file := range files {
+		if m.FindFileObservation(&file) == nil {
+			return true
+		}
+	}
+
+	return false
+}
+
+func (m *Mta) HasRunningOperation() bool {
+	return slices.ContainsFunc(m.allOperations(), func(operation Operation) bool {
+		return operation.IsRunning()
+	})
+}
+
+func (m *Mta) HasErrorOperation() bool {
+	return slices.ContainsFunc(m.allOperations(), func(operation Operation) bool {
+		return operation.HasError()
+	})
+}
+
+func (m *Mta) GetErrorOperation() string {
+	operations := m.allOperations()
+
+	errIndex := slices.IndexFunc(operations, func(operation Operation) bool {
+		return operation.HasError()
+	})
+
+	return operations[errIndex].GetError()
+}
+
+func (m *Mta) allOperations() []Operation {
+	operations := []Operation{}
+
+	if m.Status.AtProvider.LastOperation != nil && m.Status.AtProvider.LastOperation.ID != nil {
+		operations = append(operations, *m.Status.AtProvider.LastOperation)
+	}
+
+	if m.Status.AtProvider.Files == nil {
+		return operations
+	}
+
+	for _, v := range *m.Status.AtProvider.Files {
+		if v.LastOperation != nil && v.LastOperation.ID != nil {
+			operations = append(operations, *v.LastOperation)
+		}
+	}
+
+	return operations
+}

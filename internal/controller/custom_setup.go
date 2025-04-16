@@ -5,6 +5,7 @@ Copyright 2023 SAP SE
 package controller
 
 import (
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/mta"
 	ctrl "sigs.k8s.io/controller-runtime"
 
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -42,6 +43,7 @@ func CustomSetup(mgr ctrl.Manager, o controller.Options) error {
 		servicecredentialbinding.Setup,
 		spacequota.Setup,
 		domain.Setup,
+		mta.Setup,
 	} {
 		if err := setup(mgr, o); err != nil {
 			return err
