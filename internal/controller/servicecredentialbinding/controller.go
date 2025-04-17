@@ -230,7 +230,7 @@ func extractParameters(ctx context.Context, kube k8s.Client, spec v1alpha1.Servi
 	}
 
 	if spec.ParametersSecretRef != nil {
-		return clients.SecretRefToJSONRawMessage(ctx, kube, spec.ParametersSecretRef)
+		return clients.ExtractSecret(ctx, kube, spec.ParametersSecretRef, "")
 	}
 
 	// If the spec has no parameters or secret ref, return nil

@@ -16,7 +16,7 @@ import (
 )
 
 // SecretRefToJSONRawMessage extracts parameters/credentials from a secret reference.
-func SecretRefToJSONRawMessage(ctx context.Context, kube k8s.Client, sr *xpv1.SecretReference) (json.RawMessage, error) {
+func ExtractSecret(ctx context.Context, kube k8s.Client, sr *xpv1.SecretReference, key string) ([]byte, error) {
 	if sr == nil {
 		return nil, nil
 	}
@@ -26,10 +26,18 @@ func SecretRefToJSONRawMessage(ctx context.Context, kube k8s.Client, sr *xpv1.Se
 		return nil, err
 	}
 
+	// if key is specified, return the value of the key
+	if key != "" {
+		if v, ok := secret.Data[key]; ok {
+			return v, nil
+		}
+		return nil, nil
+	}
+
 	// if key is not specified, return all data from the secret
 	cred := make(map[string]string)
-	for key, value := range secret.Data {
-		cred[key] = string(value)
+	for k, v := range secret.Data {
+		cred[k] = string(v)
 	}
 	buf, err := json.Marshal(cred)
 	if err != nil {

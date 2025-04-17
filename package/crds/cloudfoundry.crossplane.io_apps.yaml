@@ -95,62 +95,19 @@ spec:
                     description: Specifies docker image and optional docker credentials
                       when lifecycle is set to docker
                     properties:
-                      credentials:
+                      credentialsSecretRef:
                         description: (Attributes) Defines login credentials for private
-                          docker repositories (see below for nested schema)
+                          docker repositories
                         properties:
-                          env:
-                            description: |-
-                              Env is a reference to an environment variable that contains credentials
-                              that must be used to connect to the provider.
-                            properties:
-                              name:
-                                description: Name is the name of an environment variable.
-                                type: string
-                            required:
-                            - name
-                            type: object
-                          fs:
-                            description: |-
-                              Fs is a reference to a filesystem location that contains credentials that
-                              must be used to connect to the provider.
-                            properties:
-                              path:
-                                description: Path is a filesystem path.
-                                type: string
-                            required:
-                            - path
-                            type: object
-                          secretRef:
-                            description: |-
-                              A SecretRef is a reference to a secret key that contains the credentials
-                              that must be used to connect to the provider.
-                            properties:
-                              key:
-                                description: The key to select.
-                                type: string
-                              name:
-                                description: Name of the secret.
-                                type: string
-                              namespace:
-                                description: Namespace of the secret.
-                                type: string
-                            required:
-                            - key
-                            - name
-                            - namespace
-                            type: object
-                          source:
-                            description: Source of the provider credentials.
-                            enum:
-                            - None
-                            - Secret
-                            - InjectedIdentity
-                            - Environment
-                            - Filesystem
+                          name:
+                            description: Name of the secret.
+                            type: string
+                          namespace:
+                            description: Namespace of the secret.
                             type: string
                         required:
-                        - source
+                        - name
+                        - namespace
                         type: object
                       image:
                         description: The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag
