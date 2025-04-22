@@ -139,6 +139,8 @@ func configDocker(forProvider v1alpha1.AppParameters, dockerCredentials *DockerC
 }
 
 // configProcess map the process from app spec
+//
+//nolint:gocyclo
 func configProcess(forProvider v1alpha1.AppParameters) *operation.AppManifestProcesses {
 	if len(forProvider.Processes) > 0 {
 		var processes operation.AppManifestProcesses
@@ -161,6 +163,18 @@ func configProcess(forProvider v1alpha1.AppParameters) *operation.AppManifestPro
 			}
 			if process.HealthCheckInterval != nil {
 				processManifest.HealthCheckInterval = *process.HealthCheckInterval
+			}
+			if process.DiskQuota != nil {
+				processManifest.DiskQuota = *process.DiskQuota
+			}
+			if process.Memory != nil {
+				processManifest.Memory = *process.Memory
+			}
+			if process.Timeout != nil {
+				processManifest.Timeout = *process.Timeout
+			}
+			if process.Instances != nil {
+				processManifest.Instances = process.Instances
 			}
 
 			processes = append(processes, processManifest)
