@@ -139,6 +139,8 @@ func configDocker(forProvider v1alpha1.AppParameters, dockerCredentials *DockerC
 }
 
 // configProcess map the process from app spec
+//
+//nolint:gocyclo
 func configProcess(forProvider v1alpha1.AppParameters) *operation.AppManifestProcesses {
 	if len(forProvider.Processes) > 0 {
 		var processes operation.AppManifestProcesses
