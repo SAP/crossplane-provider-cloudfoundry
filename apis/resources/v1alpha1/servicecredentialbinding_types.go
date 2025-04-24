@@ -23,6 +23,7 @@ type ServiceCredentialBindingParameters struct {
 	// The type of the Service Key in Cloud Foundry. Either "key" or "app".
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=key;app
+	// +kubebuilder:default=key
 	Type string `json:"type,omitempty"`
 
 	// The name of the Service Key in Cloud Foundry. Required if Type is "key".

@@ -24,20 +24,27 @@ spec:
 apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: App
 metadata:
-  namespace: default
-  name: my-app-2
+  namespace: app-test
+  name: e2e-app
 spec:
   forProvider:
+    name: e2e-app
     spaceRef:
-      name: my-space 
-    name: my-app-1234
+      name: app-space
+      policy:
+        resolve: Always
     lifecycle: docker
     docker:
-      image: loud/hello_co:latest
-    routes:
-      - routeRef:
-          name: my-route
+      image: cloud-orchestration-experimental.common.repositories.cloud.sap/hello-cf:latest
+      credentialsSecretRef:
+        name: artifactory-readonly-docker
+        namespace: crossplane-system
     processes:
       - type: web
         health-check-type: http
         health-check-http-endpoint: "/"
+    routes:
+      - routeRef: 
+          name: app-route
+          policy:
+            resolve: Always

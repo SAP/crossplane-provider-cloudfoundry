@@ -100,21 +100,14 @@ type AppParameters struct {
 	ResourceMetadata `json:",inline"`
 }
 
-type DockerCredentialsSecretRef struct {
-	// Source of the provider credentials.
-	// +kubebuilder:validation:Enum=None;Secret;InjectedIdentity;Environment;Filesystem
-	Source                         xpv1.CredentialsSource `json:"source"`
-	xpv1.CommonCredentialSelectors `json:",inline"`
-}
-
 type DockerConfiguration struct {
 	// The URL to the docker image with tag e.g registry.example.com:5000/user/repository/tag or docker image name from the public repo e.g. redis:4.0
 	// +kubebuilder:validation:Required
 	Image string `json:"image,omitempty"`
 
-	// (Attributes) Defines login credentials for private docker repositories (see below for nested schema)
+	// (Attributes) Defines login credentials for private docker repositories
 	// +kubebuilder:validation:Optional
-	Credentials *DockerCredentialsSecretRef `json:"credentials,omitempty"`
+	Credentials *xpv1.SecretReference `json:"credentialsSecretRef,omitempty"`
 }
 
 // RouteConfiguration defines the route for the application

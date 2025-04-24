@@ -305,7 +305,7 @@ func extractCredentialSpec(ctx context.Context, kube k8s.Client, spec v1alpha1.S
 			return []byte(*spec.JSONParams), nil
 		}
 
-		return clients.SecretRefToJSONRawMessage(ctx, kube, spec.ParametersSecretRef)
+		return clients.ExtractSecret(ctx, kube, spec.ParametersSecretRef, "")
 	}
 
 	if spec.Type == v1alpha1.UserProvidedService {
@@ -316,7 +316,7 @@ func extractCredentialSpec(ctx context.Context, kube k8s.Client, spec v1alpha1.S
 		if spec.JSONCredentials != nil {
 			return []byte(*spec.JSONCredentials), nil
 		}
-		return clients.SecretRefToJSONRawMessage(ctx, kube, spec.CredentialsSecretRef)
+		return clients.ExtractSecret(ctx, kube, spec.CredentialsSecretRef, "")
 	}
 	return nil, nil
 }

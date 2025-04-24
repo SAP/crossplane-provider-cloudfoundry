@@ -237,7 +237,7 @@ func getDockerCredential(ctx context.Context, kube k8s.Client, forProvider v1alp
 		return nil, nil
 	}
 
-	buf, err := resource.CommonCredentialExtractor(ctx, forProvider.Docker.Credentials.Source, kube, forProvider.Docker.Credentials.CommonCredentialSelectors)
+	buf, err := clients.ExtractSecret(ctx, kube, forProvider.Docker.Credentials, ".dockerconfigjson")
 	if err != nil {
 		return nil, errors.Wrap(err, errSecret)
 	}
