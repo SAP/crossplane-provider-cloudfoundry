@@ -6,7 +6,8 @@ metadata:
 spec:
   forProvider:
     namespace: default
-    space: space-id
+    spaceRef:
+      name: my-space
     blueGreenDeploy: true
     file:
       url: <url>

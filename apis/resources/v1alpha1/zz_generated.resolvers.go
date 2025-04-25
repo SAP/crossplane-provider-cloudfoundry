@@ -115,6 +115,32 @@ func (mg *Domain) ResolveReferences(ctx context.Context, c client.Reader) error 
 	return nil
 }
 
+// ResolveReferences of this Mta.
+func (mg *Mta) ResolveReferences(ctx context.Context, c client.Reader) error {
+	r := reference.NewAPIResolver(c, mg)
+
+	var rsp reference.ResolutionResponse
+	var err error
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceReference.Space),
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.SpaceReference.SpaceRef,
+		Selector:     mg.Spec.ForProvider.SpaceReference.SpaceSelector,
+		To: reference.To{
+			List:    &SpaceList{},
+			Managed: &Space{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.SpaceReference.Space")
+	}
+	mg.Spec.ForProvider.SpaceReference.Space = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.SpaceReference.SpaceRef = rsp.ResolvedReference
+
+	return nil
+}
+
 // ResolveReferences of this OrgMembers.
 func (mg *OrgMembers) ResolveReferences(ctx context.Context, c client.Reader) error {
 	r := reference.NewAPIResolver(c, mg)

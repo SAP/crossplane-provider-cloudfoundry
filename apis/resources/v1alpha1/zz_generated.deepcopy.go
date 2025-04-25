@@ -834,21 +834,7 @@ func (in *MtaParameters) DeepCopyInto(out *MtaParameters) {
 		*out = new(string)
 		**out = **in
 	}
-	if in.Space != nil {
-		in, out := &in.Space, &out.Space
-		*out = new(string)
-		**out = **in
-	}
-	if in.SpaceRef != nil {
-		in, out := &in.SpaceRef, &out.SpaceRef
-		*out = new(v1.Reference)
-		(*in).DeepCopyInto(*out)
-	}
-	if in.SpaceSelector != nil {
-		in, out := &in.SpaceSelector, &out.SpaceSelector
-		*out = new(v1.Selector)
-		(*in).DeepCopyInto(*out)
-	}
+	in.SpaceReference.DeepCopyInto(&out.SpaceReference)
 	if in.File != nil {
 		in, out := &in.File, &out.File
 		*out = new(File)

@@ -110,13 +110,24 @@ spec:
                       (String) The namespace of the MTA. Should be of valid host format
                       The namespace of the MTA. Should be of valid host format
                     type: string
+                  orgName:
+                    description: The name of the Cloud Foundry organization containing
+                      the space.
+                    type: string
                   space:
-                    description: |-
-                      (String) The GUID of the space where the MTA will be deployed
-                      The GUID of the space where the MTA will be deployed
+                    description: The `guid` of the Cloud Foundry space. This field
+                      is typically populated using references specified in `spaceRef`,
+                      `spaceSelector`, or `spaceName`.
+                    type: string
+                  spaceName:
+                    description: The name of the Cloud Foundry space to lookup the
+                      `guid` of the Space. Use `spaceName` only when the reference
+                      Space is not managed by Crossplane.
                     type: string
                   spaceRef:
-                    description: Reference to a Space in space to populate space.
+                    description: Reference to a `Space` CR to lookup the `guid` of
+                      the Cloud Foundry space. Preferred if the reference space is
+                      managed by Crossplane.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -150,7 +161,9 @@ spec:
                     - name
                     type: object
                   spaceSelector:
-                    description: Selector for a Space in space to populate space.
+                    description: Selector for a `Space` CR to lookup the `guid` of
+                      the Cloud Foundry space. Preferred if the reference space is
+                      managed by Crossplane.
                     properties:
                       matchControllerRef:
                         description: |-
