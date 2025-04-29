@@ -17,7 +17,7 @@ func (o *Operation) HasError() bool {
 	if o.State == nil {
 		return false
 	}
-	return *o.State == "ERROR"
+	return *o.State == "ABORTED"
 }
 
 func (o *Operation) GetError() string {
