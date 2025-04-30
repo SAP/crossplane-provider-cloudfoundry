@@ -3,25 +3,39 @@ package mta
 import (
 	"encoding/base64"
 	"fmt"
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	mtaClient "github.com/cloudfoundry-incubator/multiapps-cli-plugin/clients/mtaclient"
 	"io"
-	v1 "k8s.io/api/core/v1"
+	"net/http"
 	"net/url"
 	"path"
 	"strings"
 
-	"github.com/pkg/errors"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 
 	mtaModels "github.com/cloudfoundry-incubator/multiapps-cli-plugin/clients/models"
+	mtaClient "github.com/cloudfoundry-incubator/multiapps-cli-plugin/clients/mtaclient"
+	"github.com/cloudfoundry-incubator/multiapps-cli-plugin/util"
+	v1 "k8s.io/api/core/v1"
+
+	"github.com/pkg/errors"
 )
 
-var nonProtectedMethods = map[string]struct{}{"GET": {}, "HEAD": {}, "TRACE": {}, "OPTIONS": {}}
+// MtaClient defines the interface to communicate with Cloud Foundry Mta resource.
 
-const deploy_service_host = "deploy-service"
+type MtaClient interface {
+	GetMta(mtaID string) (*mtaModels.Mta, error)
+	StartMtaOperation(operation mtaModels.Operation) (mtaClient.ResponseHeader, error)
+	GetMtaOperation(operationID, embed string) (*mtaModels.Operation, error)
+	UploadMtaFile(file util.NamedReadSeeker, fileSize int64, namespace *string) (*mtaModels.FileMetadata, error)
+	StartUploadMtaArchiveFromUrl(fileUrl string, namespace *string) (http.Header, error)
+	GetAsyncUploadJob(jobId string, namespace *string, appInstanceId string) (mtaClient.AsyncUploadJobResult, error)
+}
 
+type Client struct {
+	MtaClient MtaClient
+}
+
+// Error messages
 const (
-	// error messages
 	errParseUrl      = "cannot parse CF API URL"
 	errNoUrl         = "could not parse mtarUrl"
 	notFound         = "404 Not Found"
@@ -37,8 +51,8 @@ func (t NamedReadSeeker) Name() string {
 	return t.FileName
 }
 
-func Exists(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (bool, error) {
-	_, err := c.GetMta(*cr.Status.AtProvider.MtaId)
+func (c *Client) Exists(cr *v1alpha1.Mta) (bool, error) {
+	_, err := c.MtaClient.GetMta(*cr.Status.AtProvider.MtaId)
 	if err != nil {
 		if strings.Contains(err.Error(), notFound) {
 			return false, nil
@@ -48,15 +62,15 @@ func Exists(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (bool, error) {
 	return true, nil
 }
 
-func Observe(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (v1alpha1.MtaObservation, error) {
-	observation, err := observeMta(cr, c)
+func (c *Client) Observe(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
+	observation, err := c.observeMta(cr)
 	if err != nil {
 		return observation, err
 	}
 
 	fileObservations := []v1alpha1.FileObservation{}
 	for _, file := range *cr.Status.AtProvider.Files {
-		fileObservation, mtaId, err := observeFile(cr, file, c)
+		fileObservation, mtaId, err := c.observeFile(cr, file)
 		if err != nil {
 			return observation, err
 		}
@@ -72,7 +86,7 @@ func Observe(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (v1alpha1.MtaObs
 	return observation, nil
 }
 
-func Deploy(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (v1alpha1.MtaObservation, error) {
+func (c *Client) Deploy(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 	fileObservation := cr.FindFileObservation(cr.Spec.ForProvider.File)
 	if fileObservation == nil || fileObservation.ID == nil {
 		// file is not available yet, wait for it
@@ -108,7 +122,7 @@ func Deploy(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (v1alpha1.MtaObse
 		Parameters:  parameters,
 	}
 
-	responseHeaders, err := c.StartMtaOperation(operation)
+	responseHeaders, err := c.MtaClient.StartMtaOperation(operation)
 	if err != nil {
 		return v1alpha1.MtaObservation{}, err
 	}
@@ -129,7 +143,7 @@ func Deploy(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (v1alpha1.MtaObse
 	}, nil
 }
 
-func Delete(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (v1alpha1.MtaObservation, error) {
+func (c *Client) Delete(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 	operation := mtaModels.Operation{
 		ProcessType: "UNDEPLOY",
 		Namespace:   *cr.Spec.ForProvider.Namespace,
@@ -140,7 +154,7 @@ func Delete(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (v1alpha1.MtaObse
 		},
 	}
 
-	responseHeaders, err := c.StartMtaOperation(operation)
+	responseHeaders, err := c.MtaClient.StartMtaOperation(operation)
 	if err != nil {
 		return v1alpha1.MtaObservation{}, err
 	}
@@ -161,12 +175,12 @@ func Delete(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (v1alpha1.MtaObse
 	}, nil
 }
 
-func CreateExtensions(cr *v1alpha1.Mta, o *v1alpha1.MtaObservation, c mtaClient.MtaClientOperations) error {
+func (c *Client) CreateExtensions(cr *v1alpha1.Mta, o *v1alpha1.MtaObservation) error {
 	if cr.HasExtension() && !cr.IsExtensionAlreadyUploaded() {
 		stringReader := strings.NewReader(*cr.Spec.ForProvider.Extension)
 		reader := NamedReadSeeker{stringReader, "extension.mtaext"}
 
-		mtaExtFileMetadata, err := c.UploadMtaFile(reader, stringReader.Size(), cr.Spec.ForProvider.Namespace)
+		mtaExtFileMetadata, err := c.MtaClient.UploadMtaFile(reader, stringReader.Size(), cr.Spec.ForProvider.Namespace)
 		if err != nil {
 			return err
 		}
@@ -178,7 +192,7 @@ func CreateExtensions(cr *v1alpha1.Mta, o *v1alpha1.MtaObservation, c mtaClient.
 	return nil
 }
 
-func UploadFileFromUrl(cr *v1alpha1.Mta, file *v1alpha1.File, secret *v1.Secret, c mtaClient.MtaClientOperations) (v1alpha1.FileObservation, error) {
+func (c *Client) UploadFileFromUrl(cr *v1alpha1.Mta, file *v1alpha1.File, secret *v1.Secret) (v1alpha1.FileObservation, error) {
 	urlObj, err := url.Parse(*file.URL)
 	if err != nil {
 		return v1alpha1.FileObservation{}, errors.Wrap(err, errNoUrl)
@@ -189,7 +203,7 @@ func UploadFileFromUrl(cr *v1alpha1.Mta, file *v1alpha1.File, secret *v1.Secret,
 	}
 
 	encodedUrl := base64.StdEncoding.EncodeToString([]byte(urlObj.String()))
-	responseHeaders, err := c.StartUploadMtaArchiveFromUrl(encodedUrl, cr.Spec.ForProvider.Namespace)
+	responseHeaders, err := c.MtaClient.StartUploadMtaArchiveFromUrl(encodedUrl, cr.Spec.ForProvider.Namespace)
 	if err != nil {
 		return v1alpha1.FileObservation{}, err
 	}
@@ -210,7 +224,7 @@ func UploadFileFromUrl(cr *v1alpha1.Mta, file *v1alpha1.File, secret *v1.Secret,
 	}, nil
 }
 
-func observeFile(cr *v1alpha1.Mta, file v1alpha1.FileObservation, c mtaClient.MtaClientOperations) (v1alpha1.FileObservation, *string, error) {
+func (c *Client) observeFile(cr *v1alpha1.Mta, file v1alpha1.FileObservation) (v1alpha1.FileObservation, *string, error) {
 	observation := v1alpha1.FileObservation{
 		ID:          file.ID,
 		URL:         file.URL,
@@ -227,7 +241,7 @@ func observeFile(cr *v1alpha1.Mta, file v1alpha1.FileObservation, c mtaClient.Mt
 		return observation, cr.Status.AtProvider.MtaId, nil
 	}
 
-	jobResult, err := c.GetAsyncUploadJob(*observation.LastOperation.ID, cr.Spec.ForProvider.Namespace, *observation.AppInstance)
+	jobResult, err := c.MtaClient.GetAsyncUploadJob(*observation.LastOperation.ID, cr.Spec.ForProvider.Namespace, *observation.AppInstance)
 	if err != nil {
 		return observation, cr.Status.AtProvider.MtaId, err
 	}
@@ -242,7 +256,7 @@ func observeFile(cr *v1alpha1.Mta, file v1alpha1.FileObservation, c mtaClient.Mt
 	return observation, &jobResult.MtaId, nil
 }
 
-func observeMta(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (v1alpha1.MtaObservation, error) {
+func (c *Client) observeMta(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 	observation := v1alpha1.MtaObservation{
 		MtaId:            cr.Status.AtProvider.MtaId,
 		MtaExtensionId:   cr.Status.AtProvider.MtaExtensionId,
@@ -265,7 +279,7 @@ func observeMta(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (v1alpha1.Mta
 		ID: cr.Status.AtProvider.LastOperation.ID,
 	}
 
-	o, err := c.GetMtaOperation(*observation.LastOperation.ID, "messages")
+	o, err := c.MtaClient.GetMtaOperation(*observation.LastOperation.ID, "messages")
 	if err != nil {
 		return observation, err
 	}

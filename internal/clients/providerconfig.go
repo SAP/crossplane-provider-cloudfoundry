@@ -8,12 +8,13 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
-	mtaCsrf "github.com/cloudfoundry-incubator/multiapps-cli-plugin/clients/csrf"
-	mtaClient "github.com/cloudfoundry-incubator/multiapps-cli-plugin/clients/mtaclient"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
+
+	mtaCsrf "github.com/cloudfoundry-incubator/multiapps-cli-plugin/clients/csrf"
+	mtaClient "github.com/cloudfoundry-incubator/multiapps-cli-plugin/clients/mtaclient"
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
@@ -141,7 +142,7 @@ func ClientFnBuilderMta(ctx context.Context, client client.Client, spaceId *stri
 
 		csrfx := mtaCsrf.CsrfTokenHelper{NonProtectedMethods: map[string]struct{}{"GET": {}, "HEAD": {}, "TRACE": {}, "OPTIONS": {}}}
 		httpTransport := http.DefaultTransport.(*http.Transport).Clone()
-		// Increase tls handshake timeout to cope with slow internet connections. 3 x default value =30s.
+		// Increase tls handshake timeout to cope with slow internet connections. 3 x default value = 30s.
 		httpTransport.TLSHandshakeTimeout = 30 * time.Second
 		httpTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: false}
 		transport := &mtaCsrf.Transport{Delegate: httpTransport, Csrf: &csrfx}

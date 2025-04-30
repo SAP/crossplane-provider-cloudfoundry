@@ -9,7 +9,6 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/mta"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
-	mtaClient "github.com/cloudfoundry-incubator/multiapps-cli-plugin/clients/mtaclient"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 
@@ -44,13 +43,6 @@ const (
 
 	errUpdateCR = "cannot update the managed resource"
 	errDelete   = "cannot delete MTA"
-)
-
-// A NoOpService does nothing.
-type NoOpService struct{}
-
-var (
-	newNoOpService = func(_ []byte) (interface{}, error) { return &NoOpService{}, nil }
 )
 
 // Setup adds a controller that reconciles Mta managed resources.
@@ -108,16 +100,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
-	return &external{kube: c.kube, mta: *client}, nil
+	return &external{kube: c.kube, client: mta.Client{MtaClient: *client}}, nil
 }
 
-// An ExternalClient observes, then either creates, updates, or deletes an
-// external resource to ensure it reflects the managed resource's desired state.
 type external struct {
-	// A 'client' used to connect to the external resource API. In practice this
-	// would be something like an AWS SDK client.
-	kube k8s.Client
-	mta  mtaClient.MtaClientOperations
+	kube   k8s.Client
+	client mta.Client
 }
 
 func (c *external) Disconnect(ctx context.Context) error {
@@ -134,7 +122,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
-	observation, err := mta.Observe(cr, c.mta)
+	observation, err := c.client.Observe(cr)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
 	}
@@ -150,7 +138,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	if cr.HasRunningOperation() {
 		return managed.ExternalObservation{ResourceExists: true}, nil
 	}
-	if exists, err := mta.Exists(cr, c.mta); !exists || cr.Status.AtProvider.LastOperation == nil {
+	if exists, err := c.client.Exists(cr); !exists || cr.Status.AtProvider.LastOperation == nil {
 		return managed.ExternalObservation{ResourceExists: false}, err
 	}
 	if cr.HasChangedUrls() || cr.HasExtensionChanged() {
@@ -182,7 +170,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Creating())
 
-	observation, err := mta.Deploy(cr, c.mta)
+	observation, err := c.client.Deploy(cr)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
@@ -193,7 +181,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 	observation.Files = &fileObservations
 
-	err = mta.CreateExtensions(cr, &observation, c.mta)
+	err = c.client.CreateExtensions(cr, &observation)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreateMtaExt)
 	}
@@ -227,7 +215,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 
 	cr.SetConditions(xpv1.Deleting())
 
-	observation, err := mta.Delete(cr, c.mta)
+	observation, err := c.client.Delete(cr)
 	if err != nil {
 		return errors.Wrap(err, errDelete)
 	}
@@ -255,7 +243,7 @@ func (c *external) createFiles(ctx context.Context, cr *v1alpha1.Mta) ([]v1alpha
 				}
 			}
 
-			o, err := mta.UploadFileFromUrl(cr, &file, secret, c.mta)
+			o, err := c.client.UploadFileFromUrl(cr, &file, secret)
 			if err != nil {
 				return fileObservations, errors.Wrap(err, errCreate)
 			}
