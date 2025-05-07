@@ -15,11 +15,10 @@ import (
 	mtaClient "github.com/cloudfoundry-incubator/multiapps-cli-plugin/clients/mtaclient"
 	"github.com/cloudfoundry-incubator/multiapps-cli-plugin/util"
 	v1 "k8s.io/api/core/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/pkg/errors"
 )
-
-// MtaClient defines the interface to communicate with Cloud Foundry Mta resource.
 
 type MtaClient interface {
 	GetMta(mtaID string) (*mtaModels.Mta, error)
@@ -101,7 +100,7 @@ func (c *Client) Deploy(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 		"abortOnError": "true",
 	}
 
-	blueGreen := (*cr.Spec.ForProvider.BlueGreenDeploy)
+	blueGreen := ptr.Deref(cr.Spec.ForProvider.BlueGreenDeploy, false)
 	if blueGreen {
 		processType = "BLUE_GREEN_DEPLOY"
 		parameters["noConfirm"] = "true"
@@ -112,13 +111,15 @@ func (c *Client) Deploy(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 		parameters["abortOnError"] = "true"
 	}
 
-	if *cr.Status.AtProvider.MtaExtensionId != "" {
+	mtaExtensionId := ptr.Deref(cr.Status.AtProvider.MtaExtensionId, "")
+	if mtaExtensionId != "" {
 		parameters["mtaExtDescriptorId"] = cr.Status.AtProvider.MtaExtensionId
 	}
 
+	namespace := ptr.Deref(cr.Spec.ForProvider.Namespace, "default")
 	operation := mtaModels.Operation{
 		ProcessType: processType,
-		Namespace:   *cr.Spec.ForProvider.Namespace,
+		Namespace:   namespace,
 		Parameters:  parameters,
 	}
 
@@ -144,9 +145,10 @@ func (c *Client) Deploy(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 }
 
 func (c *Client) Delete(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
+	namespace := ptr.Deref(cr.Spec.ForProvider.Namespace, "default")
 	operation := mtaModels.Operation{
 		ProcessType: "UNDEPLOY",
-		Namespace:   *cr.Spec.ForProvider.Namespace,
+		Namespace:   namespace,
 		Parameters: map[string]interface{}{
 			"mtaId":          cr.Status.AtProvider.MtaId,
 			"deleteServices": true,

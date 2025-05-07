@@ -17,7 +17,7 @@ type MockMTA struct {
 
 // GetMta mocks Mta.GetMta
 func (m *MockMTA) GetMta(guid string) (*mtaModels.Mta, error) {
-	args := m.Called(guid)
+	args := m.Called()
 	return args.Get(0).(*mtaModels.Mta), args.Error(1)
 }
 
@@ -69,6 +69,6 @@ func NewMta() *Mta {
 
 // SetMetadataID assigns MTA ID
 func (a *Mta) SetMetadataID(guid string) *Mta {
-	a.Metadata.ID = guid
+	a.Metadata = &mtaModels.Metadata{ID: guid}
 	return a
 }

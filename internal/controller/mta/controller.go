@@ -112,6 +112,7 @@ func (c *external) Disconnect(ctx context.Context) error {
 	return nil
 }
 
+//nolint:gocyclo
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
 	cr, ok := mg.(*v1alpha1.Mta)
 	if !ok {
@@ -141,7 +142,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	if exists, err := c.client.Exists(cr); !exists || cr.Status.AtProvider.LastOperation == nil {
 		return managed.ExternalObservation{ResourceExists: false}, err
 	}
-	if cr.HasChangedUrls() || cr.HasExtensionChanged() {
+	if cr.HasChangedUrls() || cr.HasChangedExtension() {
 		// files can't be reused, so we need to recreate them
 		cr.Status.AtProvider.Files = nil
 		cr.Status.AtProvider.MtaExtensionId = nil
@@ -231,19 +232,20 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 func (c *external) createFiles(ctx context.Context, cr *v1alpha1.Mta) ([]v1alpha1.FileObservation, error) {
 	fileObservations := []v1alpha1.FileObservation{}
 	for _, file := range cr.AllFiles() {
-		fileObservation := cr.FindFileObservation(&file)
+		currentFile := file // Create a copy of the loop variable
+		fileObservation := cr.FindFileObservation(&currentFile)
 
 		if fileObservation == nil {
 			var secret *v1.Secret
-			if file.CredentialsSecretRef != nil {
+			if currentFile.CredentialsSecretRef != nil {
 				secret = &v1.Secret{}
-				err := c.kube.Get(ctx, types.NamespacedName{Name: file.CredentialsSecretRef.Name, Namespace: file.CredentialsSecretRef.Namespace}, secret)
+				err := c.kube.Get(ctx, types.NamespacedName{Name: currentFile.CredentialsSecretRef.Name, Namespace: currentFile.CredentialsSecretRef.Namespace}, secret)
 				if err != nil {
 					return fileObservations, errors.Wrap(err, errGetSecret)
 				}
 			}
 
-			o, err := c.client.UploadFileFromUrl(cr, &file, secret)
+			o, err := c.client.UploadFileFromUrl(cr, &currentFile, secret) // Use the copy instead of the loop variable
 			if err != nil {
 				return fileObservations, errors.Wrap(err, errCreate)
 			}
@@ -251,6 +253,10 @@ func (c *external) createFiles(ctx context.Context, cr *v1alpha1.Mta) ([]v1alpha
 		}
 
 		fileObservations = append(fileObservations, *fileObservation)
+	}
+
+	if fileObservations == nil {
+		return fileObservations, errors.New(errCreateFile)
 	}
 
 	return fileObservations, nil

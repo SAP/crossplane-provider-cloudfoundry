@@ -1,7 +1,7 @@
 package v1alpha1
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"fmt"
 	"reflect"
 	"slices"
@@ -32,7 +32,8 @@ type MtaParameters struct {
 	// Reference to a Space in space to populate space.
 	SpaceReference `json:",inline"`
 
-	File *File `json:"file,omitempty"`
+	// +kubebuilder:validation:Required
+	File *File `json:"file"`
 
 	Extension *string `json:"extension,omitempty"`
 }
@@ -67,7 +68,7 @@ type File struct {
 
 	// (String) The remote URL where the MTA archive is present
 	// The remote URL where the MTA archive is present
-	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Required
 	URL *string `json:"url,omitempty"`
 }
 
@@ -139,10 +140,11 @@ func (m *Mta) IsExtensionAlreadyUploaded() bool {
 	return m.Status.AtProvider.MtaExtensionId != nil
 }
 
-func (m *Mta) HasExtensionChanged() bool {
+func (m *Mta) HasChangedExtension() bool {
 	var desired string
 	if m.Spec.ForProvider.Extension != nil {
-		desired = fmt.Sprintf("%x", md5.Sum([]byte(*m.Spec.ForProvider.Extension)))
+		hash := sha256.Sum256([]byte(*m.Spec.ForProvider.Extension))
+		desired = fmt.Sprintf("%x", hash)
 	} else {
 		desired = ""
 	}
@@ -154,7 +156,7 @@ func (m *Mta) HasExtensionChanged() bool {
 		actual = ""
 	}
 
-	if strings.ToLower(desired) != strings.ToLower(actual) {
+	if !strings.EqualFold(desired, actual) {
 		return true
 	}
 	return false
@@ -178,7 +180,8 @@ func (m *Mta) HasChangedUrls() bool {
 	files := m.AllFiles()
 
 	for _, file := range files {
-		if m.FindFileObservation(&file) == nil {
+		fileCopy := file
+		if m.FindFileObservation(&fileCopy) == nil {
 			return true
 		}
 	}

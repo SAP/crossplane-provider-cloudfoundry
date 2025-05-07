@@ -144,7 +144,10 @@ func ClientFnBuilderMta(ctx context.Context, client client.Client, spaceId *stri
 		httpTransport := http.DefaultTransport.(*http.Transport).Clone()
 		// Increase tls handshake timeout to cope with slow internet connections. 3 x default value = 30s.
 		httpTransport.TLSHandshakeTimeout = 30 * time.Second
-		httpTransport.TLSClientConfig = &tls.Config{InsecureSkipVerify: false}
+		httpTransport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: false,
+			MinVersion:         tls.VersionTLS13,
+		}
 		transport := &mtaCsrf.Transport{Delegate: httpTransport, Csrf: &csrfx}
 
 		mtaClientOperations := mtaClient.NewMtaClient(deploy_service_host+"."+domain, *spaceId, transport, tokenFactory)
