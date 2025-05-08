@@ -1,7 +1,7 @@
 apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Mta
 metadata:
-  name: test-mta
+  name: test-mta7
   namespace: default
 spec:
   forProvider:
@@ -9,6 +9,10 @@ spec:
     space: 23f3f9b5-27bf-41ad-949c-50e45e4e63d6
     blueGreenDeploy: true
     abortOnError: true
+    versionRule: ALL
+    modulesForDeployment:
+      - bookshkop-srv
+      - bookshkop-srv-module2
     file:
       url: https://common.repositories.cloud.sap/deploy-releases-hyperspace-maven/com/sap/hyperspace/bookshkop/1.0.0-20250505070353+b9237f2c2645b881aec11c0493b1c47ad2639925/bookshkop-1.0.0-20250505070353+b9237f2c2645b881aec11c0493b1c47ad2639925.mtar
       credentialsSecretRef:
@@ -16,12 +20,10 @@ spec:
         namespace: default
     extension: |
       _schema-version: 3.3.0
-      extends: bookshkop
       ID: bookshkop.extension
+      extends: bookshkop
+
       modules:
-        - name: bookshkop-example
-          parameters:
-            instances: 2
         - name: bookshkop-srv
           type: nodejs
           path: gen/srv
@@ -36,9 +38,10 @@ spec:
                 srv-url: ${default-url}
           requires:
             - name: bookshkop-logging
+
         - name: bookshkop-srv-module2
           type: nodejs
-          path: gen/srv-module2
+          path: gen/srv
           parameters:
             instances: 1
             memory: 512M
@@ -47,3 +50,6 @@ spec:
             builder: npm-ci
           requires:
             - name: bookshkop-logging
+
+
+

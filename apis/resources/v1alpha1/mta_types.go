@@ -35,6 +35,18 @@ type MtaParameters struct {
 	File *File `json:"file,omitempty"`
 
 	Extension *string `json:"extension,omitempty"`
+
+	// (Bool) Specifies whether the deployment should be aborted if an error occurs
+	// +kubebuilder:validation:Optional
+	AbortOnError *bool `json:"abortOnError,omitempty"`
+
+	// Specifies the versioning rule to be applied for the resource
+	// +kubebuilder-validation:Enum=HIGHER;SAME_HIGHER;ALL
+	VersionRule *string `json:"versionRule,omitempty"`
+
+	// Deploy only the modules of the MTA with the specified names. If not specified, all modules are deployed.
+	// +kubebuilder-validation:Optional
+	Modules *[]string `json:"modulesForDeployment,omitempty"`
 }
 
 type FileObservation struct {
