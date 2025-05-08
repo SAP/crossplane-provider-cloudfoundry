@@ -47,7 +47,7 @@ type MtaParameters struct {
 
 	// Deploy only the modules of the MTA with the specified names. If not specified, all modules are deployed.
 	// +kubebuilder-validation:Optional
-	Modules *[]string `json:"modulesForDeployment,omitempty"`
+	Modules *[]string `json:"modules,omitempty"`
 
 	// (Bool) Specifies whether to re-create changed services and delete discontinued services.
 	// +kubebuilder:validation:Optional

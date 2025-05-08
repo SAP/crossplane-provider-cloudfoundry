@@ -14,7 +14,7 @@ spec:
       credentialsSecretRef:
         name: artifactory-credentials-secret
         namespace: default
-    modulesForDeployment:
+    modules:
       - bookshkop-srv-module2
       - bookshkop-srv
     deleteServices: true

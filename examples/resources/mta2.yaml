@@ -10,7 +10,7 @@ spec:
     blueGreenDeploy: true
     abortOnError: true
     versionRule: ALL
-    modulesForDeployment:
+    modules:
       - bookshkop-srv
       - bookshkop-srv-module2
     file:

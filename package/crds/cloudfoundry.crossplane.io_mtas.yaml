@@ -113,7 +113,7 @@ spec:
                           The remote URL where the MTA archive is present
                         type: string
                     type: object
-                  modulesForDeployment:
+                  modules:
                     description: Deploy only the modules of the MTA with the specified
                       names. If not specified, all modules are deployed.
                     items:
