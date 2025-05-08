@@ -1,32 +1,24 @@
 apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Mta
 metadata:
-  name: test-mta-philipp
+  name: test
   namespace: default
 spec:
   forProvider:
     namespace: default
-    space: spaceid
+    spaceRef:
+      name: my-space
     blueGreenDeploy: true
-    abortOnError: false
     file:
       url: <url>
       credentialsSecretRef:
-        name: artifactory-credentials-secret
+        name: secret
         namespace: default
-    modules:
-      - bookshkop-srv-module2
-      - bookshkop-srv
-    deleteServices: true
     extension: |
       _schema-version: 3.3.0
-      extends: bookshkop
-      ID: bookshkop.extension
+      extends: my-app
+      ID: my-app.extension
       modules:
-        - name: bookshkop-srv
+        - name: my-app-srv
           parameters:
-            instances: 3
-            memory: 512M
-        - name: bookshkop-srv-module2
-          parameters:
-            instances: 1
+            instances: 2
