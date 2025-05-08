@@ -6,7 +6,7 @@ metadata:
 spec:
   forProvider:
     namespace: default
-    space: 23f3f9b5-27bf-41ad-949c-50e45e4e63d6
+    space: spaceid
     blueGreenDeploy: true
     abortOnError: true
     versionRule: ALL
@@ -14,42 +14,9 @@ spec:
       - bookshkop-srv
       - bookshkop-srv-module2
     file:
-      url: https://common.repositories.cloud.sap/deploy-releases-hyperspace-maven/com/sap/hyperspace/bookshkop/1.0.0-20250505070353+b9237f2c2645b881aec11c0493b1c47ad2639925/bookshkop-1.0.0-20250505070353+b9237f2c2645b881aec11c0493b1c47ad2639925.mtar
+      url: <url>
       credentialsSecretRef:
-        name: artifactory-credentials-secret
-        namespace: default
-    extension: |
-      _schema-version: 3.3.0
-      ID: bookshkop.extension
-      extends: bookshkop
-
-      modules:
-        - name: bookshkop-srv
-          type: nodejs
-          path: gen/srv
-          parameters:
-            instances: 1
-            buildpack: nodejs_buildpack
-          build-parameters:
-            builder: npm-ci
-          provides:
-            - name: srv-api
-              properties:
-                srv-url: ${default-url}
-          requires:
-            - name: bookshkop-logging
-
-        - name: bookshkop-srv-module2
-          type: nodejs
-          path: gen/srv
-          parameters:
-            instances: 1
-            memory: 512M
-            buildpack: nodejs_buildpack
-          build-parameters:
-            builder: npm-ci
-          requires:
-            - name: bookshkop-logging
-
+      name: artifactory-credentials-secret
+      namespace: default
 
 

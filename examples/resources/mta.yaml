@@ -6,11 +6,11 @@ metadata:
 spec:
   forProvider:
     namespace: default
-    space: 23f3f9b5-27bf-41ad-949c-50e45e4e63d6
+    space: spaceid
     blueGreenDeploy: true
     abortOnError: false
     file:
-      url: https://common.repositories.cloud.sap/deploy-releases-hyperspace-maven/com/sap/hyperspace/bookshkop/1.0.0-20250505070353+b9237f2c2645b881aec11c0493b1c47ad2639925/bookshkop-1.0.0-20250505070353+b9237f2c2645b881aec11c0493b1c47ad2639925.mtar
+      url: <url>
       credentialsSecretRef:
         name: artifactory-credentials-secret
         namespace: default
