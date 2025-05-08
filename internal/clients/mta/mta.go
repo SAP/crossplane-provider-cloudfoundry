@@ -83,11 +83,12 @@ func Deploy(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (v1alpha1.MtaObse
 	parameters := map[string]interface{}{
 		"mtaId":        cr.Status.AtProvider.MtaId,
 		"appArchiveId": fileObservation.ID,
-		"versionRule":  "ALL",
-		"abortOnError": "true",
+		"versionRule":  cr.Spec.ForProvider.VersionRule,
+		"abortOnError": cr.Spec.ForProvider.AbortOnError,
+		"modules":      cr.Spec.ForProvider.Modules,
 	}
 
-	blueGreen := (*cr.Spec.ForProvider.BlueGreenDeploy)
+	blueGreen := *cr.Spec.ForProvider.BlueGreenDeploy
 	if blueGreen {
 		processType = "BLUE_GREEN_DEPLOY"
 		parameters["noConfirm"] = "true"
@@ -95,7 +96,33 @@ func Deploy(cr *v1alpha1.Mta, c mtaClient.MtaClientOperations) (v1alpha1.MtaObse
 		parameters["keepOriginalAppNamesAfterDeploy"] = "true"
 		parameters["shouldApplyIncrementalInstancesUpdate"] = "false"
 		parameters["shouldBackupPreviousVersion"] = "false"
-		parameters["abortOnError"] = "true"
+	}
+
+	// Noch nicht fertig, ist ein Logikfehler bei LastOperation
+	if cr.Spec.ForProvider.AbortOnError != nil {
+		if !*cr.Spec.ForProvider.AbortOnError {
+			if cr.Status.AtProvider.LastOperation == nil || cr.Status.AtProvider.LastOperation.HasError() {
+				return v1alpha1.MtaObservation{}, errors.New("Deployment aborted: MTA file contains errors")
+			}
+		}
+		parameters["abortOnError"] = *cr.Spec.ForProvider.AbortOnError
+	}
+
+	// Fertig
+	if cr.Spec.ForProvider.VersionRule != nil {
+		vaildVersionRules := map[string]bool{
+			"HIGHER":      true,
+			"SAME_HIGHER": true,
+			"ALL":         true,
+		}
+		if vaildVersionRules[*cr.Spec.ForProvider.VersionRule] {
+			parameters["versionRule"] = *cr.Spec.ForProvider.VersionRule
+		}
+	}
+
+	// Fertig
+	if cr.Spec.ForProvider.Modules != nil {
+		parameters["modulesForDeployment"] = strings.Join(*cr.Spec.ForProvider.Modules, ",")
 	}
 
 	if *cr.Status.AtProvider.MtaExtensionId != "" {
