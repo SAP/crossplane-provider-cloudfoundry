@@ -17,11 +17,18 @@ func (o *Operation) HasError() bool {
 	if o.State == nil {
 		return false
 	}
+	return *o.State == "ERROR"
+}
+
+func (o *Operation) isAborted() bool {
+	if o.State == nil {
+		return false
+	}
 	return *o.State == "ABORTED"
 }
 
 func (o *Operation) GetError() string {
-	if !o.HasError() {
+	if !o.HasError() && !o.isAborted() {
 		return ""
 	}
 	if len(*o.Error) > 0 {

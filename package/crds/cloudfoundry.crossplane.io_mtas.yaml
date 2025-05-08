@@ -80,6 +80,10 @@ spec:
                   blueGreenDeploy:
                     description: (Bool) Use blue-green deployment
                     type: boolean
+                  deleteServices:
+                    description: (Bool) Specifies whether to re-create changed services
+                      and delete discontinued services.
+                    type: boolean
                   deployUrl:
                     description: |-
                       (String) The URL of the deploy service, if a custom one has been used(should be present in the same landscape). By default 'deploy-service.<system-domain>'
@@ -212,11 +216,12 @@ spec:
                             type: string
                         type: object
                     type: object
-
                   versionRule:
                     description: Specifies the versioning rule to be applied for the
                       resource
                     type: string
+                required:
+                - file
                 type: object
               managementPolicies:
                 default:
@@ -426,6 +431,10 @@ spec:
                     type: string
                   mtaId:
                     type: string
+                  mtaModulesForDeployment:
+                    items:
+                      type: string
+                    type: array
                 type: object
               conditions:
                 description: Conditions of the resource.

@@ -96,9 +96,6 @@ func (c *Client) Deploy(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 	parameters := map[string]interface{}{
 		"mtaId":        cr.Status.AtProvider.MtaId,
 		"appArchiveId": fileObservation.ID,
-		"versionRule":  cr.Spec.ForProvider.VersionRule,
-		"abortOnError": cr.Spec.ForProvider.AbortOnError,
-		"modules":      cr.Spec.ForProvider.Modules,
 	}
 
 	blueGreen := ptr.Deref(cr.Spec.ForProvider.BlueGreenDeploy, false)
@@ -111,29 +108,20 @@ func (c *Client) Deploy(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 		parameters["shouldBackupPreviousVersion"] = "false"
 	}
 
-	// Noch nicht fertig, ist ein Logikfehler bei LastOperation
-	if cr.Spec.ForProvider.AbortOnError != nil {
-		if !*cr.Spec.ForProvider.AbortOnError {
-			if cr.Status.AtProvider.LastOperation == nil || cr.Status.AtProvider.LastOperation.HasError() {
-				return v1alpha1.MtaObservation{}, errors.New("Deployment aborted: MTA file contains errors")
-			}
-		}
-		parameters["abortOnError"] = *cr.Spec.ForProvider.AbortOnError
+	abortOnError := ptr.Deref(cr.Spec.ForProvider.AbortOnError, false)
+	if abortOnError {
+		parameters["abortOnError"] = abortOnError
 	}
 
-	// Fertig
+	deleteServices := ptr.Deref(cr.Spec.ForProvider.DeleteServices, false)
+	if abortOnError {
+		parameters["deleteServices"] = deleteServices
+	}
+
 	if cr.Spec.ForProvider.VersionRule != nil {
-		vaildVersionRules := map[string]bool{
-			"HIGHER":      true,
-			"SAME_HIGHER": true,
-			"ALL":         true,
-		}
-		if vaildVersionRules[*cr.Spec.ForProvider.VersionRule] {
-			parameters["versionRule"] = *cr.Spec.ForProvider.VersionRule
-		}
+		parameters["versionRule"] = *cr.Spec.ForProvider.VersionRule
 	}
 
-	// Fertig
 	if cr.Spec.ForProvider.Modules != nil {
 		parameters["modulesForDeployment"] = strings.Join(*cr.Spec.ForProvider.Modules, ",")
 	}
@@ -165,6 +153,7 @@ func (c *Client) Deploy(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 		MtaExtensionId:   cr.Status.AtProvider.MtaExtensionId,
 		MtaExtensionHash: cr.Status.AtProvider.MtaExtensionHash,
 		Files:            cr.Status.AtProvider.Files,
+		MtaModules:       cr.Status.AtProvider.MtaModules,
 		LastOperation: &v1alpha1.Operation{
 			ID: &operationId,
 		},
@@ -219,6 +208,12 @@ func (c *Client) CreateExtensions(cr *v1alpha1.Mta, o *v1alpha1.MtaObservation) 
 	}
 
 	return nil
+}
+
+func ApplyModules(cr *v1alpha1.Mta, o *v1alpha1.MtaObservation) {
+	if !cr.AreModulesApplied() {
+		o.MtaModules = cr.Spec.ForProvider.Modules
+	}
 }
 
 func (c *Client) UploadFileFromUrl(cr *v1alpha1.Mta, file *v1alpha1.File, secret *v1.Secret) (v1alpha1.FileObservation, error) {
@@ -290,6 +285,7 @@ func (c *Client) observeMta(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 		MtaId:            cr.Status.AtProvider.MtaId,
 		MtaExtensionId:   cr.Status.AtProvider.MtaExtensionId,
 		MtaExtensionHash: cr.Status.AtProvider.MtaExtensionHash,
+		MtaModules:       cr.Status.AtProvider.MtaModules,
 		Files:            cr.Status.AtProvider.Files,
 	}
 

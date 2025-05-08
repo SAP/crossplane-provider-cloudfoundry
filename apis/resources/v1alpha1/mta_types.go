@@ -1,7 +1,7 @@
 package v1alpha1
 
 import (
-	"crypto/sha256"
+	"crypto/md5"
 	"fmt"
 	"reflect"
 	"slices"
@@ -48,6 +48,10 @@ type MtaParameters struct {
 	// Deploy only the modules of the MTA with the specified names. If not specified, all modules are deployed.
 	// +kubebuilder-validation:Optional
 	Modules *[]string `json:"modulesForDeployment,omitempty"`
+
+	// (Bool) Specifies whether to re-create changed services and delete discontinued services.
+	// +kubebuilder:validation:Optional
+	DeleteServices *bool `json:"deleteServices,omitempty"`
 }
 
 type FileObservation struct {
@@ -67,6 +71,8 @@ type MtaObservation struct {
 	MtaExtensionId *string `json:"mtaExtensionId,omitempty"`
 
 	MtaExtensionHash *string `json:"mtaExtensionHash,omitempty"`
+
+	MtaModules *[]string `json:"mtaModulesForDeployment,omitempty"`
 
 	Files *[]FileObservation `json:"files,omitempty"`
 
@@ -152,11 +158,14 @@ func (m *Mta) IsExtensionAlreadyUploaded() bool {
 	return m.Status.AtProvider.MtaExtensionId != nil
 }
 
+func (m *Mta) AreModulesApplied() bool {
+	return m.Status.AtProvider.MtaModules != nil
+}
+
 func (m *Mta) HasChangedExtension() bool {
 	var desired string
 	if m.Spec.ForProvider.Extension != nil {
-		hash := sha256.Sum256([]byte(*m.Spec.ForProvider.Extension))
-		desired = fmt.Sprintf("%x", hash)
+		desired = fmt.Sprintf("%x", md5.Sum([]byte(*m.Spec.ForProvider.Extension)))
 	} else {
 		desired = ""
 	}
@@ -172,6 +181,10 @@ func (m *Mta) HasChangedExtension() bool {
 		return true
 	}
 	return false
+}
+
+func (m *Mta) HaveDeploymentModulesChanged() bool {
+	return !reflect.DeepEqual(m.Spec.ForProvider.Modules, m.Status.AtProvider.MtaModules)
 }
 
 func (m *Mta) FindFileObservation(file *File) *FileObservation {
@@ -209,7 +222,7 @@ func (m *Mta) HasRunningOperation() bool {
 
 func (m *Mta) HasErrorOperation() bool {
 	return slices.ContainsFunc(m.allOperations(), func(operation Operation) bool {
-		return operation.HasError()
+		return operation.HasError() || operation.isAborted()
 	})
 }
 
@@ -217,7 +230,7 @@ func (m *Mta) GetErrorOperation() string {
 	operations := m.allOperations()
 
 	errIndex := slices.IndexFunc(operations, func(operation Operation) bool {
-		return operation.HasError()
+		return operation.HasError() || operation.isAborted()
 	})
 
 	return operations[errIndex].GetError()
@@ -244,6 +257,6 @@ func (m *Mta) allOperations() []Operation {
 }
 
 // implement SpaceScoped interface
-func (s *Mta) GetSpaceRef() *SpaceReference {
-	return &s.Spec.ForProvider.SpaceReference
+func (m *Mta) GetSpaceRef() *SpaceReference {
+	return &m.Spec.ForProvider.SpaceReference
 }

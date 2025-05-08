@@ -788,6 +788,15 @@ func (in *MtaObservation) DeepCopyInto(out *MtaObservation) {
 		*out = new(string)
 		**out = **in
 	}
+	if in.MtaModules != nil {
+		in, out := &in.MtaModules, &out.MtaModules
+		*out = new([]string)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make([]string, len(*in))
+			copy(*out, *in)
+		}
+	}
 	if in.Files != nil {
 		in, out := &in.Files, &out.Files
 		*out = new([]FileObservation)
@@ -843,6 +852,30 @@ func (in *MtaParameters) DeepCopyInto(out *MtaParameters) {
 	if in.Extension != nil {
 		in, out := &in.Extension, &out.Extension
 		*out = new(string)
+		**out = **in
+	}
+	if in.AbortOnError != nil {
+		in, out := &in.AbortOnError, &out.AbortOnError
+		*out = new(bool)
+		**out = **in
+	}
+	if in.VersionRule != nil {
+		in, out := &in.VersionRule, &out.VersionRule
+		*out = new(string)
+		**out = **in
+	}
+	if in.Modules != nil {
+		in, out := &in.Modules, &out.Modules
+		*out = new([]string)
+		if **in != nil {
+			in, out := *in, *out
+			*out = make([]string, len(*in))
+			copy(*out, *in)
+		}
+	}
+	if in.DeleteServices != nil {
+		in, out := &in.DeleteServices, &out.DeleteServices
+		*out = new(bool)
 		**out = **in
 	}
 }

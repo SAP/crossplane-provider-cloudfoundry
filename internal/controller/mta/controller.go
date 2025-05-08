@@ -142,12 +142,13 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	if exists, err := c.client.Exists(cr); !exists || cr.Status.AtProvider.LastOperation == nil {
 		return managed.ExternalObservation{ResourceExists: false}, err
 	}
-	if cr.HasChangedUrls() || cr.HasChangedExtension() {
+	if cr.HasChangedUrls() || cr.HasChangedExtension() || cr.HaveDeploymentModulesChanged() {
 		// files can't be reused, so we need to recreate them
 		cr.Status.AtProvider.Files = nil
 		cr.Status.AtProvider.MtaExtensionId = nil
 		cr.Status.AtProvider.MtaExtensionHash = nil
 		cr.Status.AtProvider.LastOperation = nil
+		cr.Status.AtProvider.MtaModules = nil
 		if err = c.kube.Status().Update(ctx, cr); err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, errUpdateCR)
 		}
@@ -186,6 +187,8 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreateMtaExt)
 	}
+
+	mta.ApplyModules(cr, &observation)
 
 	cr.Status.AtProvider = observation
 	if err = c.kube.Status().Update(ctx, cr); err != nil {
