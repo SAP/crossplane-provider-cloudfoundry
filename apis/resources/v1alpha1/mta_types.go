@@ -32,7 +32,8 @@ type MtaParameters struct {
 	// Reference to a Space in space to populate space.
 	SpaceReference `json:",inline"`
 
-	File *File `json:"file,omitempty"`
+	// +kubebuilder:validation:Required
+	File *File `json:"file"`
 
 	Extension *string `json:"extension,omitempty"`
 
@@ -46,7 +47,11 @@ type MtaParameters struct {
 
 	// Deploy only the modules of the MTA with the specified names. If not specified, all modules are deployed.
 	// +kubebuilder-validation:Optional
-	Modules *[]string `json:"modulesForDeployment,omitempty"`
+	Modules *[]string `json:"modules,omitempty"`
+
+	// (Bool) Specifies whether to re-create changed services and delete discontinued services.
+	// +kubebuilder:validation:Optional
+	DeleteServices *bool `json:"deleteServices,omitempty"`
 }
 
 type FileObservation struct {
@@ -67,6 +72,8 @@ type MtaObservation struct {
 
 	MtaExtensionHash *string `json:"mtaExtensionHash,omitempty"`
 
+	MtaModules *[]string `json:"mtaModulesForDeployment,omitempty"`
+
 	Files *[]FileObservation `json:"files,omitempty"`
 
 	LastOperation *Operation `json:"lastOperation,omitempty"`
@@ -79,7 +86,7 @@ type File struct {
 
 	// (String) The remote URL where the MTA archive is present
 	// The remote URL where the MTA archive is present
-	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Required
 	URL *string `json:"url,omitempty"`
 }
 
@@ -151,7 +158,11 @@ func (m *Mta) IsExtensionAlreadyUploaded() bool {
 	return m.Status.AtProvider.MtaExtensionId != nil
 }
 
-func (m *Mta) HasExtensionChanged() bool {
+func (m *Mta) AreModulesApplied() bool {
+	return m.Status.AtProvider.MtaModules != nil
+}
+
+func (m *Mta) HasChangedExtension() bool {
 	var desired string
 	if m.Spec.ForProvider.Extension != nil {
 		desired = fmt.Sprintf("%x", md5.Sum([]byte(*m.Spec.ForProvider.Extension)))
@@ -166,10 +177,14 @@ func (m *Mta) HasExtensionChanged() bool {
 		actual = ""
 	}
 
-	if strings.ToLower(desired) != strings.ToLower(actual) {
+	if !strings.EqualFold(desired, actual) {
 		return true
 	}
 	return false
+}
+
+func (m *Mta) HaveDeploymentModulesChanged() bool {
+	return !reflect.DeepEqual(m.Spec.ForProvider.Modules, m.Status.AtProvider.MtaModules)
 }
 
 func (m *Mta) FindFileObservation(file *File) *FileObservation {
@@ -190,7 +205,8 @@ func (m *Mta) HasChangedUrls() bool {
 	files := m.AllFiles()
 
 	for _, file := range files {
-		if m.FindFileObservation(&file) == nil {
+		fileCopy := file
+		if m.FindFileObservation(&fileCopy) == nil {
 			return true
 		}
 	}
@@ -206,7 +222,7 @@ func (m *Mta) HasRunningOperation() bool {
 
 func (m *Mta) HasErrorOperation() bool {
 	return slices.ContainsFunc(m.allOperations(), func(operation Operation) bool {
-		return operation.HasError()
+		return operation.HasError() || operation.isAborted()
 	})
 }
 
@@ -214,7 +230,7 @@ func (m *Mta) GetErrorOperation() string {
 	operations := m.allOperations()
 
 	errIndex := slices.IndexFunc(operations, func(operation Operation) bool {
-		return operation.HasError()
+		return operation.HasError() || operation.isAborted()
 	})
 
 	return operations[errIndex].GetError()
@@ -241,6 +257,6 @@ func (m *Mta) allOperations() []Operation {
 }
 
 // implement SpaceScoped interface
-func (s *Mta) GetSpaceRef() *SpaceReference {
-	return &s.Spec.ForProvider.SpaceReference
+func (m *Mta) GetSpaceRef() *SpaceReference {
+	return &m.Spec.ForProvider.SpaceReference
 }
