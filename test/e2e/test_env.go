@@ -29,7 +29,7 @@ var (
 	testenv       env.Environment
 	testOrgName   = "cf-ci-e2e"
 	testDomain    = "e2e.orchestrator.io"
-	testHostName  = "app-host"
+	testAppDomain = "cfapps.eu12.hana.ondemand.com"
 	testSpaceName = "e2e-space"
 	testQuotaName = "e2e-space-quota"
 )
@@ -44,7 +44,10 @@ func resetTestOrg(ctx context.Context, t *testing.T) {
 	if err != nil {
 		t.Fatalf("test org %s not accessible", testOrgName)
 	}
-	_ = deleteDomainRoute(ctx, cfClient, org, testDomain, testHostName)
+	_ = deleteRoute(ctx, cfClient, org, testDomain, "app-host")
+	_ = deleteRoute(ctx, cfClient, org, testAppDomain, "app-route-host-domainref")
+	_ = deleteRoute(ctx, cfClient, org, testAppDomain, "app-route-host-domainname")
+	_ = deleteDomain(ctx, cfClient, org, testDomain)
 	_ = deleteSpace(ctx, cfClient, org, testSpaceName)
 	_ = deleteQuota(ctx, cfClient, org, testQuotaName)
 }
@@ -105,14 +108,26 @@ func deleteSpace(ctx context.Context, cfClient *client.Client, org string, space
 
 }
 
-func deleteDomainRoute(ctx context.Context, cfClient *client.Client, org string, domain string, route string) error {
+func deleteDomain(ctx context.Context, cfClient *client.Client, org string, domain string) error {
 	d, err := cfClient.Domains.Single(ctx,
 		&client.DomainListOptions{
 			OrganizationGUIDs: client.Filter{Values: []string{org}},
 			Names:             client.Filter{Values: []string{domain}},
 		})
 	if err == nil {
-		klog.V(4).Info("found test domain! cleaning up")
+		_, err = cfClient.Domains.Delete(ctx, d.GUID)
+		return err
+	}
+	return err
+}
+
+func deleteRoute(ctx context.Context, cfClient *client.Client, org string, domain string, route string) error {
+	d, err := cfClient.Domains.Single(ctx,
+		&client.DomainListOptions{
+			OrganizationGUIDs: client.Filter{Values: []string{org}},
+			Names:             client.Filter{Values: []string{domain}},
+		})
+	if err == nil {
 		s, err := cfClient.Routes.Single(ctx,
 			&client.RouteListOptions{
 				OrganizationGUIDs: client.Filter{Values: []string{org}},
@@ -125,12 +140,10 @@ func deleteDomainRoute(ctx context.Context, cfClient *client.Client, org string,
 			_, err = cfClient.Routes.Delete(ctx, s.GUID)
 			return err
 		}
-		_, err = cfClient.Domains.Delete(ctx, d.GUID)
-		return err
+		return nil
 	}
-	return nil
+	return err
 }
-
 func deleteQuota(ctx context.Context, cfClient *client.Client, org string, quota string) error {
 	s, err := cfClient.SpaceQuotas.Single(ctx,
 		&client.SpaceQuotaListOptions{
