@@ -6,6 +6,8 @@ PROJECT_REPO := github.com/SAP/$(PROJECT_NAME)
 
 
 PLATFORMS ?= linux_amd64 linux_arm64
+VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || git rev-parse HEAD)
+$(info VERSION is $(VERSION))
 
 # -include will silently skip missing files, which allows us
 # to load those files with a target in the Makefile. If only
