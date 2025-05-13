@@ -1,0 +1,35 @@
+---
+# CR to create a managed ServiceInstance
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: my-audit-log
+spec:
+  forProvider:
+    type: managed
+    name: my-audit-log
+    spaceRef: 
+      name: my-space
+      policy: 
+        resolve: Always
+    servicePlan:
+      offering: auditlog-management
+      plan: default
+
+---
+# CR to create a ServiceKey
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceKey
+metadata:
+  name: my-audit-log-key
+spec:
+  forProvider:
+    name: audit-log-key
+    connectionDetailsAsJSON: false
+    serviceInstanceRef:
+      name: my-audit-log
+      policy:
+        resolve: Always
+  writeConnectionSecretToRef:
+    name: my-audit-log-key
+    namespace: default

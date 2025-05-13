@@ -1,0 +1,98 @@
+#+options: ':nil *:t -:t ::t <:t H:3 \n:nil ^:t arch:headline
+#+options: author:t broken-links:nil c:nil creator:nil
+#+options: d:(not "LOGBOOK") date:t e:t email:nil expand-links:t f:t
+#+options: inline:t num:t p:nil pri:nil prop:nil stat:t tags:t
+#+options: tasks:t tex:t timestamp:t title:t toc:t todo:t |:t
+#+title: Converter tool - PR review
+#+date: <2025-04-25 Fri>
+#+author: Gergely Szabo
+#+email: gergely.szabo@sap.com
+#+language: en
+#+select_tags: export
+#+exclude_tags: noexport
+#+creator: Emacs 30.1 (Org mode 9.7.12)
+#+cite_export:
+
+* Demo
+** Resources to convert
+
+We have resource YAMLs in the [[file:cmd/converter/test-resources/][cmd/converter/test-resources/]] directory.
+
+In the demo, there is a single [[file:cmd/converter/test-resources/route.yaml][route.yaml]] file there.
+
+The [[file:cmd/converter/test-resources/route.yaml][route.yaml]] contains two =Route= resources of
+- API group: =cloudfoundry.crossplane.io=
+- API version: =v1alpha1=
+
+They have a field =.spec.forProvider.host=.
+
+** Run the tool
+
+#+begin_src eshell :session converter-tool-shell
+_output/bin/linux_amd64/converter
+#+end_src
+
+#+RESULTS:
+: ~/kubermatic/sap-ora-mcp/github-migration/crossplane-provider-cloudfoundry-github.com $ _output/bin/linux_amd64/converter
+
+The generated resources are similar to the original =Route= resources
+except for the following differences:
+
+- The API version changed from =v1alpha1= → =v1alpha2=
+- The field name changed from =.spec.forProvider.host= → =.spec.forProvider.hostname=
+
+* Conversion logic
+
+** Prerequisites
+
+- There shall be a proper Go package with the types describing the
+  resources of the API group =cloudfoundry.crossplane.io/v1alpha2=
+- This has been artificially created for the sake of the demo, see
+  [[file:apis/resources/v1alpha2/][apis/resources/v1alpha2/]]
+
+** Conversion Logic
+
+The =Route= conversion logic is implemented by the =RouteConversion=
+function in the [[file:apis/resources/v1alpha2/conversion.go][apis/resources/v1alpha2/conversion.go]] file.
+
+The =AddConversionFuncs= function implemented in the
+[[file:apis/resources/v1alpha2/conversion.go][apis/resources/v1alpha2/conversion.go]] adds the various conversion
+functions to a =Scheme=. Currently, only =Route= conversion is added.
+
+** Resource conversion tool
+
+The tool is implemented in the [[file:cmd/converter/][cmd/converter/]] directory.
+
+*** Business logic
+
+Business logic is implemented in [[file:cmd/converter/main.go][main.go]]:
+
+1. Build a =Scheme= that contains the types (resources) of =v1alpha1=
+   and =v1alpha2=.
+2. Add the conversion functions to the =Scheme= using the
+   =AddConversionFuncs= function.
+3. Collect YAMLs and deserialize theme into the objects of types
+   defined in our =Scheme=. The helper functions are implemented in
+   the [[file:cmd/converter/yamlprovider.go][yamlprovider.go]] file.
+4. For each object, perform a the conversion. The helper functions are
+   implemented in [[file:cmd/converter/conversion.go][conversion.go]] file.
+5. Print out the converted object in YAML format.
+
+*** Building
+
+The building of the tool is integrated in the [[file:Makefile][Makefile]]. The =make
+build= command builds the tool.
+
+* Summary
+
+- The tool can convert YAML files read from a tree of directories and
+  files.
+  - The tree is not preserved since we simply output the generated
+    YAMLs to =stdout=.
+- It's easy to add new conversion functions for new types.
+- The conversion is performed using types, not regular expressions or
+  other unreliable ways.
+- The conversion functions follow the same signature required for
+  Kubernetes conversion webhooks.
+  - This design allows the logic to be reused when implementing a
+    conversion webhook in the future.

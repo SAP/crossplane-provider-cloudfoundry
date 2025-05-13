@@ -1,0 +1,40 @@
+---
+# CR to create a managed ServiceInstance
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: my-cloud-logging
+spec:
+  forProvider:
+    type: managed
+    name: my-cloud-logging
+    spaceRef: 
+      name: my-space
+      policy: 
+        resolve: Always
+    servicePlan:
+      offering: cloud-logging
+      plan: dev
+    jsonParams: |
+      {
+        "retention_period": 3
+      }
+---
+# ALTERNATIVE YAML based CR to create a managed ServiceInstance
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: my-cloud-logging
+spec:
+  forProvider:
+    type: managed
+    name: my-cloud-logging
+    spaceRef: 
+      name: my-space
+      policy: 
+        resolve: Always
+    servicePlan:
+      offering: cloud-logging
+      plan: dev
+    parameters:
+      retention_period: 3

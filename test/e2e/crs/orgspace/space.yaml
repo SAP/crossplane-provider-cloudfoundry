@@ -1,0 +1,25 @@
+---
+# create a new space with a specific name and org ref
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  namespace: orgspace-test
+  name: e2e-space-org-ref
+spec:
+  forProvider:
+    name: e2e-space
+    orgRef:
+      name:  e2e-org
+      policy:
+        resolve: Always
+---
+# create a new space with org name
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  namespace: orgspace-test
+  name: e2e-space-org-name
+spec:
+  forProvider:
+    name: e2e-space
+    orgName: cf-ci-e2e

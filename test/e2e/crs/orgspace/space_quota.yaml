@@ -1,0 +1,16 @@
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceQuota
+metadata:
+  namespace: orgspace-test
+  name: e2e-space-quota
+spec:
+  forProvider:
+    name: e2e-space-quota
+    orgRef:
+      name: e2e-org
+    allowPaidServicePlans: false
+    spacesRefs:
+      - name: e2e-space-org-name
+        policy:
+          resolve: Always

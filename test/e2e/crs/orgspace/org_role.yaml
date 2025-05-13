@@ -1,0 +1,27 @@
+# create a new org role with org ref
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: OrgRole
+metadata:
+  namespace: orgspace-test
+  name: e2e-org-role-org-ref
+spec:
+  forProvider:
+    type: Auditor
+    username: co-test-user@example.com
+    orgRef:
+      name: e2e-org
+      policy:
+        resolve: Always
+---
+# create a new org role with org name
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: OrgRole
+metadata:
+  namespace: orgspace-test
+  name: e2e-org-role-org-name
+spec:
+  forProvider:
+    type: Auditor
+    username: co-test-user-2@example.com
+    orgName: cf-ci-e2e
+

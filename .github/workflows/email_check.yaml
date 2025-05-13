@@ -1,0 +1,364 @@
+name: Email and Phone Number Check
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  content-check:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup scan configuration
+        id: setup
+        shell: bash
+        run: |
+          echo "📋 Setting up scan configuration"
+
+          # Configure allowed domains here (pipe-separated for grep)
+          ALLOWED_DOMAINS="example\.com|test\.com|developer\.example\.org"
+          echo "ℹ️ Allowed email domains: ${ALLOWED_DOMAINS//\\/}"
+          echo "ALLOWED_DOMAINS=$ALLOWED_DOMAINS" >> $GITHUB_ENV
+
+          # Configure allowed API endpoints (pipe-separated for grep)
+          ALLOWED_API_ENDPOINTS="git\.k8s\.io|my-route-service\.example\.com|api\.example\.org|github\.com|charts\.crossplane\.io|docs\.github\.com|v3-apidocs\.cloudfoundry\.org|zip\.com|apache\.org|docs\.renovatebot\.com|crossplane\.io|v3-apidocs\.cloudfoundry\.space|releases\.hashicorp\.com|probot\.github\.io|facebook\.github\.io"
+          echo "ℹ️ Allowed API endpoints: ${ALLOWED_API_ENDPOINTS//\\/}"
+          echo "ALLOWED_API_ENDPOINTS=$ALLOWED_API_ENDPOINTS" >> $GITHUB_ENV
+
+          # Directories to exclude
+          EXCLUDE_DIRS=".git build .github/workflows"
+          echo "ℹ️ Excluding directories: $EXCLUDE_DIRS"
+          echo "EXCLUDE_DIRS=$EXCLUDE_DIRS" >> $GITHUB_ENV
+
+          # Specific files to exclude (space-separated)
+          EXCLUDED_FILES="package/crossplanel.yaml"
+          echo "ℹ️ Excluding specific files: $EXCLUDED_FILES"
+          echo "EXCLUDED_FILES=$EXCLUDED_FILES" >> $GITHUB_ENV
+
+          # Create exclude pattern for find command (directories)
+          EXCLUDE_PATTERN=""
+          for dir in $EXCLUDE_DIRS; do
+            EXCLUDE_PATTERN="$EXCLUDE_PATTERN -not -path './$dir/*'"
+          done
+
+          # Add specific files to exclude pattern
+          for file in $EXCLUDED_FILES; do
+            EXCLUDE_PATTERN="$EXCLUDE_PATTERN -not -path './$file' -not -path '*/$file'"
+          done
+
+          echo "ℹ️ Find exclude pattern: $EXCLUDE_PATTERN"
+          echo "EXCLUDE_PATTERN=$EXCLUDE_PATTERN" >> $GITHUB_ENV
+
+          # Count total files to be checked
+          TOTAL_FILES=$(eval "find . -type f $EXCLUDE_PATTERN" | wc -l)
+          echo "ℹ️ Found $TOTAL_FILES files to scan"
+          echo "TOTAL_FILES=$TOTAL_FILES" >> $GITHUB_ENV
+
+      - name: Check for unauthorized email domains
+        id: email-check
+        shell: bash
+        run: |
+          echo "📧 Starting email domain check"
+
+          # Get environment variables
+          ALLOWED_DOMAINS="${{ env.ALLOWED_DOMAINS }}"
+          EXCLUDE_PATTERN="${{ env.EXCLUDE_PATTERN }}"
+          TOTAL_FILES="${{ env.TOTAL_FILES }}"
+
+          # Email regex pattern for grep
+          EMAIL_PATTERN='[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}'
+          echo "ℹ️ Using email pattern: $EMAIL_PATTERN"
+
+          # Create temporary file to store results
+          EMAIL_TEMP_FILE=$(mktemp)
+          echo "ℹ️ Created temporary file for results: $EMAIL_TEMP_FILE"
+
+          echo "🔍 Scanning files for unauthorized email domains..."
+
+          # Counter for progress reporting
+          CHECKED_FILES=0
+          FOUND_EMAILS=0
+          UNAUTHORIZED_EMAILS=0
+
+          # Find all files, excluding binary files and specified directories/files
+          eval "find . -type f $EXCLUDE_PATTERN" | while read -r file; do
+            # Update and show progress every 100 files
+            CHECKED_FILES=$((CHECKED_FILES + 1))
+            if [ $((CHECKED_FILES % 100)) -eq 0 ]; then
+              echo "ℹ️ Progress: Checked $CHECKED_FILES/$TOTAL_FILES files"
+            fi
+
+            # Skip binary files
+            if file "$file" | grep -q "text"; then
+              # Check for emails
+              EMAILS_IN_FILE=$(grep -oE "$EMAIL_PATTERN" "$file" 2>/dev/null || true)
+
+              if [ -n "$EMAILS_IN_FILE" ]; then
+                EMAIL_COUNT=$(echo "$EMAILS_IN_FILE" | wc -l)
+                FOUND_EMAILS=$((FOUND_EMAILS + EMAIL_COUNT))
+
+                echo "$EMAILS_IN_FILE" | while read -r email; do
+                  # Check if email is from allowed domain
+                  domain=$(echo "$email" | awk -F@ '{print $2}')
+                  if ! echo "$domain" | grep -iE "($ALLOWED_DOMAINS)$" > /dev/null; then
+                    echo "$file: $email" >> "$EMAIL_TEMP_FILE"
+                    UNAUTHORIZED_EMAILS=$((UNAUTHORIZED_EMAILS + 1))
+                  fi
+                done
+              fi
+            fi
+          done
+
+          echo "✅ Email scan complete! Checked $CHECKED_FILES files"
+          echo "ℹ️ Found $FOUND_EMAILS total email addresses"
+
+          # Check unauthorized emails
+          UNAUTHORIZED_COUNT=$(wc -l < "$EMAIL_TEMP_FILE" || echo 0)
+          echo "ℹ️ Detected $UNAUTHORIZED_COUNT unauthorized email domains"
+          echo "EMAIL_VIOLATIONS=$UNAUTHORIZED_COUNT" >> $GITHUB_ENV
+
+          if [ -s "$EMAIL_TEMP_FILE" ]; then
+            echo "❌ Found unauthorized email domains:"
+            cat "$EMAIL_TEMP_FILE" | while read -r line; do
+              echo "  - $line"
+            done
+            echo "UNAUTHORIZED_EMAILS=true" >> $GITHUB_ENV
+            echo "::error::Found $UNAUTHORIZED_COUNT unauthorized email domains"
+            cp "$EMAIL_TEMP_FILE" email_violations.txt
+          else
+            echo "✅ No unauthorized email domains found"
+          fi
+
+          # Clean up temporary file
+          rm "$EMAIL_TEMP_FILE"
+
+      - name: Check for phone numbers
+        id: phone-check
+        shell: bash
+        run: |
+          echo "📞 Starting phone number check"
+
+          # Get environment variables
+          EXCLUDE_PATTERN="${{ env.EXCLUDE_PATTERN }}"
+          TOTAL_FILES="${{ env.TOTAL_FILES }}"
+
+          # Phone number regex patterns (multiple formats)
+          # International format with + and optional spaces/dashes
+          PHONE_PATTERN_1='\+[0-9]{1,4}[ -]?[0-9]{1,4}[ -]?[0-9]{1,9}[ -]?[0-9]{1,9}'
+          # Format with parentheses for area code
+          PHONE_PATTERN_2='\([0-9]{3,5}\)[ -]?[0-9]{3,4}[ -]?[0-9]{3,4}'
+          # Simple format with dashes or spaces
+          PHONE_PATTERN_3='[0-9]{3,4}[ -][0-9]{3,4}[ -][0-9]{3,4}'
+          # Combined pattern
+          PHONE_PATTERN="($PHONE_PATTERN_1)|($PHONE_PATTERN_2)|($PHONE_PATTERN_3)"
+          echo "ℹ️ Using phone number patterns to detect various formats"
+
+          # Create temporary file to store results
+          PHONE_TEMP_FILE=$(mktemp)
+          echo "ℹ️ Created temporary file for results: $PHONE_TEMP_FILE"
+
+          echo "🔍 Scanning files for phone numbers..."
+
+          # Counter for progress reporting
+          CHECKED_FILES=0
+          FOUND_PHONES=0
+
+          # Find all files, excluding binary files and specified directories/files
+          eval "find . -type f $EXCLUDE_PATTERN" | while read -r file; do
+            # Update and show progress every 100 files
+            CHECKED_FILES=$((CHECKED_FILES + 1))
+            if [ $((CHECKED_FILES % 100)) -eq 0 ]; then
+              echo "ℹ️ Progress: Checked $CHECKED_FILES/$TOTAL_FILES files"
+            fi
+
+            # Skip binary files
+            if file "$file" | grep -q "text"; then
+              # Check for phone numbers
+              PHONES_IN_FILE=$(grep -oE "$PHONE_PATTERN" "$file" 2>/dev/null || true)
+
+              if [ -n "$PHONES_IN_FILE" ]; then
+                PHONE_COUNT=$(echo "$PHONES_IN_FILE" | wc -l)
+                FOUND_PHONES=$((FOUND_PHONES + PHONE_COUNT))
+
+                echo "$PHONES_IN_FILE" | while read -r phone; do
+                  echo "$file: $phone" >> "$PHONE_TEMP_FILE"
+                done
+              fi
+            fi
+          done
+
+          echo "✅ Phone number scan complete! Checked $CHECKED_FILES files"
+
+          # Check phone numbers
+          PHONE_COUNT=$(wc -l < "$PHONE_TEMP_FILE" || echo 0)
+          echo "ℹ️ Detected $PHONE_COUNT phone numbers"
+          echo "PHONE_VIOLATIONS=$PHONE_COUNT" >> $GITHUB_ENV
+
+          if [ -s "$PHONE_TEMP_FILE" ]; then
+            echo "❌ Found phone numbers (not allowed in codebase):"
+            cat "$PHONE_TEMP_FILE" | while read -r line; do
+              echo "  - $line"
+            done
+            echo "FOUND_PHONES=true" >> $GITHUB_ENV
+            echo "::error::Found $PHONE_COUNT phone numbers in codebase"
+            cp "$PHONE_TEMP_FILE" phone_violations.txt
+          else
+            echo "✅ No phone numbers found"
+          fi
+
+          # Clean up temporary file
+          rm "$PHONE_TEMP_FILE"
+
+      - name: Check for unauthorized API endpoints
+        id: api-check
+        shell: bash
+        run: |
+          echo "🌐 Starting API endpoint check"
+
+          # Get environment variables
+          ALLOWED_API_ENDPOINTS="${{ env.ALLOWED_API_ENDPOINTS }}"
+          EXCLUDE_PATTERN="${{ env.EXCLUDE_PATTERN }}"
+          TOTAL_FILES="${{ env.TOTAL_FILES }}"
+
+          # API endpoint patterns
+          # HTTP/HTTPS URLs
+          URL_PATTERN='https?://[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](\.[a-zA-Z]{2,})+(/[a-zA-Z0-9\-._~:/?#[\]@!$&'\''()*+,;=]*)?'
+          # Domain with path but no protocol
+          DOMAIN_PATH_PATTERN='[a-zA-Z0-9][a-zA-Z0-9-]{1,61}[a-zA-Z0-9](\.[a-zA-Z]{2,})+(/[a-zA-Z0-9\-._~:/?#[\]@!$&'\''()*+,;=]*)?'
+
+          echo "ℹ️ Using API endpoint patterns to detect URLs and domains"
+
+          # Create temporary file to store results
+          API_TEMP_FILE=$(mktemp)
+          echo "ℹ️ Created temporary file for results: $API_TEMP_FILE"
+
+          echo "🔍 Scanning files for unauthorized API endpoints..."
+
+          # Counter for progress reporting
+          CHECKED_FILES=0
+          FOUND_ENDPOINTS=0
+          UNAUTHORIZED_ENDPOINTS=0
+
+          # Find all files, excluding binary files and specified directories/files
+          eval "find . -type f $EXCLUDE_PATTERN" | while read -r file; do
+            # Update and show progress every 100 files
+            CHECKED_FILES=$((CHECKED_FILES + 1))
+            if [ $((CHECKED_FILES % 100)) -eq 0 ]; then
+              echo "ℹ️ Progress: Checked $CHECKED_FILES/$TOTAL_FILES files"
+            fi
+
+            # Skip binary files
+            if file "$file" | grep -q "text"; then
+              # Check for URLs with protocol
+              URLS_IN_FILE=$(grep -oE "$URL_PATTERN" "$file" 2>/dev/null || true)
+
+              if [ -n "$URLS_IN_FILE" ]; then
+                URL_COUNT=$(echo "$URLS_IN_FILE" | wc -l)
+                FOUND_ENDPOINTS=$((FOUND_ENDPOINTS + URL_COUNT))
+
+                echo "$URLS_IN_FILE" | while read -r url; do
+                  # Extract domain from URL
+                  domain=$(echo "$url" | sed -E 's|https?://([^/]+).*|\1|')
+
+                  # Check if domain is in allowed list
+                  if ! echo "$domain" | grep -iE "^($ALLOWED_API_ENDPOINTS)$" > /dev/null; then
+                    echo "$file: $url" >> "$API_TEMP_FILE"
+                    UNAUTHORIZED_ENDPOINTS=$((UNAUTHORIZED_ENDPOINTS + 1))
+                  fi
+                done
+              fi
+
+              # Check for domains with paths but no protocol
+              DOMAINS_IN_FILE=$(grep -oE "$DOMAIN_PATH_PATTERN" "$file" 2>/dev/null | grep -v -E '(com\.|org\.|net\.|io\.|edu\.)' || true)
+
+              if [ -n "$DOMAINS_IN_FILE" ]; then
+                DOMAIN_COUNT=$(echo "$DOMAINS_IN_FILE" | wc -l)
+                FOUND_ENDPOINTS=$((FOUND_ENDPOINTS + DOMAIN_COUNT))
+
+                echo "$DOMAINS_IN_FILE" | while read -r domain_path; do
+                  # Extract domain from domain+path
+                  domain=$(echo "$domain_path" | sed -E 's|([^/]+).*|\1|')
+
+                  # Check if domain is in allowed list
+                  if ! echo "$domain" | grep -iE "^($ALLOWED_API_ENDPOINTS)$" > /dev/null; then
+                    echo "$file: $domain_path" >> "$API_TEMP_FILE"
+                    UNAUTHORIZED_ENDPOINTS=$((UNAUTHORIZED_ENDPOINTS + 1))
+                  fi
+                done
+              fi
+            fi
+          done
+
+          echo "✅ API endpoint scan complete! Checked $CHECKED_FILES files"
+          echo "ℹ️ Found $FOUND_ENDPOINTS total potential API endpoints"
+
+          # Check unauthorized API endpoints
+          API_COUNT=$(wc -l < "$API_TEMP_FILE" || echo 0)
+          echo "ℹ️ Detected $API_COUNT unauthorized API endpoints"
+          echo "API_VIOLATIONS=$API_COUNT" >> $GITHUB_ENV
+
+          if [ -s "$API_TEMP_FILE" ]; then
+            echo "❌ Found unauthorized API endpoints:"
+            cat "$API_TEMP_FILE" | while read -r line; do
+              echo "  - $line"
+            done
+            echo "UNAUTHORIZED_APIS=true" >> $GITHUB_ENV
+            echo "::error::Found $API_COUNT unauthorized API endpoints"
+            cp "$API_TEMP_FILE" api_violations.txt
+          else
+            echo "✅ No unauthorized API endpoints found"
+          fi
+
+          # Clean up temporary file
+          rm "$API_TEMP_FILE"
+
+      - name: Check results and fail if violations found
+        id: results
+        shell: bash
+        run: |
+          echo "📊 Checking final results"
+
+          EMAIL_VIOLATIONS="${{ env.EMAIL_VIOLATIONS }}"
+          PHONE_VIOLATIONS="${{ env.PHONE_VIOLATIONS }}"
+          API_VIOLATIONS="${{ env.API_VIOLATIONS }}"
+
+          TOTAL_VIOLATIONS=$((EMAIL_VIOLATIONS + PHONE_VIOLATIONS + API_VIOLATIONS))
+          echo "ℹ️ Total violations found: $TOTAL_VIOLATIONS"
+
+          if [ "$TOTAL_VIOLATIONS" -gt 0 ]; then
+            echo "❌ Workflow failed due to detected issues:"
+
+            if [ "$EMAIL_VIOLATIONS" -gt 0 ]; then
+              echo "  - $EMAIL_VIOLATIONS unauthorized email domains"
+              if [ -f "email_violations.txt" ]; then
+                echo "    Email violations:"
+                cat email_violations.txt | sed 's/^/      /'
+              fi
+            fi
+
+            if [ "$PHONE_VIOLATIONS" -gt 0 ]; then
+              echo "  - $PHONE_VIOLATIONS phone numbers"
+              if [ -f "phone_violations.txt" ]; then
+                echo "    Phone violations:"
+                cat phone_violations.txt | sed 's/^/      /'
+              fi
+            fi
+
+            if [ "$API_VIOLATIONS" -gt 0 ]; then
+              echo "  - $API_VIOLATIONS unauthorized API endpoints"
+              if [ -f "api_violations.txt" ]; then
+                echo "    API endpoint violations:"
+                cat api_violations.txt | sed 's/^/      /'
+              fi
+            fi
+
+            exit 1
+          else
+            echo "✅ All checks passed successfully!"
+          fi

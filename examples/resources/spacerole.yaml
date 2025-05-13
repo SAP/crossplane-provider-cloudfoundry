@@ -1,0 +1,43 @@
+---
+# Use CR reference for space.
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceRole
+metadata:
+  namespace: default
+  name: my-space-auditor
+spec:
+  forProvider:
+    type: Auditor
+    spaceRef:
+      name: my-space
+    username: user1@example.com
+    origin: sap.ids
+
+---
+# Use name reference for space.
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceRole
+metadata:
+  namespace: default
+  name: my-space-developer
+spec:
+  forProvider:
+    type: Developer
+    spaceName: space-app‚
+    orgName: cf-dev
+    username: user2@example.com
+    origin: sap.ids
+
+---
+# Set GUID directly for space 
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceRole
+metadata:
+  namespace: default
+  name: my-space-manager
+spec:
+  forProvider:
+    space: 6d11e2f9-cab3-4cbb-983d-9f4a86514284
+    type: Manager
+    username: user3@example.com
+    origin: sap.ids

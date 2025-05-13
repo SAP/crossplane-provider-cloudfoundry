@@ -1,0 +1,13 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceRole
+metadata:
+  namespace: orgspace-test
+  name: e2e-space-role
+spec:
+  forProvider:
+    type: Developer
+    username: co-test-user@example.com
+    spaceRef:
+      name: e2e-space-org-name
+      policy:
+        resolve: Always

@@ -1,0 +1,57 @@
+---
+# CR to observe a managed ServiceInstance
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: audit-log-import
+spec:
+  managementPolicies:
+    - "Observe"
+  forProvider:
+    type: managed
+    name: audit-log-1
+    spaceRef: 
+      name: my-space
+      policy: 
+        resolve: Always
+    servicePlan:
+      offering: auditlog-management
+      plan: default
+
+---
+# CR to observe a first ServiceKey
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceKey
+metadata:
+  name: import-audit-log-key
+spec:
+  managementPolicies:
+    - "Observe"
+  forProvider:
+    name: key1
+    connectionDetailsAsJSON: false
+    serviceInstanceRef:
+      name: audit-log-import
+      policy:
+        resolve: Always
+  writeConnectionSecretToRef:
+    name: audit-log-key-import
+    namespace: default
+
+---
+# CR to create a second ServiceKey
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceKey
+metadata:
+  name: audit-log-key2
+spec:
+  forProvider:
+    name: key2
+    connectionDetailsAsJSON: false
+    serviceInstanceRef:
+      name: audit-log-import
+      policy:
+        resolve: Always
+  writeConnectionSecretToRef:
+    name: audit-log-key2
+    namespace: default

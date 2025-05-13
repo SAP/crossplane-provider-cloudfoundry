@@ -1,0 +1,31 @@
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Domain
+metadata:
+  namespace: default
+  name: my-domain
+spec:
+  forProvider:
+    domain: orchestrator.io
+    subDomain: dev
+    orgRef:
+      name: my-org
+    internal: false
+
+
+---
+# Import an existing domain 
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Domain
+metadata:
+  namespace: default
+  name: my-cfapps-domain
+spec:
+  forProvider:
+    name: cfapps.eu12.hana.ondemand.com
+    orgRef:
+      name: my-org
+  managementPolicies:
+  - Observe
+
+

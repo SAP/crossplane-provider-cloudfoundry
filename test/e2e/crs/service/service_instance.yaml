@@ -1,0 +1,18 @@
+---
+# CR to create a managed ServiceInstance
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: e2e-service-instance
+  namespace: service-test
+spec:
+  forProvider:
+    type: managed
+    name: e2e-service-instance
+    spaceRef: 
+      name: service-space
+      policy: 
+        resolve: Always
+    servicePlan:
+      offering: destination
+      plan: lite

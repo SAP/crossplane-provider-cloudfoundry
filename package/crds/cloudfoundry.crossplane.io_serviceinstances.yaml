@@ -1,0 +1,658 @@
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.14.0
+  name: serviceinstances.cloudfoundry.crossplane.io
+spec:
+  group: cloudfoundry.crossplane.io
+  names:
+    categories:
+    - crossplane
+    - managed
+    - cloudfoundry
+    kind: ServiceInstance
+    listKind: ServiceInstanceList
+    plural: serviceinstances
+    singular: serviceinstance
+  scope: Cluster
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type=='Synced')].status
+      name: SYNCED
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: READY
+      type: string
+    - jsonPath: .metadata.annotations.crossplane\.io/external-name
+      name: EXTERNAL-NAME
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: AGE
+      type: date
+    name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: 'ServiceInstance is the Schema for the ServiceInstances API.
+          Creates a service instance in a cloudfoundry space. Further documentation:
+          https://docs.cloudfoundry.org/devguide/services'
+        properties:
+          apiVersion:
+            description: |-
+              APIVersion defines the versioned schema of this representation of an object.
+              Servers should convert recognized schemas to the latest internal value, and
+              may reject unrecognized values.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources
+            type: string
+          kind:
+            description: |-
+              Kind is a string value representing the REST resource this object represents.
+              Servers may infer this from the endpoint the client submits requests to.
+              Cannot be updated.
+              In CamelCase.
+              More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ServiceInstanceSpec defines the desired state of ServiceInstance
+            properties:
+              deletionPolicy:
+                default: Delete
+                description: |-
+                  DeletionPolicy specifies what will happen to the underlying external
+                  when this managed resource is deleted - either "Delete" or "Orphan" the
+                  external resource.
+                  This field is planned to be deprecated in favor of the ManagementPolicies
+                  field in a future release. Currently, both could be set independently and
+                  non-default values would be honored if the feature flag is enabled.
+                  See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+                enum:
+                - Orphan
+                - Delete
+                type: string
+              enableParameterDriftDetection:
+                default: false
+                description: Enable drift detection for configuration parameters of
+                  managed service instance. Default is false.
+                type: boolean
+              forProvider:
+                description: ServiceInstanceParameters define the desired state of
+                  a Cloud Foundry service instance.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: The annotations associated with Cloud Foundry resources.
+                      Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    type: object
+                    x-kubernetes-map-type: granular
+                  credentials:
+                    description: |-
+                      Arbitrary credentials as K8S runtime.RawExtension object, delivered to applications via VCAP_SERVICES environment variables.Applicable for user-provided service instance type.
+
+
+                      The Credentials field is NOT secret or secured in any way and should
+                      NEVER be used to hold sensitive information. To set parameters that
+                      contain secret information, you should ALWAYS store that information
+                      in a Secret and use the CredentialFrom field.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  credentialsSecretRef:
+                    description: Same as `Credentials`, supplied as a Secret reference.
+                      Ignored if `Credentials` or `JSONCredentials` is set.
+                    properties:
+                      name:
+                        description: Name of the secret.
+                        type: string
+                      namespace:
+                        description: Namespace of the secret.
+                        type: string
+                    required:
+                    - name
+                    - namespace
+                    type: object
+                  jsonCredentials:
+                    description: Same as `Credentials`, supplied as arbitrary JSON
+                      string. Ignored if `Credentials` is set.
+                    type: string
+                  jsonParams:
+                    description: Same as `Parameters`, supplied as arbitrary JSON
+                      string. Ignored if `Parameters` is set.
+                    type: string
+                  maintenanceInfo:
+                    description: MaintenanceInfo describes the version of the service
+                      instance
+                    properties:
+                      description:
+                        description: (String) A description of the last operation
+                        type: string
+                      version:
+                        description: (String) The version of the service instance
+                        type: string
+                    type: object
+                  name:
+                    description: The name of the service instance
+                    type: string
+                  orgName:
+                    description: The name of the Cloud Foundry organization containing
+                      the space.
+                    type: string
+                  parameters:
+                    description: |-
+                      Configuration parameters for the managed service instance, supplied as K8S runtime.RawExtension object
+
+
+                      The Parameters field is NOT secret or secured in any way and should
+                      NEVER be used to hold sensitive information. To set parameters that
+                      contain secret information, you should ALWAYS store that information
+                      in a Secret and use the ParametersSecretRef field.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  paramsSecretRef:
+                    description: Same as `Parameters`, supplied as a Secret reference.
+                      Ignored if `Parameters` or `JSONParam` is set.
+                    properties:
+                      name:
+                        description: Name of the secret.
+                        type: string
+                      namespace:
+                        description: Namespace of the secret.
+                        type: string
+                    required:
+                    - name
+                    - namespace
+                    type: object
+                  routeServiceUrl:
+                    description: URL to which requests for bound routes will be forwarded;
+                      only shown when type is user-provided.
+                    type: string
+                  servicePlan:
+                    description: |-
+                      (String) The ID of the service plan from which to create the service instance
+                      The ID of the service plan from which to create the service instance
+                    properties:
+                      id:
+                        description: The ID of the service plan
+                        type: string
+                      offering:
+                        description: The name of service offering
+                        type: string
+                      plan:
+                        description: The name of service plan
+                        type: string
+                    type: object
+                  space:
+                    description: The `guid` of the Cloud Foundry space. This field
+                      is typically populated using references specified in `spaceRef`,
+                      `spaceSelector`, or `spaceName`.
+                    type: string
+                  spaceName:
+                    description: The name of the Cloud Foundry space to lookup the
+                      `guid` of the Space. Use `spaceName` only when the reference
+                      Space is not managed by Crossplane.
+                    type: string
+                  spaceRef:
+                    description: Reference to a `Space` CR to lookup the `guid` of
+                      the Cloud Foundry space. Preferred if the reference space is
+                      managed by Crossplane.
+                    properties:
+                      name:
+                        description: Name of the referenced object.
+                        type: string
+                      policy:
+                        description: Policies for referencing.
+                        properties:
+                          resolution:
+                            default: Required
+                            description: |-
+                              Resolution specifies whether resolution of this reference is required.
+                              The default is 'Required', which means the reconcile will fail if the
+                              reference cannot be resolved. 'Optional' means this reference will be
+                              a no-op if it cannot be resolved.
+                            enum:
+                            - Required
+                            - Optional
+                            type: string
+                          resolve:
+                            description: |-
+                              Resolve specifies when this reference should be resolved. The default
+                              is 'IfNotPresent', which will attempt to resolve the reference only when
+                              the corresponding field is not present. Use 'Always' to resolve the
+                              reference on every reconcile.
+                            enum:
+                            - Always
+                            - IfNotPresent
+                            type: string
+                        type: object
+                    required:
+                    - name
+                    type: object
+                  spaceSelector:
+                    description: Selector for a `Space` CR to lookup the `guid` of
+                      the Cloud Foundry space. Preferred if the reference space is
+                      managed by Crossplane.
+                    properties:
+                      matchControllerRef:
+                        description: |-
+                          MatchControllerRef ensures an object with the same controller reference
+                          as the selecting object is selected.
+                        type: boolean
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: MatchLabels ensures an object with matching labels
+                          is selected.
+                        type: object
+                      policy:
+                        description: Policies for selection.
+                        properties:
+                          resolution:
+                            default: Required
+                            description: |-
+                              Resolution specifies whether resolution of this reference is required.
+                              The default is 'Required', which means the reconcile will fail if the
+                              reference cannot be resolved. 'Optional' means this reference will be
+                              a no-op if it cannot be resolved.
+                            enum:
+                            - Required
+                            - Optional
+                            type: string
+                          resolve:
+                            description: |-
+                              Resolve specifies when this reference should be resolved. The default
+                              is 'IfNotPresent', which will attempt to resolve the reference only when
+                              the corresponding field is not present. Use 'Always' to resolve the
+                              reference on every reconcile.
+                            enum:
+                            - Always
+                            - IfNotPresent
+                            type: string
+                        type: object
+                    type: object
+                  syslogDrainUrl:
+                    description: URL to which logs for bound applications will be
+                      streamed; only shown when type is user-provided.
+                    type: string
+                  tags:
+                    description: List of tags used by apps to identify service instances.
+                      They are shown in the app VCAP_SERVICES env.
+                    items:
+                      type: string
+                    type: array
+                  timeouts:
+                    description: Timeouts for the service instance operations
+                    properties:
+                      create:
+                        description: (String) Timeout for creating the service instance.
+                          Default is 40 minutes
+                        type: string
+                      delete:
+                        description: (String) Timeout for deleting the service instance.
+                          Default is 40 minutes
+                        type: string
+                      update:
+                        description: (String) Timeout for updating the service instance.
+                          Default is 40 minutes
+                        type: string
+                    type: object
+                  type:
+                    default: managed
+                    description: Type of the service instance. Either managed or user-provided.
+                      Default is managed.
+                    enum:
+                    - managed
+                    - user-provided
+                    type: string
+                required:
+                - type
+                type: object
+              managementPolicies:
+                default:
+                - '*'
+                description: |-
+                  THIS IS A BETA FIELD. It is on by default but can be opted out
+                  through a Crossplane feature flag.
+                  ManagementPolicies specify the array of actions Crossplane is allowed to
+                  take on the managed and external resources.
+                  This field is planned to replace the DeletionPolicy field in a future
+                  release. Currently, both could be set independently and non-default
+                  values would be honored if the feature flag is enabled. If both are
+                  custom, the DeletionPolicy field will be ignored.
+                  See the design doc for more information: https://github.com/crossplane/crossplane/blob/499895a25d1a1a0ba1604944ef98ac7a1a71f197/design/design-doc-observe-only-resources.md?plain=1#L223
+                  and this one: https://github.com/crossplane/crossplane/blob/444267e84783136daa93568b364a5f01228cacbe/design/one-pager-ignore-changes.md
+                items:
+                  description: |-
+                    A ManagementAction represents an action that the Crossplane controllers
+                    can take on an external resource.
+                  enum:
+                  - Observe
+                  - Create
+                  - Update
+                  - Delete
+                  - LateInitialize
+                  - '*'
+                  type: string
+                type: array
+              providerConfigRef:
+                default:
+                  name: default
+                description: |-
+                  ProviderConfigReference specifies how the provider that will be used to
+                  create, observe, update, and delete this managed resource should be
+                  configured.
+                properties:
+                  name:
+                    description: Name of the referenced object.
+                    type: string
+                  policy:
+                    description: Policies for referencing.
+                    properties:
+                      resolution:
+                        default: Required
+                        description: |-
+                          Resolution specifies whether resolution of this reference is required.
+                          The default is 'Required', which means the reconcile will fail if the
+                          reference cannot be resolved. 'Optional' means this reference will be
+                          a no-op if it cannot be resolved.
+                        enum:
+                        - Required
+                        - Optional
+                        type: string
+                      resolve:
+                        description: |-
+                          Resolve specifies when this reference should be resolved. The default
+                          is 'IfNotPresent', which will attempt to resolve the reference only when
+                          the corresponding field is not present. Use 'Always' to resolve the
+                          reference on every reconcile.
+                        enum:
+                        - Always
+                        - IfNotPresent
+                        type: string
+                    type: object
+                required:
+                - name
+                type: object
+              publishConnectionDetailsTo:
+                description: |-
+                  PublishConnectionDetailsTo specifies the connection secret config which
+                  contains a name, metadata and a reference to secret store config to
+                  which any connection details for this managed resource should be written.
+                  Connection details frequently include the endpoint, username,
+                  and password required to connect to the managed resource.
+                properties:
+                  configRef:
+                    default:
+                      name: default
+                    description: |-
+                      SecretStoreConfigRef specifies which secret store config should be used
+                      for this ConnectionSecret.
+                    properties:
+                      name:
+                        description: Name of the referenced object.
+                        type: string
+                      policy:
+                        description: Policies for referencing.
+                        properties:
+                          resolution:
+                            default: Required
+                            description: |-
+                              Resolution specifies whether resolution of this reference is required.
+                              The default is 'Required', which means the reconcile will fail if the
+                              reference cannot be resolved. 'Optional' means this reference will be
+                              a no-op if it cannot be resolved.
+                            enum:
+                            - Required
+                            - Optional
+                            type: string
+                          resolve:
+                            description: |-
+                              Resolve specifies when this reference should be resolved. The default
+                              is 'IfNotPresent', which will attempt to resolve the reference only when
+                              the corresponding field is not present. Use 'Always' to resolve the
+                              reference on every reconcile.
+                            enum:
+                            - Always
+                            - IfNotPresent
+                            type: string
+                        type: object
+                    required:
+                    - name
+                    type: object
+                  metadata:
+                    description: Metadata is the metadata for connection secret.
+                    properties:
+                      annotations:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          Annotations are the annotations to be added to connection secret.
+                          - For Kubernetes secrets, this will be used as "metadata.annotations".
+                          - It is up to Secret Store implementation for others store types.
+                        type: object
+                      labels:
+                        additionalProperties:
+                          type: string
+                        description: |-
+                          Labels are the labels/tags to be added to connection secret.
+                          - For Kubernetes secrets, this will be used as "metadata.labels".
+                          - It is up to Secret Store implementation for others store types.
+                        type: object
+                      type:
+                        description: |-
+                          Type is the SecretType for the connection secret.
+                          - Only valid for Kubernetes Secret Stores.
+                        type: string
+                    type: object
+                  name:
+                    description: Name is the name of the connection secret.
+                    type: string
+                required:
+                - name
+                type: object
+              writeConnectionSecretToRef:
+                description: |-
+                  WriteConnectionSecretToReference specifies the namespace and name of a
+                  Secret to which any connection details for this managed resource should
+                  be written. Connection details frequently include the endpoint, username,
+                  and password required to connect to the managed resource.
+                  This field is planned to be replaced in a future release in favor of
+                  PublishConnectionDetailsTo. Currently, both could be set independently
+                  and connection details would be published to both without affecting
+                  each other.
+                properties:
+                  name:
+                    description: Name of the secret.
+                    type: string
+                  namespace:
+                    description: Namespace of the secret.
+                    type: string
+                required:
+                - name
+                - namespace
+                type: object
+            required:
+            - forProvider
+            type: object
+          status:
+            description: ServiceInstanceStatus defines the observed state of ServiceInstance
+            properties:
+              atProvider:
+                description: ServiceInstanceObservation records the observed state
+                  of a Cloud Foundry service instance.
+                properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
+                      The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    type: object
+                    x-kubernetes-map-type: granular
+                  createdAt:
+                    description: |-
+                      (String) The date and time when the resource was created in RFC3339 format.
+                      The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    type: string
+                  credentials:
+                    description: The applied parameters of the managed service instance
+                    format: byte
+                    type: string
+                  dashboardUrl:
+                    description: |-
+                      (String) The URL to the service instance dashboard (or null if there is none); only shown when type is managed.
+                      The URL to the service instance dashboard (or null if there is none); only shown when type is managed.
+                    type: string
+                  id:
+                    description: The GUID of the service instance
+                    type: string
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: |-
+                      (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
+                      The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    type: object
+                    x-kubernetes-map-type: granular
+                  lastAsyncJob:
+                    description: The job GUID of the last async operation performed
+                      on the resource
+                    type: string
+                  lastOperation:
+                    description: (Attributes) The details of the last operation performed
+                      on the resource (see below for nested schema)
+                    properties:
+                      createdAt:
+                        description: (String) The date and time when the resource
+                          was created in RFC3339 format.
+                        type: string
+                      description:
+                        description: (String) A description of the last operation
+                        type: string
+                      state:
+                        description: (String) The state of the last operation
+                        type: string
+                      type:
+                        description: (String) the type of last operation perform on
+                          the resource.
+                        type: string
+                      updatedAt:
+                        description: (String) The date and time when the resource
+                          was updated in RFC3339 format.
+                        type: string
+                    type: object
+                  maintenanceInfo:
+                    description: (Attributes) Information about the version of this
+                      service instance; only shown when type is managed (see below
+                      for nested schema)
+                    properties:
+                      description:
+                        description: (String) A description of the last operation
+                        type: string
+                      version:
+                        description: (String) The version of the service instance
+                        type: string
+                    type: object
+                  name:
+                    description: The name of the service instance
+                    type: string
+                  parameters:
+                    description: The applied parameters of the managed service instance
+                      (TO BE IMPLEMENTED)
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+                  routeServiceUrl:
+                    description: URL to which requests for bound routes will be forwarded;
+                      only shown when type is user-provided.
+                    type: string
+                  servicePlan:
+                    description: The GUID of the Service Plan for a managed service
+                    type: string
+                  space:
+                    description: The GUID of the space in which the service instance
+                      was created
+                    type: string
+                  syslogDrainUrl:
+                    description: URL to which logs for bound applications will be
+                      streamed; only shown when type is user-provided.
+                    type: string
+                  tags:
+                    description: |-
+                      (List of String) List of tags used by apps to identify service instances. They are shown in the app VCAP_SERVICES env.
+                      List of tags used by apps to identify service instances. They are shown in the app VCAP_SERVICES env.
+                    items:
+                      type: string
+                    type: array
+                  updatedAt:
+                    description: |-
+                      (String) The date and time when the resource was updated in RFC3339 format.
+                      The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    type: string
+                  upgradeAvailable:
+                    description: |-
+                      (Boolean) Whether or not an upgrade of this service instance is available on the current Service Plan; details are available in the maintenance_info object; Only shown when type is managed
+                      Whether or not an upgrade of this service instance is available on the current Service Plan; details are available in the maintenance_info object; Only shown when type is managed
+                    type: boolean
+                type: object
+              conditions:
+                description: Conditions of the resource.
+                items:
+                  description: A Condition that may apply to a resource.
+                  properties:
+                    lastTransitionTime:
+                      description: |-
+                        LastTransitionTime is the last time this condition transitioned from one
+                        status to another.
+                      format: date-time
+                      type: string
+                    message:
+                      description: |-
+                        A Message containing details about this condition's last transition from
+                        one status to another, if any.
+                      type: string
+                    observedGeneration:
+                      description: |-
+                        ObservedGeneration represents the .metadata.generation that the condition was set based upon.
+                        For instance, if .metadata.generation is currently 12, but the .status.conditions[x].observedGeneration is 9, the condition is out of date
+                        with respect to the current state of the instance.
+                      format: int64
+                      type: integer
+                    reason:
+                      description: A Reason for this condition's last transition from
+                        one status to another.
+                      type: string
+                    status:
+                      description: Status of this condition; is it currently True,
+                        False, or Unknown?
+                      type: string
+                    type:
+                      description: |-
+                        Type of this condition. At most one of each condition type may apply to
+                        a resource at any point in time.
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+                x-kubernetes-list-map-keys:
+                - type
+                x-kubernetes-list-type: map
+              observedGeneration:
+                description: |-
+                  ObservedGeneration is the latest metadata.generation
+                  which resulted in either a ready state, or stalled due to error
+                  it can not recover from without human intervention.
+                format: int64
+                type: integer
+            type: object
+        required:
+        - spec
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

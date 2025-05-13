@@ -1,0 +1,48 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  name: app-org
+  namespace: app-test
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: cf-ci-e2e
+
+---
+# import app-space with roles pre-configured
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  name: app-space
+  namespace: app-test
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: space-donotdelete
+    orgRef:
+      name:  app-org
+      policy:
+        resolve: Always
+---
+
+# CR to create a managed ServiceInstance
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: app-service-instance
+  namespace: app-test
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    type: managed
+    name: e2e-destination
+    spaceRef: 
+      name: app-space
+      policy: 
+        resolve: Always
+    servicePlan:
+      offering: destination
+      plan: lite

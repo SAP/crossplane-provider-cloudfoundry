@@ -1,0 +1,41 @@
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Org
+metadata:
+  namespace: default
+  name: my-org
+  annotations:
+    crossplane.io/external-name: cf-dev
+spec:
+  managementPolicies: ["Observe"]
+  forProvider: {}
+  providerConfigRef:
+    name: default
+
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  namespace: default
+  name: my-space
+spec:
+  forProvider:
+    allowSsh: false
+    name: my-space-x
+    orgRef:
+      name: my-org
+---
+
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceMembers
+metadata:
+  namespace: default
+  name: my-space-role
+spec:
+  forProvider:
+    roleType: Developers
+    spaceRef:
+      name: my-space
+    members:
+      - username: "1@example.com"
+      - username: 123@example.com

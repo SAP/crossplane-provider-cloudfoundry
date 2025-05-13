@@ -1,0 +1,15 @@
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: cf-default
+spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        spec:
+          containers:
+            - args:
+                - --sync=10s
+                - --poll=5s
+              name: package-runtime

@@ -1,0 +1,16 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: OrgMembers
+metadata:
+  namespace: orgspace-test
+  name: e2e-org-members
+spec:
+  forProvider:
+    roleType: Managers
+    members:
+    - username: user1@example.com
+    - username: user2@example.com
+    orgRef:
+      name: e2e-org
+      policy:
+        resolve: Always
+    enforcementPolicy: Lax

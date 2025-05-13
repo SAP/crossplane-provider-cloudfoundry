@@ -1,0 +1,17 @@
+---
+# CR to create a managed ServiceInstance
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: my-service-instance
+spec:
+  forProvider:
+    type: managed
+    name: my-service-instance
+    spaceRef: 
+      name: my-space
+      policy: 
+        resolve: Always
+    servicePlan:
+      offering: destination
+      plan: lite
