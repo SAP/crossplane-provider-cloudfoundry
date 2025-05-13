@@ -11,18 +11,18 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/app"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/domain"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/mta"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/org"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgmembers"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgquota"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgrole"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/spacemembers"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/spacerole"
-
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/route"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/servicecredentialbinding"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/serviceinstance"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/space"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/spacemembers"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/spacequota"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/spacerole"
 )
 
 // CustomSetup creates all controllers with the supplied logger and adds them to
@@ -42,6 +42,7 @@ func CustomSetup(mgr ctrl.Manager, o controller.Options) error {
 		servicecredentialbinding.Setup,
 		spacequota.Setup,
 		domain.Setup,
+		mta.Setup,
 	} {
 		if err := setup(mgr, o); err != nil {
 			return err
