@@ -1,0 +1,40 @@
+---
+# CR to create a managed ServiceInstance
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: my-xsuaa
+spec:
+  forProvider:
+    type: managed
+    name: my-xsuaa
+    spaceRef: 
+      name: my-space
+    servicePlan:
+      offering: xsuaa
+      plan: application
+    jsonParams: |
+      {
+      "xsappname": "sample-java-super-app",
+      "description": "sample java application",
+      "tenant-mode": "shared"
+      }
+---
+# ALTERNATIVE YAML based CR to create a managed ServiceInstance
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: my-xsuaa
+spec:
+  forProvider:
+    type: managed
+    name: my-xsuaa
+    spaceRef: 
+      name: my-space
+    servicePlan:
+      offering: xsuaa
+      plan: application
+    parameters:
+      xsappname: sample-java-super-app
+      description: sample java application
+      tenant-mode: shared

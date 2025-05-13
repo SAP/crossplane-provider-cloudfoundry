@@ -1,0 +1,10 @@
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Org
+metadata:
+  namespace: default
+  name: my-org-create
+spec:
+  forProvider:
+    name: cf-dev
+

@@ -1,0 +1,164 @@
+package v1alpha1
+
+import (
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+)
+
+// RouteObservation observations for routes
+type RouteObservation struct {
+	Resource `json:",inline"`
+
+	// Protocol of the route
+	// +kubebuilder:validation:Optional
+	Protocol *string `json:"protocol,omitempty"`
+
+	// The host name of the route
+	// +kubebuilder:validation:Optional
+	Host *string `json:"host,omitempty"`
+
+	// The path of the route
+	// +kubebuilder:validation:Optional
+	Path *string `json:"path,omitempty"`
+
+	// The URL of the route
+	// +kubebuilder:validation:Optional
+	URL *string `json:"url,omitempty"`
+
+	// The route options
+	// +kubebuilder:validation:Optional
+	Options *RouteOptions `json:"options,omitempty"`
+
+	// One or more route mapping(s) that will map this route to application(s). Can be repeated multiple times to load balance route traffic among multiple applications.
+	// +kubebuilder:validation:Optional
+	Destinations []RouteDestination `json:"destinations,omitempty"`
+}
+
+// RouteParameters parameters for Routes
+type RouteParameters struct {
+	SpaceReference `json:",inline"`
+
+	DomainReference `json:",inline"`
+
+	// The application's host name. This is required for shared domains.
+	// +kubebuilder:validation:Optional
+	Host *string `json:"host,omitempty"`
+
+	// A path for an HTTP route.
+	// +kubebuilder:validation:Optional
+	Path *string `json:"path,omitempty"`
+
+	// The port to associate with the route for a TCP route. Conflicts with random_port.
+	// +kubebuilder:validation:Optional
+	Port *int `json:"port,omitempty"`
+
+	// The route options
+	// +kubebuilder:validation:Optional
+	Options *RouteOptions `json:"options,omitempty"`
+}
+
+// RouteOptions parameters for domain.
+type RouteOptions struct {
+	// The load-balancer associated with this route. Valid values are ‘round-robin’ and ‘least-connections’
+	// +kubebuilder:validation:Optional
+	LoadBalancing string `json:"loadbalancing,omitempty"`
+}
+
+// RouteDestination describes a route destinations
+type RouteDestination struct {
+	// The destination GUID
+	GUID string `json:"guid,omitempty"`
+
+	// The ID of the application to map this route to.
+	// +kubebuilder:validation:Required
+	App *RouteDestinationApp `json:"app,omitempty"`
+
+	// The port to associate with the route for a TCP route. Conflicts with random_port.
+	// +kubebuilder:validation:Optional
+	Port *int `json:"port,omitempty"`
+}
+
+// DestinationApp describes a destination application
+type RouteDestinationApp struct {
+	GUID string `json:"guid,omitempty"`
+
+	// The process type of the destination.
+	// +kubebuilder:validation:Optional
+	Process *string `json:"process,omitempty"`
+
+	// Port on the destination application
+	// +kubebuilder:validation:Optional
+	Port *int `json:"port,omitempty"`
+
+	Protocol *string `json:"protocol,omitempty"`
+}
+
+// RouteSpec defines the desired state of Route
+type RouteSpec struct {
+	v1.ResourceSpec `json:",inline"`
+	ForProvider     RouteParameters `json:"forProvider"`
+}
+
+// RouteStatus defines the observed state of Route.
+type RouteStatus struct {
+	v1.ResourceStatus `json:",inline"`
+	AtProvider        RouteObservation `json:"atProvider,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+// +kubebuilder:storageversion
+
+// Route is the Schema for the Routes API. Provides a Cloud Foundry route resource.
+// +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
+// +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:subresource:status
+// +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+type Route struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              RouteSpec   `json:"spec"`
+	Status            RouteStatus `json:"status,omitempty"`
+}
+
+// +kubebuilder:object:root=true
+
+// RouteList contains a list of Routes
+type RouteList struct {
+	metav1.TypeMeta `json:",inline"`
+	metav1.ListMeta `json:"metadata,omitempty"`
+	Items           []Route `json:"items"`
+}
+
+// Repository type metadata.
+var (
+	RouteKind             = "Route"
+	RouteGroupKind        = schema.GroupKind{Group: CRDGroup, Kind: RouteKind}.String()
+	RouteKindAPIVersion   = RouteKind + "." + CRDGroupVersion.String()
+	RouteGroupVersionKind = CRDGroupVersion.WithKind(RouteKind)
+)
+
+func init() {
+	SchemeBuilder.Register(&Route{}, &RouteList{})
+}
+
+// GetID returns the ID of the route
+func (r *Route) GetID() string {
+	return r.Status.AtProvider.GUID
+}
+
+// GetCloudFoundryName implements Namable reference interface
+func (r *Route) GetCloudFoundryName() string {
+	if r.Status.AtProvider.URL != nil {
+		return *r.Status.AtProvider.URL
+	}
+	return ""
+}
+
+// implement DomainScoped interface
+func (r *Route) GetDomainRef() *DomainReference {
+	return &r.Spec.ForProvider.DomainReference
+}

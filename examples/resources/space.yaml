@@ -1,0 +1,13 @@
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  namespace: default
+  name: my-space
+spec:
+  forProvider:
+    allowSsh: false
+    name: dev-space
+    orgRef:
+      name: my-org
+

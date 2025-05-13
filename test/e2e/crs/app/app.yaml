@@ -1,0 +1,50 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: App
+metadata:
+  namespace: app-test
+  name: e2e-app
+spec:
+  forProvider:
+    name: e2e-app
+    spaceRef:
+      name: app-space
+      policy:
+        resolve: Always
+    lifecycle: docker
+    docker:
+      image: loud/hello_co:latest
+    processes:
+      - type: web
+        health-check-type: http
+        health-check-http-endpoint: "/"
+    routes:
+      - routeRef: 
+          name: app-route-domainref
+          policy:
+            resolve: Always
+
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: App
+metadata:
+  namespace: app-test
+  name: e2e-app-2
+spec:
+  forProvider:
+    name: e2e-app-2
+    spaceRef:
+      name: app-space
+      policy:
+        resolve: Always
+    lifecycle: docker
+    docker:
+      image: loud/hello_co:latest
+    processes:
+      - type: web
+        health-check-type: http
+        health-check-http-endpoint: "/"
+    routes:
+      - routeRef: 
+          name: app-route-domainname
+          policy:
+            resolve: Always

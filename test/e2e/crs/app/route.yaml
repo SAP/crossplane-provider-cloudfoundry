@@ -1,0 +1,31 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Route
+metadata:
+  name: app-route-domainref
+  namespace: app-test
+spec:
+  forProvider:
+    domainRef: 
+      name: app-domain
+      policy:
+        resolve: Always
+    host: app-route-host-domainref
+    spaceRef:
+      name: app-space
+      policy:
+        resolve: Always
+
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Route
+metadata:
+  name: app-route-domainname
+  namespace: app-test
+spec:
+  forProvider:
+    domainName: v6.cfapps.eu12.hana.ondemand.com # reference domain name directly
+    host: app-route-host-domainname
+    spaceRef:
+      name: app-space
+      policy:
+        resolve: Always

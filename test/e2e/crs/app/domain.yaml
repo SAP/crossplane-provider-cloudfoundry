@@ -1,0 +1,13 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Domain
+metadata:
+  namespace: app-test
+  name: app-domain
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: cfapps.eu12.hana.ondemand.com
+    orgRef:
+      name: app-org
+    internal: false

@@ -1,0 +1,8 @@
+---
+apiVersion: pkg.crossplane.io/v1
+kind: Provider
+metadata:
+  name: provider-cloudfoundry
+spec:
+  package: build-aeac6570/crossplane/provider-cloudfoundry-controller:v1.0.0-20230301092619.6.g80eac6e.dirty
+  packagePullPolicy: Never

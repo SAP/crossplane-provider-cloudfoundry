@@ -1,0 +1,12 @@
+apiVersion: cloudfoundry.crossplane.io/v1beta1
+kind: ProviderConfig
+metadata:
+  name: default
+spec:
+  apiEndpoint: https://api.cf.eu12.hana.ondemand.com
+  credentials:
+    source: Secret
+    secretRef:
+      name: cf-provider-secret
+      namespace: crossplane-system
+      key: credentials

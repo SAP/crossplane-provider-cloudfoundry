@@ -1,0 +1,21 @@
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  namespace: service-test
+  name: e2e-ups
+spec:
+  forProvider:
+    type: user-provided
+    name: e2e-ups
+    routeServiceUrl: https://e2e-route-service.example.com
+    syslogDrainUrl: syslog-tls://example.log-aggregator.com:6514
+    spaceRef: 
+      name: service-space
+      policy:
+        resolve: Always
+    credentials: 
+      environmentid: environmentid
+      apitoken: apitoken
+      apiurl: apiurl
+      type: dynatrace

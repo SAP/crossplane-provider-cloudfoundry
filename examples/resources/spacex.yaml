@@ -1,0 +1,25 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  namespace: default
+  name: my-org
+  annotations:
+    crossplane.io/external-name: cf-dev
+spec:
+  forProvider:
+    name: cf-dev
+
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  namespace: default
+  name: my-space
+spec:
+  forProvider:
+    allowSsh: true
+    name: space-x
+    orgRef:
+      name: my-org
+      policy:
+        resolve: Always

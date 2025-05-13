@@ -1,0 +1,18 @@
+diff a/.github/workflows/email_check.yaml b/.github/workflows/email_check.yaml	(rejected hunks)
+@@ -22,15 +22,15 @@ jobs:
+           echo "📋 Setting up scan configuration"
+ 
+           # Configure allowed domains here (pipe-separated for grep)
+-          ALLOWED_DOMAINS="example\.com|test\.com|developer\.example\.org"
++          ALLOWED_DOMAINS="git\.k8s\.io|my-route-service\.example\.com|api\.example\.org|github\.com|charts\.crossplane\.io|docs\.github\.com|v3-apidocs\.cloudfoundry\.org|zip\.com|apache\.org|docs\.renovatebot\.com|crossplane\.io|v3-apidocs\.cloudfoundry\.space|releases\.hashicorp\.com|probot\.github\.io|facebook\.github\.io"
+           echo "ℹ️ Allowed email domains: ${ALLOWED_DOMAINS//\\/}"
+           echo "ALLOWED_DOMAINS=$ALLOWED_DOMAINS" >> $GITHUB_ENV
+ 
+           # Configure allowed API endpoints (pipe-separated for grep)
+           ALLOWED_API_ENDPOINTS="api\.example\.com|api\.internal\.company\.com|localhost:[0-9]+"
+           echo "ℹ️ Allowed API endpoints: ${ALLOWED_API_ENDPOINTS//\\/}"
+           echo "ALLOWED_API_ENDPOINTS=$ALLOWED_API_ENDPOINTS" >> $GITHUB_ENV
+ 
+           # Directories to exclude
+           EXCLUDE_DIRS=".git build .github/workflows"
+           echo "ℹ️ Excluding directories: $EXCLUDE_DIRS"

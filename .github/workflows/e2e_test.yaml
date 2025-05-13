@@ -1,0 +1,75 @@
+# Enviroment variables/secrets that are needed
+# CF_CREDENTIALS contains the login information of the CF technical user for this test
+# CF_ENVIRONMENT contains the URL of the CF API endpoint
+# USER_WHERE_ROLES_GET_ASSIGNED_EMAIL contains the email of a technical user (different to TECHNICAL_USER_EMAIL)
+# TECHNICAL_USER_EMAIL contains the email of the BTP_TECHNICAL_USER
+# More information in the README.md
+
+name: e2e-Tests
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      checkout-ref:
+        description: 'the ref for the repo checkout step'
+        default: ''
+        required: false
+        type: string
+      environment:
+        description: 'the environment to run in'
+        default: 'pr-e2e-approval'
+        required: false
+        type: string
+    secrets:
+      CF_CREDENTIALS:
+        description: contains the login information of the CF technical user for this test
+        required: true
+      CF_ENVIRONMENT:
+        description: contains the URL of the CF API endpoint
+        required: true
+      # USER_WHERE_ROLES_GET_ASSIGNED_EMAIL:
+      #   description: contains the email of a technical user (different to TECHNICAL_USER_EMAIL)
+      #   required: true
+      # TECHNICAL_USER_EMAIL:
+      #   description: contains the email of the BTP_TECHNICAL_USER
+      #   required: true
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-tests:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.environment }}
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          #use inputs.checkout-ref to be able to call it from a pull_request_target workflow, since there it needs to be github.event.pull_request.head.sha and not the default
+          ref: ${{ inputs.checkout-ref }}
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
+        with:
+          go-version: '1.21'
+
+      - name: Install Helm
+        run: |
+          curl https://baltocdn.com/helm/signing.asc | sudo gpg --dearmor -o /usr/share/keyrings/helm.gpg
+          sudo apt-get install apt-transport-https --yes
+          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+          sudo apt-get update
+          sudo apt-get install -y helm
+
+      - name: Install gettext for envsubst
+        run: sudo apt-get update && sudo apt-get install -y gettext
+
+      - name: Run build and e2e test
+        run: make test-acceptance
+        env:
+          CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
+          CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
+          # USER_WHERE_ROLES_GET_ASSIGNED_EMAIL: ${{ secrets.USER_WHERE_ROLES_GET_ASSIGNED_EMAIL }}
+          # TECHNICAL_USER_EMAIL: ${{ secrets.TECHNICAL_USER_EMAIL }}

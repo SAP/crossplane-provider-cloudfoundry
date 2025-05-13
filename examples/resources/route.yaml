@@ -1,0 +1,30 @@
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Route
+metadata:
+  name: my-route
+spec:
+  forProvider:
+    domainRef:
+      name: my-domain
+    host: hello-cf-app
+    spaceRef:
+      name: my-space
+      policy:
+        resolve: Always
+
+
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Route
+metadata:
+  name: my-cfapps-route
+spec:
+  forProvider:
+    domainRef:
+      name: my-cfapps-domain
+    host: hello-cf-app
+    spaceRef:
+      name: my-space
+      policy:
+        resolve: Always

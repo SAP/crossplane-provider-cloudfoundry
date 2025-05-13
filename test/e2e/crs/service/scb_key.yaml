@@ -1,0 +1,17 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceCredentialBinding
+metadata:
+  name: e2e-scb-key
+  namespace: service-test
+spec:
+  forProvider:
+    name: e2e-scb-key
+    type: key
+    serviceInstanceRef:
+      name: e2e-service-instance
+      policy:
+        resolve: Always
+  connectionDetailsAsJSON: false
+  writeConnectionSecretToRef:
+    name: e2e-service-key
+    namespace: default # keep it default, changing it to service-test will cause the test to hang

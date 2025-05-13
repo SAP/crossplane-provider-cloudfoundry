@@ -1,0 +1,16 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceCredentialBinding
+metadata:
+  name: app-service-binding
+  namespace: app-test
+spec:
+  forProvider:
+    type: app
+    serviceInstanceRef:
+      name: app-service-instance
+      policy:
+        resolve: Always
+    appRef:
+      name: e2e-app
+      policy:
+        resolve: Always

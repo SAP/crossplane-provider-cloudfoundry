@@ -1,0 +1,95 @@
+---
+# CR to create a managed ServiceInstance
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: my-audit-log
+spec:
+  enableParameterDriftDetection: false
+  forProvider:
+    type: managed
+    name: my-audit-log
+    spaceRef: 
+      name: my-space
+      policy: 
+        resolve: Always
+    servicePlan:
+      offering: auditlog-management
+      plan: default
+
+
+---
+# CR to create a ServiceCredentialBinding
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceCredentialBinding
+metadata:
+  name: my-audit-log-key
+spec:
+  forProvider:
+    type: key
+    name: audit-log-key-1
+    serviceInstanceRef:
+      name: my-audit-log
+      policy:
+        resolve: Always
+  connectionDetailsAsJSON: false
+  writeConnectionSecretToRef:
+    name: my-audit-log-key
+    namespace: default
+
+---
+# CR to create a ServiceCredentialBinding
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceCredentialBinding
+metadata:
+  name: my-audit-log-key-duplicate
+spec:
+  forProvider:
+    type: key
+    name: audit-log-key-1
+    serviceInstanceRef:
+      name: my-audit-log
+      policy:
+        resolve: Always
+  connectionDetailsAsJSON: false
+  writeConnectionSecretToRef:
+    name: my-audit-log-key-duplicate
+    namespace: default
+---
+# CR to create a ServiceCredentialBinding
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceCredentialBinding
+metadata:
+  name: my-audit-log-key-2
+spec:
+  forProvider:
+    type: key
+    name: audit-log-key-2
+    serviceInstanceRef:
+      name: my-audit-log
+      policy:
+        resolve: Always
+  connectionDetailsAsJSON: true
+  writeConnectionSecretToRef:
+    name: my-audit-log-key-2
+    namespace: default
+
+
+---
+# CR to create a ServiceCredentialBinding
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceCredentialBinding
+metadata:
+  name: my-audit-log-key-3
+spec:
+  forProvider:
+    type: key
+    name: audit-log-key-3
+    serviceInstanceRef:
+      name: my-audit-log
+      policy:
+        resolve: Always
+  connectionDetailsAsJSON: false
+  writeConnectionSecretToRef:
+    name: my-audit-log-key-3
+    namespace: default

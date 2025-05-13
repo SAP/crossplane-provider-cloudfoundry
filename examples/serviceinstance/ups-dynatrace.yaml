@@ -1,0 +1,68 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dynatrace-credentials
+  namespace: crossplane-system
+type: Opaque
+stringData:
+  environmentid: environmentid
+  apitoken: apitoken
+  apiurl: apiurl
+  type: dynatrace
+
+---
+# UPS with service credentials from a secret ref
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: ups-dynatrace
+spec:
+  forProvider:
+    type: user-provided
+    name: ups-dynatrace
+    routeServiceUrl: https://my-route-service.example.com
+    syslogDrainUrl: syslog-tls://example.log-aggregator.com:6514
+    spaceRef: 
+      name: my-space
+      policy:
+        resolve: Always
+    credentialsSecretRef: 
+        name: dynatrace-credentials
+        namespace: crossplane-system
+        key: "" # to select the whole secret
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dynatrace-json-credentials
+  namespace: crossplane-system
+type: Opaque
+stringData:
+  credentials: |
+    {
+      "environmentid": "environmentid",
+      "apitoken": "apitoken",
+      "apiurl": "apiurl",
+      "type": "dynatrace"
+    }
+
+---
+# UPS with service json credentials from a secret key selector
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: ups-ups-json
+spec:
+  forProvider:
+    type: user-provided
+    name: ups-dynatrace-json
+    spaceRef: 
+      name: my-space
+      policy:
+        resolve: Always
+    credentialsSecretRef: 
+        name: dynatrace-json-credentials
+        namespace: crossplane-system
+        key: credentials

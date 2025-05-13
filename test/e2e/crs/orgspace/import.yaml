@@ -1,0 +1,11 @@
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  namespace: orgspace-test
+  name: e2e-org
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: cf-ci-e2e

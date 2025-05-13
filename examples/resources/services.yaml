@@ -1,0 +1,64 @@
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: dynatrace-json-credentials
+  namespace: crossplane-system
+type: Opaque
+stringData:
+    environmentid: "environmentid"
+    apitoken: "apitoken"
+    apiurl: "apiurl"
+    type: "dynatrace"
+    
+
+---
+# UPS with service json credentials from a secret key selector
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: my-ups
+spec:
+  forProvider:
+    type: user-provided
+    name: ups-dynatrace-json
+    spaceRef: 
+      name: my-space
+      policy:
+        resolve: Always
+    credentialsSecretRef: 
+        name: dynatrace-json-credentials
+        namespace: crossplane-system
+
+---
+# CR to create a managed ServiceInstance
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: my-service-instance
+spec:
+  forProvider:
+    type: managed
+    name: my-destination-instance
+    spaceRef: 
+      name: my-space
+      policy: 
+        resolve: Always
+    servicePlan:
+      offering: destination
+      plan: lite
+
+---
+# CR to create a managed ServiceInstance
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceCredentialBinding
+metadata:
+  name: my-service-credential-binding
+spec:
+  forProvider:
+    type: app
+    serviceInstanceRef:
+      name: my-service-instance
+    appRef:
+      name: my-app
+  
