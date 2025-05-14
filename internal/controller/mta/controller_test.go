@@ -1,7 +1,9 @@
 package mta
 
+// Initialize and use `tc` explicitly for subtests
 import (
 	"context"
+	// "github.com/stretchr/testify/assert"
 	"net/http"
 	"testing"
 
@@ -82,6 +84,27 @@ func withId(mtaGUID string) modifier {
 func withUrl(image string) modifier {
 	return func(r *v1alpha1.Mta) {
 		r.Spec.ForProvider.File = &v1alpha1.File{URL: &image}
+	}
+}
+
+// Helping Methode for AbortOnError
+func withAbortOnError(value bool) modifier {
+	return func(r *v1alpha1.Mta) {
+		r.Spec.ForProvider.AbortOnError = &value
+	}
+}
+
+// Helping Methode for VersionRule
+func withVersionRule(value string) modifier {
+	return func(r *v1alpha1.Mta) {
+		r.Spec.ForProvider.VersionRule = &value
+	}
+}
+
+// Helping Methode for Modules
+func withModules(value []string) modifier {
+	return func(r *v1alpha1.Mta) {
+		r.Spec.ForProvider.Modules = &value
 	}
 }
 
@@ -288,10 +311,17 @@ func TestObserve(t *testing.T) {
 		},
 		"Mta with guid does not exist": {
 			args: args{
-				mg: newMta(withLastOperation(mtaGUID), withFile("mtar-file"), withId(mtaGUID)),
+				mg: newMta(
+					withLastOperation(mtaGUID),
+					withFile("mtar-file"),
+					withId(mtaGUID),
+				),
 			},
 			want: want{
-				mg:  newMta(withLastOperation(mtaGUID), withFile("mtar-file")),
+				mg: newMta(
+					withLastOperation(mtaGUID),
+					withFile("mtar-file"),
+				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceLateInitialized: false},
 				err: errBoom,
 			},
@@ -404,6 +434,497 @@ func TestDelete(t *testing.T) {
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
 					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+				}
+			}
+		})
+	}
+}
+
+// Testing fuction for AbortOnError
+func TestAbortOnError(t *testing.T) {
+	type service func() *fake.MockMTA
+	type args struct {
+		mg resource.Managed
+	}
+
+	type want struct {
+		mg  resource.Managed
+		obs managed.ExternalCreation
+		err error
+	}
+
+	cases := map[string]struct {
+		args    args
+		want    want
+		service service
+		kube    k8s.Client
+	}{
+		"SuccessfulDeployment_AbortOnError_True": {
+			args: args{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withAbortOnError(true),
+					withConditions(xpv1.Creating()),
+				),
+			},
+			want: want{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withAbortOnError(true),
+					withConditions(xpv1.Creating()),
+				),
+				obs: managed.ExternalCreation{ConnectionDetails: managed.ConnectionDetails{}},
+				err: nil,
+			},
+			service: func() *fake.MockMTA {
+				m := &fake.MockMTA{}
+
+				// Log an Mock-Funktion StartMtaOperation
+				m.On("StartMtaOperation").Return(
+					&fake.NewMta().SetMetadataID(mtaGUID).Mta,
+					nil,
+				)
+
+				// Log an Mock-Funktion StartUploadMtaArchiveFromUrl
+				m.On("StartUploadMtaArchiveFromUrl").Return(
+					http.Header{},
+					nil,
+				)
+
+				return m
+			},
+		},
+		"FailedDeployment_AbortOnError_True": {
+			args: args{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withAbortOnError(true),
+					withConditions(xpv1.Creating()),
+				),
+			},
+			want: want{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withAbortOnError(true),
+				),
+				obs: managed.ExternalCreation{},
+				err: errors.Wrap(errBoom, errCreate),
+			},
+			service: func() *fake.MockMTA {
+				m := &fake.MockMTA{}
+				m.On("StartMtaOperation").Return(
+					mtaClient.ResponseHeader{},
+					errBoom,
+				)
+				m.On("StartUploadMtaArchiveFromUrl").Return(
+					http.Header{},
+					nil,
+				)
+				return m
+			},
+		},
+		"SuccessfulDeployment_AbortOnError_False": {
+			args: args{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withAbortOnError(false),
+					withConditions(xpv1.Creating()),
+				),
+			},
+			want: want{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withAbortOnError(false),
+					withConditions(xpv1.Available()), // Status switch to "Ready"
+				),
+				obs: managed.ExternalCreation{ConnectionDetails: managed.ConnectionDetails{}},
+				err: nil,
+			},
+			service: func() *fake.MockMTA {
+				m := &fake.MockMTA{}
+				m.On("StartMtaOperation").Return(
+					mtaClient.ResponseHeader{},
+					nil,
+				)
+				m.On("StartUploadMtaArchiveFromUrl").Return(
+					http.Header{},
+					nil,
+				)
+				return m
+			},
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			t.Logf("Testing: %s", n)
+
+			c := &external{
+				kube: &test.MockClient{
+					MockUpdate:       test.NewMockUpdateFn(nil),
+					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
+				},
+				client: mta.Client{
+					MtaClient: tc.service(),
+				},
+			}
+
+			obs, err := c.Create(context.Background(), tc.args.mg)
+			t.Logf("Create call: obs=%+v, err=%+v", obs, err)
+
+			if tc.want.err != nil && err != nil {
+				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
+					t.Errorf("Create(...): want error string != got error string:\n%s", diff)
+				} else {
+					if diff := cmp.Diff(tc.want.err, err); diff != "" {
+						t.Errorf("Create(...): want error != got error:\n%s", diff)
+					}
+				}
+
+				if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
+					t.Errorf("Create(...): -want, +got:\n%s", diff)
+				}
+
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Create(...): -want, +got:\n%s", diff)
+				}
+			}
+		})
+	}
+}
+
+func TestVersionRule(t *testing.T) {
+	type service func() *fake.MockMTA
+	type args struct {
+		mg resource.Managed
+	}
+
+	type want struct {
+		mg  resource.Managed
+		obs managed.ExternalCreation
+		err error
+	}
+
+	cases := map[string]struct {
+		args    args
+		want    want
+		service service
+		kube    k8s.Client
+	}{
+		"SuccessfulDeployment_VersionRule_HIGHER": {
+			args: args{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withVersionRule("HIGHER"),
+					withConditions(xpv1.Creating()),
+				),
+			},
+			want: want{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withVersionRule("SAME_HIGHER"),
+					withConditions(xpv1.Creating()),
+				),
+			},
+			service: func() *fake.MockMTA {
+				m := &fake.MockMTA{}
+				m.On("StartMtaOperation").Return(
+					mtaClient.ResponseHeader{},
+					nil,
+				)
+
+				m.On("StartUploadMtaArchiveFromUrl").Return(
+					http.Header{},
+					nil,
+				)
+				return m
+			},
+		},
+		"SuccessfulDeployment_VersionRule_SAME_HIGHER": {
+			args: args{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withVersionRule("SAME_HIGHER"),
+					withConditions(xpv1.Creating()),
+				),
+			},
+			want: want{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withVersionRule("SAME_HIGHER"),
+				),
+			},
+			service: func() *fake.MockMTA {
+				m := &fake.MockMTA{}
+				m.On("StartMtaOperation").Return(
+					mtaClient.ResponseHeader{},
+					nil,
+				)
+
+				m.On("StartUploadMtaArchiveFromUrl").Return(
+					http.Header{},
+					nil,
+				)
+				return m
+			},
+		},
+		"SuccessfulDeployment_VersionRule_ALL": {
+			args: args{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withVersionRule("ALL"),
+					withConditions(xpv1.Creating()),
+				),
+			},
+			want: want{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withVersionRule("ALL"),
+				),
+			},
+			service: func() *fake.MockMTA {
+				m := &fake.MockMTA{}
+				m.On("StartMtaOperation").Return(
+					mtaClient.ResponseHeader{},
+					nil,
+				)
+
+				m.On("StartUploadMtaArchiveFromUrl").Return(
+					http.Header{},
+					nil,
+				)
+				return m
+			},
+		},
+		"Lower": {
+			args: args{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withVersionRule("LOWER"),
+					withConditions(xpv1.Creating()),
+				),
+			},
+			want: want{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withVersionRule("LOWER"),
+				),
+				obs: managed.ExternalCreation{},
+				err: errors.Wrap(errBoom, errCreate),
+			},
+			service: func() *fake.MockMTA {
+				m := &fake.MockMTA{}
+				m.On("StartMtaOperation").Return(
+					mtaClient.ResponseHeader{},
+					errBoom,
+				)
+				m.On("StartUploadMtaArchiveFromUrl").Return(
+					http.Header{},
+					nil,
+				)
+				return m
+			},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			t.Logf("Testing: %s", n)
+
+			c := &external{
+				kube: &test.MockClient{
+					MockUpdate:       test.NewMockUpdateFn(nil),
+					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
+				},
+				client: mta.Client{
+					MtaClient: tc.service(),
+				},
+			}
+
+			obs, err := c.Create(context.Background(), tc.args.mg)
+			t.Logf("Create call: obs=%+v, err=%+v", obs, err)
+
+			if tc.want.err != nil && err != nil {
+				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
+					t.Errorf("Create(...): want error string != got error string:\n%s", diff)
+				} else {
+					if diff := cmp.Diff(tc.want.err, err); diff != "" {
+						t.Errorf("Create(...): want error != got error:\n%s", diff)
+					}
+				}
+
+				if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
+					t.Errorf("Create(...): -want, +got:\n%s", diff)
+				}
+
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Create(...): -want, +got:\n%s", diff)
+				}
+			}
+		})
+	}
+}
+
+func TestModules(t *testing.T) {
+	type service func() *fake.MockMTA
+	type args struct {
+		mg resource.Managed
+	}
+
+	type want struct {
+		mg  resource.Managed
+		obs managed.ExternalCreation
+		err error
+	}
+
+	cases := map[string]struct {
+		args    args
+		want    want
+		service service
+		kube    k8s.Client
+	}{
+		"Modules ist ein leerer Slice": {
+			args: args{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withModules([]string{}),
+					withConditions(xpv1.Creating()),
+				),
+			},
+			want: want{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withModules([]string{}),
+				),
+				obs: managed.ExternalCreation{ConnectionDetails: managed.ConnectionDetails{}},
+				err: nil,
+			},
+			service: func() *fake.MockMTA {
+				m := &fake.MockMTA{}
+				m.On("StartMtaOperation").Return(
+					mtaClient.ResponseHeader{},
+					nil,
+				)
+
+				m.On("StartUploadMtaArchiveFromUrl").Return(
+					http.Header{},
+					nil,
+				)
+				return m
+			},
+		},
+		"Modules mit mehreren Elementen": {
+			args: args{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withModules([]string{"bookshkop-srv-module2", "bookshkop-srv"}),
+					withConditions(xpv1.Creating()),
+				),
+			},
+			want: want{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withModules([]string{"bookshkop-srv-module2", "bookshkop-srv"}),
+				),
+				obs: managed.ExternalCreation{ConnectionDetails: managed.ConnectionDetails{}},
+				err: nil,
+			},
+			service: func() *fake.MockMTA {
+				m := &fake.MockMTA{}
+				m.On("StartMtaOperation").Return(
+					mtaClient.ResponseHeader{},
+					nil,
+				)
+
+				m.On("StartUploadMtaArchiveFromUrl").Return(
+					http.Header{},
+					nil,
+				)
+				return m
+			},
+		},
+		"Modules mit einem Elementen": {
+			args: args{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withModules([]string{"bookshkop-srv"}),
+					withConditions(xpv1.Creating()),
+				),
+			},
+			want: want{
+				mg: newMta(
+					withUrl("mtar-file"),
+					withSpace(spaceGUID),
+					withModules([]string{"bookshkop-srv"}),
+				),
+				obs: managed.ExternalCreation{ConnectionDetails: managed.ConnectionDetails{}},
+				err: nil,
+			},
+			service: func() *fake.MockMTA {
+				m := &fake.MockMTA{}
+				m.On("StartMtaOperation").Return(
+					mtaClient.ResponseHeader{},
+					nil,
+				)
+
+				m.On("StartUploadMtaArchiveFromUrl").Return(
+					http.Header{},
+					nil,
+				)
+				return m
+			},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			t.Logf("Testing: %s", n)
+
+			c := &external{
+				kube: &test.MockClient{
+					MockUpdate:       test.NewMockUpdateFn(nil),
+					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
+				},
+				client: mta.Client{
+					MtaClient: tc.service(),
+				},
+			}
+
+			obs, err := c.Create(context.Background(), tc.args.mg)
+			t.Logf("Create call: obs=%+v, err=%+v", obs, err)
+
+			if tc.want.err != nil && err != nil {
+				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
+					t.Errorf("Create(...): want error string != got error string:\n%s", diff)
+				} else {
+					if diff := cmp.Diff(tc.want.err, err); diff != "" {
+						t.Errorf("Create(...): want error != got error:\n%s", diff)
+					}
+				}
+
+				if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
+					t.Errorf("Create(...): -want, +got:\n%s", diff)
+				}
+
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Create(...): -want, +got:\n%s", diff)
 				}
 			}
 		})
