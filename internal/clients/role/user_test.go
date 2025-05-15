@@ -6,6 +6,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"k8s.io/utils/ptr"
 )
 
 // unit test for findRole
@@ -37,13 +38,13 @@ func TestFindRole(t *testing.T) {
 	users := []*resource.User{
 		{
 			Resource: resource.Resource{GUID: "338b0d04-d537-4e4e-8c6f-f09ca0e7f56a"},
-			Username: "user1",
-			Origin:   "sap.ids",
+			Username: ptr.To("user1"),
+			Origin:   ptr.To("sap.ids"),
 		},
 		{
 			Resource: resource.Resource{GUID: "338b0d04-d537-4e4e-8c6f-f09ca0e7f56b"},
-			Username: "user2",
-			Origin:   "sap.ids",
+			Username: ptr.To("user2"),
+			Origin:   ptr.To("sap.ids"),
 		},
 	}
 

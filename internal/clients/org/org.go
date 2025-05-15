@@ -56,7 +56,7 @@ func GenerateObservation(o *resource.Organization) v1alpha1.OrgObservation {
 		ID:        ptr.To(o.GUID),
 		CreatedAt: ptr.To(o.CreatedAt.Format(time.RFC3339)),
 		UpdatedAt: ptr.To(o.UpdatedAt.Format(time.RFC3339)),
-		Suspended: o.Suspended,
+		Suspended: ptr.To(o.Suspended),
 	}
 
 	if o.Metadata != nil {
@@ -78,7 +78,7 @@ func LateInitialize(spec *v1alpha1.OrgParameters, from *resource.Organization) {
 	}
 
 	if spec.Suspended == nil {
-		spec.Suspended = from.Suspended
+		spec.Suspended = ptr.To(from.Suspended)
 	}
 	// TODO: ADD labels and annotations
 }

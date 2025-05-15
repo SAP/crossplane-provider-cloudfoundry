@@ -58,9 +58,7 @@ func GenerateSpaceQuota(resp *resource.SpaceQuota) *v1alpha1.SpaceQuota {
 	if v := resp.Routes.TotalRoutes; v != nil {
 		cr.Status.AtProvider.TotalRoutes = ptr.To(float64(*v))
 	}
-	if v := resp.Services.PaidServicesAllowed; v != nil {
-		cr.Status.AtProvider.AllowPaidServicePlans = v
-	}
+	cr.Status.AtProvider.AllowPaidServicePlans = ptr.To(resp.Services.PaidServicesAllowed)
 	if v := resp.Services.TotalServiceInstances; v != nil {
 		cr.Status.AtProvider.TotalServices = ptr.To(float64(*v))
 	}

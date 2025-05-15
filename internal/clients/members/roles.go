@@ -6,13 +6,14 @@ import (
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 )
 
 func toMemberKey(u *resource.User) string {
-	user := v1alpha1.Member{Username: u.Username, Origin: u.Origin}
+	user := v1alpha1.Member{Username: ptr.Deref(u.Username, ""), Origin: ptr.Deref(u.Origin, "")}
 	return user.Key()
 }
 

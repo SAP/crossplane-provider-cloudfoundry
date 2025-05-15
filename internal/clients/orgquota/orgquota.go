@@ -91,7 +91,7 @@ func intpToFloatp(in *int) *float64 {
 // and returns an OrgQuotaObservation.
 func GenerateObservation(o *resource.OrganizationQuota) v1alpha1.OrgQuotaObservation {
 	obs := v1alpha1.OrgQuotaObservation{
-		AllowPaidServicePlans: o.Services.PaidServicesAllowed,
+		AllowPaidServicePlans: ptr.To(o.Services.PaidServicesAllowed),
 		CreatedAt:             ptr.To(o.CreatedAt.Format(time.RFC3339)),
 		ID:                    ptr.To(o.GUID),
 		InstanceMemory:        intpToFloatp(o.Apps.PerProcessMemoryInMB),
@@ -207,7 +207,7 @@ func LateInitialize(spec *v1alpha1.OrgQuotaParameters, from *resource.Organizati
 		changed = true
 	}
 	if spec.AllowPaidServicePlans == nil {
-		spec.AllowPaidServicePlans = ptrDef(from.Services.PaidServicesAllowed, true)
+		spec.AllowPaidServicePlans = ptr.To(from.Services.PaidServicesAllowed)
 		changed = true
 	}
 	if spec.InstanceMemory == nil {

@@ -13,6 +13,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -46,7 +47,9 @@ func fakeOrg(m ...modifier) *v1alpha1.Organization {
 			Annotations: map[string]string{},
 		},
 		Spec: v1alpha1.OrgSpec{
-			ForProvider: v1alpha1.OrgParameters{},
+			ForProvider: v1alpha1.OrgParameters{
+				Suspended: ptr.To(false),
+			},
 		},
 	}
 

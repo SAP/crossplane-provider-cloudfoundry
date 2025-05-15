@@ -15,6 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -50,8 +51,8 @@ var (
 					GUID: guidNoRefUser}}}}
 
 	healthyUser = &cfresource.User{
-		Username: "user1",
-		Origin:   "sap.ids",
+		Username: ptr.To("user1"),
+		Origin:   ptr.To("sap.ids"),
 		Resource: cfresource.Resource{
 			GUID: guidHealthyUser}}
 )

@@ -13,6 +13,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -67,8 +68,9 @@ func fakeSpaceQuota(m ...modifier) *v1alpha1.SpaceQuota {
 		},
 		Status: v1alpha1.SpaceQuotaStatus{
 			AtProvider: v1alpha1.SpaceQuotaObservation{
-				CreatedAt: &zeroTime,
-				UpdatedAt: &zeroTime,
+				CreatedAt:             &zeroTime,
+				UpdatedAt:             &zeroTime,
+				AllowPaidServicePlans: ptr.To(false),
 			},
 		},
 	}
