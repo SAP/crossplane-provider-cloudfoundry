@@ -89,7 +89,7 @@ https://api.cf.eu12.hana.ondemand.com
 
 ## 👐 Support, Feedback, Contributing
 
-If you have a question always feel free to reach out on our official crossplane slack channel: 
+If you have a question always feel free to reach out on our official crossplane slack channel:
 
 :rocket: [**#provider-sap-cloudfoundry**](https://crossplane.slack.com/archives/C08NBTJ1J05).
 
