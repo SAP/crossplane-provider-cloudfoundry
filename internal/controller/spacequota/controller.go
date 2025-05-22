@@ -152,7 +152,7 @@ func isUpToDate(ctx context.Context,
 	resp *cfresource.SpaceQuota) (bool, error) {
 	spec := &cr.Spec.ForProvider
 	if v := spec.AllowPaidServicePlans; v != nil {
-		if !ptr.Equal(v, resp.Services.PaidServicesAllowed) {
+		if *v != resp.Services.PaidServicesAllowed {
 			return false, nil
 		}
 	}
