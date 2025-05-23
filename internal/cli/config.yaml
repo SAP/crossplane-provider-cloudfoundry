@@ -1,0 +1,19 @@
+resources:
+  - org:
+      name: TodoCompany
+      managementPolicies: [Observe]
+  - space:
+      name: .*
+      orgRef: TodoCompany
+      managementPolicies: [Observe]
+  - app:
+      name: .*
+      spaceRef: Production
+      managementPolicies: [Observe]
+  - app:
+      name: .*
+      spaceRef: Testing
+      managementPolicies: ["Observe"]
+providerConfigRef:
+  name: default
+  namespace: default
