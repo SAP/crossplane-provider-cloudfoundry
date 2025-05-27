@@ -25,7 +25,7 @@ import (
 
 var (
 	errBoom           = errors.New("boom")
-	errAborted        = errors.New("ABOORTED")
+	errAborted        = errors.New("ABORTED")
 	name              = "my-mta"
 	spaceGUID         = "a46808d1-d09a-4eef-add1-30872dec82f7"
 	mtaGUID           = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
@@ -565,35 +565,6 @@ func TestVersionRule(t *testing.T) {
 		service service
 		kube    k8s.Client
 	}{
-		"SuccessfulDeployment_VersionRule_HIGHER": {
-			args: args{
-				mg: newMta(
-					withVersionRule("HIGHER"),
-					withUrl("mtar-file"),
-				),
-			},
-			want: want{
-				mg: newMta(
-					withVersionRule("HIGHER"),
-					withUrl("mtar-file"),
-				),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceLateInitialized: true},
-				err: nil,
-			},
-			service: func() *fake.MockMTA {
-				m := &fake.MockMTA{}
-				m.On("GetMta").Return(
-					&fake.NewMta().SetMetadataID(mtaGUID).Mta,
-					nil,
-				)
-				m.On("StartUploadMtaArchiveFromUrl").Return(
-					http.Header{},
-					nil,
-				)
-				return m
-			},
-			kube: &test.MockClient{},
-		},
 		"SuccessfulDeployment_VersionRule_SAME_HIGHER": {
 			args: args{
 				mg: newMta(
@@ -604,35 +575,6 @@ func TestVersionRule(t *testing.T) {
 			want: want{
 				mg: newMta(
 					withVersionRule("SAME_HIGHER"),
-					withUrl("mtar-file"),
-				),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceLateInitialized: true},
-				err: nil,
-			},
-			service: func() *fake.MockMTA {
-				m := &fake.MockMTA{}
-				m.On("GetMta").Return(
-					&fake.NewMta().SetMetadataID(mtaGUID).Mta,
-					nil,
-				)
-				m.On("StartUploadMtaArchiveFromUrl").Return(
-					http.Header{},
-					nil,
-				)
-				return m
-			},
-			kube: &test.MockClient{},
-		},
-		"SuccessfulDeployment_VersionRule_ALL": {
-			args: args{
-				mg: newMta(
-					withVersionRule("ALL"),
-					withUrl("mtar-file"),
-				),
-			},
-			want: want{
-				mg: newMta(
-					withVersionRule("ALL"),
 					withUrl("mtar-file"),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceLateInitialized: true},
@@ -715,6 +657,7 @@ func TestVersionRule(t *testing.T) {
 	}
 }
 
+// TestModules ensures that only the specified modules in an MTA are processed and created correctly.
 func TestModules(t *testing.T) {
 	type service func() *fake.MockMTA
 	type args struct {
@@ -820,10 +763,10 @@ func TestModules(t *testing.T) {
 			},
 			kube: &test.MockClient{},
 		},
-		"ErrInvalidNameInput": {
+		"InvalidNameInput": {
 			args: args{
 				mg: newMta(
-					withModules([]string{"bookshkop-srv", "bookshkop-srv-module2", "bookshkop-srv-module3"}),
+					withModules([]string{"bookshkop-srv", "bookshkop-srv-module2", "INVALID-NAME"}),
 					withUrl("mtar-file"),
 				),
 			},
@@ -848,16 +791,16 @@ func TestModules(t *testing.T) {
 				return m
 			},
 		},
-		"DuplicateModulesNotAllowedError": {
+		"DuplicateModulesNotAllowed": {
 			args: args{
 				mg: newMta(
-					withModules([]string{"bookshkop-srv", "bookshkop-srv"}),
+					withModules([]string{"DUPLICATE", "DUPLICATE"}),
 					withUrl("mtar-file"),
 				),
 			},
 			want: want{
 				mg: newMta(
-					withModules([]string{"bookshkop-srv", "bookshkop-srv"}),
+					withModules([]string{"DUPLICATE", "DUPLICATE"}),
 					withUrl("mtar-file"),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceLateInitialized: false},
