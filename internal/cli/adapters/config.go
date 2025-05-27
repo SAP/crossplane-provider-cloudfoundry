@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/config"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
@@ -167,7 +168,7 @@ func (p *CFConfigParser) ParseConfig(configPath string) (config.ProviderConfig, 
 			}
 
 			filters = append(filters, &CFResourceFilter{
-				Type: "space",
+				Type: v1alpha1.Space_Kind,
 				Space: &SpaceFilter{
 					Name: res.Space.Name,
 					OrgRef: res.Space.OrgName,
@@ -183,7 +184,7 @@ func (p *CFConfigParser) ParseConfig(configPath string) (config.ProviderConfig, 
 			}
 
 			filters = append(filters, &CFResourceFilter{
-				Type: "organization",
+				Type: v1alpha1.Org_Kind,
 				Organization: &OrganizationFilter{
 					Name:   res.Organization.Name,
 				},
@@ -198,7 +199,7 @@ func (p *CFConfigParser) ParseConfig(configPath string) (config.ProviderConfig, 
 			}
 
 			filters = append(filters, &CFResourceFilter{
-				Type: "app",
+				Type: v1alpha1.App_Kind,
 				App: &AppFilter{
 					Name:   res.App.Name,
 					SpaceRef: res.App.SpaceRef,

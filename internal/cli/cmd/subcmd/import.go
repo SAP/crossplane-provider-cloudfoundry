@@ -10,6 +10,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	v1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/adapters"
+	adapterv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/adapters/v1alpha1"
 	cli "github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/credentialManager"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/importer"
@@ -61,9 +62,9 @@ var ImportCMD = &cobra.Command{
 		// Create adapters
 		clientAdapter := &adapters.CFClientAdapter{}
 		resourceAdapters := map[string]resource.ResourceAdapter{
-			"space": &adapters.CFSpaceAdapter{},
-			"organization": &adapters.CFOrganizationAdapter{},
-			"app": &adapters.CFAppAdapter{},
+			v1alpha1.Space_Kind: &adapterv1alpha1.CFSpaceAdapter{},
+			v1alpha1.Org_Kind: &adapterv1alpha1.CFOrganizationAdapter{},
+			v1alpha1.App_Kind: &adapterv1alpha1.CFAppAdapter{},
 		}
 		configParser := &adapters.CFConfigParser{}
 
