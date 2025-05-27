@@ -1,4 +1,4 @@
-package adapters
+package v1alpha1
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // CFSpace implements the Resource interface
@@ -25,7 +26,7 @@ func (d *CFSpace) GetExternalID() string {
 }
 
 func (d *CFSpace) GetResourceType() string {
-	return "space"
+	return v1alpha1.Space_Kind
 }
 
 func (d *CFSpace) GetManagedResource() resource.Managed {
@@ -44,7 +45,7 @@ func (d *CFSpace) SetManagementPolicies(policies []v1.ManagementAction) {
 type CFSpaceAdapter struct{}
 
 func (a *CFSpaceAdapter) GetResourceType() string {
-	return "space"
+	return v1alpha1.Space_Kind
 }
 
 var sshEnabled bool
@@ -54,7 +55,7 @@ func (a *CFSpaceAdapter) FetchResources(ctx context.Context, client client.Provi
 	criteria := filter.GetFilterCriteria()
 
 	// Fetch resources from provider
-	providerResources, err := client.GetResourcesByType(ctx, "space", criteria)
+	providerResources, err := client.GetResourcesByType(ctx, v1alpha1.Space_Kind, criteria)
 	if err != nil {
 		return nil, err
 	}
@@ -93,8 +94,8 @@ func (a *CFSpaceAdapter) MapToResource(providerResource interface{}, managementP
 
 	// Map resource
 	managedResource := &v1alpha1.Space{}
-	managedResource.APIVersion = "cloudfoundry.crossplane.io/v1alpha1"
-	managedResource.Kind = "Space"
+	managedResource.APIVersion = schema.GroupVersion{Group:   v1alpha1.CRDGroup,	Version: v1alpha1.CRDVersion}.String()
+	managedResource.Kind = v1alpha1.Space_Kind
 	managedResource.SetAnnotations(map[string]string{"crossplane.io/external-name": space.GUID})
 	managedResource.SetGenerateName(utils.NormalizeToRFC1123(space.Name))
 
