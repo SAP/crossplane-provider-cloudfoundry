@@ -1,4 +1,4 @@
-package adapters
+package v1alpha1
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
 // CFApp implements the Resource interface
@@ -25,7 +26,7 @@ func (d *CFApp) GetExternalID() string {
 }
 
 func (d *CFApp) GetResourceType() string {
-	return "app"
+	return v1alpha1.App_Kind
 }
 
 func (d *CFApp) GetManagedResource() resource.Managed {
@@ -44,7 +45,7 @@ func (d *CFApp) SetManagementPolicies(policies []v1.ManagementAction) {
 type CFAppAdapter struct{}
 
 func (a *CFAppAdapter) GetResourceType() string {
-	return "app"
+	return v1alpha1.App_Kind
 }
 
 func (a *CFAppAdapter) FetchResources(ctx context.Context, client client.ProviderClient, filter res.ResourceFilter) ([]res.Resource, error) {
@@ -52,7 +53,7 @@ func (a *CFAppAdapter) FetchResources(ctx context.Context, client client.Provide
 	criteria := filter.GetFilterCriteria()
 
 	// Fetch resources from provider
-	providerResources, err := client.GetResourcesByType(ctx, "app", criteria)
+	providerResources, err := client.GetResourcesByType(ctx, v1alpha1.App_Kind, criteria)
 
 	if err != nil {
 		return nil, err
@@ -82,8 +83,8 @@ func (a *CFAppAdapter) MapToResource(providerResource interface{}, managementPol
 
 	// Map resource
 	managedResource := &v1alpha1.App{}
-	managedResource.APIVersion = "cloudfoundry.btp.orchestrate.cloud.sap/v1alpha1"
-	managedResource.Kind = "App"
+	managedResource.APIVersion = schema.GroupVersion{Group:   v1alpha1.CRDGroup,	Version: v1alpha1.CRDVersion}.String()
+	managedResource.Kind = v1alpha1.App_Kind
 	managedResource.SetAnnotations(map[string]string{"crossplane.io/external-name": app.GUID})
 	managedResource.SetGenerateName(utils.NormalizeToRFC1123(app.Name))
 	managedResource.Spec.ForProvider.Space = &app.Relationships.Space.Data.GUID

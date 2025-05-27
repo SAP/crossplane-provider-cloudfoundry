@@ -1,12 +1,11 @@
 package adapters
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
@@ -20,10 +19,8 @@ import (
 )
 
 var(
-	errResolveOrgName = "Could not resolve organization name"
 	errIsSSHEnabled = "Could not check if SSH is enabled for the space"
 	errListOrganizations = "Could not list organizations"
-	errResolveSpaceName = "Could not resolve space name"
 	errCreateCFConfig = "Could not create CF config"
 	errCreateK8sClient = "Could not create Kubernetes client"
 	errGetProviderConfig = "Could not get provider config"
@@ -31,7 +28,8 @@ var(
 	errExtractCredentials = "Credentials key not found in secret data"
 	errExtractApiEndpoint = "API endpoint key not found in secret data"
 	errUnmarshalCredentials = "Failed to unmarshal credentials JSON"
-	errParseCredEnvironment = "Could not parse CredEnvironment"
+	errGetOrgReference = "Could not get data about referenced organization"
+	errGetSpaceReference = "Could not get data about referenced space"
 )
 
 // CFCredentials implements the Credentials interface
@@ -56,11 +54,11 @@ type CFClient struct {
 
 func (c *CFClient) GetResourcesByType(ctx context.Context, resourceType string, filter map[string]string) ([]interface{}, error) {
 	switch resourceType {
-	case "space":
+	case v1alpha1.Space_Kind:
 		return c.getSpaces(ctx, filter)
-	case "organization":
+	case v1alpha1.Org_Kind:
 		return c.getOrganizations(ctx, filter)
-	case "app":
+	case v1alpha1.App_Kind:
 		return c.getApps(ctx, filter)
 	default:
 		return nil, fmt.Errorf("unsupported resource type: %s", resourceType)
@@ -78,8 +76,20 @@ func (c *CFClient) getSpaces(ctx context.Context, filter map[string]string) ([]i
 		return nil, fmt.Errorf("org-reference filter is required for spaces")
 	}
 
+	// get referenced org
+	orgRefFilter := cfv3.OrganizationListOptions{Names: cfv3.Filter{Values: []string{orgName}}}
+	orgRef, err := c.client.Organizations.ListAll(ctx, &orgRefFilter)
+	kingpin.FatalIfError(err, "%s", errGetOrgReference)
+
+	if orgRef[0].GUID == "" {
+		kingpin.FatalIfError(fmt.Errorf("organization %s not found", orgName), "%s", errGetOrgReference)
+	}
+	
+	// define filter-option with orgRef for query
+	opt := &cfv3.SpaceListOptions{OrganizationGUIDs: cfv3.Filter{Values: []string{orgRef[0].GUID}}}
+
 	// Get all spaces from CF
-	responseCollection, err := c.client.Spaces.ListAll(ctx, &cfv3.SpaceListOptions{})
+	responseCollection, err := c.client.Spaces.ListAll(ctx, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -88,11 +98,8 @@ func (c *CFClient) getSpaces(ctx context.Context, filter map[string]string) ([]i
 	var results []interface{}
 	var SSHlist []bool
 	for _, space := range responseCollection {
-		orgNameResolved, err := c.resolveOrgName(ctx, space.Relationships.Organization.Data.GUID)
-		kingpin.FatalIfError(err, "%s", errResolveOrgName)
-
-		// Check if the space name matches and if the org name matches
-		if utils.IsFullMatch(name, space.Name) && orgNameResolved == orgName {
+		// Check if the space name matches
+		if utils.IsFullMatch(name, space.Name){
 			results = append(results, space)
 			isSSHEnabled, err := c.client.SpaceFeatures.IsSSHEnabled(ctx, space.GUID)
 			kingpin.FatalIfError(err, "%s", errIsSSHEnabled)
@@ -146,8 +153,20 @@ func (c *CFClient) getApps(ctx context.Context, filter map[string]string) ([]int
 		return nil, fmt.Errorf("org-reference filter is required for apps")
 	}
 
+	// get referenced space
+	spaceRefFilter := cfv3.SpaceListOptions{Names: cfv3.Filter{Values: []string{spaceName}}}
+	spaceRef, err := c.client.Spaces.ListAll(ctx, &spaceRefFilter)
+	kingpin.FatalIfError(err, "%s", errGetSpaceReference)
+
+	if spaceRef[0].GUID == "" {
+		kingpin.FatalIfError(fmt.Errorf("organization %s not found", spaceName), "%s", errGetOrgReference)
+	}
+
+	// define filter-option with spaceRef for query
+	opt := &cfv3.AppListOptions{SpaceGUIDs: cfv3.Filter{Values: []string{spaceRef[0].GUID}}}
+
 	// Get apps from CF
-	responseCollection, err := c.client.Applications.ListAll(ctx, &cfv3.AppListOptions{})
+	responseCollection, err := c.client.Applications.ListAll(ctx, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -155,11 +174,8 @@ func (c *CFClient) getApps(ctx context.Context, filter map[string]string) ([]int
 	// Filter spaces by name and org-reference
 	var results []interface{}
 	for _, app := range responseCollection {
-		spaceNameResolved, err := c.resolveSpaceName(ctx, app.Relationships.Space.Data.GUID)
-		kingpin.FatalIfError(err, "%s", errResolveSpaceName)
-
-		// Check if the app name matches and if the space name matches
-		if utils.IsFullMatch(name, app.Name) && spaceNameResolved == spaceName {
+		// Check if the app name matches
+		if utils.IsFullMatch(name, app.Name){
 			results = append(results, app)
 		}
 	}
@@ -250,56 +266,4 @@ func (a *CFClientAdapter) GetCredentials(ctx context.Context, kubeConfigPath str
 		Email:       creds.Email,
 		Password:    creds.Password,
 	}, nil
-}
-
-func (c *CFClient)resolveOrgName(ctx context.Context, guid string) (string, error) {
-	// Get the organization from the CF client
-	org, err := c.client.Organizations.Get(ctx, guid)
-	if err != nil {
-		return "", err
-	}
-
-	return org.Name, nil
-}
-
-func (c *CFClient)resolveSpaceName(ctx context.Context, guid string) (string, error) {
-	// Get the space from the CF client
-	space, err := c.client.Spaces.Get(ctx, guid)
-	if err != nil {
-		return "", err
-	}
-
-	return space.Name, nil
-}
-
-func getAPIEndpoint() string {
-	file := utils.OpenFile(".xpcfi")
-	defer file.Close()
-
-	config := make(map[string]string)
-
-    // Read the file line by line
-    scanner := bufio.NewScanner(file)
-    for scanner.Scan() {
-        line := scanner.Text()
-        // Split the line by "="
-        parts := strings.SplitN(line, "=", 2)
-        if len(parts) == 2 {
-            key := parts[0]
-            value := parts[1]
-            // Store key-value pairs in the map
-            config[key] = value
-        }
-    }
-
-    err := scanner.Err()
-	kingpin.FatalIfError(err, "%s", errParseCredEnvironment)
-    
-	// map values and return Credentials
-	var credentials CFCredentials
-	err = json.Unmarshal([]byte(config["CREDENTIALS"]), &credentials)
-	kingpin.FatalIfError(err, "%s", errUnmarshalCredentials)
-	fmt.Println(credentials.ApiEndpoint)
-	
-	return credentials.ApiEndpoint
 }
