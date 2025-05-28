@@ -225,9 +225,8 @@ func (c *Client) UploadFileFromUrl(cr *v1alpha1.Mta, file *v1alpha1.File, secret
 	}
 
 	if secret != nil {
-		urlObj.User = url.UserPassword(string(secret.Data["user"]), string(secret.Data["password"]))
+		urlObj.User = url.UserPassword(string(secret.Data[v1.BasicAuthUsernameKey]), string(secret.Data[v1.BasicAuthPasswordKey]))
 	}
-
 	encodedUrl := base64.StdEncoding.EncodeToString([]byte(urlObj.String()))
 	responseHeaders, err := c.MtaClient.StartUploadMtaArchiveFromUrl(encodedUrl, cr.Spec.ForProvider.Namespace)
 	if err != nil {
