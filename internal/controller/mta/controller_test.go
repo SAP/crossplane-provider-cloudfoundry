@@ -626,7 +626,7 @@ func TestVersionRule(t *testing.T) {
 	}
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			t.Logf("Testing: %s", n)
+			//t.Logf("Testing: %s", n)
 
 			c := &external{
 				kube: &test.MockClient{
@@ -657,7 +657,7 @@ func TestVersionRule(t *testing.T) {
 	}
 }
 
-// TestModules ensures that only the specified modules in an MTA are processed and created correctly.
+// Modules are defined within MTA Extensions and specify components or configurations for deployment.
 func TestModules(t *testing.T) {
 	type service func() *fake.MockMTA
 	type args struct {
