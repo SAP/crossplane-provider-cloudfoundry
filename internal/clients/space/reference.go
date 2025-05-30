@@ -16,33 +16,30 @@ type SpaceScoped interface {
 	GetSpaceRef() *v1alpha1.SpaceReference
 }
 
-// / Initialize implements the Initializer interface
+// ResolveByName resolves the space reference by name.
 func ResolveByName(ctx context.Context, clientFn clients.ClientFn, mg resource.Managed) error {
 	cr, ok := mg.(SpaceScoped)
 	if !ok {
 		return errors.New("Cannot resolve space name. The resource does not implement SpaceScoped")
 	}
 
-	// if external-name is not set, search by Name and Space
 	sr := cr.GetSpaceRef()
-	if sr == nil || sr.SpaceName == nil {
-		if sr.Space != nil { // space GUID is directly set, so we do not need to use names.
-			return nil
+	// resolve space by name only if spaceName is set
+	if sr.SpaceName != nil {
+		cf, err := clientFn(mg)
+		if err != nil {
+			return errors.Wrap(err, "Could not connect to Cloud Foundry")
 		}
-		return errors.New("Unknown space. Please specify `spaceRef` or `spaceSelector` or using `spaceName` and `orgNames`. ")
+		spaceClient, _, orgClient := NewClient(cf)
+		spaceGUID, err := GetGUID(ctx, orgClient, spaceClient, *sr.OrgName, *sr.SpaceName)
+		if err != nil {
+			return errors.Wrap(err, "Cannot resolve space reference by name")
+		}
+		sr.Space = spaceGUID
+		return nil
 	}
 
-	// spaceName and orgName are set, always retrieve space GUID
-	cf, err := clientFn(mg)
-	if err != nil {
-		return errors.Wrap(err, "Could not connect to Cloud Foundry")
-	}
-	spaceClient, _, orgClient := NewClient(cf)
-	spaceGUID, err := GetGUID(ctx, orgClient, spaceClient, *sr.OrgName, *sr.SpaceName)
-	if err != nil {
-		return errors.Wrap(err, "Cannot resolve space reference by name")
-	}
-	sr.Space = spaceGUID
+	// nothing to resolve.
 	return nil
 }
 
