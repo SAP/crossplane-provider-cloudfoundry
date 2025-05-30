@@ -181,6 +181,10 @@ func (c *Client) createUserProvided(ctx context.Context, spec v1alpha1.ServiceIn
 		return nil, errors.New("Missing or invalid credentials")
 	}
 
+	// throw error if no space is provided
+	if spec.Space == nil {
+		return nil, errors.New("no space reference provided")
+	}
 	// create the service instance
 	opt := resource.NewServiceInstanceCreateUserProvided(*spec.Name, *spec.Space)
 	si, err := c.ServiceInstance.CreateUserProvided(ctx, opt)
