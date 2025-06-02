@@ -26,10 +26,7 @@ func ResolveByName(ctx context.Context, clientFn clients.ClientFn, mg resource.M
 	// if external-name is not set, search by Name and Space
 	sr := cr.GetSpaceRef()
 	if sr == nil || sr.SpaceName == nil {
-		if sr.Space != nil { // space GUID is directly set, so we do not need to use names.
-			return nil
-		}
-		return errors.New("Unknown space. Please specify `spaceRef` or `spaceSelector` or using `spaceName` and `orgNames`. ")
+		return nil
 	}
 
 	// spaceName and orgName are set, always retrieve space GUID

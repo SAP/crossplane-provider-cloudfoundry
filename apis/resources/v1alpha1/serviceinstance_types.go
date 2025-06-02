@@ -292,3 +292,8 @@ func (r *ServiceInstance) GetCloudFoundryName() string {
 	}
 	return *r.Spec.ForProvider.Name
 }
+
+// implement SpaceScoped interface
+func (r *ServiceInstance) GetSpaceRef() *SpaceReference {
+	return &r.Spec.ForProvider.SpaceReference
+}
