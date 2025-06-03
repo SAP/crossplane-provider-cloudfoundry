@@ -307,34 +307,24 @@ func TestObserve(t *testing.T) {
 		},
 		"Mta with guid does not exist": {
 			args: args{
-				mg: newMta(
-					withLastOperation(mtaGUID),
-					withFile("mtar-file"),
-					withId(mtaGUID),
-				),
+				mg: newMta(withLastOperation(mtaGUID), withFile("mtar-file"), withId(mtaGUID)),
 			},
 			want: want{
-				mg: newMta(
-					withLastOperation(mtaGUID),
-					withFile("mtar-file"),
-				),
+				mg:  newMta(withLastOperation(mtaGUID), withFile("mtar-file")),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceLateInitialized: false},
-				err: errBoom,
+				err: errors.Wrap(errBoom, errGet),
 			},
 			service: func() *fake.MockMTA {
 				m := &fake.MockMTA{}
 				m.On("GetMtaOperation").Return(
 					&mtaModels.Operation{State: mtaModels.StateERROR},
-					nil,
+					errBoom,
 				)
 				m.On("GetAsyncUploadJob").Return(
 					mtaClient.AsyncUploadJobResult{Status: "", Error: "", MtaId: ""},
 					nil,
 				)
-				m.On("GetMta").Return(
-					MtaModelNil,
-					errBoom,
-				)
+
 				return m
 			},
 			kube: &test.MockClient{},
