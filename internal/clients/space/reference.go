@@ -23,9 +23,9 @@ func ResolveByName(ctx context.Context, clientFn clients.ClientFn, mg resource.M
 		return errors.New("Cannot resolve space name. The resource does not implement SpaceScoped")
 	}
 
-	// if external-name is not set, search by Name and Space
+	// Check if the space reference is fully populated
 	sr := cr.GetSpaceRef()
-	if sr == nil || sr.SpaceName == nil {
+	if sr == nil || sr.SpaceName == nil || sr.OrgName == nil {
 		return nil
 	}
 
