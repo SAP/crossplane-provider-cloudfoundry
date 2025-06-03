@@ -23,12 +23,15 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/serviceinstance"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/spacequota"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/providerconfig"
 )
 
 // CustomSetup creates all controllers with the supplied logger and adds them to
 // the supplied manager.
 func CustomSetup(mgr ctrl.Manager, o controller.Options) error {
 	for _, setup := range []func(ctrl.Manager, controller.Options) error{
+		providerconfig.Setup,
 		app.Setup,
 		org.Setup,
 		orgrole.Setup,
