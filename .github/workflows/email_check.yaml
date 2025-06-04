@@ -37,7 +37,7 @@ jobs:
           echo "EXCLUDE_DIRS=$EXCLUDE_DIRS" >> $GITHUB_ENV
 
           # Specific files to exclude (space-separated)
-          EXCLUDED_FILES="package/crossplanel.yaml"
+          EXCLUDED_FILES="package/crossplane.yaml"
           echo "ℹ️ Excluding specific files: $EXCLUDED_FILES"
           echo "EXCLUDED_FILES=$EXCLUDED_FILES" >> $GITHUB_ENV
 
