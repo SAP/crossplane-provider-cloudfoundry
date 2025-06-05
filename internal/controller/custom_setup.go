@@ -16,6 +16,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgmembers"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgquota"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgrole"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/providerconfig"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/route"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/servicecredentialbinding"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/serviceinstance"
@@ -29,6 +30,7 @@ import (
 // the supplied manager.
 func CustomSetup(mgr ctrl.Manager, o controller.Options) error {
 	for _, setup := range []func(ctrl.Manager, controller.Options) error{
+		providerconfig.Setup,
 		app.Setup,
 		org.Setup,
 		orgrole.Setup,

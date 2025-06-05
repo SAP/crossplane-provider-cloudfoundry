@@ -61,6 +61,10 @@ func findSpaceRole(ctx context.Context, client Role, spec v1alpha1.SpaceRolePara
 
 // newSpaceRoleListOptions returns a list options for the given SpaceRoleParameters
 func newSpaceRoleListOptions(spec v1alpha1.SpaceRoleParameters) (*cfv3.RoleListOptions, error) {
+	if spec.Space == nil {
+		return nil, errors.New(ErrSpaceNotSpecified)
+	}
+
 	opts := cfv3.NewRoleListOptions()
 	opts.WithSpaceRoleType(SpaceRoleType(spec.Type))
 

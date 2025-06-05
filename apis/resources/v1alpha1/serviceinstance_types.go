@@ -292,3 +292,9 @@ func (r *ServiceInstance) GetCloudFoundryName() string {
 	}
 	return *r.Spec.ForProvider.Name
 }
+
+
+// GetSpaceRef returns the reference to the space
+func (s *ServiceInstance) GetSpaceRef() *SpaceReference {
+	return &s.Spec.ForProvider.SpaceReference
+}

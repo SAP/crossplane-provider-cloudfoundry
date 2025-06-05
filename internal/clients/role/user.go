@@ -5,6 +5,7 @@ import (
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	"k8s.io/utils/ptr"
 )
 
 // Member identifies a user by name and origin
@@ -19,7 +20,7 @@ type Member struct {
 func findRole(roles []*resource.Role, users []*resource.User, username, origin, roleType string) (*resource.Role, error) {
 	var userGUID string
 	for _, u := range users {
-		if strings.EqualFold(u.Username, username) && strings.EqualFold(u.Origin, origin) {
+		if strings.EqualFold(ptr.Deref(u.Username, ""), username) && strings.EqualFold(ptr.Deref(u.Origin, ""), origin) {
 			userGUID = u.GUID
 			break
 		}
