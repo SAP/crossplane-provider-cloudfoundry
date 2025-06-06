@@ -87,6 +87,7 @@ func (c *Client) Observe(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 	return observation, nil
 }
 
+//nolint:gocyclo
 func (c *Client) Deploy(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 	fileObservation := cr.FindFileObservation(cr.Spec.ForProvider.File)
 	if fileObservation == nil || fileObservation.ID == nil {

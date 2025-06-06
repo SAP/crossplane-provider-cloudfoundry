@@ -616,7 +616,7 @@ func TestVersionRule(t *testing.T) {
 	}
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			//t.Logf("Testing: %s", n)
+			// t.Logf("Testing: %s", n)
 
 			c := &external{
 				kube: &test.MockClient{
