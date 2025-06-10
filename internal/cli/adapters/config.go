@@ -3,54 +3,56 @@ package adapters
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"gopkg.in/yaml.v2"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/config"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"gopkg.in/yaml.v2"
 )
 
 // types for the config file
 type Config struct {
-	Resources         []Resource            `yaml:"resources"`
+	Resources         []Resource               `yaml:"resources"`
 	ProviderConfigRef client.ProviderConfigRef `yaml:"providerConfigRef"`
 }
 
-type Resource struct{
-	Space 			   Space               `yaml:"space"`
-	Organization       Organization        `yaml:"org"`
-	App 			   App                 `yaml:"app"`
+type Resource struct {
+	Space        Space        `yaml:"space"`
+	Organization Organization `yaml:"org"`
+	App          App          `yaml:"app"`
 	// add more resources here
 }
 
 type Space struct {
-	Name                string             `yaml:"name"`
-	OrgName             string             `yaml:"orgRef"`
-	ManagementPolicies  []ManagementPolicy `yaml:"managementPolicies"`
+	Name               string             `yaml:"name"`
+	OrgName            string             `yaml:"orgRef"`
+	ManagementPolicies []ManagementPolicy `yaml:"managementPolicies"`
 }
 
 type Organization struct {
-	Name                string             `yaml:"name"`
-	ManagementPolicies  []ManagementPolicy `yaml:"managementPolicies"`
+	Name               string             `yaml:"name"`
+	ManagementPolicies []ManagementPolicy `yaml:"managementPolicies"`
 }
 
 type App struct {
-	Name                string             `yaml:"name"`
-	SpaceRef            string             `yaml:"spaceRef"`
-	ManagementPolicies  []ManagementPolicy `yaml:"managementPolicies"`
+	Name               string             `yaml:"name"`
+	SpaceRef           string             `yaml:"spaceRef"`
+	ManagementPolicies []ManagementPolicy `yaml:"managementPolicies"`
 }
 
 type ManagementPolicy string
 
 // CFResourceFilter implements the ResourceFilter interface
 type CFResourceFilter struct {
-	Type              	 string
-	Space        		 *SpaceFilter
-	Organization         *OrganizationFilter
-	App        			 *AppFilter
-	ManagementPolicies  []v1.ManagementAction
+	Type               string
+	Space              *SpaceFilter
+	Organization       *OrganizationFilter
+	App                *AppFilter
+	ManagementPolicies []v1.ManagementAction
 }
 
 func (f *CFResourceFilter) GetResourceType() string {
@@ -82,16 +84,16 @@ func (f *CFResourceFilter) GetManagementPolicies() []v1.ManagementAction {
 }
 
 type SpaceFilter struct {
-	Name string
+	Name   string
 	OrgRef string
 }
 
 type OrganizationFilter struct {
-	Name   string
+	Name string
 }
 
 type AppFilter struct {
-	Name   	 string
+	Name     string
 	SpaceRef string
 }
 
@@ -105,30 +107,37 @@ func (c *CFConfig) GetProviderConfigRef() client.ProviderConfigRef {
 	return c.ProviderConfigRef
 }
 
+func (c *CFConfig) resourceIsValid(resource Resource) bool {
+	// check for empty space names
+	if resource.Space.Name != "" && (resource.Space.ManagementPolicies == nil || resource.Space.OrgName == "") {
+		fmt.Println(resource.Space.Name + "is not a valid space configuration")
+		return false
+	}
+	// check for empty organization names
+	if resource.Organization.Name != "" && resource.Organization.ManagementPolicies == nil {
+		fmt.Println(resource.Organization.Name + "is not a valid organization configuration")
+		return false
+	}
+	// check for empty app names
+	if resource.App.Name != "" && resource.App.ManagementPolicies == nil && resource.App.SpaceRef != "" {
+		fmt.Println(resource.App.Name + "is not a valid app configuration")
+		return false
+	}
+	return true
+}
+
 func (c *CFConfig) Validate() bool {
 	for _, resource := range c.Resources {
-		// check for empty space names
-		if (resource.Space.Name != "" && (resource.Space.ManagementPolicies == nil || resource.Space.OrgName == "")) {
-			fmt.Println(resource.Space.Name + "is not a valid space configuration")
-			return false
-		}
-		// check for empty organization names
-		if resource.Organization.Name != "" && resource.Organization.ManagementPolicies == nil{
-			fmt.Println(resource.Organization.Name + "is not a valid organization configuration")
-			return false
-		}
-		// check for empty app names
-		if resource.App.Name != "" && resource.App.ManagementPolicies == nil && resource.App.SpaceRef != ""{
-			fmt.Println(resource.App.Name + "is not a valid app configuration")
+		if !c.resourceIsValid(resource) {
 			return false
 		}
 	}
 
 	// check for empty provider config ref
-	if c.ProviderConfigRef.Name == "" || c.ProviderConfigRef.Namespace == ""{
+	if c.ProviderConfigRef.Name == "" || c.ProviderConfigRef.Namespace == "" {
 		return false
 	}
-	
+
 	return true
 }
 
@@ -137,7 +146,8 @@ type CFConfigParser struct{}
 
 func (p *CFConfigParser) ParseConfig(configPath string) (config.ProviderConfig, []resource.ResourceFilter, error) {
 	// Read config file
-	file, err := os.ReadFile(configPath)
+
+	file, err := os.ReadFile(filepath.Clean(configPath))
 	if err != nil {
 		return nil, nil, err
 	}
@@ -170,7 +180,7 @@ func (p *CFConfigParser) ParseConfig(configPath string) (config.ProviderConfig, 
 			filters = append(filters, &CFResourceFilter{
 				Type: v1alpha1.Space_Kind,
 				Space: &SpaceFilter{
-					Name: res.Space.Name,
+					Name:   res.Space.Name,
 					OrgRef: res.Space.OrgName,
 				},
 				ManagementPolicies: policies,
@@ -186,7 +196,7 @@ func (p *CFConfigParser) ParseConfig(configPath string) (config.ProviderConfig, 
 			filters = append(filters, &CFResourceFilter{
 				Type: v1alpha1.Org_Kind,
 				Organization: &OrganizationFilter{
-					Name:   res.Organization.Name,
+					Name: res.Organization.Name,
 				},
 				ManagementPolicies: policies,
 			})
@@ -201,7 +211,7 @@ func (p *CFConfigParser) ParseConfig(configPath string) (config.ProviderConfig, 
 			filters = append(filters, &CFResourceFilter{
 				Type: v1alpha1.App_Kind,
 				App: &AppFilter{
-					Name:   res.App.Name,
+					Name:     res.App.Name,
 					SpaceRef: res.App.SpaceRef,
 				},
 				ManagementPolicies: policies,

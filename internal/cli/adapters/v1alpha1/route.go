@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
-	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
+	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
 )
 
 // CFRoute implements the Resource interface
@@ -59,9 +60,9 @@ func (a *CFRouteAdapter) FetchResources(ctx context.Context, client client.Provi
 	}
 
 	// Map to Resource interface
-	var resources []res.Resource
+	resources := make([]res.Resource, len(providerResources))
 
-	for _, providerResource := range providerResources {
+	for i, providerResource := range providerResources {
 		resourceData, ok := providerResource.(map[string]interface{})
 		if !ok {
 			return nil, fmt.Errorf("invalid provider resource format")
@@ -71,7 +72,7 @@ func (a *CFRouteAdapter) FetchResources(ctx context.Context, client client.Provi
 		if err != nil {
 			return nil, err
 		}
-		resources = append(resources, resource)
+		resources[i] = resource
 	}
 
 	return resources, nil

@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
-	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
+	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
 )
 
 // CFApp implements the Resource interface
@@ -60,13 +61,13 @@ func (a *CFAppAdapter) FetchResources(ctx context.Context, client client.Provide
 	}
 
 	// Map to Resource interface
-	var resources []res.Resource
-	for _, providerResource := range providerResources {
+	resources := make([]res.Resource, len(providerResources))
+	for i, providerResource := range providerResources {
 		resource, err := a.MapToResource(providerResource, filter.GetManagementPolicies())
 		if err != nil {
 			return nil, err
 		}
-		resources = append(resources, resource)
+		resources[i] = resource
 	}
 
 	return resources, nil
@@ -74,7 +75,7 @@ func (a *CFAppAdapter) FetchResources(ctx context.Context, client client.Provide
 
 func (a *CFAppAdapter) MapToResource(providerResource interface{}, managementPolicies []v1.ManagementAction) (res.Resource, error) {
 	app, ok := providerResource.(*cfresource.App)
-	
+
 	fmt.Println("- App: " + app.Name + " with GUID: " + app.GUID)
 
 	if !ok {
@@ -83,7 +84,7 @@ func (a *CFAppAdapter) MapToResource(providerResource interface{}, managementPol
 
 	// Map resource
 	managedResource := &v1alpha1.App{}
-	managedResource.APIVersion = schema.GroupVersion{Group:   v1alpha1.CRDGroup,	Version: v1alpha1.CRDVersion}.String()
+	managedResource.APIVersion = schema.GroupVersion{Group: v1alpha1.CRDGroup, Version: v1alpha1.CRDVersion}.String()
 	managedResource.Kind = v1alpha1.App_Kind
 	managedResource.SetAnnotations(map[string]string{"crossplane.io/external-name": app.GUID})
 	managedResource.SetGenerateName(utils.NormalizeToRFC1123(app.Name))
@@ -97,7 +98,6 @@ func (a *CFAppAdapter) MapToResource(providerResource interface{}, managementPol
 	// Set spec fields
 	managedResource.Spec.ForProvider.Name = app.Name
 	managedResource.Spec.ManagementPolicies = managementPolicies
-	
 
 	return &CFApp{
 		managedResource: managedResource,
@@ -119,9 +119,9 @@ func (a *CFAppAdapter) PreviewResource(resource res.Resource) {
 	utils.PrintLine("Name", "<generated on creation>", maxWidth)
 	utils.PrintLine("External Name", app.managedResource.Annotations["crossplane.io/external-name"], maxWidth)
 
-	var managementPolicies []string
-	for _, policy := range app.managedResource.Spec.ManagementPolicies {
-		managementPolicies = append(managementPolicies, string(policy))
+	managementPolicies := make([]string, len(app.managedResource.Spec.ManagementPolicies))
+	for i, policy := range app.managedResource.Spec.ManagementPolicies {
+		managementPolicies[i] = string(policy)
 	}
 	utils.PrintLine("Management Policies", strings.Join(managementPolicies, ", "), maxWidth)
 
