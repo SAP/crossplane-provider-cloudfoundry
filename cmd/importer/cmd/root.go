@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	subcmd "github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/cmd/subcmd"
+	subcmd "github.com/SAP/crossplane-provider-cloudfoundry/cmd/importer/cmd/subcmd"
 	"github.com/spf13/cobra"
 )
 
