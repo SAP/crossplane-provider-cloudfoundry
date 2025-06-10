@@ -3,9 +3,10 @@ package resource
 import (
 	"context"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
 )
 
 // Resource represents a generic resource that can be imported

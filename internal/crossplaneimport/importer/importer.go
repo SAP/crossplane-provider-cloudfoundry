@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"strings"
 
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/credentialManager"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/config"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/kubernetes"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // Importer is the main struct for importing resources
@@ -37,13 +38,13 @@ func (i *Importer) ImportResources(ctx context.Context, configPath string, kubeC
 
 	// Get credentials
 	creds := credentialManager.RetrieveCredentials()
-	
+
 	// Build client
 	client, err := i.ClientAdapter.BuildClient(ctx, creds)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build client: %w", err)
 	}
-	
+
 	// Import resources using adapters
 	var allResources []resource.Resource
 	for _, filter := range resourceFilters {
