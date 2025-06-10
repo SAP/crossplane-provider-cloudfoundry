@@ -18,25 +18,26 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-var(
-	errIsSSHEnabled = "Could not check if SSH is enabled for the space"
-	errListOrganizations = "Could not list organizations"
-	errCreateCFConfig = "Could not create CF config"
-	errCreateK8sClient = "Could not create Kubernetes client"
-	errGetProviderConfig = "Could not get provider config"
-	errGetSecret = "Could not get secret"
-	errExtractCredentials = "Credentials key not found in secret data"
-	errExtractApiEndpoint = "API endpoint key not found in secret data"
+var (
+	errIsSSHEnabled         = "Could not check if SSH is enabled for the space"
+	errListOrganizations    = "Could not list organizations"
+	errCreateCFConfig       = "Could not create CF config"
+	errCreateK8sClient      = "Could not create Kubernetes client"
+	errGetProviderConfig    = "Could not get provider config"
+	errGetSecret            = "Could not get secret"
+	errExtractCredentials   = "Credentials key not found in secret data"
+	errExtractApiEndpoint   = "API endpoint key not found in secret data"
 	errUnmarshalCredentials = "Failed to unmarshal credentials JSON"
-	errGetOrgReference = "Could not get data about referenced organization"
-	errGetSpaceReference = "Could not get data about referenced space"
+	errGetOrgReference      = "Could not get data about referenced organization"
+	errGetSpaceReference    = "Could not get data about referenced space"
+	errGetDomainReference   = "Could not get data about referenced domain"
 )
 
 // CFCredentials implements the Credentials interface
 type CFCredentials struct {
-	ApiEndpoint		string;
-	Email 			string;
-	Password 		string;
+	ApiEndpoint string
+	Email       string
+	Password    string
 }
 
 func (c *CFCredentials) GetAuthData() map[string][]byte {
@@ -60,6 +61,8 @@ func (c *CFClient) GetResourcesByType(ctx context.Context, resourceType string, 
 		return c.getOrganizations(ctx, filter)
 	case v1alpha1.App_Kind:
 		return c.getApps(ctx, filter)
+	case v1alpha1.RouteKind:
+		return c.getRoutes(ctx, filter)
 	default:
 		return nil, fmt.Errorf("unsupported resource type: %s", resourceType)
 	}
@@ -84,7 +87,7 @@ func (c *CFClient) getSpaces(ctx context.Context, filter map[string]string) ([]i
 	if orgRef[0].GUID == "" {
 		kingpin.FatalIfError(fmt.Errorf("organization %s not found", orgName), "%s", errGetOrgReference)
 	}
-	
+
 	// define filter-option with orgRef for query
 	opt := &cfv3.SpaceListOptions{OrganizationGUIDs: cfv3.Filter{Values: []string{orgRef[0].GUID}}}
 
@@ -99,7 +102,7 @@ func (c *CFClient) getSpaces(ctx context.Context, filter map[string]string) ([]i
 	var SSHlist []bool
 	for _, space := range responseCollection {
 		// Check if the space name matches
-		if utils.IsFullMatch(name, space.Name){
+		if utils.IsFullMatch(name, space.Name) {
 			results = append(results, space)
 			isSSHEnabled, err := c.client.SpaceFeatures.IsSSHEnabled(ctx, space.GUID)
 			kingpin.FatalIfError(err, "%s", errIsSSHEnabled)
@@ -111,8 +114,8 @@ func (c *CFClient) getSpaces(ctx context.Context, filter map[string]string) ([]i
 	var combinedResults []interface{}
 	for i := range results {
 		combinedResults = append(combinedResults, map[string]interface{}{
-			"result":   results[i],
-			"SSH":  SSHlist[i],
+			"result": results[i],
+			"SSH":    SSHlist[i],
 		})
 	}
 
@@ -127,7 +130,7 @@ func (c *CFClient) getOrganizations(ctx context.Context, filter map[string]strin
 	}
 
 	// Get organizations from CF
-	organizations, err :=  c.client.Organizations.ListAll(ctx, &cfv3.OrganizationListOptions{})
+	organizations, err := c.client.Organizations.ListAll(ctx, &cfv3.OrganizationListOptions{})
 	kingpin.FatalIfError(err, "%s", errListOrganizations)
 
 	// Filter organizations by name
@@ -175,8 +178,65 @@ func (c *CFClient) getApps(ctx context.Context, filter map[string]string) ([]int
 	var results []interface{}
 	for _, app := range responseCollection {
 		// Check if the app name matches
-		if utils.IsFullMatch(name, app.Name){
+		if utils.IsFullMatch(name, app.Name) {
 			results = append(results, app)
+		}
+	}
+
+	return results, nil
+}
+
+func (c *CFClient) getRoutes(ctx context.Context, filter map[string]string) ([]interface{}, error) {
+	// Get host filter
+	host, ok := filter["host"]
+	if !ok {
+		return nil, fmt.Errorf("host filter is required for routes")
+	}
+	spaceName, ok := filter["space"]
+	if !ok {
+		return nil, fmt.Errorf("space-reference filter is required for routes")
+	}
+	domainName, ok := filter["domain"]
+	if !ok {
+		return nil, fmt.Errorf("domain-reference filter is required for routes")
+	}
+
+	// get referenced space
+	spaceRefFilter := cfv3.SpaceListOptions{Names: cfv3.Filter{Values: []string{spaceName}}}
+	spaceRef, err := c.client.Spaces.ListAll(ctx, &spaceRefFilter)
+	kingpin.FatalIfError(err, "%s", errGetSpaceReference)
+
+	if spaceRef[0].GUID == "" {
+		kingpin.FatalIfError(fmt.Errorf("space %s not found", spaceName), "%s", errGetSpaceReference)
+	}
+
+	// get referenced domain
+	domainRefFilter := cfv3.DomainListOptions{Names: cfv3.Filter{Values: []string{domainName}}}
+	domainRef, err := c.client.Domains.ListAll(ctx, &domainRefFilter)
+	kingpin.FatalIfError(err, "%s", errGetDomainReference)
+
+	if domainRef[0].GUID == "" {
+		kingpin.FatalIfError(fmt.Errorf("domain %s not found", domainName), "%s", errGetDomainReference)
+	}
+
+	// define filter-option with spaceRef for query
+	opt := &cfv3.RouteListOptions{
+		SpaceGUIDs:  cfv3.Filter{Values: []string{spaceRef[0].GUID}},
+		DomainGUIDs: cfv3.Filter{Values: []string{domainRef[0].GUID}},
+	}
+
+	// Get domains from CF
+	responseCollection, err := c.client.Routes.ListAll(ctx, opt)
+	if err != nil {
+		return nil, err
+	}
+
+	// Filter domains by name and org-reference
+	var results []interface{}
+	for _, route := range responseCollection {
+		// Check if the app name matches
+		if utils.IsFullMatch(host, route.Host) {
+			results = append(results, route)
 		}
 	}
 
@@ -208,7 +268,7 @@ func (a *CFClientAdapter) GetCredentials(ctx context.Context, kubeConfigPath str
 	providerConfig := &v1beta1.ProviderConfig{}
 
 	resourceRef := types.NamespacedName{
-		Name:       providerConfigRef.Name,
+		Name:      providerConfigRef.Name,
 		Namespace: providerConfigRef.Namespace,
 	}
 
@@ -219,20 +279,20 @@ func (a *CFClientAdapter) GetCredentials(ctx context.Context, kubeConfigPath str
 	err = k8sClient.Get(ctx, resourceRef, providerConfig)
 	kingpin.FatalIfError(err, "%s", errGetProviderConfig)
 
-    secret := &corev1.Secret{}
+	secret := &corev1.Secret{}
 
-    // Get the K8s-Secret and store in secret
-    err = k8sClient.Get(ctx, types.NamespacedName{
-		Name: providerConfig.Spec.Credentials.SecretRef.Name,
+	// Get the K8s-Secret and store in secret
+	err = k8sClient.Get(ctx, types.NamespacedName{
+		Name:      providerConfig.Spec.Credentials.SecretRef.Name,
 		Namespace: providerConfig.Spec.Credentials.SecretRef.Namespace,
 	}, secret)
-    kingpin.FatalIfError(err, "%s", errGetSecret)
+	kingpin.FatalIfError(err, "%s", errGetSecret)
 
 	// Extract and decode the credentials JSON
 	credentials, exists := secret.Data[providerConfig.Spec.Credentials.SecretRef.Key]
 	if !exists {
 		panic(errExtractCredentials)
-	} 
+	}
 
 	// CF Endpoint can be either directly in providerConfig or in a separate secret
 	var apiEndpoint = ""
@@ -242,13 +302,13 @@ func (a *CFClientAdapter) GetCredentials(ctx context.Context, kubeConfigPath str
 	} else {
 		// Get the API endpoint from a secret
 		apiSecret := &corev1.Secret{}
-	
+
 		// Get the K8s-Secret containing the CF-Endpoint and store in apiSecret
 		err = k8sClient.Get(ctx, types.NamespacedName{
-			Name: providerConfig.Spec.Endpoint.SecretRef.Name,
+			Name:      providerConfig.Spec.Endpoint.SecretRef.Name,
 			Namespace: providerConfig.Spec.Endpoint.SecretRef.Namespace,
 		}, apiSecret)
-    	kingpin.FatalIfError(err, "%s", errGetSecret)
+		kingpin.FatalIfError(err, "%s", errGetSecret)
 
 		apiEndpointRaw, exists := apiSecret.Data[providerConfig.Spec.Endpoint.SecretRef.Key]
 		if !exists {

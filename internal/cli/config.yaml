@@ -14,6 +14,11 @@ resources:
       name: .*
       spaceRef: Testing
       managementPolicies: ["Observe"]
+  - route:
+      name: .*
+      spaceRef: Testing
+      domainRef: Testing
+      managementPolicies: [Observe]
 providerConfigRef:
   name: default
   namespace: default

@@ -26,12 +26,12 @@ var preview bool
 
 var (
 	// error messages
-	errCreateReader = "Could not create a reader for the console prompt"
-	errAddv1beta1Scheme = "Could not add v1beta1 scheme"
+	errCreateReader      = "Could not create a reader for the console prompt"
+	errAddv1beta1Scheme  = "Could not add v1beta1 scheme"
 	errAddv1alpha1Scheme = "Could not add v1alpha1 scheme"
-	errAddCorev1Scheme = "Could not add corev1 scheme"
-	errImportResources = "Could not import resources"
-	errCreateResource = "Could not create resources"
+	errAddCorev1Scheme   = "Could not add corev1 scheme"
+	errImportResources   = "Could not import resources"
+	errCreateResource    = "Could not create resources"
 )
 
 // Define colors for this file
@@ -63,8 +63,9 @@ var ImportCMD = &cobra.Command{
 		clientAdapter := &adapters.CFClientAdapter{}
 		resourceAdapters := map[string]resource.ResourceAdapter{
 			v1alpha1.Space_Kind: &adapterv1alpha1.CFSpaceAdapter{},
-			v1alpha1.Org_Kind: &adapterv1alpha1.CFOrganizationAdapter{},
-			v1alpha1.App_Kind: &adapterv1alpha1.CFAppAdapter{},
+			v1alpha1.Org_Kind:   &adapterv1alpha1.CFOrganizationAdapter{},
+			v1alpha1.App_Kind:   &adapterv1alpha1.CFAppAdapter{},
+			v1alpha1.RouteKind:  &adapterv1alpha1.CFRouteAdapter{},
 		}
 		configParser := &adapters.CFConfigParser{}
 
@@ -80,7 +81,7 @@ var ImportCMD = &cobra.Command{
 		if configPath == "" {
 			configPath = cli.RetrieveConfigPath()
 		}
-		
+
 		resources, err := importer.ImportResources(ctx, configPath, kubeConfigPath, importer.Scheme)
 		kingpin.FatalIfError(err, "%s", errImportResources)
 
