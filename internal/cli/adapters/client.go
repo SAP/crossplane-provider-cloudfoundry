@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	cfconfig "github.com/cloudfoundry/go-cfclient/v3/config"
@@ -64,6 +65,8 @@ func (c *CFClient) GetResourcesByType(ctx context.Context, resourceType string, 
 		return c.getApps(ctx, filter)
 	case v1alpha1.RouteKind:
 		return c.getRoutes(ctx, filter)
+	case v1alpha1.ServiceInstance_Kind:
+		return c.getServiceInstances(ctx, filter)
 	default:
 		return nil, fmt.Errorf("unsupported resource type: %s", resourceType)
 	}
@@ -146,28 +149,43 @@ func (c *CFClient) getOrganizations(ctx context.Context, filter map[string]strin
 	return results, nil
 }
 
+// getSpaceReference retrieves a space reference by name
+func (c *CFClient) getSpaceReference(ctx context.Context, filter map[string]string) (string, error) {
+	spaceName, ok := filter["space"]
+	if !ok {
+		return "", fmt.Errorf("space-reference filter is required")
+	}
+
+	spaceRefFilter := cfv3.SpaceListOptions{Names: cfv3.Filter{Values: []string{spaceName}}}
+	spaceRef, err := c.client.Spaces.ListAll(ctx, &spaceRefFilter)
+	if err != nil {
+		return "", fmt.Errorf("%s: %w", errGetSpaceReference, err)
+	}
+
+	if len(spaceRef) == 0 || spaceRef[0].GUID == "" {
+		return "", fmt.Errorf("%s: space %s not found", errGetSpaceReference, spaceName)
+	}
+
+	return spaceRef[0].GUID, nil
+}
+
 func (c *CFClient) getApps(ctx context.Context, filter map[string]string) ([]interface{}, error) {
+
 	// Get name filter
 	name, ok := filter["name"]
 	if !ok {
 		return nil, fmt.Errorf("name filter is required for apps")
 	}
-	spaceName, ok := filter["space"]
-	if !ok {
-		return nil, fmt.Errorf("org-reference filter is required for apps")
-	}
 
 	// get referenced space
-	spaceRefFilter := cfv3.SpaceListOptions{Names: cfv3.Filter{Values: []string{spaceName}}}
-	spaceRef, err := c.client.Spaces.ListAll(ctx, &spaceRefFilter)
-	kingpin.FatalIfError(err, "%s", errGetSpaceReference)
-
-	if spaceRef[0].GUID == "" {
-		kingpin.FatalIfError(fmt.Errorf("organization %s not found", spaceName), "%s", errGetOrgReference)
+	spaceGUID, err := c.getSpaceReference(ctx, filter)
+	if err != nil {
+		return nil, err
 	}
 
+	utils.PrintLine("Fetching apps in space:", spaceGUID, 30)
 	// define filter-option with spaceRef for query
-	opt := &cfv3.AppListOptions{SpaceGUIDs: cfv3.Filter{Values: []string{spaceRef[0].GUID}}}
+	opt := &cfv3.AppListOptions{SpaceGUIDs: cfv3.Filter{Values: []string{spaceGUID}}}
 
 	// Get apps from CF
 	responseCollection, err := c.client.Applications.ListAll(ctx, opt)
@@ -193,22 +211,15 @@ func (c *CFClient) getRoutes(ctx context.Context, filter map[string]string) ([]i
 	if !ok {
 		return nil, fmt.Errorf("host filter is required for routes")
 	}
-	spaceName, ok := filter["space"]
-	if !ok {
-		return nil, fmt.Errorf("space-reference filter is required for routes")
-	}
 	domainName, ok := filter["domain"]
 	if !ok {
 		return nil, fmt.Errorf("domain-reference filter is required for routes")
 	}
 
 	// get referenced space
-	spaceRefFilter := cfv3.SpaceListOptions{Names: cfv3.Filter{Values: []string{spaceName}}}
-	spaceRef, err := c.client.Spaces.ListAll(ctx, &spaceRefFilter)
-	kingpin.FatalIfError(err, "%s", errGetSpaceReference)
-
-	if spaceRef[0].GUID == "" {
-		kingpin.FatalIfError(fmt.Errorf("space %s not found", spaceName), "%s", errGetSpaceReference)
+	spaceGUID, err := c.getSpaceReference(ctx, filter)
+	if err != nil {
+		return nil, err
 	}
 
 	// get referenced domain
@@ -222,7 +233,7 @@ func (c *CFClient) getRoutes(ctx context.Context, filter map[string]string) ([]i
 
 	// define filter-option with spaceRef for query
 	opt := &cfv3.RouteListOptions{
-		SpaceGUIDs:  cfv3.Filter{Values: []string{spaceRef[0].GUID}},
+		SpaceGUIDs:  cfv3.Filter{Values: []string{spaceGUID}},
 		DomainGUIDs: cfv3.Filter{Values: []string{domainRef[0].GUID}},
 	}
 
@@ -242,6 +253,84 @@ func (c *CFClient) getRoutes(ctx context.Context, filter map[string]string) ([]i
 	}
 
 	return results, nil
+}
+
+func (c *CFClient) getServiceInstances(ctx context.Context, filter map[string]string) ([]interface{}, error) {
+
+	// Get name filter
+	name, ok := filter["name"]
+	if !ok {
+		return nil, fmt.Errorf("name filter is required for service instances")
+	}
+
+	utils.PrintLine("Fetching service instances:", name, 30)
+	// get referenced space
+	spaceGUID, err := c.getSpaceReference(ctx, filter)
+	if err != nil {
+		return nil, err
+	}
+	utils.PrintLine("Fetching service instances in space ...", spaceGUID, 30)
+
+	// define filter-option with spaceRef for query
+	opt := &cfv3.ServiceInstanceListOptions{SpaceGUIDs: cfv3.Filter{Values: []string{spaceGUID}}}
+
+	if serviceType, ok := filter["type"]; ok {
+		opt.Type = serviceType
+	}
+
+	// Get service instances from CF
+	responseCollection, err := c.client.ServiceInstances.ListAll(ctx, opt)
+	if err != nil {
+		return nil, err
+	}
+
+	utils.PrintLine("# service instances", strconv.Itoa(len(responseCollection)), 30)
+
+	// Filter service instances by name
+	var results []interface{}
+	for _, serviceInstance := range responseCollection {
+		if utils.IsFullMatch(name, serviceInstance.Name) {
+			results = append(results, serviceInstance)
+		}
+	}
+
+	return results, nil
+}
+
+func (c *CFClient) GetServicePlan(ctx context.Context, guid string) (*v1alpha1.ServicePlanParameters, error) {
+	sp, err := c.client.ServicePlans.Get(ctx, guid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get service plan: %w", err)
+	}
+
+	// Get service offering details
+	so, err := c.client.ServiceOfferings.Get(ctx, sp.Relationships.ServiceOffering.Data.GUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get service offering: %w", err)
+	}
+
+	return &v1alpha1.ServicePlanParameters{
+		ID:       &sp.GUID,
+		Offering: &so.Name,
+		Plan:     &sp.Name,
+	}, nil
+}
+
+func (c *CFClient) GetServiceCredentials(ctx context.Context, guid string, serviceType string) (*json.RawMessage, error) {
+	// Get credentials based on service type
+	if serviceType == "managed" {
+		params, err := c.client.ServiceInstances.GetManagedParameters(ctx, guid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get managed service parameters: %w", err)
+		}
+		return params, nil
+	} else {
+		creds, err := c.client.ServiceInstances.GetUserProvidedCredentials(ctx, guid)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get user-provided service credentials: %w", err)
+		}
+		return creds, nil
+	}
 }
 
 // CFClientAdapter implements the ClientAdapter interface
