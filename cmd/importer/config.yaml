@@ -1,24 +1,26 @@
 resources:
   - org:
-      name: TodoCompany
+      name: cf-dev
       managementPolicies: [Observe]
   - space:
       name: .*
-      orgRef: TodoCompany
+      orgRef: cf-dev
       managementPolicies: [Observe]
   - app:
       name: .*
-      spaceRef: Production
+      spaceRef: my-demo-space
       managementPolicies: [Observe]
-  - app:
-      name: .*
-      spaceRef: Testing
-      managementPolicies: ["Observe"]
   - route:
       name: .*
-      spaceRef: Testing
-      domainRef: Testing
+      spaceRef: space-app
+      domainRef: test-domain
+      managementPolicies: [Observe]
+  - serviceInstance:
+      name: .*
+      spaceRef: my-demo-space
+      type: managed
       managementPolicies: [Observe]
 providerConfigRef:
   name: default
   namespace: default
+
