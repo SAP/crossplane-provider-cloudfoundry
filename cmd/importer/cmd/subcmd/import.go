@@ -7,6 +7,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/fatih/color"
+	"github.com/spf13/cobra"
+	"gopkg.in/alecthomas/kingpin.v2"
+	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	v1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/adapters"
@@ -15,11 +21,6 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/importer"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
-	"github.com/fatih/color"
-	"github.com/spf13/cobra"
-	"gopkg.in/alecthomas/kingpin.v2"
-	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 var preview bool

@@ -11,11 +11,11 @@ var (
 	errCompileRegex = "Could not compile Regex"
 )
 
-func IsFullMatch(pattern, input string) (bool) {
-    re, err := regexp.Compile("^" + pattern + "$")
+func IsFullMatch(pattern, input string) bool {
+	re, err := regexp.Compile("^" + pattern + "$")
 	kingpin.FatalIfError(err, "%s", errCompileRegex)
 
-    return re.MatchString(input)
+	return re.MatchString(input)
 }
 
 // truncates all characters that are not allowed by RFC1123

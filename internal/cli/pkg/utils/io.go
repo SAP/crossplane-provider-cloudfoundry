@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -12,19 +13,16 @@ import (
 )
 
 var (
-	fieldColor = color.New(color.FgHiGreen).SprintFunc()
+	fieldColor     = color.New(color.FgHiGreen).SprintFunc()
 	attributeColor = color.New(color.FgHiMagenta).SprintFunc()
 )
 
 var (
-	errOpenFile = "Could not open file"
 	errCreateCredEnvironment = "Not able to create CredEnvironment"
-	errCreateScanner = "Could not create scanner"
-	errGetTransactionID = "TRANSACTION_ID not found"
-
 )
 
 func OpenFile(path string) *os.File {
+	path = filepath.Clean(path)
 	file, err := os.Open(path)
 	if os.IsNotExist(err) {
 		file, _ = os.Create(path)
@@ -51,33 +49,37 @@ func ExtractPolicyNames(policies []v1.ManagementAction) string {
 }
 
 // store key-value pairs in env-file
-func StoreKeyValues(records map[string]string){
+func StoreKeyValues(records map[string]string) {
 	envFile, err := os.Create(".xpcfi")
 	kingpin.FatalIfError(err, "%s", errCreateCredEnvironment)
-	defer envFile.Close()
-	for field, attribute := range records{
-		 _, err = envFile.WriteString(field + "=" + attribute + "\n")
-		if err != nil{
-			envFile.Close()
-			kingpin.Fatalf("Could not store %s with value %s, %s",field, attribute, err)
+	defer func() {
+		err := envFile.Close()
+		kingpin.FatalIfError(err, "Could not close envFile")
+	}()
+	for field, attribute := range records {
+		_, err = envFile.WriteString(field + "=" + attribute + "\n")
+		if err != nil {
+			closeErr := envFile.Close()
+			kingpin.FatalIfError(closeErr, "Could not close envFile while handling error: %v", err)
+			kingpin.Fatalf("Could not store %s with value %s, %s", field, attribute, err)
 		}
-	}   
+	}
 }
 
-func UpdateTransactionID(){
+func UpdateTransactionID() {
 	filename := ".xpcfi"
 	transaction := uuid.New().String()
 	input, err := os.ReadFile(filename)
-    kingpin.FatalIfError(err, "Could not read file")
+	kingpin.FatalIfError(err, "Could not read file")
 
 	lines := strings.Split(string(input), "\n")
 
 	for i, line := range lines {
-			if strings.Contains(line, "TRANSACTION_ID=") {
-					lines[i] = "TRANSACTION_ID=" + transaction
-			}
+		if strings.Contains(line, "TRANSACTION_ID=") {
+			lines[i] = "TRANSACTION_ID=" + transaction
+		}
 	}
 	output := strings.Join(lines, "\n")
-	err = os.WriteFile(filename, []byte(output), 0644)
+	err = os.WriteFile(filename, []byte(output), 0600)
 	kingpin.FatalIfError(err, "Could not write file")
 }

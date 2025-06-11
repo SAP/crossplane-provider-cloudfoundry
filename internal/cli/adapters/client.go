@@ -5,17 +5,18 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/kubernetes"
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	cfconfig "github.com/cloudfoundry/go-cfclient/v3/config"
 	"gopkg.in/alecthomas/kingpin.v2"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/kubernetes"
 )
 
 var (
@@ -35,9 +36,9 @@ var (
 
 // CFCredentials implements the Credentials interface
 type CFCredentials struct {
-	ApiEndpoint string
-	Email       string
-	Password    string
+	ApiEndpoint string `json:"ApiEndpoint"`
+	Email       string `json:"Email"`
+	Password    string `json:"Password"`
 }
 
 func (c *CFCredentials) GetAuthData() map[string][]byte {
@@ -111,12 +112,12 @@ func (c *CFClient) getSpaces(ctx context.Context, filter map[string]string) ([]i
 	}
 
 	// Combine results and SSHlist into a slice of interfaces
-	var combinedResults []interface{}
+	combinedResults := make([]interface{}, len(results))
 	for i := range results {
-		combinedResults = append(combinedResults, map[string]interface{}{
+		combinedResults[i] = map[string]interface{}{
 			"result": results[i],
 			"SSH":    SSHlist[i],
-		})
+		}
 	}
 
 	return combinedResults, nil
@@ -248,7 +249,7 @@ type CFClientAdapter struct{}
 
 func (a *CFClientAdapter) BuildClient(ctx context.Context, credentials client.Credentials) (client.ProviderClient, error) {
 	cfCreds, ok := credentials.(*CFCredentials)
-	config, err := cfconfig.New(cfCreds.ApiEndpoint, cfconfig.UserPassword(string(cfCreds.Email), string(cfCreds.Password)))
+	config, err := cfconfig.New(cfCreds.ApiEndpoint, cfconfig.UserPassword(cfCreds.Email, cfCreds.Password))
 	kingpin.FatalIfError(err, "%s", errCreateCFConfig)
 
 	if !ok {
@@ -295,7 +296,7 @@ func (a *CFClientAdapter) GetCredentials(ctx context.Context, kubeConfigPath str
 	}
 
 	// CF Endpoint can be either directly in providerConfig or in a separate secret
-	var apiEndpoint = ""
+	var apiEndpoint string
 	if providerConfig.Spec.APIEndpoint != nil {
 		// Get the API endpoint from the provider config directly
 		apiEndpoint = *providerConfig.Spec.APIEndpoint
