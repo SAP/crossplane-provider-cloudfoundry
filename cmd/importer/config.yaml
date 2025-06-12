@@ -1,0 +1,26 @@
+resources:
+  - org:
+      name: cf-dev
+      managementPolicies: [Observe]
+  - space:
+      name: .*
+      orgRef: cf-dev
+      managementPolicies: [Observe]
+  - app:
+      name: .*
+      spaceRef: my-demo-space
+      managementPolicies: [Observe]
+  - route:
+      name: .*
+      spaceRef: space-app
+      domainRef: test-domain
+      managementPolicies: [Observe]
+  - serviceInstance:
+      name: .*
+      spaceRef: my-demo-space
+      type: managed
+      managementPolicies: [Observe]
+providerConfigRef:
+  name: default
+  namespace: default
+
