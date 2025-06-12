@@ -9,5 +9,5 @@ spec:
     type: "Manager"
     orgRef:
       name: my-org
-    username: "user1@example.com"
+    username: "daniel.lou@sap.com"
     origin: sap.ids
