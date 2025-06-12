@@ -12,7 +12,6 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
 	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
 )
 
@@ -43,18 +42,20 @@ func (d *CFRoute) SetManagementPolicies(policies []v1.ManagementAction) {
 }
 
 // CFRouteAdapter implements the ResourceAdapter interface
-type CFRouteAdapter struct{}
+type CFRouteAdapter struct {
+	BaseAdapter
+}
 
 func (a *CFRouteAdapter) GetResourceType() string {
 	return v1alpha1.RouteKind
 }
 
-func (a *CFRouteAdapter) FetchResources(ctx context.Context, client client.ProviderClient, filter res.ResourceFilter) ([]res.Resource, error) {
+func (a *CFRouteAdapter) FetchResources(ctx context.Context, filter res.ResourceFilter) ([]res.Resource, error) {
 	// Get filter criteria
 	criteria := filter.GetFilterCriteria()
 
 	// Fetch resources from provider
-	providerResources, err := client.GetResourcesByType(ctx, v1alpha1.RouteKind, criteria)
+	providerResources, err := a.GetResourcesByType(ctx, v1alpha1.RouteKind, criteria)
 	if err != nil {
 		return nil, err
 	}

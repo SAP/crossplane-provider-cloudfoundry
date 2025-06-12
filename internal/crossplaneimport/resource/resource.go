@@ -44,8 +44,11 @@ type ResourceAdapter interface {
 	// GetResourceType returns the type of resource this adapter handles
 	GetResourceType() string
 
+	// Connect establishes a connection to the provider
+	Connect(ctx context.Context, credentials client.Credentials) error
+
 	// FetchResources fetches resources from the provider
-	FetchResources(ctx context.Context, client client.ProviderClient, filter ResourceFilter) ([]Resource, error)
+	FetchResources(ctx context.Context, filter ResourceFilter) ([]Resource, error)
 
 	// MapToResource maps a provider-specific resource to a Resource
 	MapToResource(providerResource interface{}, managementPolicies []v1.ManagementAction) (Resource, error)
