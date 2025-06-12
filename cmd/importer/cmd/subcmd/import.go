@@ -63,10 +63,11 @@ var ImportCMD = &cobra.Command{
 		// Create adapters
 		clientAdapter := &adapters.CFClientAdapter{}
 		resourceAdapters := map[string]resource.ResourceAdapter{
-			v1alpha1.Space_Kind: &adapterv1alpha1.CFSpaceAdapter{},
-			v1alpha1.Org_Kind:   &adapterv1alpha1.CFOrganizationAdapter{},
-			v1alpha1.App_Kind:   &adapterv1alpha1.CFAppAdapter{},
-			v1alpha1.RouteKind:  &adapterv1alpha1.CFRouteAdapter{},
+			v1alpha1.Space_Kind:           &adapterv1alpha1.CFSpaceAdapter{},
+			v1alpha1.Org_Kind:             &adapterv1alpha1.CFOrganizationAdapter{},
+			v1alpha1.App_Kind:             &adapterv1alpha1.CFAppAdapter{},
+			v1alpha1.RouteKind:            &adapterv1alpha1.CFRouteAdapter{},
+			v1alpha1.ServiceInstance_Kind: &adapterv1alpha1.CFServiceInstanceAdapter{},
 		}
 		configParser := &adapters.CFConfigParser{}
 

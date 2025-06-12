@@ -12,7 +12,6 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
 	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
 )
 
@@ -43,19 +42,20 @@ func (d *CFOrganization) SetManagementPolicies(policies []v1.ManagementAction) {
 }
 
 // CFOrgaizationAdapter implements the ResourceAdapter interface
-type CFOrganizationAdapter struct{}
+type CFOrganizationAdapter struct {
+	BaseAdapter
+}
 
 func (a *CFOrganizationAdapter) GetResourceType() string {
 	return v1alpha1.Org_Kind
 }
 
-func (a *CFOrganizationAdapter) FetchResources(ctx context.Context, client client.ProviderClient, filter res.ResourceFilter) ([]res.Resource, error) {
+func (a *CFOrganizationAdapter) FetchResources(ctx context.Context, filter res.ResourceFilter) ([]res.Resource, error) {
 	// Get filter criteria
 	criteria := filter.GetFilterCriteria()
 
 	// Fetch resources from provider
-	providerResources, err := client.GetResourcesByType(ctx, v1alpha1.Org_Kind, criteria)
-
+	providerResources, err := a.GetResourcesByType(ctx, v1alpha1.Org_Kind, criteria)
 	if err != nil {
 		return nil, err
 	}
