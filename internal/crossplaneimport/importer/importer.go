@@ -39,6 +39,12 @@ func (i *Importer) ImportResources(ctx context.Context, configPath string, kubeC
 	// Get credentials
 	creds := credentialManager.RetrieveCredentials()
 
+	// Build client
+	client, err := i.ClientAdapter.BuildClient(ctx, creds)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build client: %w", err)
+	}
+
 	// Import resources using adapters
 	var allResources []resource.Resource
 	for _, filter := range resourceFilters {
@@ -47,13 +53,7 @@ func (i *Importer) ImportResources(ctx context.Context, configPath string, kubeC
 		if !exists {
 			return nil, fmt.Errorf("no adapter found for resource type: %s", resourceType)
 		}
-
-		// Build client for this adapter
-		if err := adapter.Connect(ctx, creds); err != nil {
-			return nil, fmt.Errorf("failed to connect to provider for resource type %s: %w", resourceType, err)
-		}
-
-		resources, err := adapter.FetchResources(ctx, filter)
+		resources, err := adapter.FetchResources(ctx, client, filter)
 		if err != nil {
 			return nil, fmt.Errorf("failed to fetch resources of type %s: %w", resourceType, err)
 		}

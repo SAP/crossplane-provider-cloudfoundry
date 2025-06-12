@@ -12,6 +12,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
 	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
 )
 
@@ -42,20 +43,19 @@ func (d *CFApp) SetManagementPolicies(policies []v1.ManagementAction) {
 }
 
 // CFSpaceAdapter implements the ResourceAdapter interface
-type CFAppAdapter struct {
-	BaseAdapter
-}
+type CFAppAdapter struct{}
 
 func (a *CFAppAdapter) GetResourceType() string {
 	return v1alpha1.App_Kind
 }
 
-func (a *CFAppAdapter) FetchResources(ctx context.Context, filter res.ResourceFilter) ([]res.Resource, error) {
+func (a *CFAppAdapter) FetchResources(ctx context.Context, client client.ProviderClient, filter res.ResourceFilter) ([]res.Resource, error) {
 	// Get filter criteria
 	criteria := filter.GetFilterCriteria()
 
 	// Fetch resources from provider
-	providerResources, err := a.GetResourcesByType(ctx, v1alpha1.App_Kind, criteria)
+	providerResources, err := client.GetResourcesByType(ctx, v1alpha1.App_Kind, criteria)
+
 	if err != nil {
 		return nil, err
 	}

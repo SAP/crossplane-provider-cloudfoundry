@@ -9,7 +9,6 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/config"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
@@ -22,10 +21,9 @@ type Config struct {
 }
 
 type Resource struct {
-	Space           Space           `yaml:"space"`
-	Organization    Organization    `yaml:"org"`
-	App             App             `yaml:"app"`
-	ServiceInstance ServiceInstance `yaml:"serviceInstance"`
+	Space        Space        `yaml:"space"`
+	Organization Organization `yaml:"org"`
+	App          App          `yaml:"app"`
 	// add more resources here
 }
 
@@ -46,13 +44,6 @@ type App struct {
 	ManagementPolicies []ManagementPolicy `yaml:"managementPolicies"`
 }
 
-type ServiceInstance struct {
-	Name               string             `yaml:"name"`
-	SpaceRef           string             `yaml:"spaceRef"`
-	Type               string             `yaml:"type"`
-	ManagementPolicies []ManagementPolicy `yaml:"managementPolicies"`
-}
-
 type ManagementPolicy string
 
 // CFResourceFilter implements the ResourceFilter interface
@@ -61,7 +52,6 @@ type CFResourceFilter struct {
 	Space              *SpaceFilter
 	Organization       *OrganizationFilter
 	App                *AppFilter
-	ServiceInstance    *ServiceInstanceFilter
 	ManagementPolicies []v1.ManagementAction
 }
 
@@ -86,12 +76,6 @@ func (f *CFResourceFilter) GetFilterCriteria() map[string]string {
 		criteria["space"] = f.App.SpaceRef
 	}
 
-	if f.ServiceInstance != nil {
-		criteria["name"] = f.ServiceInstance.Name
-		criteria["space"] = f.ServiceInstance.SpaceRef
-		criteria["type"] = f.ServiceInstance.Type
-	}
-
 	return criteria
 }
 
@@ -111,12 +95,6 @@ type OrganizationFilter struct {
 type AppFilter struct {
 	Name     string
 	SpaceRef string
-}
-
-type ServiceInstanceFilter struct {
-	Name     string
-	SpaceRef string
-	Type     string
 }
 
 // CFConfig implements the ProviderConfig interface
@@ -143,11 +121,6 @@ func (c *CFConfig) resourceIsValid(resource Resource) bool {
 	// check for empty app names
 	if resource.App.Name != "" && resource.App.ManagementPolicies == nil && resource.App.SpaceRef != "" {
 		fmt.Println(resource.App.Name + "is not a valid app configuration")
-		return false
-	}
-	// check for empty service instance names
-	if resource.ServiceInstance.Name != "" && (resource.ServiceInstance.ManagementPolicies == nil || resource.ServiceInstance.SpaceRef == "" || resource.ServiceInstance.Type == "") {
-		fmt.Println(resource.ServiceInstance.Name + "is not a valid service instance configuration")
 		return false
 	}
 	return true
@@ -230,7 +203,6 @@ func (p *CFConfigParser) ParseConfig(configPath string) (config.ProviderConfig, 
 		}
 
 		if res.App.Name != "" {
-			utils.PrintLine("add app  ...", res.App.Name, 30)
 			var policies []v1.ManagementAction
 			for _, policy := range res.App.ManagementPolicies {
 				policies = append(policies, v1.ManagementAction(policy))
@@ -241,25 +213,6 @@ func (p *CFConfigParser) ParseConfig(configPath string) (config.ProviderConfig, 
 				App: &AppFilter{
 					Name:     res.App.Name,
 					SpaceRef: res.App.SpaceRef,
-				},
-				ManagementPolicies: policies,
-			})
-		}
-
-		if res.ServiceInstance.Name != "" {
-			utils.PrintLine("add service instances  ...", res.ServiceInstance.Name, 30)
-
-			var policies []v1.ManagementAction
-			for _, policy := range res.ServiceInstance.ManagementPolicies {
-				policies = append(policies, v1.ManagementAction(policy))
-			}
-
-			filters = append(filters, &CFResourceFilter{
-				Type: v1alpha1.ServiceInstance_Kind,
-				ServiceInstance: &ServiceInstanceFilter{
-					Name:     res.ServiceInstance.Name,
-					SpaceRef: res.ServiceInstance.SpaceRef,
-					Type:     res.ServiceInstance.Type,
 				},
 				ManagementPolicies: policies,
 			})
