@@ -96,12 +96,12 @@ spec:
                       The Credentials field is NOT secret or secured in any way and should
                       NEVER be used to hold sensitive information. To set parameters that
                       contain secret information, you should ALWAYS store that information
-                      in a Secret and use the CredentialFrom field.
+                      in a Secret and use the `credentialsSecretRef` field.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   credentialsSecretRef:
                     description: Same as `Credentials`, supplied as a Secret reference.
-                      Ignored if `Credentials` or `JSONCredentials` is set.
+                      Ignored if `credentials` or `jsonCredentials` is set.
                     properties:
                       name:
                         description: Name of the secret.
@@ -114,12 +114,12 @@ spec:
                     - namespace
                     type: object
                   jsonCredentials:
-                    description: Same as `Credentials`, supplied as arbitrary JSON
-                      string. Ignored if `Credentials` is set.
+                    description: Same as `credentials`, supplied as arbitrary JSON
+                      string. Ignored if `credentials` is set.
                     type: string
                   jsonParams:
-                    description: Same as `Parameters`, supplied as arbitrary JSON
-                      string. Ignored if `Parameters` is set.
+                    description: Same as `parameters`, supplied as arbitrary JSON
+                      string. Ignored if `parameters` is set.
                     type: string
                   maintenanceInfo:
                     description: MaintenanceInfo describes the version of the service
@@ -144,15 +144,15 @@ spec:
                       Configuration parameters for the managed service instance, supplied as K8S runtime.RawExtension object
 
 
-                      The Parameters field is NOT secret or secured in any way and should
+                      The `parameters` field is NOT secret or secured in any way and should
                       NEVER be used to hold sensitive information. To set parameters that
                       contain secret information, you should ALWAYS store that information
-                      in a Secret and use the ParametersSecretRef field.
+                      in a Secret and use the `paramsSecretRef` field.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   paramsSecretRef:
-                    description: Same as `Parameters`, supplied as a Secret reference.
-                      Ignored if `Parameters` or `JSONParam` is set.
+                    description: Same as `parameters`, supplied as a Secret reference.
+                      Ignored if `parameters` or `jsonParams` is set.
                     properties:
                       name:
                         description: Name of the secret.

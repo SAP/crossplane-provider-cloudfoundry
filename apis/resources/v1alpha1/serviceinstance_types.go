@@ -70,19 +70,19 @@ type Managed struct {
 
 	// Configuration parameters for the managed service instance, supplied as K8S runtime.RawExtension object
 	//
-	// The Parameters field is NOT secret or secured in any way and should
+	// The `parameters` field is NOT secret or secured in any way and should
 	// NEVER be used to hold sensitive information. To set parameters that
 	// contain secret information, you should ALWAYS store that information
-	// in a Secret and use the ParametersSecretRef field.
+	// in a Secret and use the `paramsSecretRef` field.
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Parameters *runtime.RawExtension `json:"parameters,omitempty"`
 
 
-	// Same as `Parameters`, supplied as arbitrary JSON string. Ignored if `Parameters` is set.
+	// Same as `parameters`, supplied as arbitrary JSON string. Ignored if `parameters` is set.
 	// +optional
 	JSONParams *string `json:"jsonParams,omitempty"`
 
-	// Same as `Parameters`, supplied as a Secret reference. Ignored if `Parameters` or `JSONParam` is set.
+	// Same as `parameters`, supplied as a Secret reference. Ignored if `parameters` or `jsonParams` is set.
 	// +kubebuilder:validation:Optional
 	ParametersSecretRef *v1.SecretReference `json:"paramsSecretRef,omitempty" tf:"-"`
 
@@ -99,15 +99,15 @@ type UserProvided struct {
 	// The Credentials field is NOT secret or secured in any way and should
 	// NEVER be used to hold sensitive information. To set parameters that
 	// contain secret information, you should ALWAYS store that information
-	// in a Secret and use the CredentialFrom field.
+	// in a Secret and use the `credentialsSecretRef` field.
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Credentials *runtime.RawExtension `json:"credentials,omitempty"`
 
-	// Same as `Credentials`, supplied as arbitrary JSON string. Ignored if `Credentials` is set.
+	// Same as `credentials`, supplied as arbitrary JSON string. Ignored if `credentials` is set.
 	// +optional
 	JSONCredentials *string `json:"jsonCredentials,omitempty"`
 
-	// Same as `Credentials`, supplied as a Secret reference. Ignored if `Credentials` or `JSONCredentials` is set.
+	// Same as `Credentials`, supplied as a Secret reference. Ignored if `credentials` or `jsonCredentials` is set.
 	// +kubebuilder:validation:Optional
 	CredentialsSecretRef *v1.SecretReference `json:"credentialsSecretRef,omitempty"`
 
