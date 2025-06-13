@@ -3,7 +3,6 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -11,7 +10,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
 	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
 )
 
@@ -120,58 +118,35 @@ func (a *CFRouteAdapter) MapToResource(providerResource interface{}, managementP
 func (a *CFRouteAdapter) PreviewResource(resource res.Resource) {
 	route, ok := resource.(*CFRoute)
 	if !ok {
+		fmt.Println("Invalid resource type provided for preview.")
 		return
 	}
 
-	const maxWidth = 30
+	const (
+		keyColor   = "\033[36m" // Cyan
+		valueColor = "\033[32m" // Green
+		resetColor = "\033[0m"  // Reset
+	)
 
-	utils.PrintLine("API Version", route.managedResource.APIVersion, maxWidth)
-	utils.PrintLine("Kind", route.managedResource.Kind, maxWidth)
-	utils.PrintLine("Name", "<generated on creation>", maxWidth)
-	utils.PrintLine("External Name", route.managedResource.Annotations["crossplane.io/external-name"], maxWidth)
-
-	// Space GUID
+	fmt.Printf("%sapiVersion%s: %s%s%s\n", keyColor, resetColor, valueColor, route.managedResource.APIVersion, resetColor)
+	fmt.Printf("%skind%s: %s%s%s\n", keyColor, resetColor, valueColor, route.managedResource.Kind, resetColor)
+	fmt.Printf("%smetadata%s:\n  %sname%s: %s<generated on creation>%s\n", keyColor, resetColor, keyColor, resetColor, valueColor, resetColor)
+	fmt.Printf("  %sannotations%s:\n    %scrossplane.io/external-name%s: %s%s%s\n", keyColor, resetColor, keyColor, resetColor, valueColor, route.managedResource.Annotations["crossplane.io/external-name"], resetColor)
+	fmt.Printf("%sspec%s:\n", keyColor, resetColor)
+	fmt.Printf("  %sforProvider%s:\n", keyColor, resetColor)
+	fmt.Printf("    %sdomain%s: %s%s%s\n", keyColor, resetColor, valueColor, route.managedResource.Spec.ForProvider.Domain, resetColor)
 	if route.managedResource.Spec.ForProvider.Space != nil {
-		utils.PrintLine("Space GUID", *route.managedResource.Spec.ForProvider.Space, maxWidth)
-	} else {
-		utils.PrintLine("Space GUID", "Not specified", maxWidth)
+		fmt.Printf("    %sspace%s: %s%s%s\n", keyColor, resetColor, valueColor, *route.managedResource.Spec.ForProvider.Space, resetColor)
 	}
-
-	// Domain GUID
-	if route.managedResource.Spec.ForProvider.Domain != nil {
-		utils.PrintLine("Domain GUID", *route.managedResource.Spec.ForProvider.Domain, maxWidth)
-	} else {
-		utils.PrintLine("Domain GUID", "Not specified", maxWidth)
-	}
-
-	// all the other forProvider fields
 	if route.managedResource.Spec.ForProvider.Host != nil {
-		utils.PrintLine("Host GUID", *route.managedResource.Spec.ForProvider.Host, maxWidth)
-	} else {
-		utils.PrintLine("Host GUID", "Not specified", maxWidth)
+		fmt.Printf("    %shost%s: %s%s%s\n", keyColor, resetColor, valueColor, *route.managedResource.Spec.ForProvider.Host, resetColor)
 	}
-
 	if route.managedResource.Spec.ForProvider.Path != nil {
-		utils.PrintLine("Path GUID", *route.managedResource.Spec.ForProvider.Path, maxWidth)
-	} else {
-		utils.PrintLine("Path GUID", "Not specified", maxWidth)
+		fmt.Printf("    %spath%s: %s%s%s\n", keyColor, resetColor, valueColor, *route.managedResource.Spec.ForProvider.Path, resetColor)
 	}
-
-	if route.managedResource.Spec.ForProvider.Port != nil {
-		utils.PrintLine("Port GUID", fmt.Sprint(*route.managedResource.Spec.ForProvider.Port), maxWidth)
-	} else {
-		utils.PrintLine("Port GUID", "Not specified", maxWidth)
+	fmt.Printf("  %smanagementPolicies%s:\n", keyColor, resetColor)
+	for _, policy := range route.managedResource.Spec.ManagementPolicies {
+		fmt.Printf("    - %s%s%s\n", valueColor, policy, resetColor)
 	}
-
-	if len(route.managedResource.Spec.ManagementPolicies) > 0 {
-		var policies []string
-		for _, policy := range route.managedResource.Spec.ManagementPolicies {
-			policies = append(policies, string(policy))
-		}
-		utils.PrintLine("Management Policies", strings.Join(policies, ", "), maxWidth)
-	} else {
-		utils.PrintLine("Management Policies", "None", maxWidth)
-	}
-
-	fmt.Println(strings.Repeat("-", 80))
+	fmt.Println("---")
 }

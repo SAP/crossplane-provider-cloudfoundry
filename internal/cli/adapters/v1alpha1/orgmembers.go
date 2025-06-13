@@ -3,7 +3,6 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
@@ -76,28 +75,29 @@ func (a *CFOrgMembersAdapter) PreviewResource(resource res.Resource) {
 		return
 	}
 
-	const maxWidth = 30
+	const (
+		keyColor   = "\033[36m" // Cyan
+		valueColor = "\033[32m" // Green
+		resetColor = "\033[0m"  // Reset
+	)
 
-	utils.PrintLine("API Version", members.managedResource.APIVersion, maxWidth)
-	utils.PrintLine("Kind", members.managedResource.Kind, maxWidth)
-	utils.PrintLine("Name", "<generated on creation>", maxWidth)
-	utils.PrintLine("Role Type", members.managedResource.Spec.ForProvider.RoleType, maxWidth)
-	utils.PrintLine("Org", *members.managedResource.Spec.ForProvider.Org, maxWidth)
-
-	// Print members
-	memberStrings := make([]string, len(members.managedResource.Spec.ForProvider.Members))
-	for i, member := range members.managedResource.Spec.ForProvider.Members {
-		memberStrings[i] = fmt.Sprintf("%s (%s)", member.Username, member.Origin)
+	fmt.Printf("%sapiVersion%s: %s%s%s\n", keyColor, resetColor, valueColor, members.managedResource.APIVersion, resetColor)
+	fmt.Printf("%skind%s: %s%s%s\n", keyColor, resetColor, valueColor, members.managedResource.Kind, resetColor)
+	fmt.Printf("%smetadata%s:\n  %sname%s: %s<generated on creation>%s\n", keyColor, resetColor, keyColor, resetColor, valueColor, resetColor)
+	fmt.Printf("%sspec%s:\n", keyColor, resetColor)
+	fmt.Printf("  %sforProvider%s:\n", keyColor, resetColor)
+	fmt.Printf("    %sroleType%s: %s%s%s\n", keyColor, resetColor, valueColor, members.managedResource.Spec.ForProvider.RoleType, resetColor)
+	fmt.Printf("    %sorg%s: %s%s%s\n", keyColor, resetColor, valueColor, *members.managedResource.Spec.ForProvider.Org, resetColor)
+	fmt.Printf("    %smembers%s:\n", keyColor, resetColor)
+	for _, member := range members.managedResource.Spec.ForProvider.Members {
+		fmt.Printf("      - %susername%s: %s%s%s\n", keyColor, resetColor, valueColor, member.Username, resetColor)
+		fmt.Printf("        %sorigin%s: %s%s%s\n", keyColor, resetColor, valueColor, member.Origin, resetColor)
 	}
-	utils.PrintLine("Members", strings.Join(memberStrings, ", "), maxWidth)
-
-	managementPolicies := make([]string, len(members.managedResource.Spec.ManagementPolicies))
-	for i, policy := range members.managedResource.Spec.ManagementPolicies {
-		managementPolicies[i] = string(policy)
+	fmt.Printf("  %smanagementPolicies%s:\n", keyColor, resetColor)
+	for _, policy := range members.managedResource.Spec.ManagementPolicies {
+		fmt.Printf("    - %s%s%s\n", valueColor, policy, resetColor)
 	}
-	utils.PrintLine("Management Policies", strings.Join(managementPolicies, ", "), maxWidth)
-
-	fmt.Println(strings.Repeat("-", 80))
+	fmt.Println("---")
 }
 
 // CFOrgMembers implements the Resource interface
