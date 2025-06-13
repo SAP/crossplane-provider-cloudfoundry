@@ -3,7 +3,6 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -106,21 +105,26 @@ func (a *CFOrganizationAdapter) MapToResource(providerResource interface{}, mana
 func (a *CFOrganizationAdapter) PreviewResource(resource res.Resource) {
 	organization, ok := resource.(*CFOrganization)
 	if !ok {
+		fmt.Println("Invalid resource type provided for preview.")
 		return
 	}
 
-	// Preview the directory
-	maxWidth := 30
+	const (
+		keyColor   = "\033[36m" // Cyan
+		valueColor = "\033[32m" // Green
+		resetColor = "\033[0m"  // Reset
+	)
 
-	utils.PrintLine("API-Version", organization.managedResource.APIVersion, maxWidth)
-	utils.PrintLine("Kind", organization.managedResource.Kind, maxWidth)
-	utils.PrintLine("Name", "<generated on creation>", maxWidth)
-	utils.PrintLine("External Name", organization.managedResource.Annotations["crossplane.io/external-name"], maxWidth)
-	managementPolicies := make([]string, len(organization.managedResource.Spec.ManagementPolicies))
-	for i, policy := range organization.managedResource.Spec.ManagementPolicies {
-		managementPolicies[i] = string(policy)
+	fmt.Printf("%sapiVersion%s: %s%s%s\n", keyColor, resetColor, valueColor, organization.managedResource.APIVersion, resetColor)
+	fmt.Printf("%skind%s: %s%s%s\n", keyColor, resetColor, valueColor, organization.managedResource.Kind, resetColor)
+	fmt.Printf("%smetadata%s:\n  %sname%s: %s<generated on creation>%s\n", keyColor, resetColor, keyColor, resetColor, valueColor, resetColor)
+	fmt.Printf("  %sannotations%s:\n    %scrossplane.io/external-name%s: %s%s%s\n", keyColor, resetColor, keyColor, resetColor, valueColor, organization.managedResource.Annotations["crossplane.io/external-name"], resetColor)
+	fmt.Printf("%sspec%s:\n", keyColor, resetColor)
+	fmt.Printf("  %sforProvider%s:\n", keyColor, resetColor)
+	fmt.Printf("    %sname%s: %s%s%s\n", keyColor, resetColor, valueColor, organization.managedResource.Spec.ForProvider.Name, resetColor)
+	fmt.Printf("  %smanagementPolicies%s:\n", keyColor, resetColor)
+	for _, policy := range organization.managedResource.Spec.ManagementPolicies {
+		fmt.Printf("    - %s%s%s\n", valueColor, policy, resetColor)
 	}
-	utils.PrintLine("Management Policies", strings.Join(managementPolicies, ", "), maxWidth)
-
-	fmt.Println(strings.Repeat("-", 80))
+	fmt.Println("---")
 }

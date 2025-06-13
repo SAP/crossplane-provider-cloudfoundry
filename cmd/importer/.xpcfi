@@ -1,0 +1,4 @@
+TRANSACTION_ID=58b51a75-4a04-49ab-ac76-0b0cd0f863ed
+KUBECONFIGPATH=/Users/d062324/.kube/config
+CONFIGPATH=./config.yaml
+CREDENTIALS={"ApiEndpoint":"https://api.cf.eu12.hana.ondemand.com","Email":"dl_673efb6870d04101363fc6b3@global.corp.sap","Password":"gT9HNYNb6hsaM\u003ew"}
