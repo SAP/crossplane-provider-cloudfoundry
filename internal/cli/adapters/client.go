@@ -16,6 +16,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/role"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/kubernetes"
 )
@@ -65,6 +66,10 @@ func (c *CFClient) GetResourcesByType(ctx context.Context, resourceType string, 
 		return c.getApps(ctx, filter)
 	case v1alpha1.RouteKind:
 		return c.getRoutes(ctx, filter)
+	case v1alpha1.SpaceMembersKind:
+		return c.getSpaceMembers(ctx, filter)
+	case v1alpha1.OrgMembersKind:
+		return c.getOrgMembers(ctx, filter)
 	case v1alpha1.ServiceInstance_Kind:
 		return c.getServiceInstances(ctx, filter)
 	default:
@@ -87,6 +92,10 @@ func (c *CFClient) getSpaces(ctx context.Context, filter map[string]string) ([]i
 	orgRefFilter := cfv3.OrganizationListOptions{Names: cfv3.Filter{Values: []string{orgName}}}
 	orgRef, err := c.client.Organizations.ListAll(ctx, &orgRefFilter)
 	kingpin.FatalIfError(err, "%s", errGetOrgReference)
+
+	if len(orgRef) == 0 || orgRef[0].GUID == "" {
+		kingpin.FatalIfError(fmt.Errorf("organization %s not found", orgName), "%s", errGetOrgReference)
+	}
 
 	if orgRef[0].GUID == "" {
 		kingpin.FatalIfError(fmt.Errorf("organization %s not found", orgName), "%s", errGetOrgReference)
@@ -132,10 +141,17 @@ func (c *CFClient) getOrganizations(ctx context.Context, filter map[string]strin
 	if !ok {
 		return nil, fmt.Errorf("name filter is required for organizations")
 	}
+	utils.PrintLine("Fetching organizations with name:", name, 30)
 
 	// Get organizations from CF
 	organizations, err := c.client.Organizations.ListAll(ctx, &cfv3.OrganizationListOptions{})
 	kingpin.FatalIfError(err, "%s", errListOrganizations)
+	if len(organizations) == 0 {
+		utils.PrintLine("Cannot get organizations with name:", name, 30)
+
+		return nil, fmt.Errorf("no organizations found")
+
+	}
 
 	// Filter organizations by name
 	var results []interface{}
@@ -331,6 +347,140 @@ func (c *CFClient) GetServiceCredentials(ctx context.Context, guid string, servi
 		}
 		return creds, nil
 	}
+}
+
+// getSpaceMembers fetches space members based on the provided filter
+func (c *CFClient) getSpaceMembers(ctx context.Context, filter map[string]string) ([]interface{}, error) {
+	// Space members require a space filter
+	spaceName, ok := filter["space"]
+	if !ok {
+		return nil, fmt.Errorf("space filter is required for fetching space members")
+	}
+
+	typeFilter, ok := filter["role_type"]
+	if !ok {
+		return nil, fmt.Errorf("role type filter is required for fetching space members")
+	}
+
+	spaceRefFilter := cfv3.SpaceListOptions{Names: cfv3.Filter{Values: []string{spaceName}}}
+	space, err := c.client.Spaces.Single(ctx, &spaceRefFilter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get space: %w", err)
+	}
+
+	// Get all roles for the space
+	opts := cfv3.NewRoleListOptions()
+	opts.SpaceGUIDs.EqualTo(space.GUID)
+
+	roleTypes := []string{
+		v1alpha1.SpaceDevelopers,
+		v1alpha1.SpaceManagers,
+		v1alpha1.SpaceAuditors,
+		v1alpha1.SpaceSupporters,
+	}
+	results := make([]any, 0, len(roleTypes))
+
+	for _, roleType := range roleTypes {
+		if !utils.IsFullMatch(typeFilter, roleType) {
+			continue
+		}
+
+		utils.PrintLine("Fetching space members of ", roleType, 30)
+		// Get the space reference
+		opts.WithSpaceRoleType(role.SpaceRoleType(roleType))
+
+		_, users, err := c.client.Roles.ListIncludeUsersAll(ctx, opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get space roles: %w", err)
+		}
+
+		members := make([]*v1alpha1.Member, 0, len(users))
+
+		for _, user := range users {
+			members = append(members, &v1alpha1.Member{
+				Username: *user.Username,
+				Origin:   *user.Origin,
+			})
+		}
+
+		spaceMembers := &v1alpha1.SpaceMembersParameters{
+			SpaceReference: v1alpha1.SpaceReference{Space: &space.GUID, SpaceName: &space.Name},
+			RoleType:       roleType,
+			MemberList: v1alpha1.MemberList{
+				Members: members,
+			},
+		}
+		results = append(results, *spaceMembers)
+	}
+
+	return results, nil
+}
+
+// getOrgMembers fetches org members based on the provided filter
+func (c *CFClient) getOrgMembers(ctx context.Context, filter map[string]string) ([]interface{}, error) {
+	// Org members require an org filter
+	orgName, ok := filter["org"]
+	if !ok {
+		return nil, fmt.Errorf("org filter is required for fetching org members")
+	}
+
+	typeFilter, ok := filter["role_type"]
+	if !ok {
+		return nil, fmt.Errorf("role type filter is required for fetching org members")
+	}
+
+	orgRefFilter := cfv3.OrganizationListOptions{Names: cfv3.Filter{Values: []string{orgName}}}
+	org, err := c.client.Organizations.Single(ctx, &orgRefFilter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get org: %w", err)
+	}
+
+	// Get all roles for the org
+	opts := cfv3.NewRoleListOptions()
+	opts.OrganizationGUIDs.EqualTo(org.GUID)
+
+	roleTypes := []string{
+		v1alpha1.OrgUsers,
+		v1alpha1.OrgManagers,
+		v1alpha1.OrgAuditors,
+		v1alpha1.OrgBillingManagers,
+	}
+	results := make([]any, 0, len(roleTypes))
+
+	for _, roleType := range roleTypes {
+		if !utils.IsFullMatch(typeFilter, roleType) {
+			continue
+		}
+
+		utils.PrintLine("Fetching org members of ", roleType, 30)
+		// Get the org reference
+		opts.WithOrganizationRoleType(role.OrgRoleType(roleType))
+
+		_, users, err := c.client.Roles.ListIncludeUsersAll(ctx, opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get org roles: %w", err)
+		}
+
+		members := make([]*v1alpha1.Member, 0, len(users))
+
+		for _, user := range users {
+			members = append(members, &v1alpha1.Member{
+				Username: *user.Username,
+				Origin:   *user.Origin,
+			})
+		}
+
+		orgMembers := &v1alpha1.OrgMembersParameters{
+			OrgReference: v1alpha1.OrgReference{Org: &org.GUID, OrgName: &org.Name},
+			RoleType:     roleType,
+			MemberList: v1alpha1.MemberList{
+				Members: members,
+			},
+		}
+		results = append(results, *orgMembers)
+	}
+
+	return results, nil
 }
 
 // CFClientAdapter implements the ClientAdapter interface

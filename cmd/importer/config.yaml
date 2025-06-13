@@ -1,26 +1,29 @@
 resources:
   - org:
-      name: cf-dev
+      name: my-manual-org
       managementPolicies: [Observe]
-  - space:
+  - space: 
       name: .*
-      orgRef: cf-dev
+      orgRef: my-manual-org
+      managementPolicies: [Observe]    
+  - spaceMembers:
+      roleType: .*
+      spaceRef: manual-space
       managementPolicies: [Observe]
-  - app:
-      name: .*
-      spaceRef: my-demo-space
-      managementPolicies: [Observe]
-  - route:
-      name: .*
-      spaceRef: space-app
-      domainRef: test-domain
+  - orgMembers:
+      roleType: .*
+      orgRef: my-manual-org
       managementPolicies: [Observe]
   - serviceInstance:
       name: .*
-      spaceRef: my-demo-space
+      spaceRef: manual-space
       type: managed
+      managementPolicies: [Observe]
+  - serviceInstance:
+      name: .*
+      spaceRef: manual-space
+      type: user-provided
       managementPolicies: [Observe]
 providerConfigRef:
   name: default
   namespace: default
-

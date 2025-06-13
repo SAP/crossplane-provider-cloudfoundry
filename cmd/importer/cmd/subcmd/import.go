@@ -68,6 +68,8 @@ var ImportCMD = &cobra.Command{
 			v1alpha1.App_Kind:             &adapterv1alpha1.CFAppAdapter{},
 			v1alpha1.RouteKind:            &adapterv1alpha1.CFRouteAdapter{},
 			v1alpha1.ServiceInstance_Kind: &adapterv1alpha1.CFServiceInstanceAdapter{},
+			v1alpha1.SpaceMembersKind:     &adapterv1alpha1.CFSpaceMembersAdapter{},
+			v1alpha1.OrgMembersKind:       &adapterv1alpha1.CFOrgMembersAdapter{},
 		}
 		configParser := &adapters.CFConfigParser{}
 
