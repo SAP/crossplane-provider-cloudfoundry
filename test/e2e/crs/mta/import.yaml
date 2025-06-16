@@ -1,0 +1,27 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  name: mta-org
+  namespace: mta-test
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: cf-ci-e2e
+
+---
+# import mta-space with roles pre-configured
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  name: mta-space
+  namespace: mta-test
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: space-donotdelete
+    orgRef:
+      name:  app-org
+      policy:
+        resolve: Always
