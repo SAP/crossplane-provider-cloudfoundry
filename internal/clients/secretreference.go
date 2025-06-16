@@ -15,7 +15,9 @@ import (
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 )
 
-// SecretRefToJSONRawMessage extracts parameters/credentials from a secret reference.
+// ExtractSecret extracts parameters/credentials from a secret reference.
+// If a key is specified, returns the raw value for that key.
+// If no key is specified, returns all secret data as nested JSON/YAML.
 func ExtractSecret(ctx context.Context, kube k8s.Client, sr *xpv1.SecretReference, key string) ([]byte, error) {
 	if sr == nil {
 		return nil, nil
@@ -34,14 +36,18 @@ func ExtractSecret(ctx context.Context, kube k8s.Client, sr *xpv1.SecretReferenc
 		return nil, nil
 	}
 
-	// if key is not specified, return all data from the secret
-	cred := make(map[string]string)
+	// if key is not specified, return all data from the secret, also string or nested JSON
+	data := make(map[string]interface{})
 	for k, v := range secret.Data {
-		cred[k] = string(v)
+		// Try to parse as JSON first
+		var jsonValue interface{}
+		if err := json.Unmarshal(v, &jsonValue); err == nil {
+			data[k] = jsonValue
+		} else {
+			// If not JSON, store as string
+			data[k] = string(v)
+		}
 	}
-	buf, err := json.Marshal(cred)
-	if err != nil {
-		return nil, err
-	}
-	return buf, nil
+
+	return json.Marshal(data)
 }
