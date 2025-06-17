@@ -13,7 +13,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/adapters"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
 // CFServiceInstance implements the Resource interface
@@ -58,21 +58,21 @@ func (a *CFServiceInstanceAdapter) GetResourceType() string {
 	return v1alpha1.ServiceInstance_Kind
 }
 
-func (a *CFServiceInstanceAdapter) FetchResources(ctx context.Context, filter res.ResourceFilter) ([]res.Resource, error) {
+func (a *CFServiceInstanceAdapter) FetchResources(ctx context.Context, filter provider.ResourceFilter) ([]provider.Resource, error) {
 	// Get filter criteria
 	criteria := filter.GetFilterCriteria()
 
 	// Fetch resources from provider
-	providerResources, err := a.GetResourcesByType(ctx, v1alpha1.ServiceInstance_Kind, criteria)
+	providerResources, err := a.CFClient.GetResourcesByType(ctx, v1alpha1.ServiceInstance_Kind, criteria)
 	if err != nil {
 		return nil, err
 	}
 
 	// Map to Resource interface
-	resources := make([]res.Resource, len(providerResources))
+	resources := make([]provider.Resource, len(providerResources))
 
 	for i, providerResource := range providerResources {
-		resource, err := a.MapToResource(providerResource, filter.GetManagementPolicies())
+		resource, err := a.MapToResource(ctx, providerResource, filter.GetManagementPolicies())
 		if err != nil {
 			return nil, err
 		}
@@ -82,7 +82,7 @@ func (a *CFServiceInstanceAdapter) FetchResources(ctx context.Context, filter re
 	return resources, nil
 }
 
-func (a *CFServiceInstanceAdapter) MapToResource(providerResource interface{}, managementPolicies []v1.ManagementAction) (res.Resource, error) {
+func (a *CFServiceInstanceAdapter) MapToResource(ctx context.Context, providerResource interface{}, managementPolicies []v1.ManagementAction) (provider.Resource, error) {
 	serviceInstance, ok := providerResource.(*cfresource.ServiceInstance)
 
 	fmt.Println("- Service Instance: " + serviceInstance.Name + " with GUID: " + serviceInstance.GUID)
@@ -112,11 +112,11 @@ func (a *CFServiceInstanceAdapter) MapToResource(providerResource interface{}, m
 	managedResource.Spec.ForProvider.Type = serviceType
 
 	if serviceType == v1alpha1.ManagedService {
-		if param, err := a.GetServiceCredentials(context.Background(), serviceInstance.GUID, serviceInstance.Type); err == nil && param != nil {
+		if param, err := a.CFClient.GetServiceCredentials(ctx, serviceInstance.GUID, serviceInstance.Type); err == nil && param != nil {
 			managedResource.Spec.ForProvider.Parameters = &runtime.RawExtension{Raw: *param}
 		}
 		planID := serviceInstance.Relationships.ServicePlan.Data.GUID
-		if sp, err := a.GetServicePlan(context.Background(), planID); err == nil && sp != nil {
+		if sp, err := a.CFClient.GetServicePlan(ctx, planID); err == nil && sp != nil {
 			managedResource.Spec.ForProvider.ServicePlan = sp
 		}
 
@@ -128,7 +128,7 @@ func (a *CFServiceInstanceAdapter) MapToResource(providerResource interface{}, m
 	}, nil
 }
 
-func (a *CFServiceInstanceAdapter) PreviewResource(resource res.Resource) {
+func (a *CFServiceInstanceAdapter) PreviewResource(resource provider.Resource) {
 	si, ok := resource.(*CFServiceInstance)
 	if !ok {
 		fmt.Println("Invalid resource type provided for preview.")
@@ -147,12 +147,12 @@ func (a *CFServiceInstanceAdapter) PreviewResource(resource res.Resource) {
 	fmt.Printf("  %sannotations%s:\n    %scrossplane.io/external-name%s: %s%s%s\n", keyColor, resetColor, keyColor, resetColor, valueColor, si.managedResource.Annotations["crossplane.io/external-name"], resetColor)
 	fmt.Printf("%sspec%s:\n", keyColor, resetColor)
 	fmt.Printf("  %sforProvider%s:\n", keyColor, resetColor)
-	fmt.Printf("    %sname%s: %s%s%s\n", keyColor, resetColor, valueColor, si.managedResource.Spec.ForProvider.Name, resetColor)
+	fmt.Printf("    %sname%s: %s%s%s\n", keyColor, resetColor, valueColor, *si.managedResource.Spec.ForProvider.Name, resetColor)
 	if si.managedResource.Spec.ForProvider.Space != nil {
 		fmt.Printf("    %sspace%s: %s%s%s\n", keyColor, resetColor, valueColor, *si.managedResource.Spec.ForProvider.Space, resetColor)
 	}
 	if si.managedResource.Spec.ForProvider.ServicePlan != nil {
-		fmt.Printf("    %sservicePlan%s: %s%s%s\n", keyColor, resetColor, valueColor, *si.managedResource.Spec.ForProvider.ServicePlan, resetColor)
+		fmt.Printf("    %sservicePlan%s: %s%s%s\n", keyColor, resetColor, valueColor, *si.managedResource.Spec.ForProvider.ServicePlan.ID, resetColor)
 	}
 	fmt.Printf("  %smanagementPolicies%s:\n", keyColor, resetColor)
 	for _, policy := range si.managedResource.Spec.ManagementPolicies {

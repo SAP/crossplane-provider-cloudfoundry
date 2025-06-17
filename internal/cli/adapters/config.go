@@ -1,6 +1,7 @@
 package adapters
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 
@@ -8,15 +9,13 @@ import (
 	"gopkg.in/yaml.v2"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/config"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
 // types for the config file
 type Config struct {
-	Resources         []Resource               `yaml:"resources"`
-	ProviderConfigRef client.ProviderConfigRef `yaml:"providerConfigRef"`
+	Resources         []Resource                 `yaml:"resources"`
+	ProviderConfigRef provider.ProviderConfigRef `yaml:"providerConfigRef"`
 }
 
 type Resource struct {
@@ -174,165 +173,170 @@ type OrgMembersFilter struct {
 // CFConfig implements the ProviderConfig interface
 type CFConfig struct {
 	Resources         []Resource
-	ProviderConfigRef client.ProviderConfigRef
+	ProviderConfigRef provider.ProviderConfigRef
 }
 
-func (c *CFConfig) GetProviderConfigRef() client.ProviderConfigRef {
+func (c *CFConfig) GetProviderConfigRef() provider.ProviderConfigRef {
 	return c.ProviderConfigRef
 }
 
 func (c *CFConfig) Validate() bool {
-
-	// check for empty provider config ref
+	// Check provider config ref
 	if c.ProviderConfigRef.Name == "" || c.ProviderConfigRef.Namespace == "" {
 		return false
 	}
-
-	return true
+	// Check if there are any resources to process
+	return len(c.Resources) > 0
 }
 
 // CFConfigParser implements the ConfigParser interface
 type CFConfigParser struct{}
 
-func (p *CFConfigParser) ParseConfig(configPath string) (config.ProviderConfig, []resource.ResourceFilter, error) {
-	// Read config file
+func (p *CFConfigParser) toManagementActions(policies []string) []v1.ManagementAction {
+	result := make([]v1.ManagementAction, 0, len(policies))
+	for _, policy := range policies {
+		result = append(result, v1.ManagementAction(policy))
+	}
+	return result
+}
 
+func (p *CFConfigParser) toSpaceFilter(res Resource) (provider.ResourceFilter, error) {
+	if res.Space.OrgRef == "" {
+		return nil, fmt.Errorf("space.orgRef is required")
+	}
+
+	return &CFResourceFilter{
+		Type: v1alpha1.Space_Kind,
+		Space: &SpaceFilter{
+			Name:   res.Space.Name,
+			OrgRef: res.Space.OrgRef,
+		},
+		ManagementPolicies: p.toManagementActions(res.Space.ManagementPolicies),
+	}, nil
+}
+
+func (p *CFConfigParser) toOrgFilter(res Resource) (provider.ResourceFilter, error) {
+	return &CFResourceFilter{
+		Type: v1alpha1.Org_Kind,
+		Org: &OrgFilter{
+			Name: res.Org.Name,
+		},
+		ManagementPolicies: p.toManagementActions(res.Org.ManagementPolicies),
+	}, nil
+}
+
+func (p *CFConfigParser) toAppFilter(res Resource) (provider.ResourceFilter, error) {
+	if res.App.SpaceRef == "" {
+		return nil, fmt.Errorf("app.spaceRef is required")
+	}
+
+	return &CFResourceFilter{
+		Type: v1alpha1.App_Kind,
+		App: &AppFilter{
+			Name:     res.App.Name,
+			SpaceRef: res.App.SpaceRef,
+		},
+		ManagementPolicies: p.toManagementActions(res.App.ManagementPolicies),
+	}, nil
+}
+
+func (p *CFConfigParser) toServiceInstanceFilter(res Resource) (provider.ResourceFilter, error) {
+	if res.ServiceInstance.SpaceRef == "" {
+		return nil, fmt.Errorf("serviceInstance.spaceRef is required")
+	}
+	if res.ServiceInstance.Type == "" {
+		return nil, fmt.Errorf("serviceInstance.type is required")
+	}
+
+	return &CFResourceFilter{
+		Type: v1alpha1.ServiceInstance_Kind,
+		ServiceInstance: &ServiceInstanceFilter{
+			Name:     res.ServiceInstance.Name,
+			SpaceRef: res.ServiceInstance.SpaceRef,
+			Type:     res.ServiceInstance.Type,
+		},
+		ManagementPolicies: p.toManagementActions(res.ServiceInstance.ManagementPolicies),
+	}, nil
+}
+
+func (p *CFConfigParser) toSpaceMembersFilter(res Resource) (provider.ResourceFilter, error) {
+	if res.SpaceMembers.SpaceRef == "" {
+		return nil, fmt.Errorf("spaceMembers.spaceRef is required")
+	}
+
+	return &CFResourceFilter{
+		Type: v1alpha1.SpaceMembersKind,
+		SpaceMembers: &SpaceMembersFilter{
+			RoleType: res.SpaceMembers.RoleType,
+			SpaceRef: res.SpaceMembers.SpaceRef,
+		},
+		ManagementPolicies: p.toManagementActions(res.SpaceMembers.ManagementPolicies),
+	}, nil
+}
+
+func (p *CFConfigParser) toOrgMembersFilter(res Resource) (provider.ResourceFilter, error) {
+	if res.OrgMembers.OrgRef == "" {
+		return nil, fmt.Errorf("orgMembers.orgRef is required")
+	}
+
+	return &CFResourceFilter{
+		Type: v1alpha1.OrgMembersKind,
+		OrgMembers: &OrgMembersFilter{
+			RoleType: res.OrgMembers.RoleType,
+			OrgRef:   res.OrgMembers.OrgRef,
+		},
+		ManagementPolicies: p.toManagementActions(res.OrgMembers.ManagementPolicies),
+	}, nil
+}
+
+func (p *CFConfigParser) toResourceFilter(res Resource) (provider.ResourceFilter, error) {
+	switch {
+	case res.Space.Name != "":
+		return p.toSpaceFilter(res)
+	case res.Org.Name != "":
+		return p.toOrgFilter(res)
+	case res.App.Name != "":
+		return p.toAppFilter(res)
+	case res.ServiceInstance.Name != "":
+		return p.toServiceInstanceFilter(res)
+	case res.SpaceMembers.RoleType != "":
+		return p.toSpaceMembersFilter(res)
+	case res.OrgMembers.RoleType != "":
+		return p.toOrgMembersFilter(res)
+	default:
+		return nil, nil
+	}
+}
+
+func (p *CFConfigParser) ParseConfig(configPath string) (provider.ProviderConfig, []provider.ResourceFilter, error) {
 	file, err := os.ReadFile(filepath.Clean(configPath))
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Parse YAML
 	var config Config
 	err = yaml.Unmarshal(file, &config)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	// Convert to CFConfig
 	cfConfig := &CFConfig{
 		Resources: config.Resources,
-		ProviderConfigRef: client.ProviderConfigRef{
+		ProviderConfigRef: provider.ProviderConfigRef{
 			Name:      config.ProviderConfigRef.Name,
 			Namespace: config.ProviderConfigRef.Namespace,
 		},
 	}
 
-	// Convert to resource filters
-	var filters []resource.ResourceFilter
-	for _, res := range config.Resources {
-		if res.Space.Name != "" {
-			var policies []v1.ManagementAction
-			for _, policy := range res.Space.ManagementPolicies {
-				policies = append(policies, v1.ManagementAction(policy))
-			}
-
-			filters = append(filters, &CFResourceFilter{
-				Type: v1alpha1.Space_Kind,
-				Space: &SpaceFilter{
-					Name:   res.Space.Name,
-					OrgRef: res.Space.OrgRef,
-				},
-				ManagementPolicies: policies,
-			})
+	var filters []provider.ResourceFilter
+	for i, res := range config.Resources {
+		filter, err := p.toResourceFilter(res)
+		if err != nil {
+			fmt.Printf("Warning: resource[%d]: %v\n", i, err)
+			continue
 		}
-
-		if res.Org.Name != "" {
-			var policies []v1.ManagementAction
-			for _, policy := range res.Org.ManagementPolicies {
-				policies = append(policies, v1.ManagementAction(policy))
-			}
-
-			filters = append(filters, &CFResourceFilter{
-				Type: v1alpha1.Org_Kind,
-				Org: &OrgFilter{
-					Name: res.Org.Name,
-				},
-				ManagementPolicies: policies,
-			})
-		}
-
-		if res.App.Name != "" {
-			var policies []v1.ManagementAction
-			for _, policy := range res.App.ManagementPolicies {
-				policies = append(policies, v1.ManagementAction(policy))
-			}
-
-			filters = append(filters, &CFResourceFilter{
-				Type: v1alpha1.App_Kind,
-				App: &AppFilter{
-					Name:     res.App.Name,
-					SpaceRef: res.App.SpaceRef,
-				},
-				ManagementPolicies: policies,
-			})
-		}
-
-		if res.Route.Host != "" {
-			var policies []v1.ManagementAction
-			for _, policy := range res.Route.ManagementPolicies {
-				policies = append(policies, v1.ManagementAction(policy))
-			}
-
-			filters = append(filters, &CFResourceFilter{
-				Type: v1alpha1.RouteKind,
-				Route: &RouteFilter{
-					Host:      res.Route.Host,
-					SpaceRef:  res.Route.SpaceRef,
-					DomainRef: res.Route.DomainRef,
-				},
-				ManagementPolicies: policies,
-			})
-		}
-
-		if res.ServiceInstance.Name != "" {
-
-			var policies []v1.ManagementAction
-			for _, policy := range res.ServiceInstance.ManagementPolicies {
-				policies = append(policies, v1.ManagementAction(policy))
-			}
-
-			filters = append(filters, &CFResourceFilter{
-				Type: v1alpha1.ServiceInstance_Kind,
-				ServiceInstance: &ServiceInstanceFilter{
-					Name:     res.ServiceInstance.Name,
-					SpaceRef: res.ServiceInstance.SpaceRef,
-					Type:     res.ServiceInstance.Type,
-				},
-				ManagementPolicies: policies,
-			})
-		}
-
-		if res.SpaceMembers.RoleType != "" {
-			var policies []v1.ManagementAction
-			for _, policy := range res.SpaceMembers.ManagementPolicies {
-				policies = append(policies, v1.ManagementAction(policy))
-			}
-
-			filters = append(filters, &CFResourceFilter{
-				Type: v1alpha1.SpaceMembersKind,
-				SpaceMembers: &SpaceMembersFilter{
-					RoleType: res.SpaceMembers.RoleType,
-					SpaceRef: res.SpaceMembers.SpaceRef,
-				},
-				ManagementPolicies: policies,
-			})
-		}
-
-		if res.OrgMembers.RoleType != "" {
-			var policies []v1.ManagementAction
-			for _, policy := range res.OrgMembers.ManagementPolicies {
-				policies = append(policies, v1.ManagementAction(policy))
-			}
-
-			filters = append(filters, &CFResourceFilter{
-				Type: v1alpha1.OrgMembersKind,
-				OrgMembers: &OrgMembersFilter{
-					RoleType: res.OrgMembers.RoleType,
-					OrgRef:   res.OrgMembers.OrgRef,
-				},
-				ManagementPolicies: policies,
-			})
+		if filter != nil {
+			filters = append(filters, filter)
 		}
 	}
 

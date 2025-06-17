@@ -1,14 +1,9 @@
-package config
-
-import (
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
-)
+package provider
 
 // ProviderConfig defines the configuration for a provider
 type ProviderConfig interface {
 	// GetProviderConfigRef returns the provider config reference
-	GetProviderConfigRef() client.ProviderConfigRef
+	GetProviderConfigRef() ProviderConfigRef
 
 	// Validate validates the configuration
 	Validate() bool
@@ -17,5 +12,5 @@ type ProviderConfig interface {
 // ConfigParser parses configuration for resources to import
 type ConfigParser interface {
 	// ParseConfig parses the configuration file
-	ParseConfig(configPath string) (ProviderConfig, []resource.ResourceFilter, error)
+	ParseConfig(configPath string) (ProviderConfig, []ResourceFilter, error)
 }
