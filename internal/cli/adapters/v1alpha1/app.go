@@ -3,7 +3,6 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -12,7 +11,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
 // CFApp implements the Resource interface
@@ -50,20 +49,20 @@ func (a *CFAppAdapter) GetResourceType() string {
 	return v1alpha1.App_Kind
 }
 
-func (a *CFAppAdapter) FetchResources(ctx context.Context, filter res.ResourceFilter) ([]res.Resource, error) {
+func (a *CFAppAdapter) FetchResources(ctx context.Context, filter provider.ResourceFilter) ([]provider.Resource, error) {
 	// Get filter criteria
 	criteria := filter.GetFilterCriteria()
 
 	// Fetch resources from provider
-	providerResources, err := a.GetResourcesByType(ctx, v1alpha1.App_Kind, criteria)
+	providerResources, err := a.CFClient.GetResourcesByType(ctx, v1alpha1.App_Kind, criteria)
 	if err != nil {
 		return nil, err
 	}
 
 	// Map to Resource interface
-	resources := make([]res.Resource, len(providerResources))
+	resources := make([]provider.Resource, len(providerResources))
 	for i, providerResource := range providerResources {
-		resource, err := a.MapToResource(providerResource, filter.GetManagementPolicies())
+		resource, err := a.MapToResource(ctx, providerResource, filter.GetManagementPolicies())
 		if err != nil {
 			return nil, err
 		}
@@ -73,11 +72,8 @@ func (a *CFAppAdapter) FetchResources(ctx context.Context, filter res.ResourceFi
 	return resources, nil
 }
 
-func (a *CFAppAdapter) MapToResource(providerResource interface{}, managementPolicies []v1.ManagementAction) (res.Resource, error) {
+func (a *CFAppAdapter) MapToResource(ctx context.Context, providerResource interface{}, managementPolicies []v1.ManagementAction) (provider.Resource, error) {
 	app, ok := providerResource.(*cfresource.App)
-
-	fmt.Println("- App: " + app.Name + " with GUID: " + app.GUID)
-
 	if !ok {
 		return nil, fmt.Errorf("invalid resource type")
 	}
@@ -88,15 +84,16 @@ func (a *CFAppAdapter) MapToResource(providerResource interface{}, managementPol
 	managedResource.Kind = v1alpha1.App_Kind
 	managedResource.SetAnnotations(map[string]string{"crossplane.io/external-name": app.GUID})
 	managedResource.SetGenerateName(utils.NormalizeToRFC1123(app.Name))
-	managedResource.Spec.ForProvider.Space = &app.Relationships.Space.Data.GUID
-	managedResource.Spec.DeletionPolicy = "Orphan"
 
 	managedResource.Labels = map[string]string{
 		"cf-name": app.Name,
 	}
 
 	// Set spec fields
+	managedResource.Spec.ForProvider.Labels = app.Metadata.Labels
+	managedResource.Spec.ForProvider.Annotations = app.Metadata.Annotations
 	managedResource.Spec.ForProvider.Name = app.Name
+	managedResource.Spec.ForProvider.Space = &app.Relationships.Space.Data.GUID
 	managedResource.Spec.ManagementPolicies = managementPolicies
 
 	return &CFApp{
@@ -105,25 +102,32 @@ func (a *CFAppAdapter) MapToResource(providerResource interface{}, managementPol
 	}, nil
 }
 
-func (a *CFAppAdapter) PreviewResource(resource res.Resource) {
+func (a *CFAppAdapter) PreviewResource(resource provider.Resource) {
 	app, ok := resource.(*CFApp)
 	if !ok {
 		fmt.Println("Invalid resource type provided for preview.")
 		return
 	}
 
-	const maxWidth = 30
+	const (
+		keyColor   = "\033[36m" // Cyan
+		valueColor = "\033[32m" // Green
+		resetColor = "\033[0m"  // Reset
+	)
 
-	utils.PrintLine("API Version", app.managedResource.APIVersion, maxWidth)
-	utils.PrintLine("Kind", app.managedResource.Kind, maxWidth)
-	utils.PrintLine("Name", "<generated on creation>", maxWidth)
-	utils.PrintLine("External Name", app.managedResource.Annotations["crossplane.io/external-name"], maxWidth)
-
-	managementPolicies := make([]string, len(app.managedResource.Spec.ManagementPolicies))
-	for i, policy := range app.managedResource.Spec.ManagementPolicies {
-		managementPolicies[i] = string(policy)
+	fmt.Printf("%sapiVersion%s: %s%s%s\n", keyColor, resetColor, valueColor, app.managedResource.APIVersion, resetColor)
+	fmt.Printf("%skind%s: %s%s%s\n", keyColor, resetColor, valueColor, app.managedResource.Kind, resetColor)
+	fmt.Printf("%smetadata%s:\n  %sname%s: %s<generated on creation>%s\n", keyColor, resetColor, keyColor, resetColor, valueColor, resetColor)
+	fmt.Printf("  %sannotations%s:\n    %scrossplane.io/external-name%s: %s%s%s\n", keyColor, resetColor, keyColor, resetColor, valueColor, app.managedResource.Annotations["crossplane.io/external-name"], resetColor)
+	fmt.Printf("%sspec%s:\n", keyColor, resetColor)
+	fmt.Printf("  %sforProvider%s:\n", keyColor, resetColor)
+	fmt.Printf("    %sname%s: %s%s%s\n", keyColor, resetColor, valueColor, app.managedResource.Spec.ForProvider.Name, resetColor)
+	if app.managedResource.Spec.ForProvider.Space != nil {
+		fmt.Printf("    %sspace%s: %s%s%s\n", keyColor, resetColor, valueColor, *app.managedResource.Spec.ForProvider.Space, resetColor)
 	}
-	utils.PrintLine("Management Policies", strings.Join(managementPolicies, ", "), maxWidth)
-
-	fmt.Println(strings.Repeat("-", 80))
+	fmt.Printf("  %smanagementPolicies%s:\n", keyColor, resetColor)
+	for _, policy := range app.managedResource.Spec.ManagementPolicies {
+		fmt.Printf("    - %s%s%s\n", valueColor, policy, resetColor)
+	}
+	fmt.Println("---")
 }

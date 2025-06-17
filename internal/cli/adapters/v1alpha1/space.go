@@ -3,7 +3,6 @@ package v1alpha1
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -12,7 +11,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
 // CFSpace implements the Resource interface
@@ -52,18 +51,18 @@ func (a *CFSpaceAdapter) GetResourceType() string {
 
 var sshEnabled bool
 
-func (a *CFSpaceAdapter) FetchResources(ctx context.Context, filter res.ResourceFilter) ([]res.Resource, error) {
+func (a *CFSpaceAdapter) FetchResources(ctx context.Context, filter provider.ResourceFilter) ([]provider.Resource, error) {
 	// Get filter criteria
 	criteria := filter.GetFilterCriteria()
 
 	// Fetch resources from provider
-	providerResources, err := a.GetResourcesByType(ctx, v1alpha1.Space_Kind, criteria)
+	providerResources, err := a.CFClient.GetResourcesByType(ctx, v1alpha1.Space_Kind, criteria)
 	if err != nil {
 		return nil, err
 	}
 
 	// Map to Resource interface
-	resources := make([]res.Resource, len(providerResources))
+	resources := make([]provider.Resource, len(providerResources))
 
 	for i, providerResource := range providerResources {
 		resourceData, ok := providerResource.(map[string]interface{})
@@ -71,7 +70,7 @@ func (a *CFSpaceAdapter) FetchResources(ctx context.Context, filter res.Resource
 			return nil, fmt.Errorf("invalid provider resource format")
 		}
 
-		resource, err := a.MapToResource(resourceData["result"], filter.GetManagementPolicies())
+		resource, err := a.MapToResource(ctx, resourceData["result"], filter.GetManagementPolicies())
 		if ssh, ok := resourceData["SSH"].(bool); ok {
 			sshEnabled = ssh
 		} else {
@@ -86,7 +85,7 @@ func (a *CFSpaceAdapter) FetchResources(ctx context.Context, filter res.Resource
 	return resources, nil
 }
 
-func (a *CFSpaceAdapter) MapToResource(providerResource interface{}, managementPolicies []v1.ManagementAction) (res.Resource, error) {
+func (a *CFSpaceAdapter) MapToResource(ctx context.Context, providerResource interface{}, managementPolicies []v1.ManagementAction) (provider.Resource, error) {
 	space, ok := providerResource.(*cfresource.Space)
 
 	fmt.Println("- Space: " + space.Name + " with GUID: " + space.GUID)
@@ -119,50 +118,39 @@ func (a *CFSpaceAdapter) MapToResource(providerResource interface{}, managementP
 	}, nil
 }
 
-func (a *CFSpaceAdapter) PreviewResource(resource res.Resource) {
+func (a *CFSpaceAdapter) PreviewResource(resource provider.Resource) {
 	space, ok := resource.(*CFSpace)
 	if !ok {
+		fmt.Println("Invalid resource type provided for preview.")
 		return
 	}
 
-	const maxWidth = 30
+	const (
+		keyColor   = "\033[36m" // Cyan
+		valueColor = "\033[32m" // Green
+		resetColor = "\033[0m"  // Reset
+	)
 
-	utils.PrintLine("API Version", space.managedResource.APIVersion, maxWidth)
-	utils.PrintLine("Kind", space.managedResource.Kind, maxWidth)
-	utils.PrintLine("Name", "<generated on creation>", maxWidth)
-	utils.PrintLine("External Name", space.managedResource.Annotations["crossplane.io/external-name"], maxWidth)
-
-	allowSSH := "false"
-	if space.managedResource.Spec.ForProvider.AllowSSH {
-		allowSSH = "true"
-	}
-	utils.PrintLine("Allow SSH", allowSSH, maxWidth)
-
+	fmt.Printf("%sapiVersion%s: %s%s%s\n", keyColor, resetColor, valueColor, space.managedResource.APIVersion, resetColor)
+	fmt.Printf("%skind%s: %s%s%s\n", keyColor, resetColor, valueColor, space.managedResource.Kind, resetColor)
+	fmt.Printf("%smetadata%s:\n  %sname%s: %s<generated on creation>%s\n", keyColor, resetColor, keyColor, resetColor, valueColor, resetColor)
+	fmt.Printf("  %sannotations%s:\n    %scrossplane.io/external-name%s: %s%s%s\n", keyColor, resetColor, keyColor, resetColor, valueColor, space.managedResource.Annotations["crossplane.io/external-name"], resetColor)
+	fmt.Printf("%sspec%s:\n", keyColor, resetColor)
+	fmt.Printf("  %sforProvider%s:\n", keyColor, resetColor)
+	fmt.Printf("    %sname%s: %s%s%s\n", keyColor, resetColor, valueColor, space.managedResource.Spec.ForProvider.Name, resetColor)
+	fmt.Printf("    %sallowSSH%s: %s%v%s\n", keyColor, resetColor, valueColor, space.managedResource.Spec.ForProvider.AllowSSH, resetColor)
 	if space.managedResource.Spec.ForProvider.Org != nil {
-		utils.PrintLine("Organization GUID", *space.managedResource.Spec.ForProvider.Org, maxWidth)
-	} else {
-		utils.PrintLine("Organization GUID", "Not specified", maxWidth)
+		fmt.Printf("    %sorg%s: %s%s%s\n", keyColor, resetColor, valueColor, *space.managedResource.Spec.ForProvider.Org, resetColor)
 	}
-
 	if len(space.managedResource.Spec.ForProvider.Labels) > 0 {
-		var labels []string
+		fmt.Printf("    %slabels%s:\n", keyColor, resetColor)
 		for key, value := range space.managedResource.Spec.ForProvider.Labels {
-			labels = append(labels, fmt.Sprintf("%s: %s", key, *value))
+			fmt.Printf("      %s%s%s: %s%s%s\n", keyColor, key, resetColor, valueColor, *value, resetColor)
 		}
-		utils.PrintLine("Labels", strings.Join(labels, "; "), maxWidth)
-	} else {
-		utils.PrintLine("Labels", "None", maxWidth)
 	}
-
-	if len(space.managedResource.Spec.ManagementPolicies) > 0 {
-		var policies []string
-		for _, policy := range space.managedResource.Spec.ManagementPolicies {
-			policies = append(policies, string(policy))
-		}
-		utils.PrintLine("Management Policies", strings.Join(policies, ", "), maxWidth)
-	} else {
-		utils.PrintLine("Management Policies", "None", maxWidth)
+	fmt.Printf("  %smanagementPolicies%s:\n", keyColor, resetColor)
+	for _, policy := range space.managedResource.Spec.ManagementPolicies {
+		fmt.Printf("    - %s%s%s\n", valueColor, policy, resetColor)
 	}
-
-	fmt.Println(strings.Repeat("-", 80))
+	fmt.Println("---")
 }

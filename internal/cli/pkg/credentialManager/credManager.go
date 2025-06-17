@@ -14,7 +14,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/adapters"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
 const ConfigName = ".xpcfi"
@@ -49,14 +49,14 @@ func CreateEnvironment(kubeConfigPath string, configPath string, ctx context.Con
 	if kubeConfigPath == "" {
 		kubeConfigPath = getKubeConfigFallBackPath()
 	}
-	creds, err := clientAdapter.GetCredentials(ctx, kubeConfigPath, client.ProviderConfigRef{Name: providerConfigName, Namespace: providerConfigNamespace}, scheme)
+	creds, err := clientAdapter.GetCredentials(ctx, kubeConfigPath, provider.ProviderConfigRef{Name: providerConfigName, Namespace: providerConfigNamespace}, scheme)
 
 	kingpin.FatalIfError(err, errGetCredentials)
 
 	storeCredentials(creds, kubeConfigPath, configPath)
 }
 
-func storeCredentials(creds client.Credentials, kubeConfigPath string, configPath string) {
+func storeCredentials(creds provider.Credentials, kubeConfigPath string, configPath string) {
 	jsonCreds, err := json.Marshal(creds)
 	kingpin.FatalIfError(err, errUnmarshalCredentials)
 	env := map[string]string{
@@ -89,7 +89,7 @@ func getKubeConfigFallBackPath() string {
 	return absPath
 }
 
-func RetrieveCredentials() client.Credentials {
+func RetrieveCredentials() provider.Credentials {
 	file := utils.OpenFile(ConfigName)
 	defer func() {
 		err := file.Close()

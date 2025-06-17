@@ -9,22 +9,20 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/credentialManager"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/config"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/kubernetes"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
 // Importer is the main struct for importing resources
 type Importer struct {
-	ClientAdapter    client.ClientAdapter
-	ResourceAdapters map[string]resource.ResourceAdapter
-	ConfigParser     config.ConfigParser
+	ClientAdapter    provider.ClientAdapter
+	ResourceAdapters map[string]provider.ResourceAdapter
+	ConfigParser     provider.ConfigParser
 	Scheme           *runtime.Scheme
 }
 
 // ImportResources imports resources using the provided adapters
-func (i *Importer) ImportResources(ctx context.Context, configPath string, kubeConfigPath string, scheme *runtime.Scheme) ([]resource.Resource, error) {
+func (i *Importer) ImportResources(ctx context.Context, configPath string, kubeConfigPath string, scheme *runtime.Scheme) ([]provider.Resource, error) {
 	// Parse config
 	providerConfig, resourceFilters, err := i.ConfigParser.ParseConfig(configPath)
 	if err != nil {
@@ -40,7 +38,7 @@ func (i *Importer) ImportResources(ctx context.Context, configPath string, kubeC
 	creds := credentialManager.RetrieveCredentials()
 
 	// Import resources using adapters
-	var allResources []resource.Resource
+	var allResources []provider.Resource
 	for _, filter := range resourceFilters {
 		resourceType := filter.GetResourceType()
 		adapter, exists := i.ResourceAdapters[resourceType]
@@ -72,7 +70,7 @@ func (i *Importer) ImportResources(ctx context.Context, configPath string, kubeC
 }
 
 // PreviewResources previews the resources to be imported
-func (i *Importer) PreviewResources(resources []resource.Resource) {
+func (i *Importer) PreviewResources(resources []provider.Resource) {
 	fmt.Println(strings.Repeat("-", 80))
 	for _, res := range resources {
 		adapter, exists := i.ResourceAdapters[res.GetResourceType()]
@@ -83,7 +81,7 @@ func (i *Importer) PreviewResources(resources []resource.Resource) {
 }
 
 // CreateResources creates the imported resources in Kubernetes
-func (i *Importer) CreateResources(ctx context.Context, resources []resource.Resource, kubeConfigPath string, transactionID string) error {
+func (i *Importer) CreateResources(ctx context.Context, resources []provider.Resource, kubeConfigPath string, transactionID string) error {
 	// Create Kubernetes client
 	k8sClient, err := kubernetes.NewK8sClient(kubeConfigPath, i.Scheme)
 	if err != nil {

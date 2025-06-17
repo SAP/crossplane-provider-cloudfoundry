@@ -16,15 +16,16 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/role"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/kubernetes"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
 var (
 	errIsSSHEnabled         = "Could not check if SSH is enabled for the space"
 	errListOrganizations    = "Could not list organizations"
 	errCreateCFConfig       = "Could not create CF config"
-	errCreateK8sClient      = "Could not create Kubernetes client"
+	errCreateK8sClient      = "Could not create Kubernetes provider"
 	errGetProviderConfig    = "Could not get provider config"
 	errGetSecret            = "Could not get secret"
 	errExtractCredentials   = "Credentials key not found in secret data"
@@ -52,7 +53,7 @@ func (c *CFCredentials) GetAuthData() map[string][]byte {
 
 // CFClient implements the ProviderClient interface
 type CFClient struct {
-	client cfv3.Client
+	cf cfv3.Client
 }
 
 func (c *CFClient) GetResourcesByType(ctx context.Context, resourceType string, filter map[string]string) ([]interface{}, error) {
@@ -65,6 +66,10 @@ func (c *CFClient) GetResourcesByType(ctx context.Context, resourceType string, 
 		return c.getApps(ctx, filter)
 	case v1alpha1.RouteKind:
 		return c.getRoutes(ctx, filter)
+	case v1alpha1.SpaceMembersKind:
+		return c.getSpaceMembers(ctx, filter)
+	case v1alpha1.OrgMembersKind:
+		return c.getOrgMembers(ctx, filter)
 	case v1alpha1.ServiceInstance_Kind:
 		return c.getServiceInstances(ctx, filter)
 	default:
@@ -85,8 +90,12 @@ func (c *CFClient) getSpaces(ctx context.Context, filter map[string]string) ([]i
 
 	// get referenced org
 	orgRefFilter := cfv3.OrganizationListOptions{Names: cfv3.Filter{Values: []string{orgName}}}
-	orgRef, err := c.client.Organizations.ListAll(ctx, &orgRefFilter)
+	orgRef, err := c.cf.Organizations.ListAll(ctx, &orgRefFilter)
 	kingpin.FatalIfError(err, "%s", errGetOrgReference)
+
+	if len(orgRef) == 0 || orgRef[0].GUID == "" {
+		kingpin.FatalIfError(fmt.Errorf("organization %s not found", orgName), "%s", errGetOrgReference)
+	}
 
 	if orgRef[0].GUID == "" {
 		kingpin.FatalIfError(fmt.Errorf("organization %s not found", orgName), "%s", errGetOrgReference)
@@ -96,7 +105,7 @@ func (c *CFClient) getSpaces(ctx context.Context, filter map[string]string) ([]i
 	opt := &cfv3.SpaceListOptions{OrganizationGUIDs: cfv3.Filter{Values: []string{orgRef[0].GUID}}}
 
 	// Get all spaces from CF
-	responseCollection, err := c.client.Spaces.ListAll(ctx, opt)
+	responseCollection, err := c.cf.Spaces.ListAll(ctx, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -108,7 +117,7 @@ func (c *CFClient) getSpaces(ctx context.Context, filter map[string]string) ([]i
 		// Check if the space name matches
 		if utils.IsFullMatch(name, space.Name) {
 			results = append(results, space)
-			isSSHEnabled, err := c.client.SpaceFeatures.IsSSHEnabled(ctx, space.GUID)
+			isSSHEnabled, err := c.cf.SpaceFeatures.IsSSHEnabled(ctx, space.GUID)
 			kingpin.FatalIfError(err, "%s", errIsSSHEnabled)
 			SSHlist = append(SSHlist, isSSHEnabled)
 		}
@@ -132,10 +141,17 @@ func (c *CFClient) getOrganizations(ctx context.Context, filter map[string]strin
 	if !ok {
 		return nil, fmt.Errorf("name filter is required for organizations")
 	}
+	utils.PrintLine("Fetching organizations with name:", name, 30)
 
 	// Get organizations from CF
-	organizations, err := c.client.Organizations.ListAll(ctx, &cfv3.OrganizationListOptions{})
+	organizations, err := c.cf.Organizations.ListAll(ctx, &cfv3.OrganizationListOptions{})
 	kingpin.FatalIfError(err, "%s", errListOrganizations)
+	if len(organizations) == 0 {
+		utils.PrintLine("Cannot get organizations with name:", name, 30)
+
+		return nil, fmt.Errorf("no organizations found")
+
+	}
 
 	// Filter organizations by name
 	var results []interface{}
@@ -157,7 +173,7 @@ func (c *CFClient) getSpaceReference(ctx context.Context, filter map[string]stri
 	}
 
 	spaceRefFilter := cfv3.SpaceListOptions{Names: cfv3.Filter{Values: []string{spaceName}}}
-	spaceRef, err := c.client.Spaces.ListAll(ctx, &spaceRefFilter)
+	spaceRef, err := c.cf.Spaces.ListAll(ctx, &spaceRefFilter)
 	if err != nil {
 		return "", fmt.Errorf("%s: %w", errGetSpaceReference, err)
 	}
@@ -188,7 +204,7 @@ func (c *CFClient) getApps(ctx context.Context, filter map[string]string) ([]int
 	opt := &cfv3.AppListOptions{SpaceGUIDs: cfv3.Filter{Values: []string{spaceGUID}}}
 
 	// Get apps from CF
-	responseCollection, err := c.client.Applications.ListAll(ctx, opt)
+	responseCollection, err := c.cf.Applications.ListAll(ctx, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -224,7 +240,7 @@ func (c *CFClient) getRoutes(ctx context.Context, filter map[string]string) ([]i
 
 	// get referenced domain
 	domainRefFilter := cfv3.DomainListOptions{Names: cfv3.Filter{Values: []string{domainName}}}
-	domainRef, err := c.client.Domains.ListAll(ctx, &domainRefFilter)
+	domainRef, err := c.cf.Domains.ListAll(ctx, &domainRefFilter)
 	kingpin.FatalIfError(err, "%s", errGetDomainReference)
 
 	if domainRef[0].GUID == "" {
@@ -238,7 +254,7 @@ func (c *CFClient) getRoutes(ctx context.Context, filter map[string]string) ([]i
 	}
 
 	// Get domains from CF
-	responseCollection, err := c.client.Routes.ListAll(ctx, opt)
+	responseCollection, err := c.cf.Routes.ListAll(ctx, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -279,7 +295,7 @@ func (c *CFClient) getServiceInstances(ctx context.Context, filter map[string]st
 	}
 
 	// Get service instances from CF
-	responseCollection, err := c.client.ServiceInstances.ListAll(ctx, opt)
+	responseCollection, err := c.cf.ServiceInstances.ListAll(ctx, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -298,13 +314,13 @@ func (c *CFClient) getServiceInstances(ctx context.Context, filter map[string]st
 }
 
 func (c *CFClient) GetServicePlan(ctx context.Context, guid string) (*v1alpha1.ServicePlanParameters, error) {
-	sp, err := c.client.ServicePlans.Get(ctx, guid)
+	sp, err := c.cf.ServicePlans.Get(ctx, guid)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get service plan: %w", err)
 	}
 
 	// Get service offering details
-	so, err := c.client.ServiceOfferings.Get(ctx, sp.Relationships.ServiceOffering.Data.GUID)
+	so, err := c.cf.ServiceOfferings.Get(ctx, sp.Relationships.ServiceOffering.Data.GUID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get service offering: %w", err)
 	}
@@ -319,13 +335,13 @@ func (c *CFClient) GetServicePlan(ctx context.Context, guid string) (*v1alpha1.S
 func (c *CFClient) GetServiceCredentials(ctx context.Context, guid string, serviceType string) (*json.RawMessage, error) {
 	// Get credentials based on service type
 	if serviceType == "managed" {
-		params, err := c.client.ServiceInstances.GetManagedParameters(ctx, guid)
+		params, err := c.cf.ServiceInstances.GetManagedParameters(ctx, guid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get managed service parameters: %w", err)
 		}
 		return params, nil
 	} else {
-		creds, err := c.client.ServiceInstances.GetUserProvidedCredentials(ctx, guid)
+		creds, err := c.cf.ServiceInstances.GetUserProvidedCredentials(ctx, guid)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get user-provided service credentials: %w", err)
 		}
@@ -333,10 +349,144 @@ func (c *CFClient) GetServiceCredentials(ctx context.Context, guid string, servi
 	}
 }
 
+// getSpaceMembers fetches space members based on the provided filter
+func (c *CFClient) getSpaceMembers(ctx context.Context, filter map[string]string) ([]interface{}, error) {
+	// Space members require a space filter
+	spaceName, ok := filter["space"]
+	if !ok {
+		return nil, fmt.Errorf("space filter is required for fetching space members")
+	}
+
+	typeFilter, ok := filter["role_type"]
+	if !ok {
+		return nil, fmt.Errorf("role type filter is required for fetching space members")
+	}
+
+	spaceRefFilter := cfv3.SpaceListOptions{Names: cfv3.Filter{Values: []string{spaceName}}}
+	space, err := c.cf.Spaces.Single(ctx, &spaceRefFilter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get space: %w", err)
+	}
+
+	// Get all roles for the space
+	opts := cfv3.NewRoleListOptions()
+	opts.SpaceGUIDs.EqualTo(space.GUID)
+
+	roleTypes := []string{
+		v1alpha1.SpaceDevelopers,
+		v1alpha1.SpaceManagers,
+		v1alpha1.SpaceAuditors,
+		v1alpha1.SpaceSupporters,
+	}
+	results := make([]any, 0, len(roleTypes))
+
+	for _, roleType := range roleTypes {
+		if !utils.IsFullMatch(typeFilter, roleType) {
+			continue
+		}
+
+		utils.PrintLine("Fetching space members of ", roleType, 30)
+		// Get the space reference
+		opts.WithSpaceRoleType(role.SpaceRoleType(roleType))
+
+		_, users, err := c.cf.Roles.ListIncludeUsersAll(ctx, opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get space roles: %w", err)
+		}
+
+		members := make([]*v1alpha1.Member, 0, len(users))
+
+		for _, user := range users {
+			members = append(members, &v1alpha1.Member{
+				Username: *user.Username,
+				Origin:   *user.Origin,
+			})
+		}
+
+		spaceMembers := &v1alpha1.SpaceMembersParameters{
+			SpaceReference: v1alpha1.SpaceReference{Space: &space.GUID, SpaceName: &space.Name},
+			RoleType:       roleType,
+			MemberList: v1alpha1.MemberList{
+				Members: members,
+			},
+		}
+		results = append(results, *spaceMembers)
+	}
+
+	return results, nil
+}
+
+// getOrgMembers fetches org members based on the provided filter
+func (c *CFClient) getOrgMembers(ctx context.Context, filter map[string]string) ([]interface{}, error) {
+	// Org members require an org filter
+	orgName, ok := filter["org"]
+	if !ok {
+		return nil, fmt.Errorf("org filter is required for fetching org members")
+	}
+
+	typeFilter, ok := filter["role_type"]
+	if !ok {
+		return nil, fmt.Errorf("role type filter is required for fetching org members")
+	}
+
+	orgRefFilter := cfv3.OrganizationListOptions{Names: cfv3.Filter{Values: []string{orgName}}}
+	org, err := c.cf.Organizations.Single(ctx, &orgRefFilter)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get org: %w", err)
+	}
+
+	// Get all roles for the org
+	opts := cfv3.NewRoleListOptions()
+	opts.OrganizationGUIDs.EqualTo(org.GUID)
+
+	roleTypes := []string{
+		v1alpha1.OrgUsers,
+		v1alpha1.OrgManagers,
+		v1alpha1.OrgAuditors,
+		v1alpha1.OrgBillingManagers,
+	}
+	results := make([]any, 0, len(roleTypes))
+
+	for _, roleType := range roleTypes {
+		if !utils.IsFullMatch(typeFilter, roleType) {
+			continue
+		}
+
+		utils.PrintLine("Fetching org members of ", roleType, 30)
+		// Get the org reference
+		opts.WithOrganizationRoleType(role.OrgRoleType(roleType))
+
+		_, users, err := c.cf.Roles.ListIncludeUsersAll(ctx, opts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get org roles: %w", err)
+		}
+
+		members := make([]*v1alpha1.Member, 0, len(users))
+
+		for _, user := range users {
+			members = append(members, &v1alpha1.Member{
+				Username: *user.Username,
+				Origin:   *user.Origin,
+			})
+		}
+
+		orgMembers := &v1alpha1.OrgMembersParameters{
+			OrgReference: v1alpha1.OrgReference{Org: &org.GUID, OrgName: &org.Name},
+			RoleType:     roleType,
+			MemberList: v1alpha1.MemberList{
+				Members: members,
+			},
+		}
+		results = append(results, *orgMembers)
+	}
+
+	return results, nil
+}
+
 // CFClientAdapter implements the ClientAdapter interface
 type CFClientAdapter struct{}
 
-func (a *CFClientAdapter) BuildClient(ctx context.Context, credentials client.Credentials) (client.ProviderClient, error) {
+func (a *CFClientAdapter) BuildClient(ctx context.Context, credentials provider.Credentials) (provider.ProviderClient, error) {
 	cfCreds, ok := credentials.(*CFCredentials)
 	config, err := cfconfig.New(cfCreds.ApiEndpoint, cfconfig.UserPassword(cfCreds.Email, cfCreds.Password))
 	kingpin.FatalIfError(err, "%s", errCreateCFConfig)
@@ -345,16 +495,16 @@ func (a *CFClientAdapter) BuildClient(ctx context.Context, credentials client.Cr
 		return nil, fmt.Errorf("invalid credentials type")
 	}
 
-	// Build CF client
+	// Build CF provider
 	cfClientInstance, err := cfv3.New(config)
 	if err != nil {
 		return nil, err
 	}
 
-	return &CFClient{client: *cfClientInstance}, nil
+	return &CFClient{cf: *cfClientInstance}, nil
 }
 
-func (a *CFClientAdapter) GetCredentials(ctx context.Context, kubeConfigPath string, providerConfigRef client.ProviderConfigRef, scheme *runtime.Scheme) (client.Credentials, error) {
+func (a *CFClientAdapter) GetCredentials(ctx context.Context, kubeConfigPath string, providerConfigRef provider.ProviderConfigRef, scheme *runtime.Scheme) (provider.Credentials, error) {
 	providerConfig := &v1beta1.ProviderConfig{}
 
 	resourceRef := types.NamespacedName{

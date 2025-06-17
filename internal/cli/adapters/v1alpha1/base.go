@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/adapters"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
 // BaseAdapter provides common functionality for all adapters
@@ -14,7 +14,7 @@ type BaseAdapter struct {
 }
 
 // Connect establishes a connection to the provider
-func (a *BaseAdapter) Connect(ctx context.Context, creds client.Credentials) error {
+func (a *BaseAdapter) Connect(ctx context.Context, creds provider.Credentials) error {
 	cfCreds, ok := creds.(*adapters.CFCredentials)
 	if !ok {
 		return fmt.Errorf("invalid credentials type")
