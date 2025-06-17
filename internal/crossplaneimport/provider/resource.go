@@ -1,12 +1,10 @@
-package resource
+package provider
 
 import (
 	"context"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
-
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/client"
 )
 
 // Resource represents a generic resource that can be imported
@@ -45,13 +43,13 @@ type ResourceAdapter interface {
 	GetResourceType() string
 
 	// Connect establishes a connection to the provider
-	Connect(ctx context.Context, credentials client.Credentials) error
+	Connect(ctx context.Context, credentials Credentials) error
 
 	// FetchResources fetches resources from the provider
 	FetchResources(ctx context.Context, filter ResourceFilter) ([]Resource, error)
 
 	// MapToResource maps a provider-specific resource to a Resource
-	MapToResource(providerResource interface{}, managementPolicies []v1.ManagementAction) (Resource, error)
+	MapToResource(ctx context.Context, providerResource interface{}, managementPolicies []v1.ManagementAction) (Resource, error)
 
 	// PreviewResource displays a preview of the resource
 	PreviewResource(resource Resource)

@@ -11,7 +11,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
 // CFSpace implements the Resource interface
@@ -51,18 +51,18 @@ func (a *CFSpaceAdapter) GetResourceType() string {
 
 var sshEnabled bool
 
-func (a *CFSpaceAdapter) FetchResources(ctx context.Context, filter res.ResourceFilter) ([]res.Resource, error) {
+func (a *CFSpaceAdapter) FetchResources(ctx context.Context, filter provider.ResourceFilter) ([]provider.Resource, error) {
 	// Get filter criteria
 	criteria := filter.GetFilterCriteria()
 
 	// Fetch resources from provider
-	providerResources, err := a.GetResourcesByType(ctx, v1alpha1.Space_Kind, criteria)
+	providerResources, err := a.CFClient.GetResourcesByType(ctx, v1alpha1.Space_Kind, criteria)
 	if err != nil {
 		return nil, err
 	}
 
 	// Map to Resource interface
-	resources := make([]res.Resource, len(providerResources))
+	resources := make([]provider.Resource, len(providerResources))
 
 	for i, providerResource := range providerResources {
 		resourceData, ok := providerResource.(map[string]interface{})
@@ -70,7 +70,7 @@ func (a *CFSpaceAdapter) FetchResources(ctx context.Context, filter res.Resource
 			return nil, fmt.Errorf("invalid provider resource format")
 		}
 
-		resource, err := a.MapToResource(resourceData["result"], filter.GetManagementPolicies())
+		resource, err := a.MapToResource(ctx, resourceData["result"], filter.GetManagementPolicies())
 		if ssh, ok := resourceData["SSH"].(bool); ok {
 			sshEnabled = ssh
 		} else {
@@ -85,7 +85,7 @@ func (a *CFSpaceAdapter) FetchResources(ctx context.Context, filter res.Resource
 	return resources, nil
 }
 
-func (a *CFSpaceAdapter) MapToResource(providerResource interface{}, managementPolicies []v1.ManagementAction) (res.Resource, error) {
+func (a *CFSpaceAdapter) MapToResource(ctx context.Context, providerResource interface{}, managementPolicies []v1.ManagementAction) (provider.Resource, error) {
 	space, ok := providerResource.(*cfresource.Space)
 
 	fmt.Println("- Space: " + space.Name + " with GUID: " + space.GUID)
@@ -118,7 +118,7 @@ func (a *CFSpaceAdapter) MapToResource(providerResource interface{}, managementP
 	}, nil
 }
 
-func (a *CFSpaceAdapter) PreviewResource(resource res.Resource) {
+func (a *CFSpaceAdapter) PreviewResource(resource provider.Resource) {
 	space, ok := resource.(*CFSpace)
 	if !ok {
 		fmt.Println("Invalid resource type provided for preview.")

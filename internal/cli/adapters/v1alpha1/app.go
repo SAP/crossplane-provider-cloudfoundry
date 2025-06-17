@@ -11,7 +11,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
 // CFApp implements the Resource interface
@@ -49,20 +49,20 @@ func (a *CFAppAdapter) GetResourceType() string {
 	return v1alpha1.App_Kind
 }
 
-func (a *CFAppAdapter) FetchResources(ctx context.Context, filter res.ResourceFilter) ([]res.Resource, error) {
+func (a *CFAppAdapter) FetchResources(ctx context.Context, filter provider.ResourceFilter) ([]provider.Resource, error) {
 	// Get filter criteria
 	criteria := filter.GetFilterCriteria()
 
 	// Fetch resources from provider
-	providerResources, err := a.GetResourcesByType(ctx, v1alpha1.App_Kind, criteria)
+	providerResources, err := a.CFClient.GetResourcesByType(ctx, v1alpha1.App_Kind, criteria)
 	if err != nil {
 		return nil, err
 	}
 
 	// Map to Resource interface
-	resources := make([]res.Resource, len(providerResources))
+	resources := make([]provider.Resource, len(providerResources))
 	for i, providerResource := range providerResources {
-		resource, err := a.MapToResource(providerResource, filter.GetManagementPolicies())
+		resource, err := a.MapToResource(ctx, providerResource, filter.GetManagementPolicies())
 		if err != nil {
 			return nil, err
 		}
@@ -72,11 +72,8 @@ func (a *CFAppAdapter) FetchResources(ctx context.Context, filter res.ResourceFi
 	return resources, nil
 }
 
-func (a *CFAppAdapter) MapToResource(providerResource interface{}, managementPolicies []v1.ManagementAction) (res.Resource, error) {
+func (a *CFAppAdapter) MapToResource(ctx context.Context, providerResource interface{}, managementPolicies []v1.ManagementAction) (provider.Resource, error) {
 	app, ok := providerResource.(*cfresource.App)
-
-	fmt.Println("- App: " + app.Name + " with GUID: " + app.GUID)
-
 	if !ok {
 		return nil, fmt.Errorf("invalid resource type")
 	}
@@ -87,15 +84,16 @@ func (a *CFAppAdapter) MapToResource(providerResource interface{}, managementPol
 	managedResource.Kind = v1alpha1.App_Kind
 	managedResource.SetAnnotations(map[string]string{"crossplane.io/external-name": app.GUID})
 	managedResource.SetGenerateName(utils.NormalizeToRFC1123(app.Name))
-	managedResource.Spec.ForProvider.Space = &app.Relationships.Space.Data.GUID
-	managedResource.Spec.DeletionPolicy = "Orphan"
 
 	managedResource.Labels = map[string]string{
 		"cf-name": app.Name,
 	}
 
 	// Set spec fields
+	managedResource.Spec.ForProvider.Labels = app.Metadata.Labels
+	managedResource.Spec.ForProvider.Annotations = app.Metadata.Annotations
 	managedResource.Spec.ForProvider.Name = app.Name
+	managedResource.Spec.ForProvider.Space = &app.Relationships.Space.Data.GUID
 	managedResource.Spec.ManagementPolicies = managementPolicies
 
 	return &CFApp{
@@ -104,7 +102,7 @@ func (a *CFAppAdapter) MapToResource(providerResource interface{}, managementPol
 	}, nil
 }
 
-func (a *CFAppAdapter) PreviewResource(resource res.Resource) {
+func (a *CFAppAdapter) PreviewResource(resource provider.Resource) {
 	app, ok := resource.(*CFApp)
 	if !ok {
 		fmt.Println("Invalid resource type provided for preview.")

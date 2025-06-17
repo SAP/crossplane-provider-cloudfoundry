@@ -10,7 +10,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
 // CFOrgMembersAdapter implements the ResourceAdapter interface
@@ -24,20 +24,20 @@ func (a *CFOrgMembersAdapter) GetResourceType() string {
 }
 
 // FetchResources fetches OrgMembers resources based on the provided filter criteria
-func (a *CFOrgMembersAdapter) FetchResources(ctx context.Context, filter res.ResourceFilter) ([]res.Resource, error) {
+func (a *CFOrgMembersAdapter) FetchResources(ctx context.Context, filter provider.ResourceFilter) ([]provider.Resource, error) {
 	// Get filter criteria
 	criteria := filter.GetFilterCriteria()
 
 	// Fetch resources from provider
-	providerResources, err := a.GetResourcesByType(ctx, v1alpha1.OrgMembersKind, criteria)
+	providerResources, err := a.CFClient.GetResourcesByType(ctx, v1alpha1.OrgMembersKind, criteria)
 	if err != nil {
 		return nil, err
 	}
 
-	// Map to Resource interface
-	resources := make([]res.Resource, len(providerResources))
-	for i, providerResource := range providerResources {
-		resource, err := a.MapToResource(providerResource, filter.GetManagementPolicies())
+	// Map org members to resources
+	resources := make([]provider.Resource, len(providerResources))
+	for i, orgMember := range providerResources {
+		resource, err := a.MapToResource(ctx, orgMember, filter.GetManagementPolicies())
 		if err != nil {
 			return nil, err
 		}
@@ -48,7 +48,7 @@ func (a *CFOrgMembersAdapter) FetchResources(ctx context.Context, filter res.Res
 }
 
 // MapToResource converts a provider resource into a Resource interface
-func (a *CFOrgMembersAdapter) MapToResource(providerResource interface{}, managementPolicies []v1.ManagementAction) (res.Resource, error) {
+func (a *CFOrgMembersAdapter) MapToResource(ctx context.Context, providerResource interface{}, managementPolicies []v1.ManagementAction) (provider.Resource, error) {
 	pr, ok := providerResource.(v1alpha1.OrgMembersParameters)
 	if !ok {
 		return nil, fmt.Errorf("invalid provider resource type for org members")
@@ -68,7 +68,7 @@ func (a *CFOrgMembersAdapter) MapToResource(providerResource interface{}, manage
 }
 
 // PreviewResource displays the resource details in a formatted output
-func (a *CFOrgMembersAdapter) PreviewResource(resource res.Resource) {
+func (a *CFOrgMembersAdapter) PreviewResource(resource provider.Resource) {
 	members, ok := resource.(*CFOrgMembers)
 	if !ok {
 		fmt.Println("Invalid resource type provided for preview.")

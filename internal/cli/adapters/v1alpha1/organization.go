@@ -11,7 +11,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
-	res "github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/resource"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
 // CFOrganization implements the Resource interface
@@ -49,20 +49,20 @@ func (a *CFOrganizationAdapter) GetResourceType() string {
 	return v1alpha1.Org_Kind
 }
 
-func (a *CFOrganizationAdapter) FetchResources(ctx context.Context, filter res.ResourceFilter) ([]res.Resource, error) {
+func (a *CFOrganizationAdapter) FetchResources(ctx context.Context, filter provider.ResourceFilter) ([]provider.Resource, error) {
 	// Get filter criteria
 	criteria := filter.GetFilterCriteria()
 
 	// Fetch resources from provider
-	providerResources, err := a.GetResourcesByType(ctx, v1alpha1.Org_Kind, criteria)
+	providerResources, err := a.CFClient.GetResourcesByType(ctx, v1alpha1.Org_Kind, criteria)
 	if err != nil {
 		return nil, err
 	}
 
 	// Map to Resource interface
-	resources := make([]res.Resource, len(providerResources))
+	resources := make([]provider.Resource, len(providerResources))
 	for i, providerResource := range providerResources {
-		resource, err := a.MapToResource(providerResource, filter.GetManagementPolicies())
+		resource, err := a.MapToResource(ctx, providerResource, filter.GetManagementPolicies())
 		if err != nil {
 			return nil, err
 		}
@@ -72,7 +72,7 @@ func (a *CFOrganizationAdapter) FetchResources(ctx context.Context, filter res.R
 	return resources, nil
 }
 
-func (a *CFOrganizationAdapter) MapToResource(providerResource interface{}, managementPolicies []v1.ManagementAction) (res.Resource, error) {
+func (a *CFOrganizationAdapter) MapToResource(ctx context.Context, providerResource interface{}, managementPolicies []v1.ManagementAction) (provider.Resource, error) {
 	organization, ok := providerResource.(*cfresource.Organization)
 
 	fmt.Println("- Org: " + organization.Name + " with GUID: " + organization.GUID)
@@ -102,7 +102,7 @@ func (a *CFOrganizationAdapter) MapToResource(providerResource interface{}, mana
 	}, nil
 }
 
-func (a *CFOrganizationAdapter) PreviewResource(resource res.Resource) {
+func (a *CFOrganizationAdapter) PreviewResource(resource provider.Resource) {
 	organization, ok := resource.(*CFOrganization)
 	if !ok {
 		fmt.Println("Invalid resource type provided for preview.")
