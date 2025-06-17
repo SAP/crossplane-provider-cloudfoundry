@@ -6,8 +6,8 @@ metadata:
   name: my-org-auditor-daniel
 spec:
   forProvider:
-    type: "Manager"
+    type: "Auditor"
     orgRef:
       name: my-org
-    username: "user1@example.com"
+    username: "1@example.com"
     origin: sap.ids
