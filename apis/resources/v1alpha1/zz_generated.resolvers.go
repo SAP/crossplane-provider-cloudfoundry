@@ -167,6 +167,32 @@ func (mg *OrgRole) ResolveReferences(ctx context.Context, c client.Reader) error
 	return nil
 }
 
+// ResolveReferences of this RotatingCredentialBinding.
+func (mg *RotatingCredentialBinding) ResolveReferences(ctx context.Context, c client.Reader) error {
+	r := reference.NewAPIResolver(c, mg)
+
+	var rsp reference.ResolutionResponse
+	var err error
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.ServiceInstance),
+		Extract:      reference.ExternalName(),
+		Reference:    mg.Spec.ForProvider.ServiceInstanceRef,
+		Selector:     mg.Spec.ForProvider.ServiceInstanceSelector,
+		To: reference.To{
+			List:    &ServiceInstanceList{},
+			Managed: &ServiceInstance{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.ServiceInstance")
+	}
+	mg.Spec.ForProvider.ServiceInstance = reference.ToPtrValue(rsp.ResolvedValue)
+	mg.Spec.ForProvider.ServiceInstanceRef = rsp.ResolvedReference
+
+	return nil
+}
+
 // ResolveReferences of this Route.
 func (mg *Route) ResolveReferences(ctx context.Context, c client.Reader) error {
 	r := reference.NewAPIResolver(c, mg)
