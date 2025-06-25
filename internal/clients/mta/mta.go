@@ -87,6 +87,7 @@ func (c *Client) Observe(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 	return observation, nil
 }
 
+//nolint:gocyclo // this function is complex by design and is acceptable
 func (c *Client) Deploy(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 	fileObservation := cr.FindFileObservation(cr.Spec.ForProvider.File)
 	if fileObservation == nil || fileObservation.ID == nil {
@@ -133,7 +134,7 @@ func (c *Client) Deploy(cr *v1alpha1.Mta) (v1alpha1.MtaObservation, error) {
 		parameters["mtaExtDescriptorId"] = cr.Status.AtProvider.MtaExtensionId
 	}
 
-	namespace := ptr.Deref(cr.Spec.ForProvider.Namespace, "default")
+	namespace := ptr.Deref(cr.Spec.ForProvider.Namespace, "")
 	operation := mtaModels.Operation{
 		ProcessType: processType,
 		Namespace:   namespace,
