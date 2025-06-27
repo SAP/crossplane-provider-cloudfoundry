@@ -45,6 +45,7 @@ func CustomSetup(mgr ctrl.Manager, o controller.Options) error {
 		servicecredentialbinding.Setup,
 		spacequota.Setup,
 		domain.Setup,
+		usages.Setup,
 	} {
 		if err := setup(mgr, o); err != nil {
 			return err
