@@ -55,7 +55,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: SpaceSpec defines the desired state of Space
+            description: SpaceSpec defines the desired state of Space.
             properties:
               deletionPolicy:
                 default: Delete
@@ -75,46 +75,41 @@ spec:
                 properties:
                   allowSsh:
                     default: false
-                    description: |-
-                      (Boolean) Allows SSH to application containers via the CF CLI.
-                      Allows SSH to application containers via the CF CLI.
+                    description: (Boolean) Allows SSH to application containers via
+                      the CF CLI.
                     type: boolean
                   annotations:
                     additionalProperties:
                       type: string
-                    description: |-
-                      (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-                      The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The annotations associated with Cloud
+                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   isolationSegment:
-                    description: |-
-                      (String) The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization
-                      The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization
+                    description: (String) The ID of the isolation segment to assign
+                      to the space. The isolation segment must be entitled to the
+                      space's parent organization.
                     type: string
                   labels:
                     additionalProperties:
                       type: string
-                    description: |-
-                      (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-                      The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The labels associated with Cloud
+                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   name:
-                    description: |-
-                      (String) The name of the Space in Cloud Foundry
-                      The name of the Space in Cloud Foundry
+                    description: (String) The name of the space in Cloud Foundry.
                     type: string
                   org:
-                    description: (String) The guid of the organization
+                    description: (String) The GUID of the organization.
                     type: string
                   orgName:
-                    description: The name of the Cloud Foundry organization containing
-                      the space.
+                    description: (String) The name of the Cloud Foundry organization
+                      containing the space.
                     type: string
                   orgRef:
-                    description: Reference to an `Org` CR to retrieve the external
-                      GUID of the organization.
+                    description: (Attributes) Reference to an `Org` CR to retrieve
+                      the external GUID of the organization.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -148,8 +143,8 @@ spec:
                     - name
                     type: object
                   orgSelector:
-                    description: Selector to an `Org` CR to retrieve the external
-                      GUID of the Organization.
+                    description: (Attributes) Selector to an `Org` CR to retrieve
+                      the external GUID of the organization.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -362,58 +357,49 @@ spec:
               atProvider:
                 properties:
                   allowSsh:
-                    description: |-
-                      (Boolean) Allows SSH to application containers via the CF CLI.
-                      Allows SSH to application containers via the CF CLI.
+                    description: (Boolean) Allows SSH to application containers via
+                      the CF CLI.
                     type: boolean
                   annotations:
                     additionalProperties:
                       type: string
-                    description: |-
-                      (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-                      The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The annotations associated with Cloud
+                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   createdAt:
-                    description: |-
-                      (String) The date and time when the resource was created in RFC3339 format.
-                      The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                   id:
                     description: (String) The GUID of the object.
                     type: string
                   isolationSegment:
-                    description: |-
-                      (String) The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization
-                      The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization
+                    description: (String) The ID of the isolation segment to assign
+                      to the space. The isolation segment must be entitled to the
+                      space's parent organization.
                     type: string
                   labels:
                     additionalProperties:
                       type: string
-                    description: |-
-                      (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-                      The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The labels associated with Cloud
+                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   name:
-                    description: |-
-                      (String) The name of the Space in Cloud Foundry
-                      The name of the Space in Cloud Foundry
+                    description: (String) The name of the space in Cloud Foundry.
                     type: string
                   org:
-                    description: |-
-                      (String) The ID of the Org within which to create the space
-                      The ID of the Org within which to create the space
+                    description: (String) The ID of the organization within which
+                      to create the space.
                     type: string
                   quota:
-                    description: |-
-                      (String) The space quota applied to the space. To assign a space quota, use the space quota resource instead.
-                      The space quota applied to the space. To assign a space quota, use the space quota resource instead.
+                    description: (String) The space quota applied to the space. To
+                      assign a space quota, use the space quota resource instead.
                     type: string
                   updatedAt:
-                    description: |-
-                      (String) The date and time when the resource was updated in RFC3339 format.
-                      The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                 type: object
               conditions:

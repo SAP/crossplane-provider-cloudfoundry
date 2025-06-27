@@ -76,8 +76,8 @@ spec:
                   annotations:
                     additionalProperties:
                       type: string
-                    description: The annotations associated with Cloud Foundry resources.
-                      Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The annotations associated with the
+                      resource. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                   buildpacks:
                     description: (NOT SUPPORTED YET) An array of one ore more installed
@@ -122,13 +122,13 @@ spec:
                   labels:
                     additionalProperties:
                       type: string
-                    description: The labels associated with Cloud Foundry resources.
+                    description: (Map of String) The labels associated with the resource.
                       Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                   lifecycle:
                     default: buildpack
-                    description: Type of the lifecycle; valid values are `buildpack``,
-                      `cnb``, `docker``
+                    description: Type of the lifecycle; valid values are `buildpack`,
+                      `cnb`, `docker`
                     enum:
                     - buildpack
                     - cnb
@@ -140,7 +140,7 @@ spec:
                       MB, G, or GB, in either uppercase or lowercase.'
                     type: string
                   name:
-                    description: The name of the application.
+                    description: The `name` of the application.
                     type: string
                   no-route:
                     description: When set to true, any routes configuration specified
@@ -148,8 +148,8 @@ spec:
                       be removed.
                     type: boolean
                   orgName:
-                    description: The name of the Cloud Foundry organization containing
-                      the space.
+                    description: (String) The name of the Cloud Foundry organization
+                      containing the space.
                     type: string
                   path:
                     description: (NOT SUPPORTED YET) The path to the app directory
@@ -424,19 +424,19 @@ spec:
                       type: object
                     type: array
                   space:
-                    description: The `guid` of the Cloud Foundry space. This field
-                      is typically populated using references specified in `spaceRef`,
+                    description: (String) The GUID of the Cloud Foundry space. This
+                      field is typically populated using references specified in `spaceRef`,
                       `spaceSelector`, or `spaceName`.
                     type: string
                   spaceName:
-                    description: The name of the Cloud Foundry space to lookup the
-                      `guid` of the Space. Use `spaceName` only when the reference
-                      Space is not managed by Crossplane.
+                    description: (String) The name of the Cloud Foundry space to lookup
+                      the GUID of the space. Use `spaceName` only when the referenced
+                      space is not managed by Crossplane.
                     type: string
                   spaceRef:
-                    description: Reference to a `Space` CR to lookup the `guid` of
-                      the Cloud Foundry space. Preferred if the reference space is
-                      managed by Crossplane.
+                    description: (Attributes) Reference to a `Space` CR to lookup
+                      the GUID of the Cloud Foundry space. Preferred if the referenced
+                      space is managed by Crossplane.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -470,9 +470,9 @@ spec:
                     - name
                     type: object
                   spaceSelector:
-                    description: Selector for a `Space` CR to lookup the `guid` of
-                      the Cloud Foundry space. Preferred if the reference space is
-                      managed by Crossplane.
+                    description: (Attributes) Selector for a `Space` CR to lookup
+                      the GUID of the Cloud Foundry space. Preferred if the referenced
+                      space is managed by Crossplane.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -692,21 +692,21 @@ spec:
                     description: The yaml representation of the environment variables.
                     type: string
                   createdAt:
-                    description: The date and time when the resource was created in
-                      [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                   guid:
-                    description: The GUID of the Cloud Foundry resource
+                    description: (String) The GUID of the Cloud Foundry resource.
                     type: string
                   name:
-                    description: The name of the application.
+                    description: The `name` of the application.
                     type: string
                   state:
-                    description: the State of the application.
+                    description: the `state` of the application.
                     type: string
                   updatedAt:
-                    description: The date and time when the resource was updated in
-                      [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                 type: object
               conditions:

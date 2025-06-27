@@ -8,8 +8,8 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 )
@@ -19,213 +19,192 @@ import (
 type ServiceInstanceType string
 
 const (
-	// ManagedService manes the external resource is a managed service instance.
+	// ManagedService means the external resource is a managed service instance.
 	ManagedService ServiceInstanceType = "managed"
 
 	// UserProvidedService means the external resource is a user-provided service instance.
 	UserProvidedService ServiceInstanceType = "user-provided"
 )
 
-
-// ServiceInstanceParameters define the desired state of a Cloud Foundry service instance.
 type ServiceInstanceParameters struct {
-	// The name of the service instance
+	// (String) The name of the service instance
 	// +kubebuilder:validation:Required
 	Name *string `json:"name,omitempty" tf:"name,omitempty"`
 
-	// Type of the service instance. Either managed or user-provided. Default is managed.
+	// (String) Type of the service instance. Either managed or user-provided. Default is managed.
 	// +required
 	// +kubebuilder:default=managed
 	Type ServiceInstanceType `json:"type"`
 
+	// (Attributes) Reference to the Cloud Foundry space where the service instance will be created.
 	SpaceReference `json:",inline"`
 
-	// Fields relevant  for managed service instances
+	// (Attributes) Fields relevant for managed service instances. Only used when `type` is `managed`.
 	Managed `json:",inline"`
 
-	// Fields relevant only for user-provided service instances
+	// (Attributes) Fields relevant only for user-provided service instances. Only used when `type` is `user-provided`.
 	UserProvided `json:",inline"`
 
-	// Timeouts for the service instance operations
+	// (Attributes) Timeouts for the service instance operations.
 	// +kubebuilder:validation:Optional
 	Timeouts TimeoutsParameters `json:"timeouts,omitempty" tf:"timeouts,omitempty"`
 
-	// List of tags used by apps to identify service instances. They are shown in the app VCAP_SERVICES env.
+	// (List of String) List of tags used by apps to identify service instances. They are shown in the app VCAP_SERVICES env.
 	// +kubebuilder:validation:Optional
 	Tags []*string `json:"tags,omitempty" tf:"tags,omitempty"`
 
-	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +kubebuilder:validation:Optional
 	// +mapType=granular
 	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
 }
 
-
-// Managed defines parameters only valid for a managed service instance
+// Managed configuration for a managed service instance. Only used when `type` is `managed`.
 type Managed struct {
-	// (String) The ID of the service plan from which to create the service instance
-	// The ID of the service plan from which to create the service instance
+
+	// (Attributes) Reference to the service plan for the managed service instance.
 	// +kubebuilder:validation:Optional
 	ServicePlan *ServicePlanParameters `json:"servicePlan,omitempty"`
 
-	// Configuration parameters for the managed service instance, supplied as K8S runtime.RawExtension object
-	//
-	// The `parameters` field is NOT secret or secured in any way and should
-	// NEVER be used to hold sensitive information. To set parameters that
-	// contain secret information, you should ALWAYS store that information
-	// in a Secret and use the `paramsSecretRef` field.
+	// (Attributes) Configuration parameters for the managed service instance, supplied as a K8S runtime.RawExtension object.
+	// The `parameters` field is NOT secret or secured in any way and should NEVER be used to hold sensitive information.
+	// To set parameters that contain secret information, you should ALWAYS store that information in a Secret and use the `paramsSecretRef` field.
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Parameters *runtime.RawExtension `json:"parameters,omitempty"`
 
-
-	// Same as `parameters`, supplied as arbitrary JSON string. Ignored if `parameters` is set.
+	// (String) Same as `parameters`, supplied as arbitrary JSON string. Ignored if `parameters` is set.
 	// +optional
 	JSONParams *string `json:"jsonParams,omitempty"`
 
-	// Same as `parameters`, supplied as a Secret reference. Ignored if `parameters` or `jsonParams` is set.
+	// (Attributes) Same as `parameters`, supplied as a Secret reference. Ignored if `parameters` or `jsonParams` is set.
 	// +kubebuilder:validation:Optional
 	ParametersSecretRef *v1.SecretReference `json:"paramsSecretRef,omitempty" tf:"-"`
 
-
-	// MaintenanceInfo describes the version of the service instance
+	// (Attributes) Information about the version of this service instance; only shown when `type` is `managed`.
 	MaintenanceInfo MaintenanceInfo `json:"maintenanceInfo,omitempty"`
-
 }
 
-// UserProvided defines parameters only valid for a user-provided service instance
+// UserProvided configuration for a user-provided service instance. Only used when `type` is `user-provided`.
 type UserProvided struct {
-	// Arbitrary credentials as K8S runtime.RawExtension object, delivered to applications via VCAP_SERVICES environment variables.Applicable for user-provided service instance type.
-	//
-	// The Credentials field is NOT secret or secured in any way and should
-	// NEVER be used to hold sensitive information. To set parameters that
-	// contain secret information, you should ALWAYS store that information
-	// in a Secret and use the `credentialsSecretRef` field.
+	// (Attributes) Arbitrary credentials as K8S runtime.RawExtension object, delivered to applications via VCAP_SERVICES environment variables.
+	// The `credentials` field is NOT secret or secured in any way and should NEVER be used to hold sensitive information.
+	// To set parameters that contain secret information, you should ALWAYS store that information in a Secret and use the `credentialsSecretRef` field.
 	// +kubebuilder:pruning:PreserveUnknownFields
 	Credentials *runtime.RawExtension `json:"credentials,omitempty"`
 
-	// Same as `credentials`, supplied as arbitrary JSON string. Ignored if `credentials` is set.
+	// (String) Same as `credentials`, supplied as arbitrary JSON string. Ignored if `credentials` is set.
 	// +optional
 	JSONCredentials *string `json:"jsonCredentials,omitempty"`
 
-	// Same as `Credentials`, supplied as a Secret reference. Ignored if `credentials` or `jsonCredentials` is set.
+	// (Attributes) Same as `credentials`, supplied as a Secret reference. Ignored if `credentials` or `jsonCredentials` is set.
 	// +kubebuilder:validation:Optional
 	CredentialsSecretRef *v1.SecretReference `json:"credentialsSecretRef,omitempty"`
 
-	// URL to which requests for bound routes will be forwarded; only shown when type is user-provided.
+	// (String) URL to which requests for bound routes will be forwarded; only shown when `type` is `user-provided`.
 	// +kubebuilder:validation:Optional
 	RouteServiceURL string `json:"routeServiceUrl,omitempty"`
 
-	// URL to which logs for bound applications will be streamed; only shown when type is user-provided.
+	// (String) URL to which logs for bound applications will be streamed; only shown when `type` is `user-provided`.
 	// +kubebuilder:validation:Optional
 	SyslogDrainURL string `json:"syslogDrainUrl,omitempty"`
-
 }
 
-// ServiceInstanceObservation records the observed state of a Cloud Foundry service instance.
 type ServiceInstanceObservation struct {
-	// The GUID of the service instance
+	// (String) The GUID of the service instance.
 	ID *string `json:"id,omitempty"`
 
-	// The name of the service instance
+	// (String) The name of the service instance.
 	Name *string `json:"name,omitempty" tf:"name,omitempty"`
 
-	// The GUID of the space in which the service instance was created
+	// (String) The GUID of the space in which the service instance was created.
 	Space *string `json:"space,omitempty"`
 
-	// The GUID of the Service Plan for a managed service
+	// (String) The GUID of the service plan for a managed service instance.
 	ServicePlan *string `json:"servicePlan,omitempty"`
 
-	// The applied parameters of the managed service instance (TO BE IMPLEMENTED)
+	// (Attributes) The applied parameters of the managed service instance (TO BE IMPLEMENTED).
 	Parameters runtime.RawExtension `json:"parameters,omitempty"`
 
-	// The applied parameters of the managed service instance
+	// (String) The applied credentials of the managed service instance.
 	Credentials []byte `json:"credentials,omitempty"`
 
-	// The job GUID of the last async operation performed on the resource
+	// (String) The job GUID of the last async operation performed on the resource.
 	LastAsyncJob *string `json:"lastAsyncJob,omitempty"`
 
-
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +mapType=granular
 	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
 
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-	// The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +mapType=granular
 	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
 
-	// (Attributes) The details of the last operation performed on the resource (see below for nested schema)
-	LastOperation  `json:"lastOperation,omitempty" tf:"last_operation,omitempty"`
+	// (Attributes) The details of the last operation performed on the resource.
+	LastOperation `json:"lastOperation,omitempty" tf:"last_operation,omitempty"`
 
-	// (Attributes) Information about the version of this service instance; only shown when type is managed (see below for nested schema)
+	// (Attributes) Information about the version of this service instance; only shown when `type` is `managed`.
 	MaintenanceInfo MaintenanceInfo `json:"maintenanceInfo,omitempty" tf:"maintenance_info,omitempty"`
 
-	// (String) The URL to the service instance dashboard (or null if there is none); only shown when type is managed.
-	// The URL to the service instance dashboard (or null if there is none); only shown when type is managed.
+	// (String) The URL to the service instance dashboard (or null if there is none); only shown when `type` is `managed`.
 	DashboardURL *string `json:"dashboardUrl,omitempty" tf:"dashboard_url,omitempty"`
 
-	// URL to which requests for bound routes will be forwarded; only shown when type is user-provided.
+	// (String) URL to which requests for bound routes will be forwarded; only shown when `type` is `user-provided`.
 	RouteServiceURL *string `json:"routeServiceUrl,omitempty" tf:"route_service_url,omitempty"`
 
-	// URL to which logs for bound applications will be streamed; only shown when type is user-provided.
+	// (String) URL to which logs for bound applications will be streamed; only shown when `type` is `user-provided`.
 	SyslogDrainURL *string `json:"syslogDrainUrl,omitempty" tf:"syslog_drain_url,omitempty"`
 
 	// (List of String) List of tags used by apps to identify service instances. They are shown in the app VCAP_SERVICES env.
-	// List of tags used by apps to identify service instances. They are shown in the app VCAP_SERVICES env.
 	Tags []*string `json:"tags,omitempty" tf:"tags,omitempty"`
 
 	// (String) The date and time when the resource was created in RFC3339 format.
-	// The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	CreatedAt *string `json:"createdAt,omitempty" tf:"created_at,omitempty"`
 
 	// (String) The date and time when the resource was updated in RFC3339 format.
-	// The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	UpdatedAt *string `json:"updatedAt,omitempty" tf:"updated_at,omitempty"`
 
-	// (Boolean) Whether or not an upgrade of this service instance is available on the current Service Plan; details are available in the maintenance_info object; Only shown when type is managed
-	// Whether or not an upgrade of this service instance is available on the current Service Plan; details are available in the maintenance_info object; Only shown when type is managed
+	// (Boolean) Whether or not an upgrade of this service instance is available on the current service plan; details are available in the `maintenanceInfo` object; only shown when `type` is `managed`.
 	UpgradeAvailable *bool `json:"upgradeAvailable,omitempty" tf:"upgrade_available,omitempty"`
 }
 
-// MaintenanceInfo
+// MaintenanceInfo contains information about the version of this service instance.
 type MaintenanceInfo struct {
 
-	// (String) A description of the last operation
+	// (String) A description of the last operation.
 	// +kubebuilder:validation:Optional
 	Description *string `json:"description,omitempty" tf:"description,omitempty"`
 
-	// (String) The version of the service instance
+	// (String) The version of the service instance.
 	// +kubebuilder:validation:Optional
 	Version *string `json:"version,omitempty" tf:"version,omitempty"`
 }
 
-// ServicePlanParameters define a service plan
+// ServicePlanParameters defines a service plan for a managed service instance.
 type ServicePlanParameters struct {
-	// The ID of the service plan
+	// (String) The ID of the service plan from which to create the service instance.
 	// +optional
 	ID *string `json:"id"`
 
-	// The name of service offering
+	// (String) The name of the plan offering.
 	// +optional
 	Offering *string `json:"offering"`
 
-	// The name of service plan
+	// (String) The name of the service plan.
 	// +optional
 	Plan *string `json:"plan"`
 }
 
 type TimeoutsParameters struct {
 
-	// (String) Timeout for creating the service instance. Default is 40 minutes
+	// (String) Timeout for creating the service instance. Default is 40 minutes.
 	// +kubebuilder:validation:Optional
 	Create *string `json:"create,omitempty" tf:"create,omitempty"`
 
-	// (String) Timeout for deleting the service instance. Default is 40 minutes
+	// (String) Timeout for deleting the service instance. Default is 40 minutes.
 	// +kubebuilder:validation:Optional
 	Delete *string `json:"delete,omitempty" tf:"delete,omitempty"`
 
-	// (String) Timeout for updating the service instance. Default is 40 minutes
+	// (String) Timeout for updating the service instance. Default is 40 minutes.
 	// +kubebuilder:validation:Optional
 	Update *string `json:"update,omitempty" tf:"update,omitempty"`
 }
@@ -235,7 +214,7 @@ type ServiceInstanceSpec struct {
 	v1.ResourceSpec `json:",inline"`
 	ForProvider     ServiceInstanceParameters `json:"forProvider"`
 
-	// Enable drift detection for configuration parameters of managed service instance. Default is false.
+	// (Boolean) Enable drift detection for configuration parameters of managed service instance. Default is false.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=false
 	EnableParameterDriftDetection bool `json:"enableParameterDriftDetection,omitempty"`
@@ -251,7 +230,7 @@ type ServiceInstanceStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 
-// ServiceInstance is the Schema for the ServiceInstances API. Creates a service instance in a cloudfoundry space. Further documentation: https://docs.cloudfoundry.org/devguide/services
+// ServiceInstance is the Schema for the ServiceInstances API. Creates a service instance in a Cloud Foundry space. Further documentation: https://docs.cloudfoundry.org/devguide/services
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
@@ -260,8 +239,8 @@ type ServiceInstanceStatus struct {
 type ServiceInstance struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec   ServiceInstanceSpec   `json:"spec"`
-	Status ServiceInstanceStatus `json:"status,omitempty"`
+	Spec              ServiceInstanceSpec   `json:"spec"`
+	Status            ServiceInstanceStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -292,7 +271,6 @@ func (r *ServiceInstance) GetCloudFoundryName() string {
 	}
 	return *r.Spec.ForProvider.Name
 }
-
 
 // GetSpaceRef returns the reference to the space
 func (s *ServiceInstance) GetSpaceRef() *SpaceReference {
