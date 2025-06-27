@@ -7,91 +7,88 @@ import (
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 )
 
-// RouteObservation observations for routes
 type RouteObservation struct {
 	Resource `json:",inline"`
 
-	// Protocol of the route
+	// (String) The protocol of the route.
 	// +kubebuilder:validation:Optional
 	Protocol *string `json:"protocol,omitempty"`
 
-	// The host name of the route
+	// (String) The host name of the route.
 	// +kubebuilder:validation:Optional
 	Host *string `json:"host,omitempty"`
 
-	// The path of the route
+	// (String) The path of the route.
 	// +kubebuilder:validation:Optional
 	Path *string `json:"path,omitempty"`
 
-	// The URL of the route
+	// (String) The URL of the route.
 	// +kubebuilder:validation:Optional
 	URL *string `json:"url,omitempty"`
 
-	// The route options
+	// (Attributes) The route options.
 	// +kubebuilder:validation:Optional
 	Options *RouteOptions `json:"options,omitempty"`
 
-	// One or more route mapping(s) that will map this route to application(s). Can be repeated multiple times to load balance route traffic among multiple applications.
+	// (List of Attributes) One or more route mappings that map this route to applications. Can be repeated to load balance route traffic among multiple applications.
 	// +kubebuilder:validation:Optional
 	Destinations []RouteDestination `json:"destinations,omitempty"`
 }
 
-// RouteParameters parameters for Routes
 type RouteParameters struct {
 	SpaceReference `json:",inline"`
 
 	DomainReference `json:",inline"`
 
-	// The application's host name. This is required for shared domains.
+	// (String) The application's host name. Required for shared domains.
 	// +kubebuilder:validation:Optional
 	Host *string `json:"host,omitempty"`
 
-	// A path for an HTTP route.
+	// (String) A path for an HTTP route.
 	// +kubebuilder:validation:Optional
 	Path *string `json:"path,omitempty"`
 
-	// The port to associate with the route for a TCP route. Conflicts with random_port.
+	// (Integer) The port to associate with the route for a TCP route. Conflicts with `random_port`.
 	// +kubebuilder:validation:Optional
 	Port *int `json:"port,omitempty"`
 
-	// The route options
+	// (Attributes) The route options.
 	// +kubebuilder:validation:Optional
 	Options *RouteOptions `json:"options,omitempty"`
 }
 
-// RouteOptions parameters for domain.
 type RouteOptions struct {
-	// The load-balancer associated with this route. Valid values are ‘round-robin’ and ‘least-connections’
+	// (String) The load balancer associated with this route. Valid values are `round-robin` and `least-connections`.
 	// +kubebuilder:validation:Optional
 	LoadBalancing string `json:"loadbalancing,omitempty"`
 }
 
-// RouteDestination describes a route destinations
 type RouteDestination struct {
-	// The destination GUID
+	// (String) The destination GUID.
 	GUID string `json:"guid,omitempty"`
 
-	// The ID of the application to map this route to.
+	// (Attributes) The application to map this route to.
 	// +kubebuilder:validation:Required
 	App *RouteDestinationApp `json:"app,omitempty"`
 
-	// The port to associate with the route for a TCP route. Conflicts with random_port.
+	// (Integer) The port to associate with the route for a TCP route. Conflicts with `random_port`.
 	// +kubebuilder:validation:Optional
 	Port *int `json:"port,omitempty"`
 }
 
-// DestinationApp describes a destination application
 type RouteDestinationApp struct {
+	// (String) The application GUID.
 	GUID string `json:"guid,omitempty"`
 
-	// The process type of the destination.
+	// (String) The process type of the destination.
 	// +kubebuilder:validation:Optional
 	Process *string `json:"process,omitempty"`
 
-	// Port on the destination application
+	// (Integer) Port on the destination application.
 	// +kubebuilder:validation:Optional
 	Port *int `json:"port,omitempty"`
 
+	// (String) The protocol for the destination application.
 	Protocol *string `json:"protocol,omitempty"`
 }
 

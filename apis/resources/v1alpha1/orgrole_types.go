@@ -14,62 +14,49 @@ import (
 )
 
 type OrgRoleObservation struct {
-
-	// (String) The date and time when the resource was created in RFC3339 format.
-	// The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+	// (String) The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	CreatedAt *string `json:"createdAt,omitempty" tf:"created_at,omitempty"`
 
 	// (String) The GUID of the object.
 	ID *string `json:"id,omitempty" tf:"id,omitempty"`
 
-	// (String) The identity provider for the UAA user
-	// The identity provider for the UAA user
+	// (String) The identity provider for the UAA user.
 	Origin *string `json:"origin,omitempty" tf:"origin,omitempty"`
 
-	// (String) OrgRole type; see Valid role types
-	// OrgRole type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types)
+	// (String) The org role type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types).
 	Type *string `json:"type,omitempty" tf:"type,omitempty"`
 
-	// (String) The date and time when the resource was updated in RFC3339 format.
-	// The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+	// (String) The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	UpdatedAt *string `json:"updatedAt,omitempty" tf:"updated_at,omitempty"`
 
-	// (String) The guid of the cloudfoundry user to assign the role with
-	// The guid of the cloudfoundry user to assign the role with
+	// (String) The GUID of the Cloud Foundry user to assign the role to.
 	User *string `json:"user,omitempty" tf:"user,omitempty"`
 
-	// (String) The username of the cloudfoundry user to assign the role with
-	// The username of the cloudfoundry user to assign the role with
+	// (String) The username of the Cloud Foundry user to assign the role to.
 	Username *string `json:"username,omitempty" tf:"username,omitempty"`
 }
 
 type OrgRoleParameters struct {
-
 	OrgReference `json:",inline"`
 
-	// (String) OrgRole type; see Valid role types
-	// OrgRole type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types)
+	// (String) The org role type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types).
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=User;Auditor;Manager;BillingManager;Users;Auditors;Managers;BillingManagers
 	Type string `json:"type,omitempty" tf:"type,omitempty"`
 
-	// (String) The identity provider for the UAA user
-	// The identity provider for the UAA user
+	// (String) The identity provider for the UAA user.
 	// +kubebuilder:validation:Optional
 	Origin *string `json:"origin,omitempty" tf:"origin,omitempty"`
 
-	// (String) The username of the cloudfoundry user to assign the role with
-	// The username of the cloudfoundry user to assign the role with
+	// (String) The username of the Cloud Foundry user to assign the role to.
 	// +kubebuilder:validation:Required
 	Username string `json:"username,omitempty" tf:"username,omitempty"`
-
 }
 
 // OrgRoleSpec defines the desired state of OrgRole
 type OrgRoleSpec struct {
 	v1.ResourceSpec `json:",inline"`
 	ForProvider     OrgRoleParameters `json:"forProvider"`
-
 }
 
 // OrgRoleStatus defines the observed state of OrgRole.
@@ -91,8 +78,8 @@ type OrgRoleStatus struct {
 type OrgRole struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec   OrgRoleSpec   `json:"spec"`
-	Status OrgRoleStatus `json:"status,omitempty"`
+	Spec              OrgRoleSpec   `json:"spec"`
+	Status            OrgRoleStatus `json:"status,omitempty"`
 }
 
 // +kubebuilder:object:root=true

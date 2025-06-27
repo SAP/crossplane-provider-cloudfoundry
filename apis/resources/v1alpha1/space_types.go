@@ -16,85 +16,71 @@ import (
 type SpaceObservation struct {
 
 	// (Boolean) Allows SSH to application containers via the CF CLI.
-	// Allows SSH to application containers via the CF CLI.
 	AllowSSH bool `json:"allowSsh,omitempty" tf:"allow_ssh,omitempty"`
 
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +mapType=granular
 	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
 
-	// (String) The date and time when the resource was created in RFC3339 format.
-	// The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+	// (String) The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	CreatedAt *string `json:"createdAt,omitempty" tf:"created_at,omitempty"`
 
 	// (String) The GUID of the object.
 	ID string `json:"id,omitempty"`
 
-	// (String) The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization
-	// The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization
+	// (String) The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization.
 	IsolationSegment *string `json:"isolationSegment,omitempty" tf:"isolation_segment,omitempty"`
 
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-	// The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +mapType=granular
 	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
 
-	// (String) The name of the Space in Cloud Foundry
-	// The name of the Space in Cloud Foundry
+	// (String) The name of the space in Cloud Foundry.
 	Name string `json:"name,omitempty" tf:"name,omitempty"`
 
-	// (String) The ID of the Org within which to create the space
-	// The ID of the Org within which to create the space
+	// (String) The ID of the organization within which to create the space.
 	Org string `json:"org,omitempty" tf:"org,omitempty"`
 
 	// (String) The space quota applied to the space. To assign a space quota, use the space quota resource instead.
-	// The space quota applied to the space. To assign a space quota, use the space quota resource instead.
 	Quota *string `json:"quota,omitempty" tf:"quota,omitempty"`
 
-	// (String) The date and time when the resource was updated in RFC3339 format.
-	// The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+	// (String) The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	UpdatedAt *string `json:"updatedAt,omitempty" tf:"updated_at,omitempty"`
 }
 
 type SpaceParameters struct {
 
 	// (Boolean) Allows SSH to application containers via the CF CLI.
-	// Allows SSH to application containers via the CF CLI.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=false
 	AllowSSH bool `json:"allowSsh,omitempty" tf:"allow_ssh,omitempty"`
 
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +kubebuilder:validation:Optional
 	// +mapType=granular
 	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
 
-	// (String) The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization
-	// The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization
+	// (String) The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization.
 	// +kubebuilder:validation:Optional
 	IsolationSegment *string `json:"isolationSegment,omitempty" tf:"isolation_segment,omitempty"`
 
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-	// The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +kubebuilder:validation:Optional
 	// +mapType=granular
 	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
 
-	// (String) The name of the Space in Cloud Foundry
-	// The name of the Space in Cloud Foundry
+	// (String) The name of the space in Cloud Foundry.
 	// +kubebuilder:validation:Required
 	Name string `json:"name,omitempty" tf:"name,omitempty"`
 
+	// (Attributes) Reference to the organization in which to create the space.
 	OrgReference `json:",inline"`
 }
 
-// SpaceSpec defines the desired state of Space
+// SpaceSpec defines the desired state of Space.
 type SpaceSpec struct {
 	v1.ResourceSpec `json:",inline"`
 	ForProvider     SpaceParameters `json:"forProvider"`
-
 }
 
 // SpaceStatus defines the observed state of Space.
@@ -123,7 +109,7 @@ type Space struct {
 
 // +kubebuilder:object:root=true
 
-// SpaceList contains a list of Spaces
+// SpaceList contains a list of Spaces.
 type SpaceList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

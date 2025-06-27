@@ -7,28 +7,26 @@ import (
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 )
 
-// OrgMembersParameters encapsulate role assignments to CloudFoundry Organizations
 type OrgMembersParameters struct {
 	MemberList `json:",inline"`
 
 	OrgReference `json:",inline"`
 
-	// Org role type to assign to members; see valid role types https://v3-apidocs.cloudfoundry.org/version/3.127.0/index.html#valid-role-types
+	// (String) Org role type to assign to members; see valid role types https://v3-apidocs.cloudfoundry.org/version/3.127.0/index.html#valid-role-types
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=User;Auditor;Manager;BillingManager;Users;Auditors;Managers;BillingManagers
 	RoleType string `json:"roleType"`
 }
 
-// OrgMembersSpec defines the desired state of OrgMembers
 type OrgMembersSpec struct {
 	v1.ResourceSpec `json:",inline"`
 	ForProvider     OrgMembersParameters `json:"forProvider"`
 }
 
-// OrgMembersStatus defines the observed state of OrgMembers.
 type OrgMembersStatus struct {
 	v1.ResourceStatus `json:",inline"`
-	AtProvider        RoleAssignments `json:"atProvider,omitempty"`
+	// (Attributes) The assigned roles for the organization members.
+	AtProvider RoleAssignments `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -49,7 +47,7 @@ type OrgMembers struct {
 
 // +kubebuilder:object:root=true
 
-// OrgMembersList contains a list of OrgMembers
+// OrgMembersList contains a list of OrgMembers.
 type OrgMembersList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
