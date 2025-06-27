@@ -55,7 +55,7 @@ spec:
           metadata:
             type: object
           spec:
-            description: SpaceMembersSpec defines the desired state of SpaceMembers
+            description: SpaceMembersSpec defines the desired state of SpaceMembers.
             properties:
               deletionPolicy:
                 default: Delete
@@ -73,43 +73,45 @@ spec:
                 type: string
               forProvider:
                 description: SpaceMembersParameters encapsulate role assignments to
-                  CloudFoundry Spaces
+                  CloudFoundry Spaces.
                 properties:
                   enforcementPolicy:
                     default: Lax
-                    description: Set to `Lax` to enforce that the role is assigned
-                      to AT LEAST those members as defined in this CR. Set to `Strict`
-                      to enforce that the role is assigned to EXACT those members
-                      as defined in CR and any other members will be removed. Defaults
-                      to `Lax`.
+                    description: (String) Set to `Lax` to enforce that the role is
+                      assigned to AT LEAST those members as defined in this CR. Set
+                      to `Strict` to enforce that the role is assigned to EXACTLY
+                      those members as defined in this CR and any other members will
+                      be removed. Defaults to `Lax`.
                     enum:
                     - Lax
                     - Strict
                     type: string
                   members:
-                    description: List of members (usernames) to assign as org members
-                      with the specified role type. Defaults to empty list.
+                    description: (List of Attributes) List of members (usernames)
+                      to assign as org members with the specified role type. Defaults
+                      to empty list.
                     items:
-                      description: Member identifies a user by name and origin
+                      description: Member identifies a user by name and origin.
                       properties:
                         origin:
                           default: sap.ids
-                          description: Origin picks the IDP
+                          description: (String) Origin selects the identity provider.
+                            Defaults to "sap.ids".
                           type: string
                         username:
-                          description: Username at the identity provider
+                          description: (String) Username at the identity provider.
                           type: string
                       required:
                       - username
                       type: object
                     type: array
                   orgName:
-                    description: The name of the Cloud Foundry organization containing
-                      the space.
+                    description: (String) The name of the Cloud Foundry organization
+                      containing the space.
                     type: string
                   roleType:
-                    description: Space role type to assign to members; see valid role
-                      types https://v3-apidocs.cloudfoundry.space/version/3.127.0/index.html#valid-role-types
+                    description: (String) Space role type to assign to members; see
+                      valid role types https://v3-apidocs.cloudfoundry.space/version/3.127.0/index.html#valid-role-types
                     enum:
                     - Developer
                     - Auditor
@@ -121,19 +123,19 @@ spec:
                     - Supporters
                     type: string
                   space:
-                    description: The `guid` of the Cloud Foundry space. This field
-                      is typically populated using references specified in `spaceRef`,
+                    description: (String) The GUID of the Cloud Foundry space. This
+                      field is typically populated using references specified in `spaceRef`,
                       `spaceSelector`, or `spaceName`.
                     type: string
                   spaceName:
-                    description: The name of the Cloud Foundry space to lookup the
-                      `guid` of the Space. Use `spaceName` only when the reference
-                      Space is not managed by Crossplane.
+                    description: (String) The name of the Cloud Foundry space to lookup
+                      the GUID of the space. Use `spaceName` only when the referenced
+                      space is not managed by Crossplane.
                     type: string
                   spaceRef:
-                    description: Reference to a `Space` CR to lookup the `guid` of
-                      the Cloud Foundry space. Preferred if the reference space is
-                      managed by Crossplane.
+                    description: (Attributes) Reference to a `Space` CR to lookup
+                      the GUID of the Cloud Foundry space. Preferred if the referenced
+                      space is managed by Crossplane.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -167,9 +169,9 @@ spec:
                     - name
                     type: object
                   spaceSelector:
-                    description: Selector for a `Space` CR to lookup the `guid` of
-                      the Cloud Foundry space. Preferred if the reference space is
-                      managed by Crossplane.
+                    description: (Attributes) Selector for a `Space` CR to lookup
+                      the GUID of the Cloud Foundry space. Preferred if the referenced
+                      space is managed by Crossplane.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -383,13 +385,13 @@ spec:
             description: SpaceMembersStatus defines the observed state of SpaceMembers.
             properties:
               atProvider:
-                description: RoleAssignments maps members to roles
+                description: (Attributes) The assigned roles for the space members.
                 properties:
                   assignedRoles:
                     additionalProperties:
                       type: string
-                    description: '`AssignedRoles` maps member to GUIDs of the assigned
-                      Role objects.'
+                    description: (Map of String) `assignedRoles` maps a member to
+                      the GUID of the assigned Role object.
                     type: object
                 type: object
               conditions:

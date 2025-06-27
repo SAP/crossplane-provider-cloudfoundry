@@ -35,7 +35,7 @@ spec:
     schema:
       openAPIV3Schema:
         description: 'ServiceInstance is the Schema for the ServiceInstances API.
-          Creates a service instance in a cloudfoundry space. Further documentation:
+          Creates a service instance in a Cloud Foundry space. Further documentation:
           https://docs.cloudfoundry.org/devguide/services'
         properties:
           apiVersion:
@@ -74,34 +74,29 @@ spec:
                 type: string
               enableParameterDriftDetection:
                 default: false
-                description: Enable drift detection for configuration parameters of
-                  managed service instance. Default is false.
+                description: (Boolean) Enable drift detection for configuration parameters
+                  of managed service instance. Default is false.
                 type: boolean
               forProvider:
-                description: ServiceInstanceParameters define the desired state of
-                  a Cloud Foundry service instance.
                 properties:
                   annotations:
                     additionalProperties:
                       type: string
-                    description: The annotations associated with Cloud Foundry resources.
-                      Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The annotations associated with Cloud
+                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   credentials:
                     description: |-
-                      Arbitrary credentials as K8S runtime.RawExtension object, delivered to applications via VCAP_SERVICES environment variables.Applicable for user-provided service instance type.
-
-
-                      The Credentials field is NOT secret or secured in any way and should
-                      NEVER be used to hold sensitive information. To set parameters that
-                      contain secret information, you should ALWAYS store that information
-                      in a Secret and use the `credentialsSecretRef` field.
+                      (Attributes) Arbitrary credentials as K8S runtime.RawExtension object, delivered to applications via VCAP_SERVICES environment variables.
+                      The `credentials` field is NOT secret or secured in any way and should NEVER be used to hold sensitive information.
+                      To set parameters that contain secret information, you should ALWAYS store that information in a Secret and use the `credentialsSecretRef` field.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   credentialsSecretRef:
-                    description: Same as `Credentials`, supplied as a Secret reference.
-                      Ignored if `credentials` or `jsonCredentials` is set.
+                    description: (Attributes) Same as `credentials`, supplied as a
+                      Secret reference. Ignored if `credentials` or `jsonCredentials`
+                      is set.
                     properties:
                       name:
                         description: Name of the secret.
@@ -114,45 +109,42 @@ spec:
                     - namespace
                     type: object
                   jsonCredentials:
-                    description: Same as `credentials`, supplied as arbitrary JSON
-                      string. Ignored if `credentials` is set.
+                    description: (String) Same as `credentials`, supplied as arbitrary
+                      JSON string. Ignored if `credentials` is set.
                     type: string
                   jsonParams:
-                    description: Same as `parameters`, supplied as arbitrary JSON
-                      string. Ignored if `parameters` is set.
+                    description: (String) Same as `parameters`, supplied as arbitrary
+                      JSON string. Ignored if `parameters` is set.
                     type: string
                   maintenanceInfo:
-                    description: MaintenanceInfo describes the version of the service
-                      instance
+                    description: (Attributes) Information about the version of this
+                      service instance; only shown when `type` is `managed`.
                     properties:
                       description:
-                        description: (String) A description of the last operation
+                        description: (String) A description of the last operation.
                         type: string
                       version:
-                        description: (String) The version of the service instance
+                        description: (String) The version of the service instance.
                         type: string
                     type: object
                   name:
-                    description: The name of the service instance
+                    description: (String) The name of the service instance
                     type: string
                   orgName:
-                    description: The name of the Cloud Foundry organization containing
-                      the space.
+                    description: (String) The name of the Cloud Foundry organization
+                      containing the space.
                     type: string
                   parameters:
                     description: |-
-                      Configuration parameters for the managed service instance, supplied as K8S runtime.RawExtension object
-
-
-                      The `parameters` field is NOT secret or secured in any way and should
-                      NEVER be used to hold sensitive information. To set parameters that
-                      contain secret information, you should ALWAYS store that information
-                      in a Secret and use the `paramsSecretRef` field.
+                      (Attributes) Configuration parameters for the managed service instance, supplied as a K8S runtime.RawExtension object.
+                      The `parameters` field is NOT secret or secured in any way and should NEVER be used to hold sensitive information.
+                      To set parameters that contain secret information, you should ALWAYS store that information in a Secret and use the `paramsSecretRef` field.
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   paramsSecretRef:
-                    description: Same as `parameters`, supplied as a Secret reference.
-                      Ignored if `parameters` or `jsonParams` is set.
+                    description: (Attributes) Same as `parameters`, supplied as a
+                      Secret reference. Ignored if `parameters` or `jsonParams` is
+                      set.
                     properties:
                       name:
                         description: Name of the secret.
@@ -165,38 +157,38 @@ spec:
                     - namespace
                     type: object
                   routeServiceUrl:
-                    description: URL to which requests for bound routes will be forwarded;
-                      only shown when type is user-provided.
+                    description: (String) URL to which requests for bound routes will
+                      be forwarded; only shown when `type` is `user-provided`.
                     type: string
                   servicePlan:
-                    description: |-
-                      (String) The ID of the service plan from which to create the service instance
-                      The ID of the service plan from which to create the service instance
+                    description: (Attributes) Reference to the service plan for the
+                      managed service instance.
                     properties:
                       id:
-                        description: The ID of the service plan
+                        description: (String) The ID of the service plan from which
+                          to create the service instance.
                         type: string
                       offering:
-                        description: The name of service offering
+                        description: (String) The name of the plan offering.
                         type: string
                       plan:
-                        description: The name of service plan
+                        description: (String) The name of the service plan.
                         type: string
                     type: object
                   space:
-                    description: The `guid` of the Cloud Foundry space. This field
-                      is typically populated using references specified in `spaceRef`,
+                    description: (String) The GUID of the Cloud Foundry space. This
+                      field is typically populated using references specified in `spaceRef`,
                       `spaceSelector`, or `spaceName`.
                     type: string
                   spaceName:
-                    description: The name of the Cloud Foundry space to lookup the
-                      `guid` of the Space. Use `spaceName` only when the reference
-                      Space is not managed by Crossplane.
+                    description: (String) The name of the Cloud Foundry space to lookup
+                      the GUID of the space. Use `spaceName` only when the referenced
+                      space is not managed by Crossplane.
                     type: string
                   spaceRef:
-                    description: Reference to a `Space` CR to lookup the `guid` of
-                      the Cloud Foundry space. Preferred if the reference space is
-                      managed by Crossplane.
+                    description: (Attributes) Reference to a `Space` CR to lookup
+                      the GUID of the Cloud Foundry space. Preferred if the referenced
+                      space is managed by Crossplane.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -230,9 +222,9 @@ spec:
                     - name
                     type: object
                   spaceSelector:
-                    description: Selector for a `Space` CR to lookup the `guid` of
-                      the Cloud Foundry space. Preferred if the reference space is
-                      managed by Crossplane.
+                    description: (Attributes) Selector for a `Space` CR to lookup
+                      the GUID of the Cloud Foundry space. Preferred if the referenced
+                      space is managed by Crossplane.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -272,35 +264,35 @@ spec:
                         type: object
                     type: object
                   syslogDrainUrl:
-                    description: URL to which logs for bound applications will be
-                      streamed; only shown when type is user-provided.
+                    description: (String) URL to which logs for bound applications
+                      will be streamed; only shown when `type` is `user-provided`.
                     type: string
                   tags:
-                    description: List of tags used by apps to identify service instances.
-                      They are shown in the app VCAP_SERVICES env.
+                    description: (List of String) List of tags used by apps to identify
+                      service instances. They are shown in the app VCAP_SERVICES env.
                     items:
                       type: string
                     type: array
                   timeouts:
-                    description: Timeouts for the service instance operations
+                    description: (Attributes) Timeouts for the service instance operations.
                     properties:
                       create:
                         description: (String) Timeout for creating the service instance.
-                          Default is 40 minutes
+                          Default is 40 minutes.
                         type: string
                       delete:
                         description: (String) Timeout for deleting the service instance.
-                          Default is 40 minutes
+                          Default is 40 minutes.
                         type: string
                       update:
                         description: (String) Timeout for updating the service instance.
-                          Default is 40 minutes
+                          Default is 40 minutes.
                         type: string
                     type: object
                   type:
                     default: managed
-                    description: Type of the service instance. Either managed or user-provided.
-                      Default is managed.
+                    description: (String) Type of the service instance. Either managed
+                      or user-provided. Default is managed.
                     enum:
                     - managed
                     - user-provided
@@ -479,49 +471,44 @@ spec:
             description: ServiceInstanceStatus defines the observed state of ServiceInstance
             properties:
               atProvider:
-                description: ServiceInstanceObservation records the observed state
-                  of a Cloud Foundry service instance.
                 properties:
                   annotations:
                     additionalProperties:
                       type: string
-                    description: |-
-                      (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-                      The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The annotations associated with Cloud
+                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   createdAt:
-                    description: |-
-                      (String) The date and time when the resource was created in RFC3339 format.
-                      The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      created in RFC3339 format.
                     type: string
                   credentials:
-                    description: The applied parameters of the managed service instance
+                    description: (String) The applied credentials of the managed service
+                      instance.
                     format: byte
                     type: string
                   dashboardUrl:
-                    description: |-
-                      (String) The URL to the service instance dashboard (or null if there is none); only shown when type is managed.
-                      The URL to the service instance dashboard (or null if there is none); only shown when type is managed.
+                    description: (String) The URL to the service instance dashboard
+                      (or null if there is none); only shown when `type` is `managed`.
                     type: string
                   id:
-                    description: The GUID of the service instance
+                    description: (String) The GUID of the service instance.
                     type: string
                   labels:
                     additionalProperties:
                       type: string
-                    description: |-
-                      (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-                      The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The labels associated with Cloud
+                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   lastAsyncJob:
-                    description: The job GUID of the last async operation performed
-                      on the resource
+                    description: (String) The job GUID of the last async operation
+                      performed on the resource.
                     type: string
                   lastOperation:
                     description: (Attributes) The details of the last operation performed
-                      on the resource (see below for nested schema)
+                      on the resource.
                     properties:
                       createdAt:
                         description: (String) The date and time when the resource
@@ -544,55 +531,54 @@ spec:
                     type: object
                   maintenanceInfo:
                     description: (Attributes) Information about the version of this
-                      service instance; only shown when type is managed (see below
-                      for nested schema)
+                      service instance; only shown when `type` is `managed`.
                     properties:
                       description:
-                        description: (String) A description of the last operation
+                        description: (String) A description of the last operation.
                         type: string
                       version:
-                        description: (String) The version of the service instance
+                        description: (String) The version of the service instance.
                         type: string
                     type: object
                   name:
-                    description: The name of the service instance
+                    description: (String) The name of the service instance.
                     type: string
                   parameters:
-                    description: The applied parameters of the managed service instance
-                      (TO BE IMPLEMENTED)
+                    description: (Attributes) The applied parameters of the managed
+                      service instance (TO BE IMPLEMENTED).
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   routeServiceUrl:
-                    description: URL to which requests for bound routes will be forwarded;
-                      only shown when type is user-provided.
+                    description: (String) URL to which requests for bound routes will
+                      be forwarded; only shown when `type` is `user-provided`.
                     type: string
                   servicePlan:
-                    description: The GUID of the Service Plan for a managed service
+                    description: (String) The GUID of the service plan for a managed
+                      service instance.
                     type: string
                   space:
-                    description: The GUID of the space in which the service instance
-                      was created
+                    description: (String) The GUID of the space in which the service
+                      instance was created.
                     type: string
                   syslogDrainUrl:
-                    description: URL to which logs for bound applications will be
-                      streamed; only shown when type is user-provided.
+                    description: (String) URL to which logs for bound applications
+                      will be streamed; only shown when `type` is `user-provided`.
                     type: string
                   tags:
-                    description: |-
-                      (List of String) List of tags used by apps to identify service instances. They are shown in the app VCAP_SERVICES env.
-                      List of tags used by apps to identify service instances. They are shown in the app VCAP_SERVICES env.
+                    description: (List of String) List of tags used by apps to identify
+                      service instances. They are shown in the app VCAP_SERVICES env.
                     items:
                       type: string
                     type: array
                   updatedAt:
-                    description: |-
-                      (String) The date and time when the resource was updated in RFC3339 format.
-                      The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      updated in RFC3339 format.
                     type: string
                   upgradeAvailable:
-                    description: |-
-                      (Boolean) Whether or not an upgrade of this service instance is available on the current Service Plan; details are available in the maintenance_info object; Only shown when type is managed
-                      Whether or not an upgrade of this service instance is available on the current Service Plan; details are available in the maintenance_info object; Only shown when type is managed
+                    description: (Boolean) Whether or not an upgrade of this service
+                      instance is available on the current service plan; details are
+                      available in the `maintenanceInfo` object; only shown when `type`
+                      is `managed`.
                     type: boolean
                 type: object
               conditions:

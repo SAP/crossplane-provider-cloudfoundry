@@ -75,28 +75,26 @@ spec:
               forProvider:
                 properties:
                   orgName:
-                    description: The name of the Cloud Foundry organization containing
-                      the space.
+                    description: (String) The name of the Cloud Foundry organization
+                      containing the space.
                     type: string
                   origin:
-                    description: |-
-                      (String) The identity provider for the UAA user
-                      The identity provider for the UAA user
+                    description: (String) The identity provider for the UAA user.
                     type: string
                   space:
-                    description: The `guid` of the Cloud Foundry space. This field
-                      is typically populated using references specified in `spaceRef`,
+                    description: (String) The GUID of the Cloud Foundry space. This
+                      field is typically populated using references specified in `spaceRef`,
                       `spaceSelector`, or `spaceName`.
                     type: string
                   spaceName:
-                    description: The name of the Cloud Foundry space to lookup the
-                      `guid` of the Space. Use `spaceName` only when the reference
-                      Space is not managed by Crossplane.
+                    description: (String) The name of the Cloud Foundry space to lookup
+                      the GUID of the space. Use `spaceName` only when the referenced
+                      space is not managed by Crossplane.
                     type: string
                   spaceRef:
-                    description: Reference to a `Space` CR to lookup the `guid` of
-                      the Cloud Foundry space. Preferred if the reference space is
-                      managed by Crossplane.
+                    description: (Attributes) Reference to a `Space` CR to lookup
+                      the GUID of the Cloud Foundry space. Preferred if the referenced
+                      space is managed by Crossplane.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -130,9 +128,9 @@ spec:
                     - name
                     type: object
                   spaceSelector:
-                    description: Selector for a `Space` CR to lookup the `guid` of
-                      the Cloud Foundry space. Preferred if the reference space is
-                      managed by Crossplane.
+                    description: (Attributes) Selector for a `Space` CR to lookup
+                      the GUID of the Cloud Foundry space. Preferred if the referenced
+                      space is managed by Crossplane.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -172,9 +170,7 @@ spec:
                         type: object
                     type: object
                   type:
-                    description: |-
-                      (String) SpaceRole type; see Valid role types
-                      SpaceRole type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types)
+                    description: (String) The space role type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types).
                     enum:
                     - Developer
                     - Auditor
@@ -186,9 +182,8 @@ spec:
                     - Supporters
                     type: string
                   username:
-                    description: |-
-                      (String) The username of the cloudfoundry user to assign the role with
-                      The username of the cloudfoundry user to assign the role with
+                    description: (String) The username of the Cloud Foundry user to
+                      assign the role to.
                     type: string
                 type: object
               managementPolicies:
@@ -364,35 +359,29 @@ spec:
               atProvider:
                 properties:
                   createdAt:
-                    description: |-
-                      (String) The date and time when the resource was created in RFC3339 format.
-                      The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                   id:
                     description: (String) The GUID of the object.
                     type: string
                   origin:
-                    description: |-
-                      (String) The identity provider for the UAA user
-                      The identity provider for the UAA user
+                    description: (String) The identity provider for the UAA user.
                     type: string
                   type:
-                    description: (String) SpaceRole type; see Valid role types
+                    description: (String) The space role type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types).
                     type: string
                   updatedAt:
-                    description: |-
-                      (String) The date and time when the resource was updated in RFC3339 format.
-                      The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                   user:
-                    description: |-
-                      (String) The guid of the cloudfoundry user to assign the role with
-                      The guid of the cloudfoundry user to assign the role with
+                    description: (String) The GUID of the Cloud Foundry user to assign
+                      the role to.
                     type: string
                   username:
-                    description: |-
-                      (String) The username of the cloudfoundry user to assign the role with
-                      The username of the cloudfoundry user to assign the role with
+                    description: (String) The username of the Cloud Foundry user to
+                      assign the role to.
                     type: string
                 type: object
               conditions:

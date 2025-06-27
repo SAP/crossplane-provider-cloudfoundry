@@ -75,28 +75,23 @@ spec:
                   annotations:
                     additionalProperties:
                       type: string
-                    description: |-
-                      (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-                      The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The annotations associated with Cloud
+                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   labels:
                     additionalProperties:
                       type: string
-                    description: |-
-                      (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-                      The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The labels associated with Cloud
+                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   name:
-                    description: |-
-                      (String) The name of the Organization in Cloud Foundry
-                      The name of the Organization in Cloud Foundry
+                    description: (String) The name of the Organization in Cloud Foundry.
                     type: string
                   suspended:
-                    description: |-
-                      (Boolean) Whether an organization is suspended or not.
-                      Whether an organization is suspended or not.
+                    description: (Boolean) Whether an Organization is suspended or
+                      not.
                     type: boolean
                 type: object
               managementPolicies:
@@ -274,46 +269,38 @@ spec:
                   annotations:
                     additionalProperties:
                       type: string
-                    description: |-
-                      (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-                      The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The annotations associated with Cloud
+                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   createdAt:
-                    description: |-
-                      (String) The date and time when the resource was created in RFC3339 format.
-                      The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                   id:
-                    description: (String) The ID of the Organization
+                    description: (String) The ID of the Organization.
                     type: string
                   labels:
                     additionalProperties:
                       type: string
-                    description: |-
-                      (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-                      The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The labels associated with Cloud
+                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   name:
-                    description: |-
-                      (String) The name of the Organization in Cloud Foundry
-                      The name of the Organization in Cloud Foundry
+                    description: (String) The name of the Organization in Cloud Foundry.
                     type: string
                   quota:
-                    description: |-
-                      (String) The ID of quota to be applied to this Org. Default quota is assigned to the org by default.
-                      The ID of quota to be applied to this Org. Default quota is assigned to the org by default.
+                    description: (String) The ID of quota to be applied to this Organization.
+                      Default quota is assigned to the Organization by default.
                     type: string
                   suspended:
-                    description: |-
-                      (Boolean) Whether an organization is suspended or not.
-                      Whether an organization is suspended or not.
+                    description: (Boolean) Whether an Organization is suspended or
+                      not.
                     type: boolean
                   updatedAt:
-                    description: |-
-                      (String) The date and time when the resource was updated in RFC3339 format.
-                      The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                 type: object
               conditions:

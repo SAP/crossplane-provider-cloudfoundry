@@ -72,22 +72,21 @@ spec:
                 - Delete
                 type: string
               forProvider:
-                description: RouteParameters parameters for Routes
                 properties:
                   domain:
-                    description: The `guid` of the Cloud Foundry domain. This field
-                      is typically populated using references specified in `domainRef`,
+                    description: (String) The GUID of the Cloud Foundry domain. This
+                      field is typically populated using references specified in `domainRef`,
                       `domainSelector`, or `domainName`.
                     type: string
                   domainName:
-                    description: The name of the Cloud Foundry domain to lookup the
-                      `guid` of the Domain. Use `domainName` only when the referenced
-                      Domain is not managed by Crossplane.
+                    description: (String) The name of the Cloud Foundry domain to
+                      lookup the GUID of the domain. Use `domainName` only when the
+                      referenced domain is not managed by Crossplane.
                     type: string
                   domainRef:
-                    description: Reference to a `Domain` CR to lookup the `guid` of
-                      the Cloud Foundry domain. Preferred if the reference domain
-                      is managed by Crossplane.
+                    description: (Attributes) Reference to a `domain` CR to lookup
+                      the GUID of the Cloud Foundry domain. Preferred if the referenced
+                      domain is managed by Crossplane.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -121,9 +120,9 @@ spec:
                     - name
                     type: object
                   domainSelector:
-                    description: Selector for a `Domain` CR to lookup the `guid` of
-                      the Cloud Foundry domain. Preferred if the reference domain
-                      is managed by Crossplane.
+                    description: (Attributes) Selector for a `domain` CR to lookup
+                      the GUID of the Cloud Foundry domain. Preferred if the referenced
+                      domain is managed by Crossplane.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -163,42 +162,42 @@ spec:
                         type: object
                     type: object
                   host:
-                    description: The application's host name. This is required for
+                    description: (String) The application's host name. Required for
                       shared domains.
                     type: string
                   options:
-                    description: The route options
+                    description: (Attributes) The route options.
                     properties:
                       loadbalancing:
-                        description: The load-balancer associated with this route.
-                          Valid values are ‘round-robin’ and ‘least-connections’
+                        description: (String) The load balancer associated with this
+                          route. Valid values are `round-robin` and `least-connections`.
                         type: string
                     type: object
                   orgName:
-                    description: The name of the Cloud Foundry organization containing
-                      the space.
+                    description: (String) The name of the Cloud Foundry organization
+                      containing the space.
                     type: string
                   path:
-                    description: A path for an HTTP route.
+                    description: (String) A path for an HTTP route.
                     type: string
                   port:
-                    description: The port to associate with the route for a TCP route.
-                      Conflicts with random_port.
+                    description: (Integer) The port to associate with the route for
+                      a TCP route. Conflicts with `random_port`.
                     type: integer
                   space:
-                    description: The `guid` of the Cloud Foundry space. This field
-                      is typically populated using references specified in `spaceRef`,
+                    description: (String) The GUID of the Cloud Foundry space. This
+                      field is typically populated using references specified in `spaceRef`,
                       `spaceSelector`, or `spaceName`.
                     type: string
                   spaceName:
-                    description: The name of the Cloud Foundry space to lookup the
-                      `guid` of the Space. Use `spaceName` only when the reference
-                      Space is not managed by Crossplane.
+                    description: (String) The name of the Cloud Foundry space to lookup
+                      the GUID of the space. Use `spaceName` only when the referenced
+                      space is not managed by Crossplane.
                     type: string
                   spaceRef:
-                    description: Reference to a `Space` CR to lookup the `guid` of
-                      the Cloud Foundry space. Preferred if the reference space is
-                      managed by Crossplane.
+                    description: (Attributes) Reference to a `Space` CR to lookup
+                      the GUID of the Cloud Foundry space. Preferred if the referenced
+                      space is managed by Crossplane.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -232,9 +231,9 @@ spec:
                     - name
                     type: object
                   spaceSelector:
-                    description: Selector for a `Space` CR to lookup the `guid` of
-                      the Cloud Foundry space. Preferred if the reference space is
-                      managed by Crossplane.
+                    description: (Attributes) Selector for a `Space` CR to lookup
+                      the GUID of the Cloud Foundry space. Preferred if the referenced
+                      space is managed by Crossplane.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -445,69 +444,70 @@ spec:
             description: RouteStatus defines the observed state of Route.
             properties:
               atProvider:
-                description: RouteObservation observations for routes
                 properties:
                   createdAt:
-                    description: The date and time when the resource was created in
-                      [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                   destinations:
-                    description: One or more route mapping(s) that will map this route
-                      to application(s). Can be repeated multiple times to load balance
+                    description: (List of Attributes) One or more route mappings that
+                      map this route to applications. Can be repeated to load balance
                       route traffic among multiple applications.
                     items:
-                      description: RouteDestination describes a route destinations
                       properties:
                         app:
-                          description: The ID of the application to map this route
+                          description: (Attributes) The application to map this route
                             to.
                           properties:
                             guid:
+                              description: (String) The application GUID.
                               type: string
                             port:
-                              description: Port on the destination application
+                              description: (Integer) Port on the destination application.
                               type: integer
                             process:
-                              description: The process type of the destination.
+                              description: (String) The process type of the destination.
                               type: string
                             protocol:
+                              description: (String) The protocol for the destination
+                                application.
                               type: string
                           type: object
                         guid:
-                          description: The destination GUID
+                          description: (String) The destination GUID.
                           type: string
                         port:
-                          description: The port to associate with the route for a
-                            TCP route. Conflicts with random_port.
+                          description: (Integer) The port to associate with the route
+                            for a TCP route. Conflicts with `random_port`.
                           type: integer
                       type: object
                     type: array
                   guid:
-                    description: The GUID of the Cloud Foundry resource
+                    description: (String) The GUID of the Cloud Foundry resource.
                     type: string
                   host:
-                    description: The host name of the route
+                    description: (String) The host name of the route.
                     type: string
                   options:
-                    description: The route options
+                    description: (Attributes) The route options.
                     properties:
                       loadbalancing:
-                        description: The load-balancer associated with this route.
-                          Valid values are ‘round-robin’ and ‘least-connections’
+                        description: (String) The load balancer associated with this
+                          route. Valid values are `round-robin` and `least-connections`.
                         type: string
                     type: object
                   path:
-                    description: The path of the route
+                    description: (String) The path of the route.
                     type: string
                   protocol:
-                    description: Protocol of the route
+                    description: (String) The protocol of the route.
                     type: string
                   updatedAt:
-                    description: The date and time when the resource was updated in
-                      [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                   url:
-                    description: The URL of the route
+                    description: (String) The URL of the route.
                     type: string
                 type: object
               conditions:
