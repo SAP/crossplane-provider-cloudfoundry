@@ -1,0 +1,14 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Mta
+metadata:
+  name: e2e-mta
+  namespace: mta-test
+spec:
+  forProvider:
+    file:
+          url: https://github.com/SAP-samples/cf-mta-examples/raw/refs/heads/main/cf-destination/a.cf.app.mtar
+    namespace: default
+    spaceRef:
+      name: mta-space
+  providerConfigRef:
+    name: default

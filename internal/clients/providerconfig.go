@@ -6,7 +6,15 @@ package clients
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
+	"net/http"
+	"net/url"
+	"strings"
+	"time"
+
+	mtaCsrf "github.com/cloudfoundry-incubator/multiapps-cli-plugin/clients/csrf"
+	mtaClient "github.com/cloudfoundry-incubator/multiapps-cli-plugin/clients/mtaclient"
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
@@ -37,6 +45,12 @@ const (
 	errUnmarshalCredentials = "cannot unmarshal cloudfoundry credentials as JSON"
 	errUnmarshalEndpoint    = "cannot unmarshal cloudfoundry endpoint as JSON"
 	errNoEndpoint           = "no API endpoint is configured in ProviderConfig"
+
+	errParseUrl = "cannot parse CF API URL"
+	errNoUrl    = "could not parse mtarUrl"
+	notFound    = "404 Not Found"
+
+	deploy_service_host = "deploy-service"
 )
 
 // GetCredentialConfig returns a config.Config for the given managed resource
@@ -105,5 +119,39 @@ func ClientFnBuilder(ctx context.Context, client client.Client) func(resource.Ma
 		}
 
 		return cfv3.New(cfg)
+	}
+}
+
+func ClientFnBuilderMta(ctx context.Context, client client.Client, spaceId *string) func(resource.Managed) (*mtaClient.MtaClientOperations, error) {
+
+	return func(mg resource.Managed) (*mtaClient.MtaClientOperations, error) {
+		cfClient, err := ClientFnBuilder(ctx, client)(mg)
+		if err != nil {
+			return nil, err
+		}
+
+		urlObj, err := url.Parse(cfClient.ApiURL(""))
+		if err != nil {
+			return nil, errors.Wrap(err, errParseUrl)
+		}
+
+		tokenFactory := NewDefaultTokenFactory(ctx, cfClient)
+
+		domainSeparatorIndex := strings.IndexByte(urlObj.Host, '.')
+		domain := urlObj.Host[domainSeparatorIndex+1:]
+
+		csrfx := mtaCsrf.CsrfTokenHelper{NonProtectedMethods: map[string]struct{}{"GET": {}, "HEAD": {}, "TRACE": {}, "OPTIONS": {}}}
+		httpTransport := http.DefaultTransport.(*http.Transport).Clone()
+		// Increase tls handshake timeout to cope with slow internet connections. 3 x default value = 30s.
+		httpTransport.TLSHandshakeTimeout = 30 * time.Second
+		httpTransport.TLSClientConfig = &tls.Config{
+			InsecureSkipVerify: false,
+			MinVersion:         tls.VersionTLS13,
+		}
+		transport := &mtaCsrf.Transport{Delegate: httpTransport, Csrf: &csrfx}
+
+		mtaClientOperations := mtaClient.NewMtaClient(deploy_service_host+"."+domain, *spaceId, transport, tokenFactory)
+
+		return &mtaClientOperations, nil
 	}
 }
