@@ -12,10 +12,15 @@ import (
 )
 
 // ServiceCredentialBindingObservation defines the observed state of ServiceCredentialBinding
+
 type ServiceCredentialBindingObservation struct {
-	Resource `json:",inline"`
+	SCBResource `json:",inline"`
 	// LastOperation describes the last operation performed on the service credential binding.
 	LastOperation *LastOperation `json:"lastOperation,omitempty"`
+
+	// If the binding is rotated, `retiredBindings` stores resources that have been rotated out but are still transitionally retained due to `rotation.ttl` setting
+	// +kubebuilder:validation:Optional
+	RetiredKeys []*SCBResource `json:"retiredKeys,omitempty"`
 }
 
 // ServiceCredentialBindingParameters define the desired state of the forProvider field of ServiceCredentialBinding
@@ -68,6 +73,10 @@ type ServiceCredentialBindingParameters struct {
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=false
 	ConnectionDetailsAsJSON bool `json:"connectionDetailsAsJSON,omitempty"`
+
+	// Rotation defines the parameters for rotating the service credential binding.
+	// +kubebuilder:validation:Optional
+	Rotation *RotationParameters `json:"rotation,omitempty"`
 }
 
 // ServiceCredentialBindingSpec defines the desired state of ServiceCredentialBinding
@@ -82,10 +91,33 @@ type ServiceCredentialBindingSpec struct {
 	ForProvider ServiceCredentialBindingParameters `json:"forProvider"`
 }
 
+type RotationParameters struct {
+	// Frequency defines how often the active key should be rotated.
+	// +kubebuilder:validation:Required
+	Frequency *metav1.Duration `json:"frequency"`
+
+	// TTL (Time-To-Live) defines the total time a credential is valid for before it is deleted.
+	// Must be >= frequency and <= 3 * frequency.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:CEL=expression="!has(self.ttl) || (!has(self.frequency) || (self.ttl >= self.frequency && self.ttl <= self.frequency * 3))",message="ttl must be greater than or equal to frequency and no more than 5 times frequency"
+	TTL *metav1.Duration `json:"ttl,omitempty"`
+}
+
 // ServiceCredentialBindingStatus defines the observed state of ServiceCredentialBinding.
 type ServiceCredentialBindingStatus struct {
 	v1.ResourceStatus `json:",inline"`
 	AtProvider        ServiceCredentialBindingObservation `json:"atProvider,omitempty"`
+}
+
+type SCBResource struct {
+	// The GUID of the Cloud Foundry resource
+	GUID string `json:"guid,omitempty"`
+
+	// The name of the Cloud Foundry resource
+	Name string `json:"name,omitempty"`
+
+	// The date and time when the resource was created.
+	CreatedAt *metav1.Time `json:"createdAt,omitempty"`
 }
 
 // +kubebuilder:object:root=true

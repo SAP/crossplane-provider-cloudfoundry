@@ -4,6 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"math/rand"
+	"strings"
+	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
@@ -47,9 +50,9 @@ func NewClient(cfv3 *client.Client) ServiceCredentialBinding {
 }
 
 // GetByIDOrSearch returns a ServiceCredentialBinding resource by guid or by spec
-func GetByIDOrSearch(ctx context.Context, scbClient ServiceCredentialBinding, guid string, forProvider v1alpha1.ServiceCredentialBindingParameters) (*resource.ServiceCredentialBinding, error) {
+func GetByIDOrSearch(ctx context.Context, scbClient ServiceCredentialBinding, guid string, cr v1alpha1.ServiceCredentialBinding) (*resource.ServiceCredentialBinding, error) {
 	if err := uuid.Validate(guid); err != nil {
-		opts, err := newListOptions(forProvider)
+		opts, err := newListOptions(cr)
 		if err != nil {
 			return nil, err
 		}
@@ -60,8 +63,9 @@ func GetByIDOrSearch(ctx context.Context, scbClient ServiceCredentialBinding, gu
 }
 
 // Create creates a ServiceCredentialBinding resource
-func Create(ctx context.Context, scbClient ServiceCredentialBinding, forProvider v1alpha1.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBinding, error) {
-	opt, err := newCreateOption(forProvider, params)
+func Create(ctx context.Context, scbClient ServiceCredentialBinding, cr v1alpha1.ServiceCredentialBinding, params json.RawMessage) (*resource.ServiceCredentialBinding, error) {
+	cr.Status.AtProvider.Name = *randomName(*cr.Spec.ForProvider.Name)
+	opt, err := newCreateOption(cr, params)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +82,7 @@ func Create(ctx context.Context, scbClient ServiceCredentialBinding, forProvider
 		}
 	}
 
-	opts, err := newListOptions(forProvider)
+	opts, err := newListOptions(cr)
 	if err != nil {
 		return nil, err
 	}
@@ -123,56 +127,56 @@ func GetConnectionDetails(ctx context.Context, scbClient ServiceCredentialBindin
 }
 
 // newListOptions generates ServiceCredentialBindingListOptions according to CR's ForProvider spec
-func newListOptions(spec v1alpha1.ServiceCredentialBindingParameters) (*client.ServiceCredentialBindingListOptions, error) {
+func newListOptions(cr v1alpha1.ServiceCredentialBinding) (*client.ServiceCredentialBindingListOptions, error) {
 	// if external-name is not set, search by Name and Space
 	opt := client.NewServiceCredentialBindingListOptions()
-	opt.Type.EqualTo(spec.Type)
+	opt.Type.EqualTo(cr.Spec.ForProvider.Type)
 
-	if spec.ServiceInstance == nil {
+	if cr.Spec.ForProvider.ServiceInstance == nil {
 		return nil, errors.New(ErrServiceInstanceMissing)
 	}
-	opt.ServiceInstanceGUIDs.EqualTo(*spec.ServiceInstance)
+	opt.ServiceInstanceGUIDs.EqualTo(*cr.Spec.ForProvider.ServiceInstance)
 
-	if spec.Type == "app" {
-		if spec.App == nil {
+	if cr.Spec.ForProvider.Type == "app" {
+		if cr.Spec.ForProvider.App == nil {
 			return nil, errors.New(ErrAppMissing)
 		}
-		opt.AppGUIDs.EqualTo(*spec.App)
+		opt.AppGUIDs.EqualTo(*cr.Spec.ForProvider.App)
 	}
 
-	if spec.Type == "key" {
-		if spec.Name == nil {
+	if cr.Spec.ForProvider.Type == "key" {
+		if cr.Status.AtProvider.Name == "" {
 			return nil, errors.New(ErrNameMissing)
 		}
-		opt.Names.EqualTo(*spec.Name)
+		opt.Names.EqualTo(cr.Status.AtProvider.Name)
 	}
 
 	return opt, nil
 }
 
 // newCreateOption generates ServiceCredentialBindingCreate according to CR's ForProvider spec
-func newCreateOption(spec v1alpha1.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBindingCreate, error) {
-	if spec.ServiceInstance == nil {
+func newCreateOption(cr v1alpha1.ServiceCredentialBinding, params json.RawMessage) (*resource.ServiceCredentialBindingCreate, error) {
+	if cr.Spec.ForProvider.ServiceInstance == nil {
 		return nil, errors.New(ErrServiceInstanceMissing)
 	}
 
 	var opt *resource.ServiceCredentialBindingCreate
-	switch spec.Type {
+	switch cr.Spec.ForProvider.Type {
 	case "key":
-		if spec.Name == nil {
+		if cr.Status.AtProvider.Name == "" {
 			return nil, errors.New(ErrNameMissing)
 		}
 
-		opt = resource.NewServiceCredentialBindingCreateKey(*spec.ServiceInstance, *spec.Name)
+		opt = resource.NewServiceCredentialBindingCreateKey(*cr.Spec.ForProvider.ServiceInstance, cr.Status.AtProvider.Name)
 	case "app":
-		if spec.App == nil {
+		if cr.Spec.ForProvider.App == nil {
 			return nil, errors.New(ErrAppMissing)
 		}
-		opt = resource.NewServiceCredentialBindingCreateApp(*spec.ServiceInstance, *spec.App)
+		opt = resource.NewServiceCredentialBindingCreateApp(*cr.Spec.ForProvider.ServiceInstance, *cr.Spec.ForProvider.App)
 
 		// for app binding, binding name is optional
-		if spec.Name != nil {
-			opt.WithName(*spec.Name)
+		if cr.Spec.ForProvider.Name != nil {
+			opt.WithName(*cr.Spec.ForProvider.Name)
 		}
 	default:
 		return nil, errors.New(ErrBindingTypeUnknown)
@@ -207,4 +211,40 @@ func UpdateObservation(observation *v1alpha1.ServiceCredentialBindingObservation
 func IsUpToDate(ctx context.Context, spec v1alpha1.ServiceCredentialBindingParameters, r resource.ServiceCredentialBinding) bool {
 	// SCB support updates for labels and metadata only. This is to be implemented. For now return true
 	return true
+}
+
+func randomName(name string) *string {
+	if len(name) > 0 && name[len(name)-1] == '-' {
+		name = name[:len(name)-1]
+	}
+	newName := name + "-" + randomString(5)
+	return &newName
+}
+
+const letterBytes = "abcdefghijklmnopqrstuvwxyz1234567890"
+const (
+	letterIdxBits = 6                    // 6 bits to represent a letter index
+	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
+	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
+)
+
+var src = rand.NewSource(time.Now().UnixNano())
+
+func randomString(n int) string {
+	sb := strings.Builder{}
+	sb.Grow(n)
+
+	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
+		if remain == 0 {
+			cache, remain = src.Int63(), letterIdxMax
+		}
+		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
+			sb.WriteByte(letterBytes[idx])
+			i--
+		}
+		cache >>= letterIdxBits
+		remain--
+	}
+
+	return sb.String()
 }
