@@ -36,7 +36,7 @@ type RotatingCredentialBindingParameters struct {
 	ServiceInstanceSelector *v1.Selector `json:"serviceInstanceSelector,omitempty"`
 
 	// An optional JSON object to pass parameters to the service broker .
-	// +kubebuilder:validation:Optionaluuu
+	// +kubebuilder:validation:Optional
 	Parameters *runtime.RawExtension `json:"parameters,omitempty"`
 
 	// Use a reference to a secret to pass parameters to the service broker. Ignored if parameters is set.
@@ -56,11 +56,13 @@ type RotatingCredentialBindingSpec struct {
 	ForProvider RotatingCredentialBindingParameters `json:"forProvider"`
 
 	// RotationFrequency is the frequency at which the credentials should be rotated.
-	RotationFrequency *metav1.Duration `json:"rotationFrequency,omitempty"`
+	// +kubebuilder:validation:Required
+	RotationFrequency *metav1.Duration `json:"rotationFrequency"`
 
 	// RotationTTL is the time to live for the credentials after rotation.
 	// This is the time after rotation which the old credentials will be deleted.
-	RotationTTL *metav1.Duration `json:"rotationTTL,omitempty"`
+	// +kubebuilder:validation:Required
+	RotationTTL *metav1.Duration `json:"rotationTTL"`
 }
 
 // RotatingCredentialBindingStatus defines the observed state of RotatingCredentialBinding.

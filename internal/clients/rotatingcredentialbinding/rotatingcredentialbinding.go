@@ -116,6 +116,9 @@ func DeleteSCB(ctx context.Context, kube k8s.Client, name, namespace string) err
 }
 
 func GetSecret(ctx context.Context, kube k8s.Client, cr *v1alpha1.RotatingCredentialBinding) (*apicorev1.Secret, error) {
+	if cr.Status.ActiveServiceCredentialBinding == nil {
+		return nil, errors.New("active service credential binding is nil")
+	}
 
 	sourceName := cr.Status.ActiveServiceCredentialBinding.Name
 	sourceNamespace := cr.Status.ActiveServiceCredentialBinding.Namespace

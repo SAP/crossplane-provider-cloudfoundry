@@ -31,8 +31,6 @@ const (
 	errTrackPCUsage = "cannot track ProviderConfig usage"
 	errNewClient    = "cannot create a client for " + externalSystem
 	errWrongCRType  = "managed resource is not a " + resourceType
-	errGet          = "cannot get " + resourceType + " in " + externalSystem
-	errFind         = "cannot find " + resourceType + " in " + externalSystem
 	errCreate       = "cannot create " + resourceType + " in " + externalSystem
 	errUpdate       = "cannot update " + resourceType + " in " + externalSystem
 	errDelete       = "cannot delete " + resourceType + " in " + externalSystem
@@ -44,6 +42,12 @@ const (
 	msgConnOutdated     = "connection details out of date"
 	msgPrevNotFound     = "previous service credential binding not found"
 	msgWaitingForSecret = "waiting for source secret to be created"
+
+	msgCannotGetSCB           = "cannot get active service credential binding"
+	msgCannotGetSCBBackup     = "cannot get backup service credential binding"
+	msgCannotGetSourceSecret  = "cannot get source secret for current service binding"
+	msgCannotGetCurrentSecret = "cannot get secret for rotating credential binding"
+	msgCannotCreateSCB        = "cannot create service credential binding"
 )
 
 // Setup adds a controller that reconciles RotatingCredentialBinding CR.
@@ -135,8 +139,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 			cr.SetConditions(xpv1.Unavailable().WithMessage(msgSCBNotFound))
 			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false}, nil
 		}
-		cr.SetConditions(xpv1.Unavailable().WithMessage("cannot get active service credential binding"))
-		return managed.ExternalObservation{}, errors.Wrap(err, "cannot get active service credential binding")
+		cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotGetSCB))
+		return managed.ExternalObservation{}, errors.Wrap(err, msgCannotGetSCB)
 	}
 
 	if cr.Status.ActiveServiceCredentialBinding.LastRotation.Add(cr.Spec.RotationFrequency.Duration).Before(time.Now()) {
@@ -148,8 +152,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		if prevSCB.LastRotation.Add(cr.Spec.RotationTTL.Duration).Before(time.Now()) {
 			if err := c.kube.Get(ctx, k8s.ObjectKey{Namespace: prevSCB.Namespace, Name: prevSCB.Name}, &v1alpha1.ServiceCredentialBinding{}); err != nil {
 				if !k8serrors.IsNotFound(err) {
-					cr.SetConditions(xpv1.Unavailable().WithMessage("cannot get backup service credential binding"))
-					return managed.ExternalObservation{}, errors.Wrap(err, "cannot get backup service credential binding")
+					cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotGetSCBBackup))
+					return managed.ExternalObservation{}, errors.Wrap(err, msgCannotGetSCBBackup)
 				}
 				cr.SetConditions(xpv1.Available().WithMessage(msgPrevNotFound))
 				return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false}, nil
@@ -167,8 +171,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 				cr.SetConditions(xpv1.Available().WithMessage(msgConnOutdated))
 				return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false}, nil
 			}
-			cr.SetConditions(xpv1.Unavailable().WithMessage("cannot get source secret for current binding"))
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot get source secret for current binding")
+			cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotGetSourceSecret))
+			return managed.ExternalObservation{}, errors.Wrap(err, msgCannotGetSourceSecret)
 		}
 
 		if len(sourceSecret.Data) == 0 {
@@ -177,16 +181,19 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		}
 
 		var secret apicorev1.Secret
-		if cr.Spec.WriteConnectionSecretToReference.Namespace == "" {
-			cr.Spec.WriteConnectionSecretToReference.Namespace = cr.Namespace
+		name := cr.Spec.WriteConnectionSecretToReference.Name
+		namespace := cr.Spec.WriteConnectionSecretToReference.Namespace
+		if namespace == "" {
+			namespace = cr.GetNamespace()
 		}
-		if err := c.kube.Get(ctx, k8s.ObjectKey{Namespace: cr.Spec.WriteConnectionSecretToReference.Namespace, Name: cr.Spec.WriteConnectionSecretToReference.Name}, &secret); err != nil {
+
+		if err := c.kube.Get(ctx, k8s.ObjectKey{Namespace: namespace, Name: name}, &secret); err != nil {
 			if k8serrors.IsNotFound(err) {
 				cr.SetConditions(xpv1.Available().WithMessage(msgConnOutdated))
 				return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ConnectionDetails: sourceSecret.Data}, nil
 			}
-			cr.SetConditions(xpv1.Unavailable().WithMessage("cannot get secret for current binding"))
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot get secret for current binding")
+			cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotGetCurrentSecret))
+			return managed.ExternalObservation{}, errors.Wrap(err, msgCannotGetCurrentSecret)
 		}
 
 		if len(secret.Data) != len(sourceSecret.Data) {
@@ -216,20 +223,12 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	cr.SetConditions(xpv1.Creating())
 
 	name := cr.Spec.ForProvider.Name
-	var namespace string
-	if cr.Spec.ForProvider.Namespace != nil && *cr.Spec.ForProvider.Namespace != "" {
-		namespace = *cr.Spec.ForProvider.Namespace
-	} else {
-		namespace = cr.GetNamespace()
-		if namespace == "" {
-			namespace = "default"
-		}
-	}
+	namespace := getNamespace(cr)
 
 	newName, err := rcb.GenerateSCB(ctx, c.kube, cr, name, namespace)
 	if err != nil {
-		cr.SetConditions(xpv1.Unavailable().WithMessage("cannot create service credential binding"))
-		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
+		cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotCreateSCB))
+		return managed.ExternalCreation{}, errors.Wrap(err, msgCannotCreateSCB)
 	}
 
 	cr.Status.ActiveServiceCredentialBinding = &v1alpha1.ServiceCredentialBindingReference{
@@ -273,15 +272,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	name := cr.Spec.ForProvider.Name
-	var namespace string
-	if cr.Spec.ForProvider.Namespace != nil && *cr.Spec.ForProvider.Namespace != "" {
-		namespace = *cr.Spec.ForProvider.Namespace
-	} else {
-		namespace = cr.GetNamespace()
-		if namespace == "" {
-			namespace = "default"
-		}
-	}
+	namespace := getNamespace(cr)
 
 	switch msg := cr.GetCondition(xpv1.Available().Type).Message; msg {
 	case msgUpToDate:
@@ -441,4 +432,14 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	cr.SetConditions(xpv1.Deleting().WithMessage("deleted service credential bindings"))
 
 	return nil
+}
+
+func getNamespace(cr *v1alpha1.RotatingCredentialBinding) string {
+	if cr.Spec.ForProvider.Namespace != nil && *cr.Spec.ForProvider.Namespace != "" {
+		return *cr.Spec.ForProvider.Namespace
+	}
+	if cr.GetNamespace() != "" {
+		return cr.GetNamespace()
+	}
+	return "default"
 }
