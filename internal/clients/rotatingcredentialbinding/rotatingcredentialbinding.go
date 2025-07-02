@@ -7,18 +7,35 @@ import (
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/pkg/errors"
 	apicorev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 )
 
 const (
-	ErrGetSecretTimeout = "timed out waiting for service credential binding secret to be available"
-	ErrDeleteTimeout    = "timed out waiting for service credential binding to be deleted"
+	OwnerLabelKey = "rotatingcredentialbinding.cloudfoundry.crossplane.io/owner"
 )
+
+func GetAllBindings(ctx context.Context, kube k8s.Client, cr *v1alpha1.RotatingCredentialBinding) ([]v1alpha1.ServiceCredentialBinding, error) {
+	labelSelector := labels.Set{
+		OwnerLabelKey: string(cr.GetUID()),
+	}.AsSelector()
+	listOpts := []k8s.ListOption{
+		k8s.MatchingLabelsSelector{Selector: labelSelector},
+	}
+
+	var retiredSCB v1alpha1.ServiceCredentialBindingList
+	if err := kube.List(ctx, &retiredSCB, listOpts...); err != nil {
+		return nil, errors.Wrap(err, "cannot list retired service credential bindings")
+	}
+
+	return retiredSCB.Items, nil
+}
 
 func GenerateSCB(ctx context.Context, kube k8s.Client, cr *v1alpha1.RotatingCredentialBinding, name, namespace string) (string, error) {
 	name, err := randomName(ctx, kube, name, namespace)
@@ -43,6 +60,9 @@ func CreateSCB(ctx context.Context, kube k8s.Client, cr *v1alpha1.RotatingCreden
 					Controller:         &controller,
 					BlockOwnerDeletion: &blockOwnerDeletion,
 				},
+			},
+			Labels: map[string]string{
+				OwnerLabelKey: string(cr.GetUID()),
 			},
 		},
 		Spec: v1alpha1.ServiceCredentialBindingSpec{
@@ -72,83 +92,34 @@ func CreateSCB(ctx context.Context, kube k8s.Client, cr *v1alpha1.RotatingCreden
 	return name, nil
 }
 
-func DeleteSCB(ctx context.Context, kube k8s.Client, name, namespace string) error {
-	var scb v1alpha1.ServiceCredentialBinding
-
-	if err := kube.Get(ctx, k8s.ObjectKey{Namespace: namespace, Name: name}, &scb); err != nil {
-		if k8serrors.IsNotFound(err) {
-			return nil // already deleted
-		}
-		return errors.Wrap(err, "cannot get service credential binding")
-	}
-
-	delErr := kube.Delete(ctx, &scb)
-	if delErr != nil {
-		if !strings.Contains(delErr.Error(), "There is an operation in progress for the service binding.") {
-			return errors.Wrap(delErr, "cannot delete service credential binding")
-		}
-	}
-
-	waitTimeout := 60 * time.Second
-	waitInterval := 2 * time.Second
-	ctxTimeout, cancel := context.WithTimeout(ctx, waitTimeout)
-	defer cancel()
-	for {
-		err := kube.Get(ctxTimeout, k8s.ObjectKey{Namespace: namespace, Name: name}, &scb)
-		if k8serrors.IsNotFound(err) {
-			break // deleted
-		}
-		if err != nil {
-			return errors.Wrap(err, "error waiting for service credential binding deletion")
-		}
-		select {
-		case <-ctxTimeout.Done():
-			if delErr != nil {
-				return errors.Wrap(delErr, ErrDeleteTimeout)
-			}
-			return errors.New(ErrDeleteTimeout)
-		case <-time.After(waitInterval):
+func DeleteSCBs(ctx context.Context, kube k8s.Client, retiredSCBs []v1alpha1.ServiceCredentialBinding, cr *v1alpha1.RotatingCredentialBinding) error {
+	var delErr error
+	for _, prevSCB := range retiredSCBs {
+		if cr != nil && prevSCB.Name == cr.Status.ActiveServiceCredentialBinding.Name &&
+			prevSCB.Namespace == cr.Status.ActiveServiceCredentialBinding.Namespace {
+			// If the previous SCB is the same as the active one, we do not delete it.
 			continue
 		}
-	}
-
-	return nil
-}
-
-func GetSecret(ctx context.Context, kube k8s.Client, cr *v1alpha1.RotatingCredentialBinding) (*apicorev1.Secret, error) {
-	if cr.Status.ActiveServiceCredentialBinding == nil {
-		return nil, errors.New("active service credential binding is nil")
-	}
-
-	sourceName := cr.Status.ActiveServiceCredentialBinding.Name
-	sourceNamespace := cr.Status.ActiveServiceCredentialBinding.Namespace
-
-	var sourceSecret apicorev1.Secret
-	waitTimeout := 60 * time.Second
-	waitInterval := 2 * time.Second
-	ctxTimeout, cancel := context.WithTimeout(ctx, waitTimeout)
-	defer cancel()
-	for {
-		err := kube.Get(ctxTimeout, k8s.ObjectKey{Namespace: sourceNamespace, Name: sourceName}, &sourceSecret)
-		if err == nil {
-			break
-		}
-		if k8serrors.IsNotFound(err) {
-			select {
-			case <-ctxTimeout.Done():
-				return nil, errors.New(ErrGetSecretTimeout)
-			case <-time.After(waitInterval):
-				continue
+		if cr == nil || prevSCB.GetCreationTimestamp().Add(cr.Spec.RotationTTL.Duration).Before(time.Now()) {
+			if err := kube.Delete(ctx, &prevSCB); err != nil {
+				if resource.IsAsyncServiceInstanceOperationInProgressError(err) {
+					delErr = errors.Wrap(err, "cannot delete old service credential binding")
+					continue
+				} else {
+					return errors.Wrap(err, "cannot delete old service credential binding")
+				}
 			}
 		}
-		return nil, errors.Wrap(err, "cannot get source secret for current binding")
 	}
-
-	return &sourceSecret, nil
+	if delErr != nil {
+		// If deletion failed due to another operation in progress, wait before retrying.
+		time.Sleep(5 * time.Second)
+	}
+	return delErr
 }
 
-const letterBytes = "abcdefghijklmnopqrstuvwxyz1234567890"
 const (
+	letterBytes   = "abcdefghijklmnopqrstuvwxyz1234567890"
 	letterIdxBits = 6                    // 6 bits to represent a letter index
 	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
