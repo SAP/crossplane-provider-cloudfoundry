@@ -72,10 +72,6 @@ type RotatingCredentialBindingStatus struct {
 	// Active Service Credential Binding Reference.
 	// +kubebuilder:validation:Optional
 	ActiveServiceCredentialBinding *ServiceCredentialBindingReference `json:"activeServiceCredentialBinding,omitempty"`
-
-	// Prevously rotated Service Credential Bindings.
-	// +kubebuilder:validation:Optional
-	PreviousServiceCredentialBindings []*ServiceCredentialBindingReference `json:"previousServiceCredentialBindings,omitempty"`
 }
 
 type ServiceCredentialBindingReference struct {
@@ -86,9 +82,6 @@ type ServiceCredentialBindingReference struct {
 	// Namespace of the Service Credential Binding
 	// +kubebuilder:validation:Optional
 	Namespace string `json:"namespace,omitempty"`
-
-	// Last rotation time of the Service Credential Binding
-	LastRotation metav1.Time `json:"lastRotation,omitempty"`
 }
 
 // +kubebuilder:object:root=true

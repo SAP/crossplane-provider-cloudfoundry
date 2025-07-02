@@ -9,13 +9,14 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/pkg/event"
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
 	apicorev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -26,28 +27,21 @@ import (
 )
 
 const (
-	resourceType    = "RotatingCredentialBinding"
-	externalSystem  = "Cloud Foundry"
-	errTrackPCUsage = "cannot track ProviderConfig usage"
-	errNewClient    = "cannot create a client for " + externalSystem
-	errWrongCRType  = "managed resource is not a " + resourceType
-	errCreate       = "cannot create " + resourceType + " in " + externalSystem
-	errUpdate       = "cannot update " + resourceType + " in " + externalSystem
-	errDelete       = "cannot delete " + resourceType + " in " + externalSystem
+	errTrackPCUsage       = "cannot track ProviderConfig usage"
+	errWrongCRType        = "managed resource is not a RotatingCredentialBinding"
+	errCannotUpdateStatus = "cannot update status"
 
-	msgUpToDate         = "credentials are up to date"
-	msgRotationDue      = "credentials are due for rotation"
-	msgDeleteOld        = "credentials are up to date, but old credentials have to be deleted"
-	msgSCBNotFound      = "service credential binding not found"
-	msgConnOutdated     = "connection details out of date"
-	msgPrevNotFound     = "previous service credential binding not found"
-	msgWaitingForSecret = "waiting for source secret to be created"
+	msgUpToDate              = "credentials are up to date"
+	msgRotationDue           = "credentials are due for rotation"
+	msgDeleteExpired         = "expired credentials have to be deleted"
+	msgSCBNotFound           = "service credential binding not found"
+	msgCannotGetSCB          = "cannot get active service credential binding"
+	msgCannotGetSourceSecret = "cannot get source secret for current service binding"
+	msgCannotCreateSCB       = "cannot create service credential binding"
+	msgCannotListRetiredSCBs = "cannot list retired service credential bindings"
+	msgCannotDeleteSCBs      = "cannot delete expired service credential bindings"
 
-	msgCannotGetSCB           = "cannot get active service credential binding"
-	msgCannotGetSCBBackup     = "cannot get backup service credential binding"
-	msgCannotGetSourceSecret  = "cannot get source secret for current service binding"
-	msgCannotGetCurrentSecret = "cannot get secret for rotating credential binding"
-	msgCannotCreateSCB        = "cannot create service credential binding"
+	ForceRotationKey = "rotatingcredentialbinding.cloudfoundry.crossplane.io/force-rotation"
 )
 
 // Setup adds a controller that reconciles RotatingCredentialBinding CR.
@@ -126,86 +120,79 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}
 
 	if cr.Status.ActiveServiceCredentialBinding == nil {
-		cr.SetConditions(xpv1.Creating().WithMessage("no active secret binding found"))
+		cr.SetConditions(xpv1.Creating().WithMessage(msgSCBNotFound))
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
 	name := cr.Status.ActiveServiceCredentialBinding.Name
 	namespace := cr.Status.ActiveServiceCredentialBinding.Namespace
 
-	var scb v1alpha1.ServiceCredentialBinding
-	if err := c.kube.Get(ctx, k8s.ObjectKey{Namespace: namespace, Name: name}, &scb); err != nil {
+	var activeSCB v1alpha1.ServiceCredentialBinding
+	if err := c.kube.Get(ctx, k8s.ObjectKey{Namespace: namespace, Name: name}, &activeSCB); err != nil {
 		if k8serrors.IsNotFound(err) {
 			cr.SetConditions(xpv1.Unavailable().WithMessage(msgSCBNotFound))
-			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false}, nil
+			return managed.ExternalObservation{ResourceExists: false}, nil
 		}
 		cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotGetSCB))
 		return managed.ExternalObservation{}, errors.Wrap(err, msgCannotGetSCB)
 	}
 
-	if cr.Status.ActiveServiceCredentialBinding.LastRotation.Add(cr.Spec.RotationFrequency.Duration).Before(time.Now()) {
-		cr.SetConditions(xpv1.Available().WithMessage(msgRotationDue))
-		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false}, nil
+	if meta.GetExternalName(cr) != meta.GetExternalName(&activeSCB) {
+		meta.SetExternalName(cr, meta.GetExternalName(&activeSCB))
+		if err := c.kube.Update(ctx, cr); err != nil {
+			cr.SetConditions(xpv1.Unavailable().WithMessage(errCannotUpdateStatus))
+			return managed.ExternalObservation{}, errors.Wrap(err, errCannotUpdateStatus)
+		}
 	}
 
-	for _, prevSCB := range cr.Status.PreviousServiceCredentialBindings {
-		if prevSCB.LastRotation.Add(cr.Spec.RotationTTL.Duration).Before(time.Now()) {
-			if err := c.kube.Get(ctx, k8s.ObjectKey{Namespace: prevSCB.Namespace, Name: prevSCB.Name}, &v1alpha1.ServiceCredentialBinding{}); err != nil {
-				if !k8serrors.IsNotFound(err) {
-					cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotGetSCBBackup))
-					return managed.ExternalObservation{}, errors.Wrap(err, msgCannotGetSCBBackup)
-				}
-				cr.SetConditions(xpv1.Available().WithMessage(msgPrevNotFound))
-				return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false}, nil
-			} else {
-				cr.SetConditions(xpv1.Available().WithMessage(msgDeleteOld))
-				return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false}, nil
-			}
+	if activeSCB.GetCreationTimestamp().Add(cr.Spec.RotationFrequency.Duration).Before(time.Now()) {
+		cr.SetConditions(xpv1.Available().WithMessage(msgRotationDue))
+		return managed.ExternalObservation{ResourceExists: false}, nil
+	}
+
+	if cr.ObjectMeta.Annotations != nil {
+		if _, ok := cr.ObjectMeta.Annotations[ForceRotationKey]; ok {
+			cr.SetConditions(xpv1.Available().WithMessage(msgRotationDue))
+			return managed.ExternalObservation{ResourceExists: false}, nil
+		}
+	}
+
+	allSCBs, err := rcb.GetAllBindings(ctx, c.kube, cr)
+	if err != nil {
+		cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotListRetiredSCBs))
+		return managed.ExternalObservation{}, errors.Wrap(err, msgCannotListRetiredSCBs)
+	}
+	for _, currentSCB := range allSCBs {
+		if currentSCB.Name == activeSCB.Name && currentSCB.Namespace == activeSCB.Namespace {
+			// If the previous SCB is the same as the active one, we do not
+			// delete it.
+			continue
+		}
+		if currentSCB.GetCreationTimestamp().Add(cr.Spec.RotationTTL.Duration).Before(time.Now()) {
+			cr.SetConditions(xpv1.Available().WithMessage(msgDeleteExpired))
+			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false}, nil
 		}
 	}
 
 	if cr.Spec.WriteConnectionSecretToReference != nil && cr.Spec.WriteConnectionSecretToReference.Name != "" {
 		var sourceSecret apicorev1.Secret
-		if err := c.kube.Get(ctx, k8s.ObjectKey{Namespace: scb.Spec.WriteConnectionSecretToReference.Namespace, Name: scb.Spec.WriteConnectionSecretToReference.Name}, &sourceSecret); err != nil {
-			if k8serrors.IsNotFound(err) {
-				cr.SetConditions(xpv1.Available().WithMessage(msgConnOutdated))
-				return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false}, nil
-			}
+		if err := c.kube.Get(ctx,
+			k8s.ObjectKey{
+				Namespace: activeSCB.Spec.WriteConnectionSecretToReference.Namespace,
+				Name:      activeSCB.Spec.WriteConnectionSecretToReference.Name,
+			},
+			&sourceSecret); err != nil {
 			cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotGetSourceSecret))
 			return managed.ExternalObservation{}, errors.Wrap(err, msgCannotGetSourceSecret)
 		}
 
-		if len(sourceSecret.Data) == 0 {
-			cr.SetConditions(xpv1.Available().WithMessage(msgWaitingForSecret))
-			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false}, nil
-		}
+		cr.SetConditions(xpv1.Available().WithMessage(msgUpToDate))
+		return managed.ExternalObservation{
+			ResourceExists:    true,
+			ResourceUpToDate:  true,
+			ConnectionDetails: sourceSecret.Data,
+		}, nil
 
-		var secret apicorev1.Secret
-		name := cr.Spec.WriteConnectionSecretToReference.Name
-		namespace := cr.Spec.WriteConnectionSecretToReference.Namespace
-		if namespace == "" {
-			namespace = cr.GetNamespace()
-		}
-
-		if err := c.kube.Get(ctx, k8s.ObjectKey{Namespace: namespace, Name: name}, &secret); err != nil {
-			if k8serrors.IsNotFound(err) {
-				cr.SetConditions(xpv1.Available().WithMessage(msgConnOutdated))
-				return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ConnectionDetails: sourceSecret.Data}, nil
-			}
-			cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotGetCurrentSecret))
-			return managed.ExternalObservation{}, errors.Wrap(err, msgCannotGetCurrentSecret)
-		}
-
-		if len(secret.Data) != len(sourceSecret.Data) {
-			cr.SetConditions(xpv1.Available().WithMessage(msgConnOutdated))
-			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ConnectionDetails: sourceSecret.Data}, nil
-		}
-		for k, v := range sourceSecret.Data {
-			if val, ok := secret.Data[k]; !ok || string(val) != string(v) {
-				cr.SetConditions(xpv1.Available().WithMessage(msgConnOutdated))
-				return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ConnectionDetails: sourceSecret.Data}, nil
-			}
-		}
 	}
 
 	cr.SetConditions(xpv1.Available().WithMessage(msgUpToDate))
@@ -232,36 +219,23 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	cr.Status.ActiveServiceCredentialBinding = &v1alpha1.ServiceCredentialBindingReference{
-		Name:         newName,
-		Namespace:    namespace,
-		LastRotation: metav1.Time{Time: time.Now()},
+		Name:      newName,
+		Namespace: namespace,
 	}
 	cr.SetConditions(xpv1.Available().WithMessage(msgUpToDate))
 
 	if err := c.kube.Status().Update(ctx, cr); err != nil {
-		cr.SetConditions(xpv1.Unavailable().WithMessage("cannot update status"))
-		return managed.ExternalCreation{}, errors.Wrap(err, "cannot update status")
+		cr.SetConditions(xpv1.Unavailable().WithMessage(errCannotUpdateStatus))
+		return managed.ExternalCreation{}, errors.Wrap(err, errCannotUpdateStatus)
 	}
 
-	if cr.Spec.WriteConnectionSecretToReference != nil && cr.Spec.WriteConnectionSecretToReference.Name != "" {
-		secret, err := rcb.GetSecret(ctx, c.kube, cr)
-		if err != nil {
-			if k8serrors.IsNotFound(err) {
-				cr.SetConditions(xpv1.Available().WithMessage("waiting for secret to be created"))
-				return managed.ExternalCreation{
-					ConnectionDetails: nil,
-				}, nil
-			}
-			cr.SetConditions(xpv1.Unavailable().WithMessage("cannot update copy secret"))
-			return managed.ExternalCreation{}, errors.Wrap(err, "cannot update copy secret")
+	if cr.ObjectMeta.Annotations != nil {
+		if _, ok := cr.ObjectMeta.Annotations[ForceRotationKey]; ok {
+			meta.RemoveAnnotations(cr, ForceRotationKey)
 		}
-		return managed.ExternalCreation{
-			ConnectionDetails: secret.Data,
-		}, nil
 	}
-	return managed.ExternalCreation{
-		ConnectionDetails: nil,
-	}, nil
+
+	return managed.ExternalCreation{}, nil
 }
 
 // Update a RotatingCredentialBinding resource.
@@ -271,146 +245,18 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errWrongCRType)
 	}
 
-	name := cr.Spec.ForProvider.Name
-	namespace := getNamespace(cr)
-
-	switch msg := cr.GetCondition(xpv1.Available().Type).Message; msg {
-	case msgUpToDate:
-		return managed.ExternalUpdate{}, nil
-	case msgRotationDue:
-		newName, err := rcb.GenerateSCB(ctx, c.kube, cr, name, namespace)
-		if err != nil {
-			cr.SetConditions(xpv1.Unavailable().WithMessage("cannot create new service credential binding"))
-			return managed.ExternalUpdate{}, errors.Wrap(err, "cannot create new service credential binding")
-		}
-		oldSCB := cr.Status.ActiveServiceCredentialBinding
-		if oldSCB == nil {
-			cr.SetConditions(xpv1.Unavailable().WithMessage("active service credential binding is nil"))
-			return managed.ExternalUpdate{}, errors.New("active service credential binding is nil")
-		}
-		oldSCB.LastRotation = metav1.Time{Time: time.Now()}
-		cr.Status.PreviousServiceCredentialBindings = append(cr.Status.PreviousServiceCredentialBindings, oldSCB)
-		cr.Status.ActiveServiceCredentialBinding = &v1alpha1.ServiceCredentialBindingReference{
-			Name:         newName,
-			Namespace:    namespace,
-			LastRotation: metav1.Time{Time: time.Now()},
-		}
-
-		if cr.Spec.WriteConnectionSecretToReference != nil && cr.Spec.WriteConnectionSecretToReference.Name != "" {
-			secret, err := rcb.GetSecret(ctx, c.kube, cr)
-			if err != nil {
-				if k8serrors.IsNotFound(err) {
-					cr.SetConditions(xpv1.Available().WithMessage("waiting for new secret to be created"))
-					return managed.ExternalUpdate{
-						ConnectionDetails: nil,
-					}, nil
-				}
-				cr.SetConditions(xpv1.Unavailable().WithMessage("cannot update copy secret"))
-				return managed.ExternalUpdate{}, errors.Wrap(err, "cannot update copy secret")
-			}
-			return managed.ExternalUpdate{
-				ConnectionDetails: secret.Data,
-			}, nil
-		}
-		return managed.ExternalUpdate{
-			ConnectionDetails: nil,
-		}, nil
-	case msgDeleteOld:
-		newPrevSCBs := make([]*v1alpha1.ServiceCredentialBindingReference, 0, len(cr.Status.PreviousServiceCredentialBindings))
-		for _, prevSCB := range cr.Status.PreviousServiceCredentialBindings {
-			if prevSCB.LastRotation.Add(cr.Spec.RotationTTL.Duration).Before(time.Now()) {
-				if err := rcb.DeleteSCB(ctx, c.kube, prevSCB.Name, prevSCB.Namespace); err != nil && !k8serrors.IsNotFound(err) {
-					cr.SetConditions(xpv1.Unavailable().WithMessage("cannot delete service credential binding"))
-					return managed.ExternalUpdate{}, errors.Wrap(err, "cannot delete service credential binding")
-				}
-			} else {
-				newPrevSCBs = append(newPrevSCBs, prevSCB)
-			}
-		}
-		cr.Status.PreviousServiceCredentialBindings = newPrevSCBs
-		cr.SetConditions(xpv1.Available().WithMessage(msgUpToDate))
-		return managed.ExternalUpdate{}, nil
-	case msgConnOutdated:
-		secret, err := rcb.GetSecret(ctx, c.kube, cr)
-		if err != nil {
-			if k8serrors.IsNotFound(err) {
-				cr.SetConditions(xpv1.Available().WithMessage("waiting for secret to be created"))
-				return managed.ExternalUpdate{
-					ConnectionDetails: nil,
-				}, nil
-			}
-			cr.SetConditions(xpv1.Unavailable().WithMessage("cannot update copy secret"))
-			return managed.ExternalUpdate{}, errors.Wrap(err, "cannot update copy secret")
-		}
-		cr.SetConditions(xpv1.Available().WithMessage(msgUpToDate))
-		return managed.ExternalUpdate{
-			ConnectionDetails: secret.Data,
-		}, nil
-	case msgPrevNotFound:
-		if len(cr.Status.PreviousServiceCredentialBindings) == 0 {
-			cr.SetConditions(xpv1.Available().WithMessage(msgUpToDate))
-			return managed.ExternalUpdate{}, nil
-		}
-		// If the previous service credential binding is not found, remove it from the list
-		newPrevSCBs := make([]*v1alpha1.ServiceCredentialBindingReference, 0, len(cr.Status.PreviousServiceCredentialBindings))
-		for _, prevSCB := range cr.Status.PreviousServiceCredentialBindings {
-			if err := c.kube.Get(ctx, k8s.ObjectKey{Namespace: prevSCB.Namespace, Name: prevSCB.Name}, &v1alpha1.ServiceCredentialBinding{}); err != nil {
-				if k8serrors.IsNotFound(err) {
-					continue
-				}
-				cr.SetConditions(xpv1.Unavailable().WithMessage("cannot get previous service credential binding"))
-				return managed.ExternalUpdate{}, errors.Wrap(err, "cannot get previous service credential binding")
-			}
-			newPrevSCBs = append(newPrevSCBs, prevSCB)
-		}
-		cr.Status.PreviousServiceCredentialBindings = newPrevSCBs
-		return managed.ExternalUpdate{}, nil
-	case msgWaitingForSecret:
-		if cr.Spec.WriteConnectionSecretToReference == nil || cr.Spec.WriteConnectionSecretToReference.Name == "" {
-			cr.SetConditions(xpv1.Available().WithMessage(msgUpToDate))
-			return managed.ExternalUpdate{}, nil
-		}
-		// If the secret is not created yet, we just return and wait for the next reconciliation
-		var sourceSecret apicorev1.Secret
-		if err := c.kube.Get(ctx, k8s.ObjectKey{Namespace: cr.Status.ActiveServiceCredentialBinding.Namespace, Name: cr.Status.ActiveServiceCredentialBinding.Name}, &sourceSecret); err != nil {
-			if k8serrors.IsNotFound(err) {
-				cr.SetConditions(xpv1.Available().WithMessage(msgWaitingForSecret))
-				return managed.ExternalUpdate{
-					ConnectionDetails: nil,
-				}, nil
-			}
-			cr.SetConditions(xpv1.Unavailable().WithMessage("cannot get source secret for current binding"))
-			return managed.ExternalUpdate{}, errors.Wrap(err, "cannot get source secret for current binding")
-		}
-		if len(sourceSecret.Data) == 0 {
-			cr.SetConditions(xpv1.Available().WithMessage(msgWaitingForSecret))
-			return managed.ExternalUpdate{
-				ConnectionDetails: nil,
-			}, nil
-		}
-		// If the secret is created, we can just return and wait for the next reconciliation
-		cr.SetConditions(xpv1.Available().WithMessage(msgUpToDate))
-		return managed.ExternalUpdate{
-			ConnectionDetails: sourceSecret.Data,
-		}, nil
+	allSCBs, err := rcb.GetAllBindings(ctx, c.kube, cr)
+	if err != nil {
+		cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotListRetiredSCBs))
+		return managed.ExternalUpdate{}, errors.Wrap(err, msgCannotListRetiredSCBs)
 	}
 
-	if msg := cr.GetCondition(xpv1.Unavailable().Type).Message; msg == msgSCBNotFound {
-		newName, err := rcb.CreateSCB(ctx, c.kube, cr, cr.Status.ActiveServiceCredentialBinding.Name, cr.Status.ActiveServiceCredentialBinding.Namespace)
-		if err != nil {
-			cr.SetConditions(xpv1.Unavailable().WithMessage("cannot create service credential binding"))
-			return managed.ExternalUpdate{}, errors.Wrap(err, "cannot create service credential binding")
-		}
-		cr.Status.ActiveServiceCredentialBinding = &v1alpha1.ServiceCredentialBindingReference{
-			Name:         newName,
-			Namespace:    namespace,
-			LastRotation: metav1.Time{Time: time.Now()},
-		}
-		cr.SetConditions(xpv1.Available().WithMessage(msgUpToDate))
-		return managed.ExternalUpdate{}, nil
+	if err := rcb.DeleteSCBs(ctx, c.kube, allSCBs, cr); err != nil {
+		cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotDeleteSCBs))
+		return managed.ExternalUpdate{}, errors.Wrap(err, msgCannotDeleteSCBs)
 	}
 
-	return managed.ExternalUpdate{}, errors.New("unknown condition message")
+	return managed.ExternalUpdate{}, nil
 }
 
 // Delete a RotatingCredentialBinding resource.
@@ -420,13 +266,15 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 		return errors.New(errWrongCRType)
 	}
 
-	for _, scb := range append(cr.Status.PreviousServiceCredentialBindings, cr.Status.ActiveServiceCredentialBinding) {
-		if scb != nil {
-			if err := rcb.DeleteSCB(ctx, c.kube, scb.Name, scb.Namespace); err != nil && !k8serrors.IsNotFound(err) {
-				cr.SetConditions(xpv1.Unavailable().WithMessage("cannot delete service credential binding"))
-				return errors.Wrap(err, "cannot delete service credential binding")
-			}
-		}
+	allSCBs, err := rcb.GetAllBindings(ctx, c.kube, cr)
+	if err != nil {
+		cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotListRetiredSCBs))
+		return errors.Wrap(err, msgCannotListRetiredSCBs)
+	}
+
+	if err := rcb.DeleteSCBs(ctx, c.kube, allSCBs, nil); err != nil {
+		cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotDeleteSCBs))
+		return errors.Wrap(err, msgCannotDeleteSCBs)
 	}
 
 	cr.SetConditions(xpv1.Deleting().WithMessage("deleted service credential bindings"))
