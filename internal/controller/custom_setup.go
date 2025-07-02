@@ -15,6 +15,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgmembers"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgquota"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/orgrole"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/rotatingcredentialbinding"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/spacemembers"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/spacerole"
 
@@ -43,6 +44,7 @@ func CustomSetup(mgr ctrl.Manager, o controller.Options) error {
 		route.Setup,
 		serviceinstance.Setup,
 		servicecredentialbinding.Setup,
+		rotatingcredentialbinding.Setup,
 		spacequota.Setup,
 		domain.Setup,
 	} {
