@@ -15,91 +15,75 @@ type DomainObservation struct {
 	// (String) The GUID of the object.
 	ID *string `json:"id,omitempty"`
 
-	// (to-container) traffic, or external (user-to-container) traffic
-	// Whether the domain is used for internal (container-to-container) traffic, or external (user-to-container) traffic
+	// (Boolean) Whether the domain is used for internal (container-to-container) traffic, or external (user-to-container) traffic.
 	Internal *bool `json:"internal,omitempty"`
 
-	// (String) The name of the domain;must be between 3 ~ 253 characters and follow RFC 1035
-	// The name of the domain;must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035)
+	// (String) The name of the domain; must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035).
 	Name *string `json:"name,omitempty"`
 
-	// (String) The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
-	// The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available
+	// (String) The organization the domain is scoped to; if set, the domain will only be available in that organization; otherwise, the domain will be globally available.
 	Org *string `json:"org,omitempty"`
 
-	// (String) The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
-	// The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
+	// (String) The desired router group guid. Note: creates a TCP domain; cannot be used when `internal` is set to true or domain is scoped to an org.
 	RouterGroup *string `json:"routerGroup,omitempty"`
 
-	// (Set of String) Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
-	// Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
+	// (Set of String) Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to.
 	// +listType=set
 	SharedOrgs []*string `json:"sharedOrgs,omitempty"`
 
-	// (Set of String) Available protocols for routes using the domain, currently http and tcp
-	// Available protocols for routes using the domain, currently http and tcp
+	// (Set of String) Available protocols for routes using the domain, currently http and tcp.
 	// +listType=set
 	SupportedProtocols []*string `json:"supportedProtocols,omitempty"`
 
-	// (String) The date and time when the resource was created in RFC3339 format.
-	// The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+	// (String) The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	CreatedAt *string `json:"createdAt,omitempty"`
 
-	// (String) The date and time when the resource was updated in RFC3339 format.
-	// The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+	// (String) The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	UpdatedAt *string `json:"updatedAt,omitempty"`
 
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +mapType=granular
 	Annotations map[string]*string `json:"annotations,omitempty"`
 
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-	// The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +mapType=granular
 	Labels map[string]*string `json:"labels,omitempty"`
 }
 
 type DomainParameters struct {
-	// (Deprecated) Domain part of full domain name. If specified the sub_domain argument needs to be provided and the name will be computed. If name is provided, domain and sub_domain will be ignored.
+	// (Deprecated) Domain part of full domain name. If specified, the `subDomain` argument needs to be provided and the `name` will be computed. If `name` is provided, `domain` and `subDomain` will be ignored.
 	// +kubebuilder:deprecated:warning=The domain field is deprecated and will be removed in a future version. Use the name field instead.
 	Domain *string `json:"domain,omitempty" tf:"domain,omitempty"`
 
-	// (Deprecated) Sub-domain part of full domain name. If specified the domain argument needs to be provided and the name will be computed. If name is provided, domain and sub_domain will be ignored.
+	// (Deprecated) Sub-domain part of full domain name. If specified, the `domain` argument needs to be provided and the `name` will be computed. If `name` is provided, `domain` and `subDomain` will be ignored.
 	// +kubebuilder:deprecated:warning=The sub_domain field is deprecated and will be removed in a future version. Use the name field instead.
 	SubDomain *string `json:"subDomain,omitempty" tf:"sub_domain,omitempty"`
 
-	// (String) The name of the domain;must be between 3 ~ 253 characters and follow RFC 1035
-	// The name of the domain;must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035).
+	// (String) The name of the domain; must be between 3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035).
 	// +kubebuilder:validation:Optional
 	Name string `json:"name,omitempty"`
 
-	// (to-container) traffic, or external (user-to-container) traffic
-	// Whether the domain is used for internal (container-to-container) traffic, or external (user-to-container) traffic
+	// (Boolean) Whether the domain is used for internal (container-to-container) traffic, or external (user-to-container) traffic.
 	// +kubebuilder:validation:Optional
 	Internal *bool `json:"internal,omitempty"`
 
-	// (String) The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
-	// The desired router group guid. note: creates a tcp domain; cannot be used when internal is set to true or domain is scoped to an org
+	// (String) The desired router group guid. Note: creates a TCP domain; cannot be used when `internal` is set to true or domain is scoped to an org.
 	// +kubebuilder:validation:Optional
 	RouterGroup *string `json:"routerGroup,omitempty"`
 
 	OrgReference `json:",inline"`
 
-	// (Set of String) Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
-	// Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to
+	// (Set of String) Organizations the domain is shared with; if set, the domain will be available in these organizations in addition to the organization the domain is scoped to.
 	// +kubebuilder:validation:Optional
 	// +listType=set
-	SharedOrgs []*string `json:"sharedOrgs,omitempty"` // TODO: change this to a list of Org references
+	SharedOrgs []*string `json:"sharedOrgs,omitempty"`
 
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described here.
-	// The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +kubebuilder:validation:Optional
 	// +mapType=granular
 	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
 
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described here.
-	// The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
 	// +kubebuilder:validation:Optional
 	// +mapType=granular
 	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`

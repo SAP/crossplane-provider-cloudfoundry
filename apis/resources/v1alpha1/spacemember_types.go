@@ -7,19 +7,21 @@ import (
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 )
 
-// SpaceMembersParameters encapsulate role assignments to CloudFoundry Spaces
+// SpaceMembersParameters encapsulate role assignments to CloudFoundry Spaces.
 type SpaceMembersParameters struct {
+	// (Attributes) Reference to the Cloud Foundry space.
 	SpaceReference `json:",inline"`
 
-	// Space role type to assign to members; see valid role types https://v3-apidocs.cloudfoundry.space/version/3.127.0/index.html#valid-role-types
+	// (String) Space role type to assign to members; see valid role types https://v3-apidocs.cloudfoundry.space/version/3.127.0/index.html#valid-role-types
 	// +kubebuilder:validation:Enum=Developer;Auditor;Manager;Supporter;Developers;Auditors;Managers;Supporters
 	// +kubebuilder:validation:Required
 	RoleType string `json:"roleType"`
 
+	// (Attributes) List of members and enforcement policy for role assignment.
 	MemberList `json:",inline"`
 }
 
-// SpaceMembersSpec defines the desired state of SpaceMembers
+// SpaceMembersSpec defines the desired state of SpaceMembers.
 type SpaceMembersSpec struct {
 	v1.ResourceSpec `json:",inline"`
 	ForProvider     SpaceMembersParameters `json:"forProvider"`
@@ -28,7 +30,8 @@ type SpaceMembersSpec struct {
 // SpaceMembersStatus defines the observed state of SpaceMembers.
 type SpaceMembersStatus struct {
 	v1.ResourceStatus `json:",inline"`
-	AtProvider        RoleAssignments `json:"atProvider,omitempty"`
+	// (Attributes) The assigned roles for the space members.
+	AtProvider RoleAssignments `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -49,7 +52,7 @@ type SpaceMembers struct {
 
 // +kubebuilder:object:root=true
 
-// SpaceMembersList contains a list of SpaceMembers
+// SpaceMembersList contains a list of SpaceMembers.
 type SpaceMembersList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`

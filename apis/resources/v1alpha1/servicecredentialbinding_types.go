@@ -11,12 +11,9 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
-// ServiceCredentialBindingObservation defines the observed state of ServiceCredentialBinding
-
 type ServiceCredentialBindingObservation struct {
 	SCBResource `json:",inline"`
-
-	// LastOperation describes the last operation performed on the service credential binding.
+	// (Attributes) The details of the last operation performed on the service credential binding.
 	LastOperation *LastOperation `json:"lastOperation,omitempty"`
 
 	// If the binding is rotated, `retiredBindings` stores resources that have been rotated out but are still transitionally retained due to `rotation.ttl` setting
@@ -24,53 +21,52 @@ type ServiceCredentialBindingObservation struct {
 	RetiredKeys []*SCBResource `json:"retiredKeys,omitempty"`
 }
 
-// ServiceCredentialBindingParameters define the desired state of the forProvider field of ServiceCredentialBinding
 type ServiceCredentialBindingParameters struct {
-	// The type of the Service Key in Cloud Foundry. Either "key" or "app".
+	// (String) The type of the service credential binding in Cloud Foundry. Either "key" or "app".
 	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=key;app
 	// +kubebuilder:default=key
 	Type string `json:"type,omitempty"`
 
-	// The name of the Service Key in Cloud Foundry. Required if Type is "key".
+	// (String) The name of the service credential binding in Cloud Foundry. Required if `type` is "key".
 	// +kubebuilder:validation:Optional
 	Name *string `json:"name,omitempty"`
 
-	// The ID of the Service Instance the key should be associated with.
+	// (String) The ID of the service instance the binding should be associated with.
 	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1.ServiceInstance
 	// +kubebuilder:validation:Optional
 	ServiceInstance *string `json:"serviceInstance,omitempty"`
 
-	// Reference to a ManagedServiceInstance to populate serviceInstance.
+	// (Attributes) Reference to a managed service instance to populate `serviceInstance`.
 	// +kubebuilder:validation:Optional
 	ServiceInstanceRef *v1.Reference `json:"serviceInstanceRef,omitempty"`
 
-	// Selector for a ManagedServiceInstance to populate serviceInstance.
+	// (Attributes) Selector for a managed service instance to populate `serviceInstance`.
 	// +kubebuilder:validation:Optional
 	ServiceInstanceSelector *v1.Selector `json:"serviceInstanceSelector,omitempty"`
 
-	// The ID of an App  that should be bound to. Required if Type is "app".
+	// (String) The ID of an app that should be bound to. Required if `type` is "app".
 	// +crossplane:generate:reference:type=App
 	// +kubebuilder:validation:Optional
 	App *string `json:"app,omitempty"`
 
-	// Reference to an App CR to populate app.
+	// (Attributes) Reference to an app CR to populate `app`.
 	// +kubebuilder:validation:Optional
 	AppRef *v1.Reference `json:"appRef,omitempty"`
 
-	// Selector for an App CR to populate app.
+	// (Attributes) Selector for an app CR to populate `app`.
 	// +kubebuilder:validation:Optional
 	AppSelector *v1.Selector `json:"appSelector,omitempty"`
 
-	// An optional JSON object to pass parameters to the service broker .
+	// (Attributes) An optional JSON object to pass `parameters` to the service broker.
 	// +kubebuilder:validation:Optional
 	Parameters *runtime.RawExtension `json:"parameters,omitempty"`
 
-	// Use a reference to a secret to pass parameters to the service broker. Ignored if parameters is set.
+	// (Attributes) Use a reference to a secret to pass `parameters` to the service broker. Ignored if `parameters` is set.
 	// +kubebuilder:validation:Optional
 	ParametersSecretRef *v1.SecretReference `json:"paramsSecretRef,omitempty"`
 
-	// (Deprecated) True to write connectionDetails as single key-value in a secret rather than a map. The key is the metadata.name of the service credential binding CR itself. This is deprecated in favor of the spec.connectionDetailsAsJSON field.
+	// (Boolean, Deprecated) True to write `connectionDetails` as a single key-value in a secret rather than a map. The key is the metadata.name of the service credential binding CR itself. This is deprecated in favor of the `spec.connectionDetailsAsJSON` field.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=false
 	ConnectionDetailsAsJSON bool `json:"connectionDetailsAsJSON,omitempty"`
@@ -80,11 +76,10 @@ type ServiceCredentialBindingParameters struct {
 	Rotation *RotationParameters `json:"rotation,omitempty"`
 }
 
-// ServiceCredentialBindingSpec defines the desired state of ServiceCredentialBinding
 type ServiceCredentialBindingSpec struct {
 	v1.ResourceSpec `json:",inline"`
 
-	// True to write connectionDetails as single key-value in a secret rather than a map. The key is the metadata.name of the service credential binding CR itself.
+	// (Boolean) True to write `connectionDetails` as a single key-value in a secret rather than a map. The key is the metadata.name of the service credential binding CR itself.
 	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=false
 	ConnectionDetailsAsJSON bool `json:"connectionDetailsAsJSON,omitempty"`
@@ -103,8 +98,6 @@ type RotationParameters struct {
 	// +kubebuilder:validation:CEL=expression="!has(self.ttl) || (!has(self.frequency) || (self.ttl >= self.frequency && self.ttl <= self.frequency * 3))",message="ttl must be greater than or equal to frequency and no more than 5 times frequency"
 	TTL *metav1.Duration `json:"ttl,omitempty"`
 }
-
-// ServiceCredentialBindingStatus defines the observed state of ServiceCredentialBinding.
 type ServiceCredentialBindingStatus struct {
 	v1.ResourceStatus `json:",inline"`
 	AtProvider        ServiceCredentialBindingObservation `json:"atProvider,omitempty"`

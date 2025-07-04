@@ -74,27 +74,25 @@ spec:
               forProvider:
                 properties:
                   allowPaidServicePlans:
-                    description: |-
-                      free service plans. Does not control plan visibility. When false, non-free service plans may be visible in the marketplace but instances can not be provisioned.
-                      Determines whether users can provision instances of non-free service plans. Does not control plan visibility. When false, non-free service plans may be visible in the marketplace but instances can not be provisioned.
+                    description: (Boolean) Determines whether users can provision
+                      instances of non-free service plans. Does not control plan visibility.
+                      When false, non-free service plans may be visible in the marketplace
+                      but instances cannot be provisioned.
                     type: boolean
                   instanceMemory:
-                    description: |-
-                      (Number) Maximum memory per application instance.
-                      Maximum memory per application instance.
+                    description: (Number) Maximum memory per application instance.
                     type: number
                   name:
-                    description: |-
-                      (String) The name you use to identify the quota or plan in Cloud Foundry
-                      The name you use to identify the quota or plan in Cloud Foundry
+                    description: (String) The name you use to identify the quota or
+                      plan in Cloud Foundry.
                     type: string
                   org:
-                    description: |-
-                      (String) The ID of the Org within which to create the space quota
-                      The ID of the Org within which to create the space quota
+                    description: (String) The ID of the Org within which to create
+                      the space quota.
                     type: string
                   orgRef:
-                    description: Reference to a Org in resources to populate org.
+                    description: (Attributes) Reference to an Org in resources to
+                      populate `org`.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -128,7 +126,8 @@ spec:
                     - name
                     type: object
                   orgSelector:
-                    description: Selector for a Org in resources to populate org.
+                    description: (Attributes) Selector for an Org in resources to
+                      populate `org`.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -168,15 +167,15 @@ spec:
                         type: object
                     type: object
                   spaces:
-                    description: |-
-                      (Set of String) Set of space GUIDs to which this space quota would be assigned.
-                      Set of space GUIDs to which this space quota would be assigned.
+                    description: (Set of String) Set of space GUIDs to which this
+                      space quota would be assigned.
                     items:
                       type: string
                     type: array
                     x-kubernetes-list-type: set
                   spacesRefs:
-                    description: References to Space in cloudfoundry to populate spaces.
+                    description: (Attributes) References to Space in cloudfoundry
+                      to populate `spaces`.
                     items:
                       description: A Reference to a named object.
                       properties:
@@ -213,8 +212,8 @@ spec:
                       type: object
                     type: array
                   spacesSelector:
-                    description: Selector for a list of Space in cloudfoundry to populate
-                      spaces.
+                    description: (Attributes) Selector for a list of Space in cloudfoundry
+                      to populate `spaces`.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -254,44 +253,30 @@ spec:
                         type: object
                     type: object
                   totalAppInstances:
-                    description: |-
-                      (Number) Maximum app instances allowed.
-                      Maximum app instances allowed.
+                    description: (Number) Maximum app instances allowed.
                     type: number
                   totalAppLogRateLimit:
-                    description: |-
-                      (Number) Maximum log rate allowed for all the started processes and running tasks in bytes/second.
-                      Maximum log rate allowed for all the started processes and running tasks in bytes/second.
+                    description: (Number) Maximum log rate allowed for all the started
+                      processes and running tasks in bytes/second.
                     type: number
                   totalAppTasks:
-                    description: |-
-                      (Number) Maximum tasks allowed per app.
-                      Maximum tasks allowed per app.
+                    description: (Number) Maximum tasks allowed per app.
                     type: number
                   totalMemory:
-                    description: |-
-                      (Number) Maximum memory usage allowed.
-                      Maximum memory usage allowed.
+                    description: (Number) Maximum memory usage allowed.
                     type: number
                   totalRoutePorts:
-                    description: |-
-                      (Number) Total number of ports that are reservable by routes in a space.
-                      Total number of ports that are reservable by routes in a space.
+                    description: (Number) Total number of ports that are reservable
+                      by routes in a space.
                     type: number
                   totalRoutes:
-                    description: |-
-                      (Number) Maximum routes allowed.
-                      Maximum routes allowed.
+                    description: (Number) Maximum routes allowed.
                     type: number
                   totalServiceKeys:
-                    description: |-
-                      (Number) Maximum service keys allowed.
-                      Maximum service keys allowed.
+                    description: (Number) Maximum service keys allowed.
                     type: number
                   totalServices:
-                    description: |-
-                      (Number) Maximum services allowed.
-                      Maximum services allowed.
+                    description: (Number) Maximum services allowed.
                     type: number
                 type: object
               initProvider:
@@ -308,27 +293,25 @@ spec:
                   autoscaler.
                 properties:
                   allowPaidServicePlans:
-                    description: |-
-                      free service plans. Does not control plan visibility. When false, non-free service plans may be visible in the marketplace but instances can not be provisioned.
-                      Determines whether users can provision instances of non-free service plans. Does not control plan visibility. When false, non-free service plans may be visible in the marketplace but instances can not be provisioned.
+                    description: (Boolean) Determines whether users can provision
+                      instances of non-free service plans. Does not control plan visibility.
+                      When false, non-free service plans may be visible in the marketplace
+                      but instances cannot be provisioned.
                     type: boolean
                   instanceMemory:
-                    description: |-
-                      (Number) Maximum memory per application instance.
-                      Maximum memory per application instance.
+                    description: (Number) Maximum memory per application instance.
                     type: number
                   name:
-                    description: |-
-                      (String) The name you use to identify the quota or plan in Cloud Foundry
-                      The name you use to identify the quota or plan in Cloud Foundry
+                    description: (String) The name you use to identify the quota or
+                      plan in Cloud Foundry.
                     type: string
                   org:
-                    description: |-
-                      (String) The ID of the Org within which to create the space quota
-                      The ID of the Org within which to create the space quota
+                    description: (String) The ID of the Org within which to create
+                      the space quota.
                     type: string
                   orgRef:
-                    description: Reference to a Org in resources to populate org.
+                    description: (Attributes) Reference to an Org in resources to
+                      populate `org`.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -362,7 +345,8 @@ spec:
                     - name
                     type: object
                   orgSelector:
-                    description: Selector for a Org in resources to populate org.
+                    description: (Attributes) Selector for an Org in resources to
+                      populate `org`.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -402,15 +386,15 @@ spec:
                         type: object
                     type: object
                   spaces:
-                    description: |-
-                      (Set of String) Set of space GUIDs to which this space quota would be assigned.
-                      Set of space GUIDs to which this space quota would be assigned.
+                    description: (Set of String) Set of space GUIDs to which this
+                      space quota would be assigned.
                     items:
                       type: string
                     type: array
                     x-kubernetes-list-type: set
                   spacesRefs:
-                    description: References to Space in cloudfoundry to populate spaces.
+                    description: (Attributes) References to Space in cloudfoundry
+                      to populate `spaces`.
                     items:
                       description: A Reference to a named object.
                       properties:
@@ -447,8 +431,8 @@ spec:
                       type: object
                     type: array
                   spacesSelector:
-                    description: Selector for a list of Space in cloudfoundry to populate
-                      spaces.
+                    description: (Attributes) Selector for a list of Space in cloudfoundry
+                      to populate `spaces`.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -488,44 +472,30 @@ spec:
                         type: object
                     type: object
                   totalAppInstances:
-                    description: |-
-                      (Number) Maximum app instances allowed.
-                      Maximum app instances allowed.
+                    description: (Number) Maximum app instances allowed.
                     type: number
                   totalAppLogRateLimit:
-                    description: |-
-                      (Number) Maximum log rate allowed for all the started processes and running tasks in bytes/second.
-                      Maximum log rate allowed for all the started processes and running tasks in bytes/second.
+                    description: (Number) Maximum log rate allowed for all the started
+                      processes and running tasks in bytes/second.
                     type: number
                   totalAppTasks:
-                    description: |-
-                      (Number) Maximum tasks allowed per app.
-                      Maximum tasks allowed per app.
+                    description: (Number) Maximum tasks allowed per app.
                     type: number
                   totalMemory:
-                    description: |-
-                      (Number) Maximum memory usage allowed.
-                      Maximum memory usage allowed.
+                    description: (Number) Maximum memory usage allowed.
                     type: number
                   totalRoutePorts:
-                    description: |-
-                      (Number) Total number of ports that are reservable by routes in a space.
-                      Total number of ports that are reservable by routes in a space.
+                    description: (Number) Total number of ports that are reservable
+                      by routes in a space.
                     type: number
                   totalRoutes:
-                    description: |-
-                      (Number) Maximum routes allowed.
-                      Maximum routes allowed.
+                    description: (Number) Maximum routes allowed.
                     type: number
                   totalServiceKeys:
-                    description: |-
-                      (Number) Maximum service keys allowed.
-                      Maximum service keys allowed.
+                    description: (Number) Maximum service keys allowed.
                     type: number
                   totalServices:
-                    description: |-
-                      (Number) Maximum services allowed.
-                      Maximum services allowed.
+                    description: (Number) Maximum services allowed.
                     type: number
                 type: object
               managementPolicies:
@@ -710,85 +680,65 @@ spec:
               atProvider:
                 properties:
                   allowPaidServicePlans:
-                    description: |-
-                      free service plans. Does not control plan visibility. When false, non-free service plans may be visible in the marketplace but instances can not be provisioned.
-                      Determines whether users can provision instances of non-free service plans. Does not control plan visibility. When false, non-free service plans may be visible in the marketplace but instances can not be provisioned.
+                    description: (Boolean) Determines whether users can provision
+                      instances of non-free service plans. Does not control plan visibility.
+                      When false, non-free service plans may be visible in the marketplace
+                      but instances cannot be provisioned.
                     type: boolean
                   createdAt:
-                    description: |-
-                      (String) The date and time when the resource was created in RFC3339 format.
-                      The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                   id:
                     description: (String) The GUID of the object.
                     type: string
                   instanceMemory:
-                    description: |-
-                      (Number) Maximum memory per application instance.
-                      Maximum memory per application instance.
+                    description: (Number) Maximum memory per application instance.
                     type: number
                   name:
-                    description: |-
-                      (String) The name you use to identify the quota or plan in Cloud Foundry
-                      The name you use to identify the quota or plan in Cloud Foundry
+                    description: (String) The name you use to identify the quota or
+                      plan in Cloud Foundry.
                     type: string
                   org:
-                    description: |-
-                      (String) The ID of the Org within which to create the space quota
-                      The ID of the Org within which to create the space quota
+                    description: (String) The ID of the Org within which to create
+                      the space quota.
                     type: string
                   spaces:
-                    description: |-
-                      (Set of String) Set of space GUIDs to which this space quota would be assigned.
-                      Set of space GUIDs to which this space quota would be assigned.
+                    description: (Set of String) Set of space GUIDs to which this
+                      space quota would be assigned.
                     items:
                       type: string
                     type: array
                     x-kubernetes-list-type: set
                   totalAppInstances:
-                    description: |-
-                      (Number) Maximum app instances allowed.
-                      Maximum app instances allowed.
+                    description: (Number) Maximum app instances allowed.
                     type: number
                   totalAppLogRateLimit:
-                    description: |-
-                      (Number) Maximum log rate allowed for all the started processes and running tasks in bytes/second.
-                      Maximum log rate allowed for all the started processes and running tasks in bytes/second.
+                    description: (Number) Maximum log rate allowed for all the started
+                      processes and running tasks in bytes/second.
                     type: number
                   totalAppTasks:
-                    description: |-
-                      (Number) Maximum tasks allowed per app.
-                      Maximum tasks allowed per app.
+                    description: (Number) Maximum tasks allowed per app.
                     type: number
                   totalMemory:
-                    description: |-
-                      (Number) Maximum memory usage allowed.
-                      Maximum memory usage allowed.
+                    description: (Number) Maximum memory usage allowed.
                     type: number
                   totalRoutePorts:
-                    description: |-
-                      (Number) Total number of ports that are reservable by routes in a space.
-                      Total number of ports that are reservable by routes in a space.
+                    description: (Number) Total number of ports that are reservable
+                      by routes in a space.
                     type: number
                   totalRoutes:
-                    description: |-
-                      (Number) Maximum routes allowed.
-                      Maximum routes allowed.
+                    description: (Number) Maximum routes allowed.
                     type: number
                   totalServiceKeys:
-                    description: |-
-                      (Number) Maximum service keys allowed.
-                      Maximum service keys allowed.
+                    description: (Number) Maximum service keys allowed.
                     type: number
                   totalServices:
-                    description: |-
-                      (Number) Maximum services allowed.
-                      Maximum services allowed.
+                    description: (Number) Maximum services allowed.
                     type: number
                   updatedAt:
-                    description: |-
-                      (String) The date and time when the resource was updated in RFC3339 format.
-                      The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+                    description: (String) The date and time when the resource was
+                      updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                 type: object
               conditions:

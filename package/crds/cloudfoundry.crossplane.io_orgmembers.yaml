@@ -55,7 +55,6 @@ spec:
           metadata:
             type: object
           spec:
-            description: OrgMembersSpec defines the desired state of OrgMembers
             properties:
               deletionPolicy:
                 default: Delete
@@ -72,47 +71,47 @@ spec:
                 - Delete
                 type: string
               forProvider:
-                description: OrgMembersParameters encapsulate role assignments to
-                  CloudFoundry Organizations
                 properties:
                   enforcementPolicy:
                     default: Lax
-                    description: Set to `Lax` to enforce that the role is assigned
-                      to AT LEAST those members as defined in this CR. Set to `Strict`
-                      to enforce that the role is assigned to EXACT those members
-                      as defined in CR and any other members will be removed. Defaults
-                      to `Lax`.
+                    description: (String) Set to `Lax` to enforce that the role is
+                      assigned to AT LEAST those members as defined in this CR. Set
+                      to `Strict` to enforce that the role is assigned to EXACTLY
+                      those members as defined in this CR and any other members will
+                      be removed. Defaults to `Lax`.
                     enum:
                     - Lax
                     - Strict
                     type: string
                   members:
-                    description: List of members (usernames) to assign as org members
-                      with the specified role type. Defaults to empty list.
+                    description: (List of Attributes) List of members (usernames)
+                      to assign as org members with the specified role type. Defaults
+                      to empty list.
                     items:
-                      description: Member identifies a user by name and origin
+                      description: Member identifies a user by name and origin.
                       properties:
                         origin:
                           default: sap.ids
-                          description: Origin picks the IDP
+                          description: (String) Origin selects the identity provider.
+                            Defaults to "sap.ids".
                           type: string
                         username:
-                          description: Username at the identity provider
+                          description: (String) Username at the identity provider.
                           type: string
                       required:
                       - username
                       type: object
                     type: array
                   org:
-                    description: (String) The guid of the organization
+                    description: (String) The GUID of the organization.
                     type: string
                   orgName:
-                    description: The name of the Cloud Foundry organization containing
-                      the space.
+                    description: (String) The name of the Cloud Foundry organization
+                      containing the space.
                     type: string
                   orgRef:
-                    description: Reference to an `Org` CR to retrieve the external
-                      GUID of the organization.
+                    description: (Attributes) Reference to an `Org` CR to retrieve
+                      the external GUID of the organization.
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -146,8 +145,8 @@ spec:
                     - name
                     type: object
                   orgSelector:
-                    description: Selector to an `Org` CR to retrieve the external
-                      GUID of the Organization.
+                    description: (Attributes) Selector to an `Org` CR to retrieve
+                      the external GUID of the organization.
                     properties:
                       matchControllerRef:
                         description: |-
@@ -187,8 +186,8 @@ spec:
                         type: object
                     type: object
                   roleType:
-                    description: Org role type to assign to members; see valid role
-                      types https://v3-apidocs.cloudfoundry.org/version/3.127.0/index.html#valid-role-types
+                    description: (String) Org role type to assign to members; see
+                      valid role types https://v3-apidocs.cloudfoundry.org/version/3.127.0/index.html#valid-role-types
                     enum:
                     - User
                     - Auditor
@@ -371,16 +370,16 @@ spec:
             - forProvider
             type: object
           status:
-            description: OrgMembersStatus defines the observed state of OrgMembers.
             properties:
               atProvider:
-                description: RoleAssignments maps members to roles
+                description: (Attributes) The assigned roles for the organization
+                  members.
                 properties:
                   assignedRoles:
                     additionalProperties:
                       type: string
-                    description: '`AssignedRoles` maps member to GUIDs of the assigned
-                      Role objects.'
+                    description: (Map of String) `assignedRoles` maps a member to
+                      the GUID of the assigned Role object.
                     type: object
                 type: object
               conditions:

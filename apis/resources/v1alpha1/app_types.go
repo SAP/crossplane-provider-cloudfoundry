@@ -15,10 +15,10 @@ import (
 type AppObservation struct {
 	Resource `json:",inline"`
 
-	// The name of the application.
+	// The `name` of the application.
 	Name string `json:"name,omitempty"`
 
-	// the State of the application.
+	// the `state` of the application.
 	State string `json:"state,omitempty"`
 
 	// The yaml representation of the environment variables.
@@ -26,11 +26,11 @@ type AppObservation struct {
 }
 
 type AppParameters struct {
-	// The name of the application.
+	// The `name` of the application.
 	// +kubebuilder:validation:Required
 	Name string `json:"name,omitempty"`
 
-	// Type of the lifecycle; valid values are `buildpack``, `cnb``, `docker``
+	// Type of the lifecycle; valid values are `buildpack`, `cnb`, `docker`
 	// +kubebuilder:validation:Enum=buildpack;cnb;docker
 	// +kubebuilder:default=buildpack
 	Lifecycle string `json:"lifecycle,omitempty"`
