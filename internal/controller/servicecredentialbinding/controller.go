@@ -23,6 +23,7 @@ import (
 	scb "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 
+	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -38,6 +39,8 @@ const (
 	errCreate       = "cannot create " + resourceType + " in " + externalSystem
 	errUpdate       = "cannot update " + resourceType + " in " + externalSystem
 	errDelete       = "cannot delete " + resourceType + " in " + externalSystem
+
+	ForceRotationKey = "servicecredentialbinding.cloudfoundry.crossplane.io/force-rotation"
 )
 
 // Setup adds a controller that reconciles ServiceCredentialBinding CR.
@@ -123,21 +126,26 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}
 
 	guid := meta.GetExternalName(cr)
-	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, *cr)
+	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, cr.Spec.ForProvider)
 	if err != nil {
-		if err.Error() == scb.ErrNameMissing || cfresource.IsResourceNotFoundError(err) || cfresource.IsServiceBindingNotFoundError(err) {
+		if errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
+			cfresource.IsResourceNotFoundError(err) ||
+			cfresource.IsServiceBindingNotFoundError(err) {
+			cr.SetConditions(xpv1.Unavailable().WithMessage(errGet))
+			meta.SetExternalName(cr, "") // Clear the external name if the resource does not exist
+			if err := c.kube.Update(ctx, cr); err != nil {
+				return managed.ExternalObservation{ResourceExists: false}, err
+			}
 			return managed.ExternalObservation{ResourceExists: false}, nil
 		}
 		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
 	}
 
 	if serviceBinding == nil {
-		return managed.ExternalObservation{ResourceExists: false}, nil
-	}
-
-	if retireBinding(cr, serviceBinding) {
-		if err := c.kube.Status().Update(ctx, cr); err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot update status after retiring binding")
+		cr.SetConditions(xpv1.Unavailable().WithMessage(errGet))
+		meta.SetExternalName(cr, "")
+		if err := c.kube.Update(ctx, cr); err != nil {
+			return managed.ExternalObservation{ResourceExists: false}, err
 		}
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
@@ -148,6 +156,16 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		if err := c.kube.Update(ctx, cr); err != nil {
 			return managed.ExternalObservation{ResourceExists: true}, err
 		}
+	}
+
+	cr.Status.AtProvider.GUID = serviceBinding.GUID
+	cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: serviceBinding.CreatedAt}
+
+	if retireBinding(cr, serviceBinding) {
+		if err := c.kube.Status().Update(ctx, cr); err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, "cannot update status after retiring binding")
+		}
+		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
 	scb.UpdateObservation(&cr.Status.AtProvider, serviceBinding)
@@ -186,6 +204,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
 	}
 
+	// Ensure that the current service key is retired before creating a new one.
 	if externalName := meta.GetExternalName(cr); externalName != "" {
 		keyRetired := false
 		for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
@@ -205,20 +224,22 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 	cr.SetConditions(xpv1.Creating())
 
-	serviceBinding, err := scb.Create(ctx, c.scbClient, *cr, params)
+	serviceBinding, err := scb.Create(ctx, c.scbClient, cr.Spec.ForProvider, params)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
 
-	cr.Status.AtProvider.Name = *serviceBinding.Name
-	cr.Status.AtProvider.GUID = serviceBinding.GUID
-	cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: serviceBinding.CreatedAt}
+	meta.SetExternalName(cr, serviceBinding.GUID)
 
-	if err := c.kube.Status().Update(ctx, cr); err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, "cannot update status after creating service credential binding")
+	if cr.ObjectMeta.Annotations != nil {
+		if _, ok := cr.ObjectMeta.Annotations[ForceRotationKey]; ok {
+			meta.RemoveAnnotations(cr, ForceRotationKey)
+		}
 	}
 
-	meta.SetExternalName(cr, serviceBinding.GUID)
+	if err := c.kube.Update(ctx, cr); err != nil {
+		return managed.ExternalCreation{}, errors.Wrap(err, "cannot update CR after creating service credential binding")
+	}
 
 	return managed.ExternalCreation{}, nil
 }
@@ -246,7 +267,8 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	for _, key := range cr.Status.AtProvider.RetiredKeys {
 
-		if key.CreatedAt.Add(cr.Spec.ForProvider.Rotation.TTL.Duration).After(time.Now()) {
+		if key.CreatedAt.Add(cr.Spec.ForProvider.Rotation.TTL.Duration).After(time.Now()) ||
+			key.GUID == meta.GetExternalName(cr) {
 			newRetiredKeys = append(newRetiredKeys, key)
 		} else {
 			if err := scb.Delete(ctx, c.scbClient, key.GUID); err != nil {
@@ -275,11 +297,6 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	}
 	cr.SetConditions(xpv1.Deleting())
 
-	err := scb.Delete(ctx, c.scbClient, cr.GetID())
-	if err != nil {
-		return errors.Wrap(err, errDelete)
-	}
-
 	for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
 		if err := scb.Delete(ctx, c.scbClient, retiredKey.GUID); err != nil {
 			if cfresource.IsResourceNotFoundError(err) || cfresource.IsServiceBindingNotFoundError(err) {
@@ -287,6 +304,11 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 			}
 			return errors.Wrapf(err, "cannot delete retired key %s", retiredKey.GUID)
 		}
+	}
+
+	err := scb.Delete(ctx, c.scbClient, cr.GetID())
+	if err != nil {
+		return errors.Wrap(err, errDelete)
 	}
 
 	return nil
@@ -312,7 +334,14 @@ func retireBinding(cr *v1alpha1.ServiceCredentialBinding, serviceBinding *cfreso
 		return false
 	}
 
-	if cr.Status.AtProvider.CreatedAt == nil || cr.Status.AtProvider.CreatedAt.Add(cr.Spec.ForProvider.Rotation.Frequency.Duration).Before(time.Now()) {
+	forceRotation := false
+	if cr.ObjectMeta.Annotations != nil {
+		_, forceRotation = cr.ObjectMeta.Annotations[ForceRotationKey]
+	}
+
+	if cr.Status.AtProvider.CreatedAt == nil ||
+		cr.Status.AtProvider.CreatedAt.Add(cr.Spec.ForProvider.Rotation.Frequency.Duration).Before(time.Now()) ||
+		forceRotation {
 		// If the binding was created before the rotation frequency, retire it.
 		for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
 			if retiredKey.GUID == serviceBinding.GUID {

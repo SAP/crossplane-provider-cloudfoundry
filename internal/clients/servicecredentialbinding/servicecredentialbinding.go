@@ -50,9 +50,9 @@ func NewClient(cfv3 *client.Client) ServiceCredentialBinding {
 }
 
 // GetByIDOrSearch returns a ServiceCredentialBinding resource by guid or by spec
-func GetByIDOrSearch(ctx context.Context, scbClient ServiceCredentialBinding, guid string, cr v1alpha1.ServiceCredentialBinding) (*resource.ServiceCredentialBinding, error) {
+func GetByIDOrSearch(ctx context.Context, scbClient ServiceCredentialBinding, guid string, spec v1alpha1.ServiceCredentialBindingParameters) (*resource.ServiceCredentialBinding, error) {
 	if err := uuid.Validate(guid); err != nil {
-		opts, err := newListOptions(cr)
+		opts, err := newListOptions(spec)
 		if err != nil {
 			return nil, err
 		}
@@ -63,9 +63,8 @@ func GetByIDOrSearch(ctx context.Context, scbClient ServiceCredentialBinding, gu
 }
 
 // Create creates a ServiceCredentialBinding resource
-func Create(ctx context.Context, scbClient ServiceCredentialBinding, cr v1alpha1.ServiceCredentialBinding, params json.RawMessage) (*resource.ServiceCredentialBinding, error) {
-	cr.Status.AtProvider.Name = *randomName(*cr.Spec.ForProvider.Name)
-	opt, err := newCreateOption(cr, params)
+func Create(ctx context.Context, scbClient ServiceCredentialBinding, spec v1alpha1.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBinding, error) {
+	opt, err := newCreateOption(spec, params)
 	if err != nil {
 		return nil, err
 	}
@@ -82,12 +81,7 @@ func Create(ctx context.Context, scbClient ServiceCredentialBinding, cr v1alpha1
 		}
 	}
 
-	opts, err := newListOptions(cr)
-	if err != nil {
-		return nil, err
-	}
-	return scbClient.Single(ctx, opts)
-
+	return scbClient.Single(ctx, createToListOptions(opt))
 }
 
 // Update updates labels and annotations of a ServiceCredentialBinding resource
@@ -127,56 +121,58 @@ func GetConnectionDetails(ctx context.Context, scbClient ServiceCredentialBindin
 }
 
 // newListOptions generates ServiceCredentialBindingListOptions according to CR's ForProvider spec
-func newListOptions(cr v1alpha1.ServiceCredentialBinding) (*client.ServiceCredentialBindingListOptions, error) {
+func newListOptions(spec v1alpha1.ServiceCredentialBindingParameters) (*client.ServiceCredentialBindingListOptions, error) {
 	// if external-name is not set, search by Name and Space
 	opt := client.NewServiceCredentialBindingListOptions()
-	opt.Type.EqualTo(cr.Spec.ForProvider.Type)
+	opt.Type.EqualTo(spec.Type)
 
-	if cr.Spec.ForProvider.ServiceInstance == nil {
+	if spec.ServiceInstance == nil {
 		return nil, errors.New(ErrServiceInstanceMissing)
 	}
-	opt.ServiceInstanceGUIDs.EqualTo(*cr.Spec.ForProvider.ServiceInstance)
+	opt.ServiceInstanceGUIDs.EqualTo(*spec.ServiceInstance)
 
-	if cr.Spec.ForProvider.Type == "app" {
-		if cr.Spec.ForProvider.App == nil {
+	if spec.Type == "app" {
+		if spec.App == nil {
 			return nil, errors.New(ErrAppMissing)
 		}
-		opt.AppGUIDs.EqualTo(*cr.Spec.ForProvider.App)
+		opt.AppGUIDs.EqualTo(*spec.App)
 	}
 
-	if cr.Spec.ForProvider.Type == "key" {
-		if cr.Status.AtProvider.Name == "" {
+	if spec.Type == "key" {
+		if spec.Name == nil {
 			return nil, errors.New(ErrNameMissing)
 		}
-		opt.Names.EqualTo(cr.Status.AtProvider.Name)
+		opt.Names.EqualTo(*spec.Name)
 	}
 
 	return opt, nil
 }
 
 // newCreateOption generates ServiceCredentialBindingCreate according to CR's ForProvider spec
-func newCreateOption(cr v1alpha1.ServiceCredentialBinding, params json.RawMessage) (*resource.ServiceCredentialBindingCreate, error) {
-	if cr.Spec.ForProvider.ServiceInstance == nil {
+func newCreateOption(spec v1alpha1.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBindingCreate, error) {
+	if spec.ServiceInstance == nil {
 		return nil, errors.New(ErrServiceInstanceMissing)
 	}
 
 	var opt *resource.ServiceCredentialBindingCreate
-	switch cr.Spec.ForProvider.Type {
+	switch spec.Type {
 	case "key":
-		if cr.Status.AtProvider.Name == "" {
+		if spec.Name == nil {
 			return nil, errors.New(ErrNameMissing)
 		}
 
-		opt = resource.NewServiceCredentialBindingCreateKey(*cr.Spec.ForProvider.ServiceInstance, cr.Status.AtProvider.Name)
+		name := randomName(*spec.Name)
+
+		opt = resource.NewServiceCredentialBindingCreateKey(*spec.ServiceInstance, name)
 	case "app":
-		if cr.Spec.ForProvider.App == nil {
+		if spec.App == nil {
 			return nil, errors.New(ErrAppMissing)
 		}
-		opt = resource.NewServiceCredentialBindingCreateApp(*cr.Spec.ForProvider.ServiceInstance, *cr.Spec.ForProvider.App)
+		opt = resource.NewServiceCredentialBindingCreateApp(*spec.ServiceInstance, *spec.App)
 
 		// for app binding, binding name is optional
-		if cr.Spec.ForProvider.Name != nil {
-			opt.WithName(*cr.Spec.ForProvider.Name)
+		if spec.Name != nil {
+			opt.WithName(*spec.Name)
 		}
 	default:
 		return nil, errors.New(ErrBindingTypeUnknown)
@@ -186,6 +182,24 @@ func newCreateOption(cr v1alpha1.ServiceCredentialBinding, params json.RawMessag
 		opt.WithJSONParameters(string(params))
 	}
 	return opt, nil
+}
+
+func createToListOptions(create *resource.ServiceCredentialBindingCreate) *client.ServiceCredentialBindingListOptions {
+	// create options are not used in the controller, but can be used in tests
+	opts := client.NewServiceCredentialBindingListOptions()
+	opts.Type.EqualTo(create.Type)
+
+	opts.ServiceInstanceGUIDs.EqualTo(create.Relationships.ServiceInstance.Data.GUID)
+
+	if create.Type == "app" && create.Relationships.App != nil {
+		opts.AppGUIDs.EqualTo(create.Relationships.App.Data.GUID)
+	}
+
+	if create.Type == "key" && create.Name != nil {
+		opts.Names.EqualTo(*create.Name)
+	}
+
+	return opts
 }
 
 // newUpdateOption generates ServiceCredentialBindingUpdate according to CR's ForProvider spec
@@ -213,12 +227,12 @@ func IsUpToDate(ctx context.Context, spec v1alpha1.ServiceCredentialBindingParam
 	return true
 }
 
-func randomName(name string) *string {
+func randomName(name string) string {
 	if len(name) > 0 && name[len(name)-1] == '-' {
 		name = name[:len(name)-1]
 	}
 	newName := name + "-" + randomString(5)
-	return &newName
+	return newName
 }
 
 const letterBytes = "abcdefghijklmnopqrstuvwxyz1234567890"
