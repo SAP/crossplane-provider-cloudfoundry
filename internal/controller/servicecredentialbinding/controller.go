@@ -128,17 +128,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	guid := meta.GetExternalName(cr)
 	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, cr.Spec.ForProvider)
 	if err != nil {
-		if errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
-			cfresource.IsResourceNotFoundError(err) ||
-			cfresource.IsServiceBindingNotFoundError(err) {
-			cr.SetConditions(xpv1.Unavailable().WithMessage(errGet))
-			meta.SetExternalName(cr, "") // Clear the external name if the resource does not exist
-			if err := c.kube.Update(ctx, cr); err != nil {
-				return managed.ExternalObservation{ResourceExists: false}, err
-			}
-			return managed.ExternalObservation{ResourceExists: false}, nil
-		}
-		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
+		return c.handleGetError(ctx, cr, err)
 	}
 
 	if serviceBinding == nil {
@@ -170,31 +160,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	scb.UpdateObservation(&cr.Status.AtProvider, serviceBinding)
 
-	switch serviceBinding.LastOperation.State {
-	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
-		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
-		return managed.ExternalObservation{
-			ResourceExists:   true,
-			ResourceUpToDate: true, // Do not update the resource while the last operation is in progress
-		}, nil
-	case v1alpha1.LastOperationFailed:
-		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
-		return managed.ExternalObservation{
-			ResourceExists:   serviceBinding.LastOperation.Type != v1alpha1.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
-			ResourceUpToDate: serviceBinding.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
-		}, nil
-	case v1alpha1.LastOperationSucceeded:
-		cr.SetConditions(xpv1.Available())
-
-		return managed.ExternalObservation{
-			ResourceExists:    true,
-			ResourceUpToDate:  scb.IsUpToDate(ctx, cr.Spec.ForProvider, *serviceBinding) && !hasExpiredKeys(cr),
-			ConnectionDetails: scb.GetConnectionDetails(ctx, c.scbClient, serviceBinding.GUID, cr.Spec.ConnectionDetailsAsJSON),
-		}, nil
-	}
-
-	// If the last operation is unknown, error out
-	return managed.ExternalObservation{}, errors.New("unknown last operation state")
+	return c.handleObservationState(serviceBinding, ctx, cr)
 }
 
 // Create a ServiceCredentialBinding resource.
@@ -205,17 +171,8 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	// Ensure that the current service key is retired before creating a new one.
-	if externalName := meta.GetExternalName(cr); externalName != "" {
-		keyRetired := false
-		for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
-			if retiredKey.GUID == externalName {
-				keyRetired = true
-				break
-			}
-		}
-		if !keyRetired {
-			return managed.ExternalCreation{}, errors.New("cannot create a new ServiceCredentialBinding before retiring the existing one")
-		}
+	if err := checkIfRetired(cr); err != nil {
+		return managed.ExternalCreation{}, err
 	}
 
 	params, err := extractParameters(ctx, c.kube, cr.Spec.ForProvider)
@@ -262,24 +219,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, nil
 	}
 
-	var newRetiredKeys []*v1alpha1.SCBResource
-	var retireError error
-
-	for _, key := range cr.Status.AtProvider.RetiredKeys {
-
-		if key.CreatedAt.Add(cr.Spec.ForProvider.Rotation.TTL.Duration).After(time.Now()) ||
-			key.GUID == meta.GetExternalName(cr) {
-			newRetiredKeys = append(newRetiredKeys, key)
-		} else {
-			if err := scb.Delete(ctx, c.scbClient, key.GUID); err != nil {
-				if cfresource.IsResourceNotFoundError(err) || cfresource.IsServiceBindingNotFoundError(err) {
-					continue // If the key is already deleted, we can ignore the error
-				}
-				newRetiredKeys = append(newRetiredKeys, key) // If we cannot delete the key, keep it in the list
-				retireError = errors.Wrapf(err, "cannot delete retired key %s", key.GUID)
-			}
-		}
-	}
+	newRetiredKeys, retireError := c.deleteExpiredKeys(ctx, cr)
 
 	cr.Status.AtProvider.RetiredKeys = newRetiredKeys
 	if err := c.kube.Status().Update(ctx, cr); err != nil {
@@ -371,4 +311,85 @@ func hasExpiredKeys(cr *v1alpha1.ServiceCredentialBinding) bool {
 	}
 
 	return false
+}
+
+func (c *external) handleGetError(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, err error) (managed.ExternalObservation, error) {
+	if errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
+		cfresource.IsResourceNotFoundError(err) ||
+		cfresource.IsServiceBindingNotFoundError(err) {
+		cr.SetConditions(xpv1.Unavailable().WithMessage(errGet))
+		meta.SetExternalName(cr, "") // Clear the external name if the resource does not exist
+		if err := c.kube.Update(ctx, cr); err != nil {
+			return managed.ExternalObservation{ResourceExists: false}, err
+		}
+		return managed.ExternalObservation{ResourceExists: false}, nil
+	}
+	return managed.ExternalObservation{}, errors.Wrap(err, errGet)
+}
+
+func (c *external) handleObservationState(serviceBinding *cfresource.ServiceCredentialBinding, ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error) {
+	switch serviceBinding.LastOperation.State {
+	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
+		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
+		return managed.ExternalObservation{
+			ResourceExists:   true,
+			ResourceUpToDate: true, // Do not update the resource while the last operation is in progress
+		}, nil
+	case v1alpha1.LastOperationFailed:
+		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
+		return managed.ExternalObservation{
+			ResourceExists:   serviceBinding.LastOperation.Type != v1alpha1.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
+			ResourceUpToDate: serviceBinding.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
+		}, nil
+	case v1alpha1.LastOperationSucceeded:
+		cr.SetConditions(xpv1.Available())
+
+		return managed.ExternalObservation{
+			ResourceExists:    true,
+			ResourceUpToDate:  scb.IsUpToDate(ctx, cr.Spec.ForProvider, *serviceBinding) && !hasExpiredKeys(cr),
+			ConnectionDetails: scb.GetConnectionDetails(ctx, c.scbClient, serviceBinding.GUID, cr.Spec.ConnectionDetailsAsJSON),
+		}, nil
+	}
+
+	// If the last operation is unknown, error out
+	return managed.ExternalObservation{}, errors.New("unknown last operation state")
+}
+
+func (c *external) deleteExpiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) ([]*v1alpha1.SCBResource, error) {
+	var newRetiredKeys []*v1alpha1.SCBResource
+	var retireError error
+
+	for _, key := range cr.Status.AtProvider.RetiredKeys {
+
+		if key.CreatedAt.Add(cr.Spec.ForProvider.Rotation.TTL.Duration).After(time.Now()) ||
+			key.GUID == meta.GetExternalName(cr) {
+			newRetiredKeys = append(newRetiredKeys, key)
+		} else {
+			if err := scb.Delete(ctx, c.scbClient, key.GUID); err != nil {
+				if cfresource.IsResourceNotFoundError(err) || cfresource.IsServiceBindingNotFoundError(err) {
+					continue // If the key is already deleted, we can ignore the error
+				}
+				newRetiredKeys = append(newRetiredKeys, key) // If we cannot delete the key, keep it in the list
+				retireError = errors.Wrapf(err, "cannot delete retired key %s", key.GUID)
+			}
+		}
+	}
+
+	return newRetiredKeys, retireError
+}
+
+func checkIfRetired(cr *v1alpha1.ServiceCredentialBinding) error {
+	if externalName := meta.GetExternalName(cr); externalName != "" {
+		keyRetired := false
+		for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
+			if retiredKey.GUID == externalName {
+				keyRetired = true
+				break
+			}
+		}
+		if !keyRetired {
+			return errors.New("cannot create a new ServiceCredentialBinding before retiring the existing one")
+		}
+	}
+	return nil
 }
