@@ -270,18 +270,16 @@ func extractParameters(ctx context.Context, kube k8s.Client, spec v1alpha1.Servi
 }
 
 func retireBinding(cr *v1alpha1.ServiceCredentialBinding, serviceBinding *cfresource.ServiceCredentialBinding) bool {
-	if cr.Spec.ForProvider.Rotation == nil {
-		return false
-	}
-
 	forceRotation := false
 	if cr.ObjectMeta.Annotations != nil {
 		_, forceRotation = cr.ObjectMeta.Annotations[ForceRotationKey]
 	}
 
-	if cr.Status.AtProvider.CreatedAt == nil ||
-		cr.Status.AtProvider.CreatedAt.Add(cr.Spec.ForProvider.Rotation.Frequency.Duration).Before(time.Now()) ||
-		forceRotation {
+	rotationDue := cr.Spec.ForProvider.Rotation != nil && cr.Spec.ForProvider.Rotation.Frequency != nil &&
+		(cr.Status.AtProvider.CreatedAt == nil ||
+			cr.Status.AtProvider.CreatedAt.Add(cr.Spec.ForProvider.Rotation.Frequency.Duration).Before(time.Now()))
+
+	if forceRotation || rotationDue {
 		// If the binding was created before the rotation frequency, retire it.
 		for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
 			if retiredKey.GUID == serviceBinding.GUID {
@@ -300,7 +298,8 @@ func retireBinding(cr *v1alpha1.ServiceCredentialBinding, serviceBinding *cfreso
 }
 
 func hasExpiredKeys(cr *v1alpha1.ServiceCredentialBinding) bool {
-	if cr.Status.AtProvider.RetiredKeys == nil {
+	if cr.Status.AtProvider.RetiredKeys == nil || cr.Spec.ForProvider.Rotation == nil ||
+		cr.Spec.ForProvider.Rotation.TTL == nil {
 		return false
 	}
 
