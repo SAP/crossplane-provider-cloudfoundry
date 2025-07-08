@@ -135,7 +135,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		cr.SetConditions(xpv1.Unavailable().WithMessage(errGet))
 		meta.SetExternalName(cr, "")
 		if err := c.kube.Update(ctx, cr); err != nil {
-			return managed.ExternalObservation{ResourceExists: false}, err
+			return managed.ExternalObservation{ResourceExists: false}, errors.Wrap(err, "cannot update external name")
 		}
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
@@ -144,7 +144,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	if guid != serviceBinding.GUID {
 		meta.SetExternalName(cr, serviceBinding.Resource.GUID)
 		if err := c.kube.Update(ctx, cr); err != nil {
-			return managed.ExternalObservation{ResourceExists: true}, err
+			return managed.ExternalObservation{ResourceExists: true}, errors.Wrap(err, "cannot update external name")
 		}
 	}
 
@@ -313,7 +313,8 @@ func hasExpiredKeys(cr *v1alpha1.ServiceCredentialBinding) bool {
 }
 
 func (c *external) handleGetError(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, err error) (managed.ExternalObservation, error) {
-	if errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
+	if errors.Is(err, cfclient.ErrNoResultsReturned) ||
+		errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
 		cfresource.IsResourceNotFoundError(err) ||
 		cfresource.IsServiceBindingNotFoundError(err) {
 		cr.SetConditions(xpv1.Unavailable().WithMessage(errGet))
