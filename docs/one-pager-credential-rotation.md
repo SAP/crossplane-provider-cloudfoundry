@@ -7,12 +7,13 @@
 To adhere to security best practices and compliance requirements, a mechanism is required to automatically rotate service credential bindings. 
 
 User defines a rotation policy declaratively using a `rotation` block containing `frequency` (or `interval`) and `ttl`:
-    ```yaml
+
+```yaml
     # Example rotation block
     rotation:
       frequency: "720h" # Rotate every 30 days
       ttl: "1440h"    # Delete keys after 60 days
-    ```
+```
 
 ## 2. Solution Considered
 
