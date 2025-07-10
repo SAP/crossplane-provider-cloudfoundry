@@ -24,8 +24,8 @@ func ResolveByName(ctx context.Context, clientFn clients.ClientFn, mg resource.M
 	}
 
 	sr := cr.GetSpaceRef()
-	// resolve space by name only if spaceName and orgName are set
-	if sr != nil && sr.SpaceName != nil && sr.OrgName != nil {
+	// resolve space by name only if spaceName is set
+	if sr.SpaceName != nil {
 		cf, err := clientFn(mg)
 		if err != nil {
 			return errors.Wrap(err, "Could not connect to Cloud Foundry")
