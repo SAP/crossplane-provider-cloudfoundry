@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/pkg/errors"
@@ -15,6 +14,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 const (

@@ -4,7 +4,6 @@ import (
 	"context"
 	"time"
 
-	rcb "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/rotatingcredentialbinding"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -16,6 +15,8 @@ import (
 	"github.com/pkg/errors"
 	apicorev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
+
+	rcb "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/rotatingcredentialbinding"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -137,12 +138,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.Wrap(err, msgCannotGetSCB)
 	}
 
-	if meta.GetExternalName(cr) != meta.GetExternalName(&activeSCB) {
-		meta.SetExternalName(cr, meta.GetExternalName(&activeSCB))
-		if err := c.kube.Update(ctx, cr); err != nil {
-			cr.SetConditions(xpv1.Unavailable().WithMessage(errCannotUpdateStatus))
-			return managed.ExternalObservation{}, errors.Wrap(err, errCannotUpdateStatus)
-		}
+	if err := c.updateExternalName(ctx, cr, &activeSCB); err != nil {
+		return managed.ExternalObservation{}, err
 	}
 
 	if activeSCB.GetCreationTimestamp().Add(cr.Spec.RotationFrequency.Duration).Before(time.Now()) {
@@ -150,54 +147,23 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
-	if cr.ObjectMeta.Annotations != nil {
-		if _, ok := cr.ObjectMeta.Annotations[ForceRotationKey]; ok {
-			cr.SetConditions(xpv1.Available().WithMessage(msgRotationDue))
-			return managed.ExternalObservation{ResourceExists: false}, nil
-		}
+	if checkForceRotation(cr) {
+		cr.SetConditions(xpv1.Available().WithMessage(msgRotationDue))
+		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
-	allSCBs, err := rcb.GetAllBindings(ctx, c.kube, cr)
+	expired, err := c.checkSCBExpired(ctx, cr, &activeSCB)
 	if err != nil {
 		cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotListRetiredSCBs))
-		return managed.ExternalObservation{}, errors.Wrap(err, msgCannotListRetiredSCBs)
-	}
-	for _, currentSCB := range allSCBs {
-		if currentSCB.Name == activeSCB.Name && currentSCB.Namespace == activeSCB.Namespace {
-			// If the previous SCB is the same as the active one, we do not
-			// delete it.
-			continue
-		}
-		if currentSCB.GetCreationTimestamp().Add(cr.Spec.RotationTTL.Duration).Before(time.Now()) {
-			cr.SetConditions(xpv1.Available().WithMessage(msgDeleteExpired))
-			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false}, nil
-		}
+		return managed.ExternalObservation{ResourceExists: true}, err
 	}
 
-	if cr.Spec.WriteConnectionSecretToReference != nil && cr.Spec.WriteConnectionSecretToReference.Name != "" {
-		var sourceSecret apicorev1.Secret
-		if err := c.kube.Get(ctx,
-			k8s.ObjectKey{
-				Namespace: activeSCB.Spec.WriteConnectionSecretToReference.Namespace,
-				Name:      activeSCB.Spec.WriteConnectionSecretToReference.Name,
-			},
-			&sourceSecret); err != nil {
-			cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotGetSourceSecret))
-			return managed.ExternalObservation{}, errors.Wrap(err, msgCannotGetSourceSecret)
-		}
-
-		cr.SetConditions(xpv1.Available().WithMessage(msgUpToDate))
-		return managed.ExternalObservation{
-			ResourceExists:    true,
-			ResourceUpToDate:  true,
-			ConnectionDetails: sourceSecret.Data,
-		}, nil
-
+	if expired {
+		cr.SetConditions(xpv1.Available().WithMessage(msgDeleteExpired))
+		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false}, nil
 	}
 
-	cr.SetConditions(xpv1.Available().WithMessage(msgUpToDate))
-	return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
-
+	return c.checkSecretUpdated(ctx, cr, &activeSCB)
 }
 
 // Create a RotatingCredentialBinding resource.
@@ -290,4 +256,71 @@ func getNamespace(cr *v1alpha1.RotatingCredentialBinding) string {
 		return cr.GetNamespace()
 	}
 	return "default"
+}
+
+func (c *external) checkSecretUpdated(ctx context.Context, cr *v1alpha1.RotatingCredentialBinding, activeSCB *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error) {
+	if cr.Spec.WriteConnectionSecretToReference != nil && cr.Spec.WriteConnectionSecretToReference.Name != "" {
+		var sourceSecret apicorev1.Secret
+		if err := c.kube.Get(ctx,
+			k8s.ObjectKey{
+				Namespace: activeSCB.Spec.WriteConnectionSecretToReference.Namespace,
+				Name:      activeSCB.Spec.WriteConnectionSecretToReference.Name,
+			},
+			&sourceSecret); err != nil {
+			cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotGetSourceSecret))
+			return managed.ExternalObservation{}, errors.Wrap(err, msgCannotGetSourceSecret)
+		}
+
+		cr.SetConditions(xpv1.Available().WithMessage(msgUpToDate))
+		return managed.ExternalObservation{
+			ResourceExists:    true,
+			ResourceUpToDate:  true,
+			ConnectionDetails: sourceSecret.Data,
+		}, nil
+
+	}
+
+	cr.SetConditions(xpv1.Available().WithMessage(msgUpToDate))
+	return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
+}
+
+func (c *external) checkSCBExpired(ctx context.Context, cr *v1alpha1.RotatingCredentialBinding, activeSCB *v1alpha1.ServiceCredentialBinding) (bool, error) {
+	allSCBs, err := rcb.GetAllBindings(ctx, c.kube, cr)
+	if err != nil {
+		cr.SetConditions(xpv1.Unavailable().WithMessage(msgCannotListRetiredSCBs))
+		return false, errors.Wrap(err, msgCannotListRetiredSCBs)
+	}
+	for _, currentSCB := range allSCBs {
+		if currentSCB.Name == activeSCB.Name && currentSCB.Namespace == activeSCB.Namespace {
+			// If the previous SCB is the same as the active one, we do not
+			// delete it.
+			continue
+		}
+		if currentSCB.GetCreationTimestamp().Add(cr.Spec.RotationTTL.Duration).Before(time.Now()) {
+			cr.SetConditions(xpv1.Available().WithMessage(msgDeleteExpired))
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func checkForceRotation(cr *v1alpha1.RotatingCredentialBinding) bool {
+	if cr.ObjectMeta.Annotations != nil {
+		if _, ok := cr.ObjectMeta.Annotations[ForceRotationKey]; ok {
+			cr.SetConditions(xpv1.Available().WithMessage(msgRotationDue))
+			return true
+		}
+	}
+	return false
+}
+
+func (c *external) updateExternalName(ctx context.Context, cr *v1alpha1.RotatingCredentialBinding, activeSCB *v1alpha1.ServiceCredentialBinding) error {
+	if meta.GetExternalName(cr) != meta.GetExternalName(activeSCB) {
+		meta.SetExternalName(cr, meta.GetExternalName(activeSCB))
+		if err := c.kube.Update(ctx, cr); err != nil {
+			cr.SetConditions(xpv1.Unavailable().WithMessage(errCannotUpdateStatus))
+			return errors.Wrap(err, errCannotUpdateStatus)
+		}
+	}
+	return nil
 }
