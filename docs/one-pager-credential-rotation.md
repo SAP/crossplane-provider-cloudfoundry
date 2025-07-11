@@ -190,3 +190,7 @@ Drift in the control plane is managed by controler of the parent CR. This is ver
 **Recommendation:**
 
  **Direct Control Model**. The simplicity of interacting with a single CR and a single secret is a decisive advantage. The unified handling reduces cognitive load for users and is overall a more streamlined experience for managing both static and rotating credentials. 
+
+ The changes to enhance the existing controller to support rotation are minimal and do not significantly complicate the controller logic. And it is non-breaking changes to the existing `ServiceCredentialBinding` resource.
+
+That said, the meta-controller model is useful pattern, in particular in cases whe direct change to the base controller is either not desired or not attainable. This is however not the case for `ServiceCredentialBinding` controller, which is under our control.
