@@ -110,6 +110,7 @@ dev-debug: dev-clean $(KIND) $(KUBECTL) $(HELM3)
 	@$(INFO) Installing Crossplane
 	@$(HELM3) repo add crossplane-stable https://charts.crossplane.io/stable
 	@$(HELM3) repo update
+	@${HELM3} upgrade --install crossplane crossplane-stable/crossplane --create-namespace --namespace crossplane --set args='{"--enable-usages"}'
 	@$(INFO) Installing Provider CloudFoundry CRDs
 	@$(KUBECTL) apply -R -f package/crds
 	@$(INFO) Creating crossplane-system namespace
