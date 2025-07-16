@@ -179,7 +179,6 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, "cannot extract specified parameters")
 	}
-	cr.SetConditions(xpv1.Creating())
 
 	serviceBinding, err := scb.Create(ctx, c.scbClient, cr.Spec.ForProvider, params)
 	if err != nil {
@@ -317,7 +316,7 @@ func (c *external) handleGetError(ctx context.Context, cr *v1alpha1.ServiceCrede
 		errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
 		cfresource.IsResourceNotFoundError(err) ||
 		cfresource.IsServiceBindingNotFoundError(err) {
-		cr.SetConditions(xpv1.Unavailable().WithMessage(errGet))
+		cr.SetConditions(xpv1.Creating().WithMessage(errGet))
 		meta.SetExternalName(cr, "") // Clear the external name if the resource does not exist
 		if err := c.kube.Update(ctx, cr); err != nil {
 			return managed.ExternalObservation{ResourceExists: false}, err
