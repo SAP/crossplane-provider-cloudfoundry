@@ -2,7 +2,6 @@ package servicecredentialbinding
 
 import (
 	"context"
-	"time"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
@@ -105,17 +104,22 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
+	client := scb.NewClient(cf)
 	return &external{
 		kube:      c.kube,
-		scbClient: scb.NewClient(cf),
+		scbClient: client,
+		keyRotator: &SCBKeyRotator{
+			scbClient: client,
+		},
 	}, nil
 }
 
 // An external service observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
-	kube      k8s.Client
-	scbClient scb.ServiceCredentialBinding
+	kube       k8s.Client
+	scbClient  scb.ServiceCredentialBinding
+	keyRotator KeyRotator
 }
 
 // Observe checks the observed state of the resource and updates the managed resource's status.
@@ -151,7 +155,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	cr.Status.AtProvider.GUID = serviceBinding.GUID
 	cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: serviceBinding.CreatedAt}
 
-	if retireBinding(cr, serviceBinding) {
+	if c.keyRotator.RetireBinding(cr, serviceBinding) {
 		if err := c.kube.Status().Update(ctx, cr); err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "cannot update status after retiring binding")
 		}
@@ -218,7 +222,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, nil
 	}
 
-	newRetiredKeys, retireError := c.deleteExpiredKeys(ctx, cr)
+	newRetiredKeys, retireError := c.keyRotator.DeleteExpiredKeys(ctx, cr)
 
 	cr.Status.AtProvider.RetiredKeys = newRetiredKeys
 	if err := c.kube.Status().Update(ctx, cr); err != nil {
@@ -268,49 +272,6 @@ func extractParameters(ctx context.Context, kube k8s.Client, spec v1alpha1.Servi
 	return nil, nil
 }
 
-func retireBinding(cr *v1alpha1.ServiceCredentialBinding, serviceBinding *cfresource.ServiceCredentialBinding) bool {
-	forceRotation := false
-	if cr.ObjectMeta.Annotations != nil {
-		_, forceRotation = cr.ObjectMeta.Annotations[ForceRotationKey]
-	}
-
-	rotationDue := cr.Spec.ForProvider.Rotation != nil && cr.Spec.ForProvider.Rotation.Frequency != nil &&
-		(cr.Status.AtProvider.CreatedAt == nil ||
-			cr.Status.AtProvider.CreatedAt.Add(cr.Spec.ForProvider.Rotation.Frequency.Duration).Before(time.Now()))
-
-	if forceRotation || rotationDue {
-		// If the binding was created before the rotation frequency, retire it.
-		for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
-			if retiredKey.GUID == serviceBinding.GUID {
-				// If the binding is already retired, do not retire it again.
-				return true
-			}
-		}
-		cr.Status.AtProvider.RetiredKeys = append(cr.Status.AtProvider.RetiredKeys, &v1alpha1.SCBResource{
-			GUID:      serviceBinding.GUID,
-			CreatedAt: &metav1.Time{Time: serviceBinding.CreatedAt},
-		})
-		return true
-	}
-
-	return false
-}
-
-func hasExpiredKeys(cr *v1alpha1.ServiceCredentialBinding) bool {
-	if cr.Status.AtProvider.RetiredKeys == nil || cr.Spec.ForProvider.Rotation == nil ||
-		cr.Spec.ForProvider.Rotation.TTL == nil {
-		return false
-	}
-
-	for _, key := range cr.Status.AtProvider.RetiredKeys {
-		if key.CreatedAt.Add(cr.Spec.ForProvider.Rotation.TTL.Duration).Before(time.Now()) {
-			return true
-		}
-	}
-
-	return false
-}
-
 func (c *external) handleGetError(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, err error) (managed.ExternalObservation, error) {
 	if errors.Is(err, cfclient.ErrNoResultsReturned) ||
 		errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
@@ -345,36 +306,13 @@ func (c *external) handleObservationState(serviceBinding *cfresource.ServiceCred
 
 		return managed.ExternalObservation{
 			ResourceExists:    true,
-			ResourceUpToDate:  scb.IsUpToDate(ctx, cr.Spec.ForProvider, *serviceBinding) && !hasExpiredKeys(cr),
+			ResourceUpToDate:  scb.IsUpToDate(ctx, cr.Spec.ForProvider, *serviceBinding) && !c.keyRotator.HasExpiredKeys(cr),
 			ConnectionDetails: scb.GetConnectionDetails(ctx, c.scbClient, serviceBinding.GUID, cr.Spec.ConnectionDetailsAsJSON),
 		}, nil
 	}
 
 	// If the last operation is unknown, error out
 	return managed.ExternalObservation{}, errors.New("unknown last operation state")
-}
-
-func (c *external) deleteExpiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) ([]*v1alpha1.SCBResource, error) {
-	var newRetiredKeys []*v1alpha1.SCBResource
-	var retireError error
-
-	for _, key := range cr.Status.AtProvider.RetiredKeys {
-
-		if key.CreatedAt.Add(cr.Spec.ForProvider.Rotation.TTL.Duration).After(time.Now()) ||
-			key.GUID == meta.GetExternalName(cr) {
-			newRetiredKeys = append(newRetiredKeys, key)
-		} else {
-			if err := scb.Delete(ctx, c.scbClient, key.GUID); err != nil {
-				if cfresource.IsResourceNotFoundError(err) || cfresource.IsServiceBindingNotFoundError(err) {
-					continue // If the key is already deleted, we can ignore the error
-				}
-				newRetiredKeys = append(newRetiredKeys, key) // If we cannot delete the key, keep it in the list
-				retireError = errors.Wrapf(err, "cannot delete retired key %s", key.GUID)
-			}
-		}
-	}
-
-	return newRetiredKeys, retireError
 }
 
 func checkIfRetired(cr *v1alpha1.ServiceCredentialBinding) error {
