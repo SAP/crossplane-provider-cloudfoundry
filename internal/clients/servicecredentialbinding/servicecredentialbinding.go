@@ -18,10 +18,10 @@ import (
 )
 
 const (
-	ErrServiceInstanceMissing = "ServiceInstance is required for key/app binding"
-	ErrAppMissing             = "App is required for app binding"
-	ErrNameMissing            = "Name is required for key binding"
-	ErrBindingTypeUnknown     = "Unknown binding type. Supported types are key and app"
+	ErrServiceInstanceMissing = "service instance is required for key/app binding"
+	ErrAppMissing             = "app is required for app binding"
+	ErrNameMissing            = "name is required for key binding"
+	ErrBindingTypeUnknown     = "unknown binding type. supported types are key and app"
 )
 
 // serviceCredentialBinding defines interfaces to CloudFoundry ServiceCredentialBinding resource

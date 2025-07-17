@@ -38,8 +38,6 @@ const (
 	errCreate       = "cannot create " + resourceType + " in " + externalSystem
 	errUpdate       = "cannot update " + resourceType + " in " + externalSystem
 	errDelete       = "cannot delete " + resourceType + " in " + externalSystem
-
-	ForceRotationKey = "servicecredentialbinding.cloudfoundry.crossplane.io/force-rotation"
 )
 
 // Setup adds a controller that reconciles ServiceCredentialBinding CR.
@@ -108,8 +106,8 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	return &external{
 		kube:      c.kube,
 		scbClient: client,
-		keyRotator: &SCBKeyRotator{
-			scbClient: client,
+		keyRotator: &scb.SCBKeyRotator{
+			SCBClient: client,
 		},
 	}, nil
 }
@@ -119,7 +117,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 type external struct {
 	kube       k8s.Client
 	scbClient  scb.ServiceCredentialBinding
-	keyRotator KeyRotator
+	keyRotator scb.KeyRotator
 }
 
 // Observe checks the observed state of the resource and updates the managed resource's status.
@@ -192,8 +190,8 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	meta.SetExternalName(cr, serviceBinding.GUID)
 
 	if cr.ObjectMeta.Annotations != nil {
-		if _, ok := cr.ObjectMeta.Annotations[ForceRotationKey]; ok {
-			meta.RemoveAnnotations(cr, ForceRotationKey)
+		if _, ok := cr.ObjectMeta.Annotations[scb.ForceRotationKey]; ok {
+			meta.RemoveAnnotations(cr, scb.ForceRotationKey)
 		}
 	}
 
@@ -240,13 +238,8 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	}
 	cr.SetConditions(xpv1.Deleting())
 
-	for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
-		if err := scb.Delete(ctx, c.scbClient, retiredKey.GUID); err != nil {
-			if cfresource.IsResourceNotFoundError(err) || cfresource.IsServiceBindingNotFoundError(err) {
-				continue
-			}
-			return errors.Wrapf(err, "cannot delete retired key %s", retiredKey.GUID)
-		}
+	if err := c.keyRotator.DeleteRetiredKeys(ctx, cr); err != nil {
+		return errors.Wrap(err, "delete failed")
 	}
 
 	err := scb.Delete(ctx, c.scbClient, cr.GetID())

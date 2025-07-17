@@ -5,12 +5,13 @@ import (
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	scb "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
+
+const ForceRotationKey = "servicecredentialbinding.cloudfoundry.crossplane.io/force-rotation"
 
 type KeyRotator interface {
 	// RetireBinding checks if the binding should be retired based on the rotation frequency
@@ -23,10 +24,13 @@ type KeyRotator interface {
 	// DeleteExpiredKeys deletes the expired keys from the status and the external system.
 	// It returns the new list of retired keys and any error encountered during deletion.
 	DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) ([]*v1alpha1.SCBResource, error)
+
+	// DeleteRetiredKeys deletes all retired keys from the external system.
+	DeleteRetiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) error
 }
 
 type SCBKeyRotator struct {
-	scbClient scb.ServiceCredentialBinding
+	SCBClient ServiceCredentialBinding
 }
 
 func (r *SCBKeyRotator) RetireBinding(cr *v1alpha1.ServiceCredentialBinding, serviceBinding *cfresource.ServiceCredentialBinding) bool {
@@ -82,7 +86,7 @@ func (c *SCBKeyRotator) DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.Serv
 			key.GUID == meta.GetExternalName(cr) {
 			newRetiredKeys = append(newRetiredKeys, key)
 		} else {
-			if err := scb.Delete(ctx, c.scbClient, key.GUID); err != nil {
+			if err := Delete(ctx, c.SCBClient, key.GUID); err != nil {
 				if cfresource.IsResourceNotFoundError(err) || cfresource.IsServiceBindingNotFoundError(err) {
 					continue // If the key is already deleted, we can ignore the error
 				}
@@ -93,4 +97,16 @@ func (c *SCBKeyRotator) DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.Serv
 	}
 
 	return newRetiredKeys, retireError
+}
+
+func (c *SCBKeyRotator) DeleteRetiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) error {
+	for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
+		if err := Delete(ctx, c.SCBClient, retiredKey.GUID); err != nil {
+			if cfresource.IsResourceNotFoundError(err) || cfresource.IsServiceBindingNotFoundError(err) {
+				continue
+			}
+			return errors.Wrapf(err, "cannot delete retired key %s", retiredKey.GUID)
+		}
+	}
+	return nil
 }
