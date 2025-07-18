@@ -2,12 +2,13 @@ package servicecredentialbinding
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -78,34 +79,33 @@ func (r *SCBKeyRotator) HasExpiredKeys(cr *v1alpha1.ServiceCredentialBinding) bo
 
 func (c *SCBKeyRotator) DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) ([]*v1alpha1.SCBResource, error) {
 	var newRetiredKeys []*v1alpha1.SCBResource
-	var retireError error
+	var errs []error
 
 	for _, key := range cr.Status.AtProvider.RetiredKeys {
 
 		if key.CreatedAt.Add(cr.Spec.ForProvider.Rotation.TTL.Duration).After(time.Now()) ||
 			key.GUID == meta.GetExternalName(cr) {
 			newRetiredKeys = append(newRetiredKeys, key)
-		} else {
-			if err := Delete(ctx, c.SCBClient, key.GUID); err != nil {
-				if cfresource.IsResourceNotFoundError(err) || cfresource.IsServiceBindingNotFoundError(err) {
-					continue // If the key is already deleted, we can ignore the error
-				}
-				newRetiredKeys = append(newRetiredKeys, key) // If we cannot delete the key, keep it in the list
-				retireError = errors.Wrapf(err, "cannot delete retired key %s", key.GUID)
-			}
+
+		} else if err := Delete(ctx, c.SCBClient, key.GUID); err != nil &&
+			!cfresource.IsResourceNotFoundError(err) &&
+			!cfresource.IsServiceBindingNotFoundError(err) {
+
+			// If we cannot delete the key, keep it in the list
+			newRetiredKeys = append(newRetiredKeys, key)
+			errs = append(errs, fmt.Errorf("cannot delete expired key %s: %w", key.GUID, err))
 		}
 	}
 
-	return newRetiredKeys, retireError
+	return newRetiredKeys, errors.Join(errs...)
 }
 
 func (c *SCBKeyRotator) DeleteRetiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) error {
 	for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
-		if err := Delete(ctx, c.SCBClient, retiredKey.GUID); err != nil {
-			if cfresource.IsResourceNotFoundError(err) || cfresource.IsServiceBindingNotFoundError(err) {
-				continue
-			}
-			return errors.Wrapf(err, "cannot delete retired key %s", retiredKey.GUID)
+		if err := Delete(ctx, c.SCBClient, retiredKey.GUID); err != nil &&
+			!cfresource.IsResourceNotFoundError(err) &&
+			!cfresource.IsServiceBindingNotFoundError(err) {
+			return fmt.Errorf("cannot delete retired key %s: %w", retiredKey.GUID, err)
 		}
 	}
 	return nil

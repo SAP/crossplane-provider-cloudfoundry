@@ -2,6 +2,8 @@ package servicecredentialbinding
 
 import (
 	"context"
+	"errors"
+	"fmt"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
@@ -11,7 +13,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -28,16 +29,21 @@ import (
 )
 
 const (
-	resourceType    = "ServiceCredentialBinding"
-	externalSystem  = "Cloud Foundry"
-	errTrackPCUsage = "cannot track ProviderConfig usage"
-	errNewClient    = "cannot create a client for " + externalSystem
-	errWrongCRType  = "managed resource is not a " + resourceType
-	errGet          = "cannot get " + resourceType + " in " + externalSystem
-	errFind         = "cannot find " + resourceType + " in " + externalSystem
-	errCreate       = "cannot create " + resourceType + " in " + externalSystem
-	errUpdate       = "cannot update " + resourceType + " in " + externalSystem
-	errDelete       = "cannot delete " + resourceType + " in " + externalSystem
+	resourceType         = "ServiceCredentialBinding"
+	externalSystem       = "Cloud Foundry"
+	errTrackPCUsage      = "cannot track ProviderConfig usage: %w"
+	errNewClient         = "cannot create a client for " + externalSystem + ": %w"
+	errWrongCRType       = "managed resource is not a " + resourceType
+	errGet               = "cannot get " + resourceType + " in " + externalSystem + ": %w"
+	errFind              = "cannot find " + resourceType + " in " + externalSystem
+	errCreate            = "cannot create " + resourceType + " in " + externalSystem + ": %w"
+	errUpdate            = "cannot update " + resourceType + " in " + externalSystem + ": %w"
+	errDelete            = "cannot delete " + resourceType + " in " + externalSystem + ": %w"
+	errDeleteRetiredKeys = "cannot delete retired keys in " + externalSystem + ": %w"
+	errDeleteExpiredKeys = "cannot delete expired keys in " + externalSystem + ": %w"
+	errUpdateStatus      = "cannot update status after retiring binding: %w"
+	errExtractParams     = "cannot extract specified parameters: %w"
+	errUnknownState      = "unknown last operation state for " + resourceType + " in " + externalSystem
 )
 
 // Setup adds a controller that reconciles ServiceCredentialBinding CR.
@@ -94,12 +100,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	}
 
 	if err := c.usage.Track(ctx, mg); err != nil {
-		return nil, errors.Wrap(err, errTrackPCUsage)
+		return nil, fmt.Errorf(errTrackPCUsage, err)
 	}
 
 	cf, err := clients.ClientFnBuilder(ctx, c.kube)(mg)
 	if err != nil {
-		return nil, errors.Wrap(err, errNewClient)
+		return nil, fmt.Errorf(errNewClient, err)
 	}
 
 	client := scb.NewClient(cf)
@@ -129,25 +135,13 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	guid := meta.GetExternalName(cr)
 	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, cr.Spec.ForProvider)
-	if err != nil {
-		return c.handleGetError(ctx, cr, err)
-	}
-
-	if serviceBinding == nil {
-		cr.SetConditions(xpv1.Unavailable().WithMessage(errGet))
-		meta.SetExternalName(cr, "")
-		if err := c.kube.Update(ctx, cr); err != nil {
-			return managed.ExternalObservation{ResourceExists: false}, errors.Wrap(err, "cannot update external name")
-		}
+	if errors.Is(err, cfclient.ErrNoResultsReturned) ||
+		errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
+		cfresource.IsResourceNotFoundError(err) ||
+		cfresource.IsServiceBindingNotFoundError(err) {
 		return managed.ExternalObservation{ResourceExists: false}, nil
-	}
-
-	// Update the external name if it is different from the GUID
-	if guid != serviceBinding.GUID {
-		meta.SetExternalName(cr, serviceBinding.Resource.GUID)
-		if err := c.kube.Update(ctx, cr); err != nil {
-			return managed.ExternalObservation{ResourceExists: true}, errors.Wrap(err, "cannot update external name")
-		}
+	} else if err != nil {
+		return managed.ExternalObservation{}, fmt.Errorf(errGet, err)
 	}
 
 	cr.Status.AtProvider.GUID = serviceBinding.GUID
@@ -155,7 +149,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	if c.keyRotator.RetireBinding(cr, serviceBinding) {
 		if err := c.kube.Status().Update(ctx, cr); err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, "cannot update status after retiring binding")
+			return managed.ExternalObservation{}, fmt.Errorf(errUpdateStatus, err)
 		}
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
@@ -172,19 +166,14 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
 	}
 
-	// Ensure that the current service key is retired before creating a new one.
-	if err := checkIfRetired(cr); err != nil {
-		return managed.ExternalCreation{}, err
-	}
-
 	params, err := extractParameters(ctx, c.kube, cr.Spec.ForProvider)
 	if err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, "cannot extract specified parameters")
+		return managed.ExternalCreation{}, fmt.Errorf(errExtractParams, err)
 	}
 
 	serviceBinding, err := scb.Create(ctx, c.scbClient, cr.Spec.ForProvider, params)
 	if err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
+		return managed.ExternalCreation{}, fmt.Errorf(errCreate, err)
 	}
 
 	meta.SetExternalName(cr, serviceBinding.GUID)
@@ -193,10 +182,6 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		if _, ok := cr.ObjectMeta.Annotations[scb.ForceRotationKey]; ok {
 			meta.RemoveAnnotations(cr, scb.ForceRotationKey)
 		}
-	}
-
-	if err := c.kube.Update(ctx, cr); err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, "cannot update CR after creating service credential binding")
 	}
 
 	return managed.ExternalCreation{}, nil
@@ -210,9 +195,8 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	if externalName := meta.GetExternalName(cr); externalName != "" {
-		_, err := scb.Update(ctx, c.scbClient, meta.GetExternalName(cr), cr.Spec.ForProvider)
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
+		if _, err := scb.Update(ctx, c.scbClient, meta.GetExternalName(cr), cr.Spec.ForProvider); err != nil {
+			return managed.ExternalUpdate{}, fmt.Errorf(errUpdate, err)
 		}
 	}
 
@@ -220,14 +204,12 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, nil
 	}
 
-	newRetiredKeys, retireError := c.keyRotator.DeleteExpiredKeys(ctx, cr)
-
-	cr.Status.AtProvider.RetiredKeys = newRetiredKeys
-	if err := c.kube.Status().Update(ctx, cr); err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, "cannot update status after deleting retired keys")
+	if newRetiredKeys, err := c.keyRotator.DeleteExpiredKeys(ctx, cr); err != nil {
+		return managed.ExternalUpdate{}, fmt.Errorf(errDeleteExpiredKeys, err)
+	} else {
+		cr.Status.AtProvider.RetiredKeys = newRetiredKeys
+		return managed.ExternalUpdate{}, err
 	}
-
-	return managed.ExternalUpdate{}, retireError
 }
 
 // Delete a ServiceCredentialBinding resource.
@@ -239,12 +221,12 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	cr.SetConditions(xpv1.Deleting())
 
 	if err := c.keyRotator.DeleteRetiredKeys(ctx, cr); err != nil {
-		return errors.Wrap(err, "delete failed")
+		return fmt.Errorf(errDeleteRetiredKeys, err)
 	}
 
 	err := scb.Delete(ctx, c.scbClient, cr.GetID())
 	if err != nil {
-		return errors.Wrap(err, errDelete)
+		return fmt.Errorf(errDelete, err)
 	}
 
 	return nil
@@ -263,21 +245,6 @@ func extractParameters(ctx context.Context, kube k8s.Client, spec v1alpha1.Servi
 
 	// If the spec has no parameters or secret ref, return nil
 	return nil, nil
-}
-
-func (c *external) handleGetError(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, err error) (managed.ExternalObservation, error) {
-	if errors.Is(err, cfclient.ErrNoResultsReturned) ||
-		errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
-		cfresource.IsResourceNotFoundError(err) ||
-		cfresource.IsServiceBindingNotFoundError(err) {
-		cr.SetConditions(xpv1.Creating().WithMessage(errGet))
-		meta.SetExternalName(cr, "") // Clear the external name if the resource does not exist
-		if err := c.kube.Update(ctx, cr); err != nil {
-			return managed.ExternalObservation{ResourceExists: false}, err
-		}
-		return managed.ExternalObservation{ResourceExists: false}, nil
-	}
-	return managed.ExternalObservation{}, errors.Wrap(err, errGet)
 }
 
 func (c *external) handleObservationState(serviceBinding *cfresource.ServiceCredentialBinding, ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error) {
@@ -305,21 +272,5 @@ func (c *external) handleObservationState(serviceBinding *cfresource.ServiceCred
 	}
 
 	// If the last operation is unknown, error out
-	return managed.ExternalObservation{}, errors.New("unknown last operation state")
-}
-
-func checkIfRetired(cr *v1alpha1.ServiceCredentialBinding) error {
-	if externalName := meta.GetExternalName(cr); externalName != "" {
-		keyRetired := false
-		for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
-			if retiredKey.GUID == externalName {
-				keyRetired = true
-				break
-			}
-		}
-		if !keyRetired {
-			return errors.New("cannot create a new ServiceCredentialBinding before retiring the existing one")
-		}
-	}
-	return nil
+	return managed.ExternalObservation{}, errors.New(errUnknownState)
 }
