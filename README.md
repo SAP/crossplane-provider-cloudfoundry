@@ -8,8 +8,8 @@
 
 `crossplane-provider-cloudfoundry` is a [Crossplane](https://crossplane.io/) provider for [Cloud Foundry](https://docs.cloudfoundry.org/). The provider that is built from the source code in this repository can be installed into a Crossplane control plane and adds the following new functionality:
 
-- Custom Resource Definitions (CRDs) that model Cloud Foundry resources (e.g. Organization, Space, Services, Applications, etc.)
-- Custom Controllers to provision these resources in a Cloud Foundry deployment based on the users desired state captured in CRDs they create
+- Custom Resource Definitions ([CRDs](https://doc.crds.dev/github.com/SAP/crossplane-provider-cloudfoundry)) that model Cloud Foundry resources (e.g. [Organization, Space, Services, Applications, etc.](https://doc.crds.dev/github.com/SAP/crossplane-provider-cloudfoundry))
+- Custom Controllers to provision these resources in a Cloud Foundry deployment based on the users desired state captured in [CRDs](https://doc.crds.dev/github.com/SAP/crossplane-provider-cloudfoundry) they create
 
 ## Roadmap
 We have a lot of exciting new features and improvements in our backlogs for you to expect and even contribute yourself! We will publish a detailed roadmap soon.
