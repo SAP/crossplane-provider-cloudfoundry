@@ -6,6 +6,7 @@ import (
 	"errors"
 	"math/rand"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -242,11 +243,17 @@ const (
 	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
 )
 
-var src = rand.NewSource(time.Now().UnixNano())
+var (
+	src      = rand.NewSource(time.Now().UnixNano())
+	srcMutex sync.Mutex
+)
 
 func randomString(n int) string {
 	sb := strings.Builder{}
 	sb.Grow(n)
+
+	srcMutex.Lock()
+	defer srcMutex.Unlock()
 
 	for i, cache, remain := n-1, src.Int63(), letterIdxMax; i >= 0; {
 		if remain == 0 {
