@@ -10,6 +10,7 @@ import (
 )
 
 // var _ ServiceCredentialBinding = &MockServiceCredentialBinding{}
+var testTime = time.Now()
 
 // MockServiceCredentialBinding mocks ServiceCredentialBinding interfaces
 type MockServiceCredentialBinding struct {
@@ -18,7 +19,7 @@ type MockServiceCredentialBinding struct {
 
 // Get mocks ServiceCredentialBinding.Get
 func (m *MockServiceCredentialBinding) Get(ctx context.Context, guid string) (*resource.ServiceCredentialBinding, error) {
-	args := m.Called(guid)
+	args := m.Called(ctx, guid)
 	return args.Get(0).(*resource.ServiceCredentialBinding), args.Error(1)
 }
 
@@ -115,7 +116,7 @@ func (s *ServiceCredentialBinding) SetLastOperation(op, state string) *ServiceCr
 		Type:        op,
 		State:       state,
 		Description: op + " " + state,
-		UpdatedAt:   time.Now(),
+		UpdatedAt:   testTime,
 	}
 	return s
 }
