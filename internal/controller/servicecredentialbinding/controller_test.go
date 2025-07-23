@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"testing"
 
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/mock"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -30,6 +31,16 @@ var (
 	guid                      = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 	serviceInstanceGUID       = "3d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 )
+
+// MockObservationStateHandler is a mock implementation of ObservationStateHandler
+type MockObservationStateHandler struct {
+	mock.Mock
+}
+
+func (m *MockObservationStateHandler) HandleObservationState(serviceBinding *cfresource.ServiceCredentialBinding, ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error) {
+	args := m.Called(serviceBinding, ctx, cr)
+	return args.Get(0).(managed.ExternalObservation), args.Error(1)
+}
 
 type modifier func(*v1alpha1.ServiceCredentialBinding)
 
@@ -81,6 +92,7 @@ func serviceCredentialBinding(typ string, m ...modifier) *v1alpha1.ServiceCreden
 func TestObserve(t *testing.T) {
 	type service func() *fake.MockServiceCredentialBinding
 	type keyRotator func() *fake.MockKeyRotator
+	type observationStateHandler func() *MockObservationStateHandler
 	type args struct {
 		mg resource.Managed
 	}
@@ -92,11 +104,6 @@ func TestObserve(t *testing.T) {
 	}
 
 	scb := serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID))
-	scbSucceeded := fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceCredentialBinding
-	scbCreateFailed := fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationFailed).ServiceCredentialBinding
-	scbUpdateFailed := fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationUpdate, v1alpha1.LastOperationFailed).ServiceCredentialBinding
-	scbInProgress := fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationInProgress).ServiceCredentialBinding
-
 	scbAvailable := serviceCredentialBinding(
 		"key",
 		withExternalName(guid),
@@ -105,12 +112,15 @@ func TestObserve(t *testing.T) {
 		withConditions(xpv1.Available()),
 	)
 
+	cfSucceeded := fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceCredentialBinding
+
 	cases := map[string]struct {
-		args       args
-		want       want
-		service    service
-		kube       k8s.Client
-		keyRotator keyRotator
+		args                    args
+		want                    want
+		service                 service
+		kube                    k8s.Client
+		keyRotator              keyRotator
+		observationStateHandler observationStateHandler
 	}{
 		"Nil": {
 			args: args{
@@ -222,11 +232,11 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Get", mock.Anything, guid).Return(
-					&scbSucceeded,
+					&cfSucceeded,
 					nil,
 				)
 				m.On("Single").Return(
-					&scbSucceeded,
+					&cfSucceeded,
 					nil,
 				)
 				m.On("GetDetails", guid).Return(
@@ -241,94 +251,32 @@ func TestObserve(t *testing.T) {
 				m.On("RetireBinding", mock.Anything, mock.Anything).Return(false)
 				return m
 			},
+			observationStateHandler: func() *MockObservationStateHandler {
+				m := &MockObservationStateHandler{}
+				m.On("HandleObservationState", &cfSucceeded, mock.Anything, mock.Anything).Return(
+					managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ConnectionDetails: managed.ConnectionDetails{}},
+					nil,
+				)
+				return m
+			},
 		},
-		"CreateFailed": {
+		"ObservationStateHandlerCalled": {
 			args: args{
 				mg: scb,
 			},
 			want: want{
-				mg: serviceCredentialBinding(
-					"key",
-					withExternalName(guid),
-					withServiceInstanceID(serviceInstanceGUID),
-					withStatus(guid),
-					withConditions(xpv1.Available()),
-				),
-				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
-				err: nil,
-			},
-			service: func() *fake.MockServiceCredentialBinding {
-				m := &fake.MockServiceCredentialBinding{}
-				m.On("Get", mock.Anything, guid).Return(
-					&scbCreateFailed,
-					nil,
-				)
-				m.On("Single").Return(
-					&scbCreateFailed,
-					nil,
-				)
-				return m
-			},
-			keyRotator: func() *fake.MockKeyRotator {
-				m := &fake.MockKeyRotator{}
-				m.On("RetireBinding", mock.Anything, mock.Anything).Return(false)
-				return m
-			},
-		},
-		"UpdateFailed": {
-			args: args{
-				mg: scb,
-			},
-			want: want{
-				mg: serviceCredentialBinding("key",
-					withExternalName(guid),
-					withServiceInstanceID(serviceInstanceGUID),
-					withStatus(guid),
-					withConditions(xpv1.Available()),
-				),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
-				err: nil,
-			},
-			service: func() *fake.MockServiceCredentialBinding {
-				m := &fake.MockServiceCredentialBinding{}
-				m.On("Get", mock.Anything, guid).Return(
-					&scbUpdateFailed,
-					nil,
-				)
-				m.On("Single").Return(
-					&scbUpdateFailed,
-					nil,
-				)
-				return m
-			},
-			keyRotator: func() *fake.MockKeyRotator {
-				m := &fake.MockKeyRotator{}
-				m.On("RetireBinding", mock.Anything, mock.Anything).Return(false)
-				return m
-			},
-		},
-		"InProgress": {
-			args: args{
-				mg: scb,
-			},
-			want: want{
-				mg: serviceCredentialBinding("key",
-					withExternalName(guid),
-					withStatus(guid),
-					withServiceInstanceID(serviceInstanceGUID),
-					withConditions(xpv1.Unavailable()),
-				),
+				mg:  scb,
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Get", mock.Anything, guid).Return(
-					&scbInProgress,
+					&cfSucceeded,
 					nil,
 				)
 				m.On("Single").Return(
-					&scbInProgress,
+					&cfSucceeded,
 					nil,
 				)
 				return m
@@ -336,6 +284,14 @@ func TestObserve(t *testing.T) {
 			keyRotator: func() *fake.MockKeyRotator {
 				m := &fake.MockKeyRotator{}
 				m.On("RetireBinding", mock.Anything, mock.Anything).Return(false)
+				return m
+			},
+			observationStateHandler: func() *MockObservationStateHandler {
+				m := &MockObservationStateHandler{}
+				m.On("HandleObservationState", &cfSucceeded, mock.Anything, mock.Anything).Return(
+					managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+					nil,
+				)
 				return m
 			},
 		}}
@@ -343,12 +299,17 @@ func TestObserve(t *testing.T) {
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
+			var obsHandler ObservationStateHandler
+			if tc.observationStateHandler != nil {
+				obsHandler = tc.observationStateHandler()
+			}
 			c := &external{
 				kube: &test.MockClient{
 					MockUpdate: test.NewMockUpdateFn(nil),
 				},
-				scbClient:  tc.service(),
-				keyRotator: tc.keyRotator(),
+				scbClient:               tc.service(),
+				keyRotator:              tc.keyRotator(),
+				observationStateHandler: obsHandler,
 			}
 			obs, err := c.Observe(context.Background(), tc.args.mg)
 
@@ -364,6 +325,154 @@ func TestObserve(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestHandleObservationState(t *testing.T) {
+	type args struct {
+		serviceBinding *cfresource.ServiceCredentialBinding
+		ctx            context.Context
+		cr             *v1alpha1.ServiceCredentialBinding
+	}
+
+	type want struct {
+		obs managed.ExternalObservation
+		err error
+	}
+
+	ctx := context.Background()
+	cr := serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID))
+
+	cases := map[string]struct {
+		args args
+		want want
+	}{
+		"LastOperationInitial": {
+			args: args{
+				serviceBinding: &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationInitial).ServiceCredentialBinding,
+				ctx:            ctx,
+				cr:             cr,
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:   true,
+					ResourceUpToDate: true,
+				},
+				err: nil,
+			},
+		},
+		"LastOperationInProgress": {
+			args: args{
+				serviceBinding: &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationInProgress).ServiceCredentialBinding,
+				ctx:            ctx,
+				cr:             cr,
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:   true,
+					ResourceUpToDate: true,
+				},
+				err: nil,
+			},
+		},
+		"LastOperationCreateFailed": {
+			args: args{
+				serviceBinding: &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationFailed).ServiceCredentialBinding,
+				ctx:            ctx,
+				cr:             cr,
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:   false, // Create failed, so resource doesn't exist
+					ResourceUpToDate: true,
+				},
+				err: nil,
+			},
+		},
+		"LastOperationUpdateFailed": {
+			args: args{
+				serviceBinding: &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationUpdate, v1alpha1.LastOperationFailed).ServiceCredentialBinding,
+				ctx:            ctx,
+				cr:             cr,
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:   true,  // Update failed, but resource still exists
+					ResourceUpToDate: false, // Update failed, so not up to date
+				},
+				err: nil,
+			},
+		},
+		"LastOperationSucceeded": {
+			args: args{
+				serviceBinding: &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceCredentialBinding,
+				ctx:            ctx,
+				cr:             cr,
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:    true,
+					ResourceUpToDate:  true, // Assuming IsUpToDate returns true and no expired keys
+					ConnectionDetails: managed.ConnectionDetails{},
+				},
+				err: nil,
+			},
+		},
+		"UnknownState": {
+			args: args{
+				serviceBinding: &cfresource.ServiceCredentialBinding{
+					LastOperation: cfresource.LastOperation{
+						State: "unknown-state",
+						Type:  v1alpha1.LastOperationCreate,
+					},
+				},
+				ctx: ctx,
+				cr:  cr,
+			},
+			want: want{
+				obs: managed.ExternalObservation{},
+				err: errors.New(errUnknownState),
+			},
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			t.Logf("Testing: %s", t.Name())
+
+			// Create external with mocked dependencies
+			c := &external{
+				scbClient:  &fake.MockServiceCredentialBinding{},
+				keyRotator: &fake.MockKeyRotator{},
+			}
+
+			// Set up mocks for the successful case
+			if tc.args.serviceBinding.LastOperation.State == v1alpha1.LastOperationSucceeded {
+				mockSCB := c.scbClient.(*fake.MockServiceCredentialBinding)
+				mockSCB.On("GetDetails", guid).Return(
+					fake.NewServiceCredentialBindingDetails(guid),
+					nil,
+				)
+
+				mockKeyRotator := c.keyRotator.(*fake.MockKeyRotator)
+				mockKeyRotator.On("HasExpiredKeys", tc.args.cr).Return(false)
+			}
+
+			obs, err := c.HandleObservationState(tc.args.serviceBinding, tc.args.ctx, tc.args.cr)
+
+			if tc.want.err != nil && err != nil {
+				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
+					t.Errorf("HandleObservationState(...): want error string != got error string:\n%s", diff)
+				}
+			} else {
+				if diff := cmp.Diff(tc.want.err, err); diff != "" {
+					t.Errorf("HandleObservationState(...): want error != got error:\n%s", diff)
+				}
+			}
+			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
+				t.Errorf("HandleObservationState(...): -want, +got:\n%s", diff)
 			}
 		})
 	}

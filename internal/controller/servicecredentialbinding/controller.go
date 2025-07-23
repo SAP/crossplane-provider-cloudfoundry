@@ -109,21 +109,29 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	}
 
 	client := scb.NewClient(cf)
-	return &external{
+	ext := &external{
 		kube:      c.kube,
 		scbClient: client,
 		keyRotator: &scb.SCBKeyRotator{
 			SCBClient: client,
 		},
-	}, nil
+	}
+	ext.observationStateHandler = ext // Use self as the default handler
+	return ext, nil
+}
+
+// ObservationStateHandler defines the interface for handling observation state
+type ObservationStateHandler interface {
+	HandleObservationState(serviceBinding *cfresource.ServiceCredentialBinding, ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error)
 }
 
 // An external service observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
-	kube       k8s.Client
-	scbClient  scb.ServiceCredentialBinding
-	keyRotator scb.KeyRotator
+	kube                    k8s.Client
+	scbClient               scb.ServiceCredentialBinding
+	keyRotator              scb.KeyRotator
+	observationStateHandler ObservationStateHandler
 }
 
 // Observe checks the observed state of the resource and updates the managed resource's status.
@@ -156,7 +164,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	scb.UpdateObservation(&cr.Status.AtProvider, serviceBinding)
 
-	return c.handleObservationState(serviceBinding, ctx, cr)
+	return c.observationStateHandler.HandleObservationState(serviceBinding, ctx, cr)
 }
 
 // Create a ServiceCredentialBinding resource.
@@ -247,7 +255,7 @@ func extractParameters(ctx context.Context, kube k8s.Client, spec v1alpha1.Servi
 	return nil, nil
 }
 
-func (c *external) handleObservationState(serviceBinding *cfresource.ServiceCredentialBinding, ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error) {
+func (c *external) HandleObservationState(serviceBinding *cfresource.ServiceCredentialBinding, ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error) {
 	switch serviceBinding.LastOperation.State {
 	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
 		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))

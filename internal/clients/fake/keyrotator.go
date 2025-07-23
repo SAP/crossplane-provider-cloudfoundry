@@ -3,9 +3,10 @@ package fake
 import (
 	"context"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/stretchr/testify/mock"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 type MockKeyRotator struct {
