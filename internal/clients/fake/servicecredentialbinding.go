@@ -56,10 +56,6 @@ func (m *MockServiceCredentialBinding) Single(ctx context.Context, opt *client.S
 // Create mocks ServiceCredentialBinding.Create
 func (m *MockServiceCredentialBinding) Create(ctx context.Context, r *resource.ServiceCredentialBindingCreate) (string, *resource.ServiceCredentialBinding, error) {
 	args := m.Called(ctx, r)
-	if len(args) == 2 {
-		return args.String(0), nil, args.Error(1)
-	}
-
 	return args.String(0), args.Get(1).(*resource.ServiceCredentialBinding), args.Error(2)
 }
 
