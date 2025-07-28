@@ -143,7 +143,6 @@ func IsUpToDate(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) boo
 	if spec.Lifecycle == "docker" && spec.Docker != nil {
 		// For docker apps, check if the image has changed
 		// The AppManifest in status.AtProvider contains the current image
-		// We need to parse the manifest to get the current image
 		appManifest, err := getAppManifest(spec.Name, status.AppManifest)
 		if err == nil && appManifest.Docker != nil {
 			if spec.Docker.Image != appManifest.Docker.Image {
