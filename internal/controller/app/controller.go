@@ -189,7 +189,6 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Update managed resource
-// Only rename is supported for now
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
 	cr, ok := mg.(*v1alpha1.App)
 	if !ok {
@@ -201,6 +200,28 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errUpdateResource + ": No valid GUID found for the App")
 	}
 
+	// Check if the Docker image needs to be updated
+	if cr.Spec.ForProvider.Lifecycle == "docker" && cr.Spec.ForProvider.Docker != nil {
+		// Re-observe to get the latest status for comparison
+		obs, err := c.Observe(ctx, mg)
+		if err != nil {
+			return managed.ExternalUpdate{}, errors.Wrap(err, errObserveResource)
+		}
+
+		if !obs.ResourceUpToDate {
+			dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
+			if err != nil {
+				return managed.ExternalUpdate{}, errors.Wrap(err, errSecret)
+			}
+			_, err = c.client.UpdateAndPush(ctx, guid, cr.Spec.ForProvider, dockerCredentials)
+			if err != nil {
+				return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
+			}
+			return managed.ExternalUpdate{}, nil
+		}
+	}
+
+	// If not a docker image update, proceed with regular update (e.g., name change)
 	_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)

@@ -89,6 +89,20 @@ func (c *Client) Update(ctx context.Context, guid string, spec v1alpha1.AppParam
 	return application, nil
 }
 
+// UpdateAndPush updates and pushes an app to the Cloud Foundry.
+func (c *Client) UpdateAndPush(ctx context.Context, guid string, spec v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
+	manifest, err := newManifestFromSpec(spec, dockerCredentials)
+	if err != nil {
+		return nil, err
+	}
+
+	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(spec))
+	if err != nil {
+		return nil, err
+	}
+	return c.PushClient.Push(ctx, application, manifest, nil)
+}
+
 // Delete deletes an app in the Cloud Foundry.
 func (c *Client) Delete(ctx context.Context, guid string) error {
 	jobGUID, err := c.AppClient.Delete(ctx, guid)
@@ -126,9 +140,25 @@ func GenerateObservation(res *resource.App) v1alpha1.AppObservation {
 // IsUpToDate checks whether current state is up-to-date compared to the given
 // set of parameters.
 func IsUpToDate(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) bool {
-	// rename or update ssh setting
-	return spec.Name == status.Name
+	if spec.Lifecycle == "docker" && spec.Docker != nil {
+		// For docker apps, check if the image has changed
+		// The AppManifest in status.AtProvider contains the current image
+		// We need to parse the manifest to get the current image
+		appManifest, err := getAppManifest(spec.Name, status.AppManifest)
+		if err == nil && appManifest.Docker != nil {
+			if spec.Docker.Image != appManifest.Docker.Image {
+				return false
+			}
+		}
+	}
 
+	// Check for name changes
+	if spec.Name != status.Name {
+		return false
+	}
+
+	// TODO: Add more comprehensive checks for other fields if needed
+	return true
 }
 
 // DiffServiceBindings checks whether current state is up-to-date compared to the given
