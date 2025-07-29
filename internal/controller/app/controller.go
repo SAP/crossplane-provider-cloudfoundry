@@ -4,14 +4,6 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
-
-	ctrl "sigs.k8s.io/controller-runtime"
-	k8s "sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/docker/cli/cli/config/configfile"
-
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -20,6 +12,11 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/docker/cli/cli/config/configfile"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	ctrl "sigs.k8s.io/controller-runtime"
+	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	scv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
@@ -158,9 +155,14 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		cr.SetConditions(xpv1.Unavailable())
 	}
 
+	isUpToDate, err := app.IsUpToDate(cr.Spec.ForProvider, cr.Status.AtProvider)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
+
 	return managed.ExternalObservation{
 		ResourceExists:          true,
-		ResourceUpToDate:        app.IsUpToDate(cr.Spec.ForProvider, cr.Status.AtProvider),
+		ResourceUpToDate:        isUpToDate,
 		ResourceLateInitialized: lateInitialized,
 	}, nil
 }
@@ -200,31 +202,25 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errUpdateResource + ": No valid GUID found for the App")
 	}
 
-	// Check if the Docker image needs to be updated
-	if cr.Spec.ForProvider.Lifecycle == "docker" && cr.Spec.ForProvider.Docker != nil {
-		// Re-observe to get the latest status for comparison
-		obs, err := c.Observe(ctx, mg)
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errObserveResource)
-		}
-
-		if !obs.ResourceUpToDate {
-			dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
-			if err != nil {
-				return managed.ExternalUpdate{}, errors.Wrap(err, errSecret)
-			}
-			_, err = c.client.UpdateAndPush(ctx, guid, cr.Spec.ForProvider, dockerCredentials)
-			if err != nil {
-				return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
-			}
-			return managed.ExternalUpdate{}, nil
-		}
+	changes, err := app.DetectChanges(cr.Spec.ForProvider, cr.Status.AtProvider)
+	if err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource+": Failed to detect changes")
 	}
 
-	// If not a docker image update, proceed with regular update (e.g., name change)
-	_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider)
-	if err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
+	if changes.HasField("docker_image") {
+		dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
+		if err != nil {
+			return managed.ExternalUpdate{}, errors.Wrap(err, errSecret)
+		}
+		_, err = c.client.UpdateAndPush(ctx, guid, cr.Spec.ForProvider, dockerCredentials)
+		if err != nil {
+			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
+		}
+	} else if changes.HasChanges() {
+		_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider)
+		if err != nil {
+			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
+		}
 	}
 
 	return managed.ExternalUpdate{}, nil

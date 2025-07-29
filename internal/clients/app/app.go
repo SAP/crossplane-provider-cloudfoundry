@@ -137,27 +137,59 @@ func GenerateObservation(res *resource.App) v1alpha1.AppObservation {
 	return obs
 }
 
-// IsUpToDate checks whether current state is up-to-date compared to the given
-// set of parameters.
-func IsUpToDate(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) bool {
+// ChangeDetection represents what fields have changed
+type ChangeDetection struct {
+	ChangedFields []string
+}
+
+func (cd *ChangeDetection) HasChanges() bool {
+	return len(cd.ChangedFields) > 0
+}
+
+// HasField checks if a specific field changed
+func (cd *ChangeDetection) HasField(field string) bool {
+	for _, f := range cd.ChangedFields {
+		if f == field {
+			return true
+		}
+	}
+	return false
+}
+
+// DetectChanges determines what fields have changed between spec and status
+func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (*ChangeDetection, error) {
+	changes := &ChangeDetection{
+		ChangedFields: []string{},
+	}
+
+	// Check if Docker image changed
 	if spec.Lifecycle == "docker" && spec.Docker != nil {
-		// For docker apps, check if the image has changed
-		// The AppManifest in status.AtProvider contains the current image
-		appManifest, err := getAppManifest(spec.Name, status.AppManifest)
-		if err == nil && appManifest.Docker != nil {
+		appManifest, err := getAppManifest(status.Name, status.AppManifest)
+		if err != nil {
+			changes.ChangedFields = append(changes.ChangedFields, "manifest_parse_error")
+			return changes, err
+		}
+		if appManifest.Docker != nil {
 			if spec.Docker.Image != appManifest.Docker.Image {
-				return false
+				changes.ChangedFields = append(changes.ChangedFields, "docker_image")
 			}
 		}
 	}
 
-	// Check for name changes
+	// Check if name changed
 	if spec.Name != status.Name {
-		return false
+		changes.ChangedFields = append(changes.ChangedFields, "name")
 	}
 
-	// TODO: Add more comprehensive checks for other fields if needed
-	return true
+	return changes, nil
+}
+
+func IsUpToDate(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (bool, error) {
+	changes, err := DetectChanges(spec, status)
+	if err != nil {
+		return false, err
+	}
+	return !changes.HasChanges(), nil
 }
 
 // DiffServiceBindings checks whether current state is up-to-date compared to the given
