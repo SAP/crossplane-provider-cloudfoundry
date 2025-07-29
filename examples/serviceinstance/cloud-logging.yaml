@@ -38,3 +38,20 @@ spec:
       plan: dev
     parameters:
       retention_period: 3
+---
+# CR to create a rotating Service Key for the ServiceInstance
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceCredentialBinding
+metadata:
+  name: my-cloud-binding
+spec:
+  forProvider:
+    type: key
+    name: my-cloud-binding
+    serviceInstanceRef:
+      name: my-cloud-logging
+    rotation:
+      frequency: 5m
+      ttl: 8m
+  writeConnectionSecretToRef:
+    name: my-cloud-key

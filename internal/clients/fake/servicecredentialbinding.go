@@ -10,6 +10,7 @@ import (
 )
 
 // var _ ServiceCredentialBinding = &MockServiceCredentialBinding{}
+var testTime = time.Now()
 
 // MockServiceCredentialBinding mocks ServiceCredentialBinding interfaces
 type MockServiceCredentialBinding struct {
@@ -18,53 +19,49 @@ type MockServiceCredentialBinding struct {
 
 // Get mocks ServiceCredentialBinding.Get
 func (m *MockServiceCredentialBinding) Get(ctx context.Context, guid string) (*resource.ServiceCredentialBinding, error) {
-	args := m.Called(guid)
+	args := m.Called(ctx, guid)
 	return args.Get(0).(*resource.ServiceCredentialBinding), args.Error(1)
 }
 
 // PollComplete mocks Job.PollComplete
 func (m *MockServiceCredentialBinding) PollComplete(ctx context.Context, jobGUID string, opt *client.PollingOptions) error {
-	args := m.Called()
+	args := m.Called(ctx, jobGUID, opt)
 	return args.Error(0)
 }
 
 // GetDetails mocks ServiceCredentialBinding.Get
 func (m *MockServiceCredentialBinding) GetDetails(ctx context.Context, guid string) (*resource.ServiceCredentialBindingDetails, error) {
-	args := m.Called(guid)
+	args := m.Called(ctx, guid)
 	return args.Get(0).(*resource.ServiceCredentialBindingDetails), args.Error(1)
 }
 
 // GetParameters mocks ServiceCredentialBinding.GetParameters
 func (m *MockServiceCredentialBinding) GetParameters(ctx context.Context, guid string) (map[string]string, error) {
-	args := m.Called(guid)
+	args := m.Called(ctx, guid)
 	return args.Get(0).(map[string]string), args.Error(1)
 }
 
 // Update mocks ServiceCredentialBinding.Update
 func (m *MockServiceCredentialBinding) Update(ctx context.Context, guid string, r *resource.ServiceCredentialBindingUpdate) (*resource.ServiceCredentialBinding, error) {
-	args := m.Called()
+	args := m.Called(ctx, guid, r)
 	return args.Get(0).(*resource.ServiceCredentialBinding), args.Error(1)
 }
 
 // Single mocks ServiceCredentialBinding.Single
 func (m *MockServiceCredentialBinding) Single(ctx context.Context, opt *client.ServiceCredentialBindingListOptions) (*resource.ServiceCredentialBinding, error) {
-	args := m.Called()
+	args := m.Called(ctx, opt)
 	return args.Get(0).(*resource.ServiceCredentialBinding), args.Error(1)
 }
 
 // Create mocks ServiceCredentialBinding.Create
 func (m *MockServiceCredentialBinding) Create(ctx context.Context, r *resource.ServiceCredentialBindingCreate) (string, *resource.ServiceCredentialBinding, error) {
-	args := m.Called()
-	if len(args) == 2 {
-		return args.String(0), nil, args.Error(1)
-	}
-
+	args := m.Called(ctx, r)
 	return args.String(0), args.Get(1).(*resource.ServiceCredentialBinding), args.Error(2)
 }
 
 // Delete mocks ServiceCredentialBinding.Delete
 func (m *MockServiceCredentialBinding) Delete(ctx context.Context, guid string) (string, error) {
-	args := m.Called(guid)
+	args := m.Called(ctx, guid)
 	return args.String(0), args.Error(1)
 }
 
@@ -115,7 +112,7 @@ func (s *ServiceCredentialBinding) SetLastOperation(op, state string) *ServiceCr
 		Type:        op,
 		State:       state,
 		Description: op + " " + state,
-		UpdatedAt:   time.Now(),
+		UpdatedAt:   testTime,
 	}
 	return s
 }
