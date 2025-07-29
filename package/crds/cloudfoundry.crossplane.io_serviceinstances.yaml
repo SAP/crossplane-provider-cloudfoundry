@@ -34,9 +34,8 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: 'ServiceInstance is the Schema for the ServiceInstances API.
-          Creates a service instance in a Cloud Foundry space. Further documentation:
-          https://docs.cloudfoundry.org/devguide/services'
+        description: ServiceInstance is the Schema for the ServiceInstances API. Provides
+          a Cloud Foundry resource for managing service instances.
         properties:
           apiVersion:
             description: |-
@@ -638,6 +637,15 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: 'SpaceReference is required: exactly one of spaceName, spaceRef,
+            or spaceSelector must be set'
+          rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName)
+            || has(self.spec.forProvider.spaceRef) || has(self.spec.forProvider.spaceSelector))
+        - message: 'SpaceReference validation: only one of spaceName, spaceRef, or
+            spaceSelector can be set'
+          rule: '[has(self.spec.forProvider.spaceName), has(self.spec.forProvider.spaceRef),
+            has(self.spec.forProvider.spaceSelector)].filter(x, x).size() <= 1'
     served: true
     storage: true
     subresources:

@@ -114,6 +114,10 @@ type RouteStatus struct {
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName) || has(self.spec.forProvider.spaceRef) || has(self.spec.forProvider.spaceSelector))",message="SpaceReference is required: exactly one of spaceName, spaceRef, or spaceSelector must be set"
+// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.spaceName), has(self.spec.forProvider.spaceRef), has(self.spec.forProvider.spaceSelector)].filter(x, x).size() <= 1",message="SpaceReference validation: only one of spaceName, spaceRef, or spaceSelector can be set"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.domainName) || has(self.spec.forProvider.domainRef) || has(self.spec.forProvider.domainSelector))",message="DomainReference is required: exactly one of domainName, domainRef, or domainSelector must be set"
+// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.domainName), has(self.spec.forProvider.domainRef), has(self.spec.forProvider.domainSelector)].filter(x, x).size() <= 1",message="DomainReference validation: only one of domainName, domainRef, or domainSelector can be set"
 type Route struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

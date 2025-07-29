@@ -230,12 +230,14 @@ type ServiceInstanceStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 
-// ServiceInstance is the Schema for the ServiceInstances API. Creates a service instance in a Cloud Foundry space. Further documentation: https://docs.cloudfoundry.org/devguide/services
+// ServiceInstance is the Schema for the ServiceInstances API. Provides a Cloud Foundry resource for managing service instances.
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName) || has(self.spec.forProvider.spaceRef) || has(self.spec.forProvider.spaceSelector))",message="SpaceReference is required: exactly one of spaceName, spaceRef, or spaceSelector must be set"
+// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.spaceName), has(self.spec.forProvider.spaceRef), has(self.spec.forProvider.spaceSelector)].filter(x, x).size() <= 1",message="SpaceReference validation: only one of spaceName, spaceRef, or spaceSelector can be set"
 type ServiceInstance struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
