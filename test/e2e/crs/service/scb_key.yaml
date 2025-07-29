@@ -11,6 +11,9 @@ spec:
       name: e2e-service-instance
       policy:
         resolve: Always
+    rotation:
+      frequency: 1h
+      ttl: 2h
   connectionDetailsAsJSON: false
   writeConnectionSecretToRef:
     name: e2e-service-key
