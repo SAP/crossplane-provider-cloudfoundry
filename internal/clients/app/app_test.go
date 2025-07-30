@@ -95,9 +95,11 @@ func TestDetectChanges(t *testing.T) {
 			if len(result.ChangedFields) != len(tt.expectedFields) {
 				t.Errorf("DetectChanges().ChangedFields length = %v, want %v", len(result.ChangedFields), len(tt.expectedFields))
 			}
-			for i, field := range tt.expectedFields {
-				if i >= len(result.ChangedFields) || result.ChangedFields[i] != field {
-					t.Errorf("DetectChanges().ChangedFields[%d] = %v, want %v", i, result.ChangedFields[i], field)
+
+			// Check if all expected fields are present in the map
+			for _, field := range tt.expectedFields {
+				if !result.HasField(field) {
+					t.Errorf("DetectChanges().ChangedFields missing expected field: %v", field)
 				}
 			}
 

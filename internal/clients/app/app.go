@@ -139,7 +139,7 @@ func GenerateObservation(res *resource.App) v1alpha1.AppObservation {
 
 // ChangeDetection represents what fields have changed
 type ChangeDetection struct {
-	ChangedFields []string
+	ChangedFields map[string]struct{}
 }
 
 func (cd *ChangeDetection) HasChanges() bool {
@@ -148,37 +148,32 @@ func (cd *ChangeDetection) HasChanges() bool {
 
 // HasField checks if a specific field changed
 func (cd *ChangeDetection) HasField(field string) bool {
-	for _, f := range cd.ChangedFields {
-		if f == field {
-			return true
-		}
-	}
-	return false
+	_, ok := cd.ChangedFields[field]
+	return ok
 }
 
 // DetectChanges determines what fields have changed between spec and status
 func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (*ChangeDetection, error) {
 	changes := &ChangeDetection{
-		ChangedFields: []string{},
+		ChangedFields: make(map[string]struct{}),
 	}
 
 	// Check if Docker image changed
 	if spec.Lifecycle == "docker" && spec.Docker != nil {
 		appManifest, err := getAppManifest(status.Name, status.AppManifest)
 		if err != nil {
-			changes.ChangedFields = append(changes.ChangedFields, "manifest_parse_error")
-			return changes, err
+			return nil, err
 		}
 		if appManifest.Docker != nil {
 			if spec.Docker.Image != appManifest.Docker.Image {
-				changes.ChangedFields = append(changes.ChangedFields, "docker_image")
+				changes.ChangedFields["docker_image"] = struct{}{}
 			}
 		}
 	}
 
 	// Check if name changed
 	if spec.Name != status.Name {
-		changes.ChangedFields = append(changes.ChangedFields, "name")
+		changes.ChangedFields["name"] = struct{}{}
 	}
 
 	return changes, nil
