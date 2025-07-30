@@ -273,8 +273,11 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 
-	if err := c.kube.Update(ctx, cr); err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateCR)
+	if creds != nil {
+		cr.Status.AtProvider.Credentials = iSha256(creds)
+		if err := c.kube.Status().Update(ctx, cr); err != nil {
+			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateCR)
+		}
 	}
 
 	return managed.ExternalUpdate{}, nil
@@ -408,6 +411,9 @@ func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Mana
 // info: if creds == nil, it will result in a hash value anyway (e3b0c44298...).
 // This should not be a security problem.
 func iSha256(data []byte) []byte {
+	if len(data) == 0 || string(data) == "{}" {
+		return nil
+	}
 	s := sha256.Sum256(data)
 	return s[:]
 }
