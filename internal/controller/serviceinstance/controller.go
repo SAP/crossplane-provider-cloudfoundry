@@ -175,7 +175,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	case v1alpha1.LastOperationSucceeded:
 		// If the last operation succeeded, set the CR to available
 		cr.SetConditions(xpv1.Available())
-		credentialsUpToDate := true
+		var credentialsUpToDate bool
 		desiredCredentials, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, errSecret)
@@ -407,7 +407,7 @@ func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Mana
 	return s.kube.Update(ctx, cr)
 }
 
-// Small wrapper arround sha256.Sum256()
+// Small wrapper around sha256.Sum256()
 // info: if creds == nil, it will result in a hash value anyway (e3b0c44298...).
 // This should not be a security problem.
 func iSha256(data []byte) []byte {
