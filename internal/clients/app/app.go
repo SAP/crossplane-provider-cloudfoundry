@@ -89,6 +89,20 @@ func (c *Client) Update(ctx context.Context, guid string, spec v1alpha1.AppParam
 	return application, nil
 }
 
+// UpdateAndPush updates and pushes an app to the Cloud Foundry.
+func (c *Client) UpdateAndPush(ctx context.Context, guid string, spec v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
+	manifest, err := newManifestFromSpec(spec, dockerCredentials)
+	if err != nil {
+		return nil, err
+	}
+
+	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(spec))
+	if err != nil {
+		return nil, err
+	}
+	return c.PushClient.Push(ctx, application, manifest, nil)
+}
+
 // Delete deletes an app in the Cloud Foundry.
 func (c *Client) Delete(ctx context.Context, guid string) error {
 	jobGUID, err := c.AppClient.Delete(ctx, guid)
@@ -123,12 +137,54 @@ func GenerateObservation(res *resource.App) v1alpha1.AppObservation {
 	return obs
 }
 
-// IsUpToDate checks whether current state is up-to-date compared to the given
-// set of parameters.
-func IsUpToDate(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) bool {
-	// rename or update ssh setting
-	return spec.Name == status.Name
+// ChangeDetection represents what fields have changed
+type ChangeDetection struct {
+	ChangedFields map[string]struct{}
+}
 
+func (cd *ChangeDetection) HasChanges() bool {
+	return len(cd.ChangedFields) > 0
+}
+
+// HasField checks if a specific field changed
+func (cd *ChangeDetection) HasField(field string) bool {
+	_, ok := cd.ChangedFields[field]
+	return ok
+}
+
+// DetectChanges determines what fields have changed between spec and status
+func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (*ChangeDetection, error) {
+	changes := &ChangeDetection{
+		ChangedFields: make(map[string]struct{}),
+	}
+
+	// Check if Docker image changed
+	if spec.Lifecycle == "docker" && spec.Docker != nil {
+		appManifest, err := getAppManifest(status.Name, status.AppManifest)
+		if err != nil {
+			return nil, err
+		}
+		if appManifest.Docker != nil {
+			if spec.Docker.Image != appManifest.Docker.Image {
+				changes.ChangedFields["docker_image"] = struct{}{}
+			}
+		}
+	}
+
+	// Check if name changed
+	if spec.Name != status.Name {
+		changes.ChangedFields["name"] = struct{}{}
+	}
+
+	return changes, nil
+}
+
+func IsUpToDate(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (bool, error) {
+	changes, err := DetectChanges(spec, status)
+	if err != nil {
+		return false, err
+	}
+	return !changes.HasChanges(), nil
 }
 
 // DiffServiceBindings checks whether current state is up-to-date compared to the given
