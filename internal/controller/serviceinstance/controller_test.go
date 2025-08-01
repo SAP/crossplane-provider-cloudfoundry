@@ -386,7 +386,7 @@ func TestObserve(t *testing.T) {
 				mg: serviceInstance("managed",
 					withExternalName(guid),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan, Credentials: iSha256(*fake.JSONRawMessage("{\"foo\":\"bar\"}"))}),
 					withConditions(xpv1.Available()),
 					withParameters("{\"foo\":\"bar\", \"baz\": 1}"),
 					withDriftDetection(true),
@@ -413,13 +413,13 @@ func TestObserve(t *testing.T) {
 		},
 		"DriftDetectionBreak": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(false)),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(false), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte("{\"foo\":\"bar\", \"baz\": 1}"))})),
 			},
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan, Credentials: iSha256([]byte("{\"foo\":\"bar\", \"baz\": 1}"))}),
 					withConditions(xpv1.Available()),
 					withParameters("{\"foo\":\"bar\", \"baz\": 1}"),
 					withDriftDetection(false),
@@ -532,7 +532,7 @@ func TestCreate(t *testing.T) {
 				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials)),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv1.Creating()), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: []byte(jsonCredentials)})),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv1.Creating()), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte(jsonCredentials))})),
 				obs: managed.ExternalCreation{},
 				err: nil,
 			},
@@ -713,7 +713,7 @@ func TestUpdate(t *testing.T) {
 				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}), withCredentials(&jsonCredentials)),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: *fake.JSONRawMessage(jsonCredentials)})),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: iSha256([]byte(jsonCredentials))})),
 				obs: managed.ExternalUpdate{},
 				err: nil,
 			},
@@ -894,7 +894,7 @@ func TestJSONContain(t *testing.T) {
 		"Superset": {
 			args: args{
 				a: `{ "bar": 1, "baz": "baz", "foo":"foo"}`,
-				b: `{"foo":"foo", 
+				b: `{"foo":"foo",
 				"bar": 1}`,
 			},
 			want: want{
