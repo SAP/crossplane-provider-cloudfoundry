@@ -1,17 +1,13 @@
 package serviceinstance
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/nsf/jsondiff"
-	"github.com/pkg/errors"
-
-	ctrl "sigs.k8s.io/controller-runtime"
-	k8s "sigs.k8s.io/controller-runtime/pkg/client"
-
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -20,6 +16,10 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/nsf/jsondiff"
+	"github.com/pkg/errors"
+	ctrl "sigs.k8s.io/controller-runtime"
+	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
@@ -175,6 +175,11 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	case v1alpha1.LastOperationSucceeded:
 		// If the last operation succeeded, set the CR to available
 		cr.SetConditions(xpv1.Available())
+		var credentialsUpToDate bool
+		desiredCredentials, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, errSecret)
+		}
 		// If parameter drift detection is enable, get actual credentials from the service instance
 		if cr.Spec.EnableParameterDriftDetection {
 			// Get the parameters of the service instance for drift detection
@@ -182,14 +187,17 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 			if err != nil {
 				return managed.ExternalObservation{ResourceExists: true}, errors.Wrap(err, errGetParameters)
 			}
-			cr.Status.AtProvider.Credentials = cred
+			cr.Status.AtProvider.Credentials = iSha256(cred)
+
+			credentialsUpToDate = jsonContain(cred, desiredCredentials)
+		} else {
+			desiredHash := iSha256(desiredCredentials)
+
+			credentialsUpToDate = bytes.Equal(desiredHash, cr.Status.AtProvider.Credentials)
 		}
+
 		// Check if the credentials in the spec match the credentials in the external resource
-		desiredCredentials, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
-		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, errSecret)
-		}
-		upToDate := serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r) && jsonContain(cr.Status.AtProvider.Credentials, desiredCredentials)
+		upToDate := credentialsUpToDate && serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r)
 
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
 	default:
@@ -236,8 +244,8 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.Wrap(err, errUpdateCR)
 	}
 
-	// Save credentials in the status of the CR
-	cr.Status.AtProvider.Credentials = creds
+	// Save hash value of credentials in the status of the CR
+	cr.Status.AtProvider.Credentials = iSha256(creds)
 	if err = c.kube.Status().Update(ctx, cr); err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errUpdateCR)
 	}
@@ -265,13 +273,8 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 
-	if err := c.kube.Update(ctx, cr); err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateCR)
-	}
-
-	// Save credentials in the status of the CR
 	if creds != nil {
-		cr.Status.AtProvider.Credentials = creds
+		cr.Status.AtProvider.Credentials = iSha256(creds)
 		if err := c.kube.Status().Update(ctx, cr); err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateCR)
 		}
@@ -402,4 +405,15 @@ func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Mana
 	cr.Spec.ForProvider.ServicePlan.ID = &sp.GUID
 
 	return s.kube.Update(ctx, cr)
+}
+
+// Small wrapper around sha256.Sum256()
+// info: if creds == nil, it will result in a hash value anyway (e3b0c44298...).
+// This should not be a security problem.
+func iSha256(data []byte) []byte {
+	if len(data) == 0 || string(data) == "{}" {
+		return nil
+	}
+	s := sha256.Sum256(data)
+	return s[:]
 }
