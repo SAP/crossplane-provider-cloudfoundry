@@ -9,6 +9,3 @@ metadata:
     friendly-name.meta.crossplane.io: Provider Cloud Foundry
     meta.crossplane.io/description: |
       A Cloud Foundry provider for the Crossplane runtime.
-spec:
-  controller:
-    image: DOCKER_REGISTRY/crossplane/provider-cloudfoundry-controller:VERSION
