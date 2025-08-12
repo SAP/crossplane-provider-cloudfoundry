@@ -177,8 +177,8 @@ e2e: local-deploy uptest
 
 # Updated End to End Testing following BTP Provider
 
-export E2E_REUSE_CLUSTER = local-dev
-export E2E_CLUSTER_NAME = local-dev
+export E2E_REUSE_CLUSTER = $(KIND_CLUSTER_NAME)
+export E2E_CLUSTER_NAME = $(KIND_CLUSTER_NAME)
 
 .PHONY: test-acceptance
 test-acceptance: local-deploy $(KUBECTL)
