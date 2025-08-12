@@ -161,8 +161,8 @@ e2e: local-deploy uptest
 
 # Updated End to End Testing following BTP Provider
 
-export E2E_REUSE_CLUSTER = local-dev
-export E2E_CLUSTER_NAME = local-dev
+export E2E_REUSE_CLUSTER = $(KIND_CLUSTER_NAME)
+export E2E_CLUSTER_NAME = $(KIND_CLUSTER_NAME)
 
 .PHONY: test-acceptance
 test-acceptance: local-deploy $(KUBECTL)
@@ -170,8 +170,6 @@ test-acceptance: local-deploy $(KUBECTL)
 	@$(KUBECTL) create namespace crossplane-system
 	@$(INFO) running integration tests
 	@$(INFO) Skipping long running tests
-	@$(INFO) ${E2E_IMAGES}
-	@echo "E2E_IMAGES=$$E2E_IMAGES"
 	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -run '$(testFilter)' 2>&1 | tee test-output.log
 	@echo "===========Test Summary==========="
 	@grep -E "PASS|FAIL" test-output.log
