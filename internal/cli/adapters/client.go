@@ -97,10 +97,6 @@ func (c *CFClient) getSpaces(ctx context.Context, filter map[string]string) ([]i
 		kingpin.FatalIfError(fmt.Errorf("organization %s not found", orgName), "%s", errGetOrgReference)
 	}
 
-	if orgRef[0].GUID == "" {
-		kingpin.FatalIfError(fmt.Errorf("organization %s not found", orgName), "%s", errGetOrgReference)
-	}
-
 	// define filter-option with orgRef for query
 	opt := &cfv3.SpaceListOptions{OrganizationGUIDs: cfv3.Filter{Values: []string{orgRef[0].GUID}}}
 
@@ -243,7 +239,7 @@ func (c *CFClient) getRoutes(ctx context.Context, filter map[string]string) ([]i
 	domainRef, err := c.cf.Domains.ListAll(ctx, &domainRefFilter)
 	kingpin.FatalIfError(err, "%s", errGetDomainReference)
 
-	if domainRef[0].GUID == "" {
+	if len(domainRef) == 0 || domainRef[0].GUID == "" {
 		kingpin.FatalIfError(fmt.Errorf("domain %s not found", domainName), "%s", errGetDomainReference)
 	}
 
