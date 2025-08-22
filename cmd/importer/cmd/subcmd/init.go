@@ -59,7 +59,7 @@ var InitCMD = &cobra.Command{
 
 		fmt.Println(successColor("\nReady..."))
 		fmt.Println("\nStart your import with:")
-		fmt.Println(suggestionColor("xpcfi import [--preview | -p]"))
+		fmt.Println(suggestionColor("importer import [--preview | -p]"))
 	},
 }
 

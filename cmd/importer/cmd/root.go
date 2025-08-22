@@ -10,12 +10,9 @@ import (
 )
 
 var rootCmd = &cobra.Command{
-	Use:   "xpcfi",
-	Short: "Crossplane-Cloud-Foundry-Importing (XPCFI)",
-	Long:  "XPCFI (Crossplane-Cloud-Foundry-Importing) is a CLI tool to import pre-existing Cloud Foundry resources into your ManagedControlPlane (MCP)",
-	Run: func(cmd *cobra.Command, args []string) {
-		fmt.Println("Welcome to XPCFI! Use --help for more information.")
-	},
+	Use:   "importer [command] [flags...]",
+	Short: "Crossplane Cloud Foundry provider importing tool",
+	Long:  "Crossplane Cloud Foundry provider importing tool is a CLI tool to import existing Cloud Foundry resources as Crossplane managed resources",
 }
 
 // Execute runs the root command and handles errors

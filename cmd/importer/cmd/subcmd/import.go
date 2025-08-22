@@ -39,9 +39,9 @@ var (
 var suggestionColorLocal = color.New(color.FgCyan).SprintFunc()
 
 var ImportCMD = &cobra.Command{
-	Use:   "import",
+	Use:   "importer",
 	Short: "Import Cloud Foundry resources",
-	Long:  `Import the Cloud Foundry resources you defined in your config.yaml. Make sure to first run xpcfi init first.`,
+	Long:  `Import the Cloud Foundry resources you defined in your config.yaml. Make sure to first run importer init first.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		utils.UpdateTransactionID()
 		fmt.Println(strings.Repeat("-", 52))
@@ -98,8 +98,8 @@ var ImportCMD = &cobra.Command{
 			importer.PreviewResources(resources)
 		}
 
-		if !boolPrompt("Do you want to create these resources in your ManagedControlPlane (MCP)? [YES|NO]") {
-			fmt.Println("🛑 Stopped importing, no changes were made to your ManagedControlPlane (MCP)")
+		if !boolPrompt("Do you want to create these resources in your Kubernetes cluster? [YES|NO]") {
+			fmt.Println("🛑 Stopped importing, no changes were made to your Kubernetes cluster")
 			return
 		}
 
