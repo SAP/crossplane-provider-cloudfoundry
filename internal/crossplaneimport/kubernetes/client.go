@@ -1,53 +1,51 @@
 package kubernetes
 
 import (
-	"context"
+	"path/filepath"
 
-	"k8s.io/apimachinery/pkg/runtime"
+	flag "github.com/spf13/pflag"
+	"github.com/spf13/viper"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// K8sClient is a wrapper around the Kubernetes client
-type K8sClient struct {
-	Client client.Client
+var Flags *flag.FlagSet
+var overrides *clientcmd.ConfigOverrides
+
+func init() {
+	Flags = flag.NewFlagSet("kube", flag.ContinueOnError)
+	overrides = &clientcmd.ConfigOverrides{}
+	clientcmd.BindOverrideFlags(overrides, Flags, clientcmd.RecommendedConfigOverrideFlags("kube."))
 }
 
-// NewK8sClient creates a new Kubernetes client
-func NewK8sClient(kubeConfigPath string, scheme *runtime.Scheme) (*K8sClient, error) {
-	// Use the kubeconfig to create a REST config
-	config, err := clientcmd.BuildConfigFromFlags("", kubeConfigPath)
+func getConfig() (*rest.Config, error) {
+	kubeconfig := viper.GetString("kubeconfig")
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+	if kubeconfig != "" {
+		kubeconfigs, err := filepath.Glob(kubeconfig)
+		if err != nil {
+			return nil, err
+		}
+		if len(kubeconfigs) > 0 {
+			loadingRules.ExplicitPath = kubeconfigs[0]
+		}
+	}
+	clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(loadingRules, overrides)
+	return clientConfig.ClientConfig()
+
+}
+
+func NewClient() (client.Client, error) {
+	config, err := getConfig()
 	if err != nil {
 		return nil, err
 	}
-
-	// Create a new k8s client with scheme
-	k8sClient, err := client.New(config, client.Options{Scheme: scheme})
+	scheme, err := getScheme()
 	if err != nil {
 		return nil, err
 	}
-
-	return &K8sClient{
-		Client: k8sClient,
-	}, nil
-}
-
-// Create creates a resource in the Kubernetes cluster
-func (c *K8sClient) Create(ctx context.Context, obj client.Object) error {
-	return c.Client.Create(ctx, obj)
-}
-
-// Get gets a resource from the Kubernetes cluster
-func (c *K8sClient) Get(ctx context.Context, key client.ObjectKey, obj client.Object) error {
-	return c.Client.Get(ctx, key, obj)
-}
-
-// Update updates a resource in the Kubernetes cluster
-func (c *K8sClient) Update(ctx context.Context, obj client.Object) error {
-	return c.Client.Update(ctx, obj)
-}
-
-// Delete deletes a resource from the Kubernetes cluster
-func (c *K8sClient) Delete(ctx context.Context, obj client.Object) error {
-	return c.Client.Delete(ctx, obj)
+	return client.New(config, client.Options{
+		Scheme: scheme,
+	})
 }

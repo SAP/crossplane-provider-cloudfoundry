@@ -1,182 +1,70 @@
 package credentialManager
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
+	"log/slog"
 
-	"gopkg.in/alecthomas/kingpin.v2"
-	"k8s.io/apimachinery/pkg/runtime"
+	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/spf13/viper"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/adapters"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/utils"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/erratt"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
-const ConfigName = ".xpcfi"
-
-const (
-	// error messages
-	errCreateRESTConfig         = "REST config could not be created"
-	errAddProviderScheme        = "Unable to add ProviderConfig scheme"
-	errAddSecretScheme          = "Unable to add Secret scheme"
-	errCreateK8sClient          = "Error creating Kubernetes client"
-	errGetProviderConfig        = "Failed to get ProviderConfig"
-	errGetSecret                = "Failed to get Secret"
-	errExtractCredentials       = "Credentials key not found in secret data"
-	errUnmarshalCredentials     = "Failed to unmarshal credentials JSON"
-	errCloseCredEnvironmentfile = "Could not close CredEnvironment (file)"
-	errOpenCredEnvironment      = "Could not open CredEnvironment"
-	errParseCredEnvironment     = "Could not parse CredEnvironment"
-	errStoreKubeConfigPath      = "Could not store KubeConfigPath"
-	errGetCredentials           = "Could not get credentials"
-)
-
-const (
-	// CredEnvironment attribute names
-	fieldTransactionID  = "TRANSACTION_ID"
-	fieldKubeConfigPath = "KUBECONFIGPATH"
-	fieldConfigPath     = "CONFIGPATH"
-	fieldCredentials    = "CREDENTIALS"
-)
-
-func CreateEnvironment(kubeConfigPath string, configPath string, ctx context.Context, providerConfigNamespace string, providerConfigName string, clientAdapter adapters.CFClientAdapter, scheme *runtime.Scheme) {
-	// If no kubeConfigPath is provided fall back to ~/.kube/config
-	if kubeConfigPath == "" {
-		kubeConfigPath = getKubeConfigFallBackPath()
-	}
-	creds, err := clientAdapter.GetCredentials(ctx, kubeConfigPath, provider.ProviderConfigRef{Name: providerConfigName, Namespace: providerConfigNamespace}, scheme)
-
-	kingpin.FatalIfError(err, errGetCredentials)
-
-	storeCredentials(creds, kubeConfigPath, configPath)
-}
-
-func storeCredentials(creds provider.Credentials, kubeConfigPath string, configPath string) {
-	jsonCreds, err := json.Marshal(creds)
-	kingpin.FatalIfError(err, errUnmarshalCredentials)
-	env := map[string]string{
-		fieldTransactionID:  "pending",
-		fieldKubeConfigPath: kubeConfigPath,
-		fieldConfigPath:     configPath,
-		fieldCredentials:    string(jsonCreds),
-	}
-
-	utils.StoreKeyValues(env)
-	fmt.Println("Import Environment created ...")
-}
-
-func getKubeConfigFallBackPath() string {
-	// Get the home directory
-	homeDir, err := os.UserHomeDir()
+func RetrieveCredentials(ctx context.Context, kubeClient client.Client) (provider.Credentials, error) {
+	slog.Debug("fetching ProviderConfig",
+		"providerconfig.name",
+		viper.GetString("providerconfig.name"))
+	providerConfig := v1beta1.ProviderConfig{}
+	err := kubeClient.Get(ctx, client.ObjectKey{
+		Name: viper.GetString("providerconfig.name"),
+	}, &providerConfig)
 	if err != nil {
-		return ""
+		return nil, erratt.Wrap("error getting ProviderConfig resource",
+			slog.String("providerconfig.name", viper.GetString("providerconfig.name")),
+			slog.Any("error", err),
+		)
 	}
-
-	// Define the .kube/config path
-	kubeConfigPath := filepath.Join(homeDir, ".kube", "config")
-
-	// Get the absolute path
-	absPath, err := filepath.Abs(kubeConfigPath)
+	slog.Debug("obtaining Cloud Foundry credentials via ProviderConfig",
+		"providerconfig.name",
+		viper.GetString("providerconfig.name"),
+		"credentials-source",
+		providerConfig.Spec.Credentials.Source,
+	)
+	secret, err := resource.CommonCredentialExtractor(ctx, providerConfig.Spec.Credentials.Source, kubeClient, providerConfig.Spec.Credentials.CommonCredentialSelectors)
 	if err != nil {
-		return ""
+		return nil, erratt.Wrap("error getting secrets of ProviderConfig resource",
+			slog.String("providerconfig.name", viper.GetString("providerconfig.name")),
+			slog.String("credentials-source", string(providerConfig.Spec.Credentials.Source)),
+			slog.Any("err", err))
 	}
 
-	return absPath
-}
-
-func RetrieveCredentials() provider.Credentials {
-	file := utils.OpenFile(ConfigName)
-	defer func() {
-		err := file.Close()
-		kingpin.FatalIfError(err, "error closing config file")
-	}()
-	config := make(map[string]string)
-
-	// Read the file line by line
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		// Split the line by "="
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 {
-			key := parts[0]
-			value := parts[1]
-			// Store key-value pairs in the map
-			config[key] = value
-		}
+	type cfSecret struct {
+		User     string `json:"user"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
-
-	err := scanner.Err()
-	kingpin.FatalIfError(err, errParseCredEnvironment)
-
-	// map values and resturn Credentials
-	var credentials adapters.CFCredentials
-	err = json.Unmarshal([]byte(config[fieldCredentials]), &credentials)
-	kingpin.FatalIfError(err, errUnmarshalCredentials)
-	return &credentials
-}
-
-func RetrieveKubeConfigPath() string {
-	file := utils.OpenFile(ConfigName)
-	defer func() {
-		err := file.Close()
-		kingpin.FatalIfError(err, "error closing config file")
-	}()
-
-	// Read the file line by line
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		// Split the line by "="
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 && parts[0] == fieldKubeConfigPath {
-			return parts[1]
-		}
+	cfs := cfSecret{}
+	err = json.Unmarshal(secret, &cfs)
+	if err != nil {
+		slog.Error("error unmarshalling secret json",
+			"secret",
+			string(secret))
+		return nil, err
 	}
-	return getKubeConfigFallBackPath()
-}
-
-func RetrieveTransactionID() string {
-	file := utils.OpenFile(ConfigName)
-	defer func() {
-		err := file.Close()
-		kingpin.FatalIfError(err, "error closing config file")
-	}()
-
-	// Read the file line by line
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		// Split the line by "="
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 && parts[0] == fieldTransactionID {
-			return parts[1]
-		}
+	if providerConfig.Spec.APIEndpoint == nil {
+		return nil, erratt.Wrap("APIEndpoint is not set in providerConfig",
+			slog.String("providerconfig.name", viper.GetString("providerconfig.name")),
+		)
 	}
-	return ""
-}
-
-func RetrieveConfigPath() string {
-	file := utils.OpenFile(ConfigName)
-	defer func() {
-		err := file.Close()
-		kingpin.FatalIfError(err, "error closing config file")
-	}()
-
-	// Read the file line by line
-	scanner := bufio.NewScanner(file)
-	for scanner.Scan() {
-		line := scanner.Text()
-		// Split the line by "="
-		parts := strings.SplitN(line, "=", 2)
-		if len(parts) == 2 && parts[0] == fieldConfigPath {
-			return parts[1]
-		}
+	creds := &adapters.CFCredentials{
+		ApiEndpoint: *providerConfig.Spec.APIEndpoint,
+		Email:       cfs.Email,
+		Password:    cfs.Password,
 	}
-	return ""
+	return creds, err
 }

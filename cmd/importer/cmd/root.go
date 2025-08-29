@@ -3,10 +3,12 @@ package cmd
 import (
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 
-	subcmd "github.com/SAP/crossplane-provider-cloudfoundry/cmd/importer/cmd/subcmd"
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/importer/cmd/importcmd"
 )
 
 var rootCmd = &cobra.Command{
@@ -24,7 +26,8 @@ func Execute() {
 }
 
 func init() {
-	// Initialize subcommands
-	subcmd.AddInitCMD(rootCmd)
-	subcmd.AddImportCMD(rootCmd)
+	rootCmd.AddCommand(importcmd.ImportCMD)
+	viper.SetEnvPrefix("cf_imp")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
+	viper.AutomaticEnv()
 }

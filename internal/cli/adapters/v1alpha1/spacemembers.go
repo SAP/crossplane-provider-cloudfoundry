@@ -70,35 +70,7 @@ func (a *CFSpaceMembersAdapter) MapToResource(ctx context.Context, providerResou
 
 // PreviewResource displays the resource details in a formatted output
 func (a *CFSpaceMembersAdapter) PreviewResource(resource provider.Resource) {
-	members, ok := resource.(*CFSpaceMembers)
-	if !ok {
-		fmt.Println("Invalid resource type provided for preview.")
-		return
-	}
-
-	const (
-		keyColor   = "\033[36m" // Cyan
-		valueColor = "\033[32m" // Green
-		resetColor = "\033[0m"  // Reset
-	)
-
-	fmt.Printf("%sapiVersion%s: %s%s%s\n", keyColor, resetColor, valueColor, members.managedResource.APIVersion, resetColor)
-	fmt.Printf("%skind%s: %s%s%s\n", keyColor, resetColor, valueColor, members.managedResource.Kind, resetColor)
-	fmt.Printf("%smetadata%s:\n  %sname%s: %s<generated on creation>%s\n", keyColor, resetColor, keyColor, resetColor, valueColor, resetColor)
-	fmt.Printf("%sspec%s:\n", keyColor, resetColor)
-	fmt.Printf("  %sforProvider%s:\n", keyColor, resetColor)
-	fmt.Printf("    %sroleType%s: %s%s%s\n", keyColor, resetColor, valueColor, members.managedResource.Spec.ForProvider.RoleType, resetColor)
-	fmt.Printf("    %sspace%s: %s%s%s\n", keyColor, resetColor, valueColor, *members.managedResource.Spec.ForProvider.Space, resetColor)
-	fmt.Printf("    %smembers%s:\n", keyColor, resetColor)
-	for _, member := range members.managedResource.Spec.ForProvider.Members {
-		fmt.Printf("      - %susername%s: %s%s%s\n", keyColor, resetColor, valueColor, member.Username, resetColor)
-		fmt.Printf("        %sorigin%s: %s%s%s\n", keyColor, resetColor, valueColor, member.Origin, resetColor)
-	}
-	fmt.Printf("  %smanagementPolicies%s:\n", keyColor, resetColor)
-	for _, policy := range members.managedResource.Spec.ManagementPolicies {
-		fmt.Printf("    - %s%s%s\n", valueColor, policy, resetColor)
-	}
-	fmt.Println("---")
+	preview(resource)
 }
 
 // CFSpaceMembers implements the Resource interface
