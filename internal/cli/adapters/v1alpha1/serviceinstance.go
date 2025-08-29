@@ -129,34 +129,5 @@ func (a *CFServiceInstanceAdapter) MapToResource(ctx context.Context, providerRe
 }
 
 func (a *CFServiceInstanceAdapter) PreviewResource(resource provider.Resource) {
-	si, ok := resource.(*CFServiceInstance)
-	if !ok {
-		fmt.Println("Invalid resource type provided for preview.")
-		return
-	}
-
-	const (
-		keyColor   = "\033[36m" // Cyan
-		valueColor = "\033[32m" // Green
-		resetColor = "\033[0m"  // Reset
-	)
-
-	fmt.Printf("%sapiVersion%s: %s%s%s\n", keyColor, resetColor, valueColor, si.managedResource.APIVersion, resetColor)
-	fmt.Printf("%skind%s: %s%s%s\n", keyColor, resetColor, valueColor, si.managedResource.Kind, resetColor)
-	fmt.Printf("%smetadata%s:\n  %sname%s: %s<generated on creation>%s\n", keyColor, resetColor, keyColor, resetColor, valueColor, resetColor)
-	fmt.Printf("  %sannotations%s:\n    %scrossplane.io/external-name%s: %s%s%s\n", keyColor, resetColor, keyColor, resetColor, valueColor, si.managedResource.Annotations["crossplane.io/external-name"], resetColor)
-	fmt.Printf("%sspec%s:\n", keyColor, resetColor)
-	fmt.Printf("  %sforProvider%s:\n", keyColor, resetColor)
-	fmt.Printf("    %sname%s: %s%s%s\n", keyColor, resetColor, valueColor, *si.managedResource.Spec.ForProvider.Name, resetColor)
-	if si.managedResource.Spec.ForProvider.Space != nil {
-		fmt.Printf("    %sspace%s: %s%s%s\n", keyColor, resetColor, valueColor, *si.managedResource.Spec.ForProvider.Space, resetColor)
-	}
-	if si.managedResource.Spec.ForProvider.ServicePlan != nil {
-		fmt.Printf("    %sservicePlan%s: %s%s%s\n", keyColor, resetColor, valueColor, *si.managedResource.Spec.ForProvider.ServicePlan.ID, resetColor)
-	}
-	fmt.Printf("  %smanagementPolicies%s:\n", keyColor, resetColor)
-	for _, policy := range si.managedResource.Spec.ManagementPolicies {
-		fmt.Printf("    - %s%s%s\n", valueColor, policy, resetColor)
-	}
-	fmt.Println("---")
+	preview(resource)
 }

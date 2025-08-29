@@ -1,0 +1,10 @@
+resources:
+  orgs:
+    - name: my-manual-org
+      managementpolicies: [Observe]
+  spaces:
+    - name: .*
+      orgref: my-manual-org
+      managementpolicies: [Observe]
+providerconfig:
+  name: default # 'default' is the default value

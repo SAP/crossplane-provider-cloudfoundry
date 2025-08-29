@@ -3,63 +3,113 @@ package importer
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"strings"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"k8s.io/apimachinery/pkg/runtime"
+	"github.com/spf13/viper"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/adapters"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/cli/pkg/credentialManager"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/kubernetes"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/erratt"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/crossplaneimport/provider"
 )
 
 // Importer is the main struct for importing resources
 type Importer struct {
-	ClientAdapter    provider.ClientAdapter
 	ResourceAdapters map[string]provider.ResourceAdapter
-	ConfigParser     provider.ConfigParser
-	Scheme           *runtime.Scheme
+}
+
+func (i *Importer) importOrgs() ([]provider.ResourceFilter, error) {
+	orgs := adapters.OrgConfigs{}
+	err := viper.UnmarshalKey("resources.orgs", &orgs)
+	if err != nil {
+		return nil, erratt.Wrap("Unmarshalling orgs in config", err)
+	}
+	return orgs.ToResourceFilter(), nil
+}
+
+func (i *Importer) importSpaces() ([]provider.ResourceFilter, error) {
+	spaces := adapters.SpaceConfigs{}
+	err := viper.UnmarshalKey("resources.spaces", &spaces)
+	if err != nil {
+		return nil, erratt.Wrap("Unmarshalling spaces in config", err)
+	}
+	return spaces.ToResourceFilter(), nil
+}
+
+func (i *Importer) importApps() ([]provider.ResourceFilter, error) {
+	apps := adapters.AppConfigs{}
+	err := viper.UnmarshalKey("resources.apps", &apps)
+	if err != nil {
+		return nil, erratt.Wrap("Unmarshalling apps in config", err)
+	}
+	return apps.ToResourceFilter(), nil
+}
+
+type resourceFilterCollector func() ([]provider.ResourceFilter, error)
+
+func collectResourceFilters(collectors ...resourceFilterCollector) ([]provider.ResourceFilter, error) {
+	result := []provider.ResourceFilter{}
+	for _, collector := range collectors {
+		filters, err := collector()
+		if err != nil {
+			return nil, err
+		}
+		result = append(result, filters...)
+	}
+	return result, nil
 }
 
 // ImportResources imports resources using the provided adapters
-func (i *Importer) ImportResources(ctx context.Context, configPath string, kubeConfigPath string, scheme *runtime.Scheme) ([]provider.Resource, error) {
-	// Parse config
-	providerConfig, resourceFilters, err := i.ConfigParser.ParseConfig(configPath)
+func (i *Importer) ImportResources(ctx context.Context,
+	kubeClient client.Client) ([]provider.Resource, error) {
+	creds, err := credentialManager.RetrieveCredentials(ctx, kubeClient)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse config: %w", err)
+		return nil, err
 	}
 
-	// Validate config
-	if !providerConfig.Validate() {
-		return nil, fmt.Errorf("invalid provider configuration")
+	resourceFilters, err := collectResourceFilters(
+		i.importOrgs,
+		i.importSpaces,
+		i.importApps,
+	)
+	if err != nil {
+		return nil, erratt.Wrap("cannot import resources", err)
 	}
-
-	// Get credentials
-	creds := credentialManager.RetrieveCredentials()
-
-	// Import resources using adapters
 	var allResources []provider.Resource
 	for _, filter := range resourceFilters {
 		resourceType := filter.GetResourceType()
 		adapter, exists := i.ResourceAdapters[resourceType]
 		if !exists {
-			return nil, fmt.Errorf("no adapter found for resource type: %s", resourceType)
+			return nil, erratt.S("no adapter for for resource type",
+				slog.String("resource-type", resourceType),
+			)
 		}
 
 		// Build client for this adapter
+		slog.Debug("connecting to external system")
 		if err := adapter.Connect(ctx, creds); err != nil {
-			return nil, fmt.Errorf("failed to connect to provider for resource type %s: %w", resourceType, err)
+			return nil, erratt.S("failed to connect to provider for resource type",
+				slog.String("resource-type", resourceType),
+				slog.Any("error", err),
+			)
+
 		}
 
 		resources, err := adapter.FetchResources(ctx, filter)
 		if err != nil {
-			return nil, fmt.Errorf("failed to fetch resources of type %s: %w", resourceType, err)
+			return nil, erratt.S("failed to fetch resource",
+				slog.String("resource-type", resourceType),
+				slog.Any("error", err),
+			)
 		}
 
 		// Set provider config reference and management policies
 		for _, res := range resources {
 			res.SetProviderConfigReference(&v1.Reference{
-				Name: providerConfig.GetProviderConfigRef().Name,
+				Name: viper.GetString("providerconfig.name"),
 			})
 		}
 
@@ -81,13 +131,7 @@ func (i *Importer) PreviewResources(resources []provider.Resource) {
 }
 
 // CreateResources creates the imported resources in Kubernetes
-func (i *Importer) CreateResources(ctx context.Context, resources []provider.Resource, kubeConfigPath string, transactionID string) error {
-	// Create Kubernetes client
-	k8sClient, err := kubernetes.NewK8sClient(kubeConfigPath, i.Scheme)
-	if err != nil {
-		return fmt.Errorf("failed to create Kubernetes client: %w", err)
-	}
-
+func (i *Importer) CreateResources(ctx context.Context, k8sClient client.Client, resources []provider.Resource, transactionID string) error {
 	// Create resources
 	for _, res := range resources {
 		managedRes := res.GetManagedResource()
@@ -103,7 +147,9 @@ func (i *Importer) CreateResources(ctx context.Context, resources []provider.Res
 		// Create the resource
 		err := k8sClient.Create(ctx, managedRes)
 		if err != nil {
-			return fmt.Errorf("failed to create resource %s: %w", res.GetExternalID(), err)
+			return erratt.S("failed to crate resource",
+				slog.String("external-name", res.GetExternalID()),
+				slog.Any("error", err))
 		}
 	}
 
