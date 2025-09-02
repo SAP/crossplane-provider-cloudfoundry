@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
-	"encoding/json"
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -16,6 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/google/uuid"
 	"github.com/nsf/jsondiff"
 	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -31,19 +31,20 @@ import (
 )
 
 const (
-	resourceType     = "ServiceInstance"
-	externalSystem   = "Cloud Foundry"
-	errTrackPCUsage  = "cannot track ProviderConfig usage"
-	errNewClient     = "cannot create a client for " + externalSystem
-	errWrongCRType   = "managed resource is not a " + resourceType
-	errUpdateCR      = "cannot update the managed resource"
-	errGet           = "cannot get " + resourceType + " in " + externalSystem
-	errCreate        = "cannot create " + resourceType + " in " + externalSystem
-	errUpdate        = "cannot update " + resourceType + " in " + externalSystem
-	errDelete        = "cannot delete " + resourceType + " in " + externalSystem
-	errCleanFailed   = "cannot delete failed service instance"
-	errSecret        = "cannot resolve secret reference"
-	errGetParameters = "cannot get parameters of the service instance for drift detection. Please check this is supported or set enableParameterDriftDetection to false."
+	resourceType          = "ServiceInstance"
+	externalSystem        = "Cloud Foundry"
+	errTrackPCUsage       = "cannot track ProviderConfig usage"
+	errNewClient          = "cannot create a client for " + externalSystem
+	errWrongCRType        = "managed resource is not a " + resourceType
+	errUpdateCR           = "cannot update the managed resource"
+	errGet                = "cannot get " + resourceType + " in " + externalSystem
+	errCreate             = "cannot create " + resourceType + " in " + externalSystem
+	errUpdate             = "cannot update " + resourceType + " in " + externalSystem
+	errDelete             = "cannot delete " + resourceType + " in " + externalSystem
+	errCleanFailed        = "cannot delete failed service instance"
+	errSecret             = "cannot resolve secret reference"
+	errGetParameters      = "cannot get parameters of the service instance for drift detection. Please check this is supported or set enableParameterDriftDetection to false."
+	errMissingServicePlan = "managed resource service instance requires a service plan"
 )
 
 // Setup adds a controller that reconciles ServiceInstance CR.
@@ -374,41 +375,41 @@ func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Mana
 		return nil
 	}
 
-	if cr.Spec.ForProvider.ServicePlan == nil {
-		// fallback on crossplane.io/external-data annotation for backward compatibility
-		sp := struct {
-			ServicePlan *v1alpha1.ServicePlanParameters `json:"service_plan"`
-		}{ServicePlan: &v1alpha1.ServicePlanParameters{}}
-
-		if data, ok := mg.GetAnnotations()["crossplane.io/external-data"]; ok {
-			if err := json.Unmarshal([]byte(data), &sp); err == nil {
-				cr.Spec.ForProvider.ServicePlan = sp.ServicePlan
-			}
-		} else {
-			return nil
+	if cr.Spec.ForProvider.ServicePlan != nil {
+		// When ServicePlan is set we populate the service
+		// plan ID based on the external resource GUID.
+		cf, err := clients.ClientFnBuilder(ctx, s.kube)(mg)
+		if err != nil {
+			return errors.Wrapf(err, errNewClient)
 		}
+
+		opt := client.NewServicePlanListOptions()
+		if cr.Spec.ForProvider.ServicePlan.Offering != nil {
+			opt.ServiceOfferingNames.EqualTo(*cr.Spec.ForProvider.ServicePlan.Offering)
+		}
+		if cr.Spec.ForProvider.ServicePlan.Plan != nil {
+			opt.Names.EqualTo(*cr.Spec.ForProvider.ServicePlan.Plan)
+		}
+		sp, err := cf.ServicePlans.Single(ctx, opt)
+		if err != nil {
+			return errors.Wrapf(err, "Cannot initialize service plan using serviceName/servicePlanName: %s:%s`", *cr.Spec.ForProvider.ServicePlan.Offering, *cr.Spec.ForProvider.ServicePlan.Plan)
+		}
+
+		cr.Spec.ForProvider.ServicePlan.ID = &sp.GUID
+
+		return s.kube.Update(ctx, cr)
 	}
 
-	//  Lookup service plan during every reconciliation to detect an update service_plan of existing service.
-	cf, err := clients.ClientFnBuilder(ctx, s.kube)(mg)
-	if err != nil {
-		return errors.Wrapf(err, errNewClient)
-	}
-	opt := client.NewServicePlanListOptions()
-	if cr.Spec.ForProvider.ServicePlan.Offering != nil {
-		opt.ServiceOfferingNames.EqualTo(*cr.Spec.ForProvider.ServicePlan.Offering)
-	}
-	if cr.Spec.ForProvider.ServicePlan.Plan != nil {
-		opt.Names.EqualTo(*cr.Spec.ForProvider.ServicePlan.Plan)
-	}
-	sp, err := cf.ServicePlans.Single(ctx, opt)
-	if err != nil {
-		return errors.Wrapf(err, "Cannot initialize service plan using serviceName/servicePlanName: %s:%s`", *cr.Spec.ForProvider.ServicePlan.Offering, *cr.Spec.ForProvider.ServicePlan.Plan)
+	// Service plan is not set
+	guid := meta.GetExternalName(cr)
+
+	if _, err := uuid.Parse(guid); err == nil {
+		// We have a valid external-name annotation
+		return nil
 	}
 
-	cr.Spec.ForProvider.ServicePlan.ID = &sp.GUID
-
-	return s.kube.Update(ctx, cr)
+	// No valid external-name annotation
+	return errors.New(errMissingServicePlan)
 }
 
 // Small wrapper around sha256.Sum256()
