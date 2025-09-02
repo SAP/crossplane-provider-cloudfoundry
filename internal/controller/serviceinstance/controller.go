@@ -365,8 +365,6 @@ type servicePlanInitializer struct {
 }
 
 // Initialize implements crossplane InitializeFn interface
-//
-//nolint:gocyclo
 func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
 	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
@@ -386,33 +384,29 @@ func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Mana
 			if err := json.Unmarshal([]byte(data), &sp); err == nil {
 				cr.Spec.ForProvider.ServicePlan = sp.ServicePlan
 			}
+		} else {
+			return nil
 		}
 	}
 
-	if _, ok := mg.GetAnnotations()["crossplane.io/external-name"]; !ok {
-		// external-name is not set, we, have to obtain it
-
-		//  Lookup service plan during every reconciliation to detect an update service_plan of existing service.
-		cf, err := clients.ClientFnBuilder(ctx, s.kube)(mg)
-		if err != nil {
-			return errors.Wrapf(err, errNewClient)
-		}
-		opt := client.NewServicePlanListOptions()
-
-		if cr.Spec.ForProvider.ServicePlan != nil {
-			if cr.Spec.ForProvider.ServicePlan.Offering != nil {
-				opt.ServiceOfferingNames.EqualTo(*cr.Spec.ForProvider.ServicePlan.Offering)
-			}
-			if cr.Spec.ForProvider.ServicePlan.Plan != nil {
-				opt.Names.EqualTo(*cr.Spec.ForProvider.ServicePlan.Plan)
-			}
-		}
-		// There must be exactly one matching service plan
-		sp, err := cf.ServicePlans.Single(ctx, opt)
-		if err == nil {
-			cr.Spec.ForProvider.ServicePlan.ID = &sp.GUID
-		}
+	//  Lookup service plan during every reconciliation to detect an update service_plan of existing service.
+	cf, err := clients.ClientFnBuilder(ctx, s.kube)(mg)
+	if err != nil {
+		return errors.Wrapf(err, errNewClient)
 	}
+	opt := client.NewServicePlanListOptions()
+	if cr.Spec.ForProvider.ServicePlan.Offering != nil {
+		opt.ServiceOfferingNames.EqualTo(*cr.Spec.ForProvider.ServicePlan.Offering)
+	}
+	if cr.Spec.ForProvider.ServicePlan.Plan != nil {
+		opt.Names.EqualTo(*cr.Spec.ForProvider.ServicePlan.Plan)
+	}
+	sp, err := cf.ServicePlans.Single(ctx, opt)
+	if err != nil {
+		return errors.Wrapf(err, "Cannot initialize service plan using serviceName/servicePlanName: %s:%s`", *cr.Spec.ForProvider.ServicePlan.Offering, *cr.Spec.ForProvider.ServicePlan.Plan)
+	}
+
+	cr.Spec.ForProvider.ServicePlan.ID = &sp.GUID
 
 	return s.kube.Update(ctx, cr)
 }
