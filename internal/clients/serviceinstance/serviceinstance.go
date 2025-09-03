@@ -3,6 +3,7 @@ package serviceinstance
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -51,8 +52,17 @@ func (c *Client) pollJobComplete(ctx context.Context, job string) error {
 
 	err := c.Job.PollComplete(ctx, job, newPollingOptions())
 
-	if err != nil && errors.Is(err, client.AsyncProcessTimeoutError) { // because we have logic to observe job state, we can safely ignore timeout error
-		return nil
+	if err != nil {
+		isTimeoutError := false
+		urlErr := &url.Error{}
+		if errors.As(err, &urlErr) {
+			// urlErr.Timeout() is true if the http client
+			// experienced timeout error
+			isTimeoutError = urlErr.Timeout()
+		}
+		if errors.Is(err, client.AsyncProcessTimeoutError) || isTimeoutError { // because we have logic to observe job state, we can safely ignore timeout error
+			return nil
+		}
 	}
 	return err
 }

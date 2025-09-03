@@ -2,6 +2,7 @@ package serviceinstance
 
 import (
 	"context"
+	"net/url"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -476,6 +477,13 @@ func TestObserve(t *testing.T) {
 	}
 }
 
+type timeoutError struct {
+	timeout bool
+}
+
+func (e *timeoutError) Error() string { return "timeout error" }
+func (e *timeoutError) Timeout() bool { return e.timeout }
+
 func TestCreate(t *testing.T) {
 	type service func() *fake.MockServiceInstance
 	type job func() *fake.MockJob
@@ -555,6 +563,39 @@ func TestCreate(t *testing.T) {
 			job: func() *fake.MockJob {
 				m := &fake.MockJob{}
 				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"HTTPClientTimeout": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials)),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv1.Creating()), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte(jsonCredentials))})),
+				obs: managed.ExternalCreation{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("CreateManaged").Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage(jsonCredentials),
+					nil, // no error
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(&url.Error{
+					Err: &timeoutError{true},
+				})
 				return m
 			},
 		},
@@ -640,18 +681,18 @@ func TestCreate(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Create(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Create(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Create(...): -want, +got:\n%s", diff)
 			}
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Create(...): -want, +got:\n%s", diff)
 			}
 		})
 	}
@@ -739,6 +780,39 @@ func TestUpdate(t *testing.T) {
 				return m
 			},
 		},
+		"HTTPClientTimeout": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}), withCredentials(&jsonCredentials)),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: iSha256([]byte(jsonCredentials))})),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage(jsonCredentials),
+					nil, // no error
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(&url.Error{
+					Err: &timeoutError{true},
+				})
+				return m
+			},
+		},
 		"CannotPollCreationJob": {
 			args: args{
 				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid})),
@@ -817,18 +891,18 @@ func TestUpdate(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Update(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Update(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Update(...): -want, +got:\n%s", diff)
 			}
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Update(...): -want, +got:\n%s", diff)
 			}
 		})
 	}
