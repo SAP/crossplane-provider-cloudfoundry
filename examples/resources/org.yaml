@@ -5,19 +5,7 @@ metadata:
   namespace: default
   name: my-org
 spec:
-  managementPolicies: ["Observe"]
   forProvider: 
-    name: cf-dev
-  providerConfigRef:
-    name: default
+    name: lasse-org
 
----
-apiVersion: cloudfoundry.crossplane.io/v1alpha1
-kind: Organization
-metadata:
-  namespace: default
-  name: my-org-dev
-  annotations:
-    crossplane.io/external-name: cf-dev
-spec:
-  forProvider: {}
+
