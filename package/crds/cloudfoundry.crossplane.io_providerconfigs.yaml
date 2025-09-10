@@ -167,6 +167,9 @@ spec:
                 required:
                 - source
                 type: object
+              origin:
+                description: Origin for OIDC authentication
+                type: string
             required:
             - credentials
             type: object

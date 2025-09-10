@@ -7,9 +7,11 @@ package clients
 import (
 	"context"
 	"encoding/json"
+	"os"
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
@@ -25,6 +27,7 @@ type CfCredentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Passcode string `json:"passcode"`
+	Token    string `json:"token"`
 }
 
 const (
@@ -55,7 +58,19 @@ func GetCredentialConfig(ctx context.Context, client client.Client, mg resource.
 		return nil, errors.Wrap(err, errExtractEndpoint)
 	}
 
-	return config.New(*url, config.UserPassword(cred.Email, cred.Password), config.SkipTLSValidation())
+	opts := []config.Option{config.SkipTLSValidation()}
+
+	if pc.Spec.Credentials.Source == v1.CredentialsSourceInjectedIdentity {
+		opts = append(opts, config.JWTBearerAssertion(cred.Token))
+
+		if pc.Spec.Origin != nil {
+			opts = append(opts, config.Origin(*pc.Spec.Origin))
+		}
+	} else {
+		opts = append(opts, config.UserPassword(cred.Email, cred.Password))
+	}
+
+	return config.New(*url, opts...)
 }
 
 func getProviderConfig(ctx context.Context, client client.Client, mg resource.Managed) (*v1beta1.ProviderConfig, error) {
@@ -67,7 +82,15 @@ func getProviderConfig(ctx context.Context, client client.Client, mg resource.Ma
 }
 
 func getCredentials(ctx context.Context, client client.Client, pc *v1beta1.ProviderConfig) (*CfCredentials, error) {
-	buf, err := resource.CommonCredentialExtractor(ctx, pc.Spec.Credentials.Source, client, pc.Spec.Credentials.CommonCredentialSelectors)
+	var buf []byte
+	var err error
+
+	if pc.Spec.Credentials.Source == v1.CredentialsSourceInjectedIdentity {
+		buf, err = IdentityCredentialExtractor(ctx, pc.Spec.Credentials.Source, client, pc.Spec.Credentials.CommonCredentialSelectors)
+	} else {
+		buf, err = resource.CommonCredentialExtractor(ctx, pc.Spec.Credentials.Source, client, pc.Spec.Credentials.CommonCredentialSelectors)
+	}
+
 	if err != nil {
 		return nil, err
 	}
@@ -93,6 +116,25 @@ func getEndpoint(ctx context.Context, client client.Client, pc *v1beta1.Provider
 		return &endpoint, nil
 	}
 	return nil, errors.New(errNoEndpoint)
+}
+
+func IdentityCredentialExtractor(ctx context.Context, source v1.CredentialsSource, _ client.Client, _ v1.CommonCredentialSelectors) ([]byte, error) {
+	if source != v1.CredentialsSourceInjectedIdentity {
+		return nil, errors.New("source is not injected identity")
+	}
+
+	tokenPath := "/var/run/secrets/kubernetes.io/serviceaccount/token"
+
+	tokenBytes, err := os.ReadFile(tokenPath)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot read injected service account token")
+	}
+
+	oidcCreds := CfCredentials{
+		Token: string(tokenBytes),
+	}
+
+	return json.Marshal(oidcCreds)
 }
 
 type ClientFn func(resource.Managed) (*cfv3.Client, error)

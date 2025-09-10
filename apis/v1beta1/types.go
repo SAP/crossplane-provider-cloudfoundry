@@ -20,6 +20,9 @@ type ProviderConfigSpec struct {
 	Endpoint *EndpointConfig `json:"endpoint"`
 	// Credentials required to authenticate to this provider.
 	Credentials ProviderCredentials `json:"credentials"`
+	// Origin for OIDC authentication
+	// +kubebuilder:validation:Optional
+	Origin *string `json:"origin,omitempty"`
 }
 
 // EndpointConfig is used to configure cf API endpoint.
