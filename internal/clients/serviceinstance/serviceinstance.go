@@ -311,13 +311,13 @@ func UpdateObservation(in *v1alpha1.ServiceInstanceObservation, r *resource.Serv
 
 // IsUpToDate checks if the managed resource is in sync with CR.
 func IsUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.ServiceInstance) bool {
-	if *in.Name != observed.Name {
+	if in.Name != nil && *in.Name != observed.Name {
 		return false
 	}
 
 	switch in.Type {
 	case v1alpha1.ManagedService:
-		if in.ServicePlan.ID != nil && observed.Relationships.ServicePlan.Data.GUID != *in.ServicePlan.ID {
+		if in.ServicePlan != nil && in.ServicePlan.ID != nil && observed.Relationships.ServicePlan.Data.GUID != *in.ServicePlan.ID {
 			return false
 		}
 	case v1alpha1.UserProvidedService:
