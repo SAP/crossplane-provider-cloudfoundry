@@ -15,6 +15,7 @@
 We have a lot of exciting new features and improvements in our backlogs for you to expect and even contribute yourself! We will publish a detailed roadmap soon.
 
 ## 📊 Installation
+> Crossplane v2 is NOT yet supported, please use Crossplane v1 for now.
 
 To install this provider in a kubernetes cluster running crossplane, you can use the provider custom resource, replacing the `<version>`placeholder with the current version of this provider (e.g. v0.3.0):
 
