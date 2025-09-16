@@ -1,6 +1,6 @@
 ---
 apiVersion: cloudfoundry.crossplane.io/v1alpha1
-kind: Org
+kind: Organization
 metadata:
   namespace: default
   name: my-org

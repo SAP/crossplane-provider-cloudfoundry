@@ -152,7 +152,7 @@ func (c *Client) Create(ctx context.Context, spec v1alpha1.ServiceInstanceParame
 		return c.createManaged(ctx, spec, creds)
 
 	case v1alpha1.UserProvidedService:
-		return c.createUserProvided(ctx, spec, creds)
+		return c.createUserProvided(ctx, spec)
 	default:
 		return nil, errors.New("unknown service instance type")
 	}
@@ -185,12 +185,7 @@ func (c *Client) createManaged(ctx context.Context, spec v1alpha1.ServiceInstanc
 }
 
 // createUserProvided creates a user-provided service instance according to CR's ForProvider spec
-func (c *Client) createUserProvided(ctx context.Context, spec v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
-	// Credential is required for UPS
-	if creds == nil {
-		return nil, errors.New("Missing or invalid credentials")
-	}
-
+func (c *Client) createUserProvided(ctx context.Context, spec v1alpha1.ServiceInstanceParameters) (*resource.ServiceInstance, error) {
 	// throw error if no space is provided
 	if spec.Space == nil {
 		return nil, errors.New("no space reference provided")
@@ -204,7 +199,6 @@ func (c *Client) createUserProvided(ctx context.Context, spec v1alpha1.ServiceIn
 
 	// workaround: cf-goclient supports few ups options at creation time.
 	upt := resource.NewServiceInstanceUserProvidedUpdate().
-		WithCredentials(creds).
 		WithRouteServiceURL(spec.RouteServiceURL).
 		WithSyslogDrainURL(spec.SyslogDrainURL)
 
