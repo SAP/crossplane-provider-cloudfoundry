@@ -28,10 +28,11 @@ func TestCloudFoundryServices(t *testing.T) {
 		// updated checks if resource is updated, normally by observing a new value on managed field.
 		updated func(k8s.Object) (bool, error)
 	}{
-		"space":            {name: "service-space", obj: &v1alpha1.Space{}},
-		"service_instance": {name: "e2e-service-instance", obj: &v1alpha1.ServiceInstance{}},
-		"ups":              {name: "e2e-ups", obj: &v1alpha1.ServiceInstance{}},
-		"scb_key":          {name: "e2e-scb-key", obj: &v1alpha1.ServiceCredentialBinding{}},
+		"space":              {name: "service-space", obj: &v1alpha1.Space{}},
+		"service_instance":   {name: "e2e-service-instance", obj: &v1alpha1.ServiceInstance{}},
+		"ups":                {name: "e2e-ups", obj: &v1alpha1.ServiceInstance{}},
+		"ups_no_credentials": {name: "e2e-ups-no-credentials", obj: &v1alpha1.ServiceInstance{}},
+		"scb_key":            {name: "e2e-scb-key", obj: &v1alpha1.ServiceCredentialBinding{}},
 	}
 
 	var feat = features.New("CO-159 cloudfoundry e2e test services").Setup(

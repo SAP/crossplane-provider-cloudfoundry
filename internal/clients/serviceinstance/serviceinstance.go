@@ -186,11 +186,6 @@ func (c *Client) createManaged(ctx context.Context, spec v1alpha1.ServiceInstanc
 
 // createUserProvided creates a user-provided service instance according to CR's ForProvider spec
 func (c *Client) createUserProvided(ctx context.Context, spec v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
-	// Credential is required for UPS
-	if creds == nil {
-		return nil, errors.New("Missing or invalid credentials")
-	}
-
 	// throw error if no space is provided
 	if spec.Space == nil {
 		return nil, errors.New("no space reference provided")
@@ -203,9 +198,11 @@ func (c *Client) createUserProvided(ctx context.Context, spec v1alpha1.ServiceIn
 	}
 
 	// workaround: cf-goclient supports few ups options at creation time.
-	upt := resource.NewServiceInstanceUserProvidedUpdate().
-		WithCredentials(creds).
-		WithRouteServiceURL(spec.RouteServiceURL).
+	upt := resource.NewServiceInstanceUserProvidedUpdate()
+	if creds != nil {
+		upt.WithCredentials(creds)
+	}
+	upt.WithRouteServiceURL(spec.RouteServiceURL).
 		WithSyslogDrainURL(spec.SyslogDrainURL)
 
 	return c.ServiceInstance.UpdateUserProvided(ctx, si.GUID, upt)
@@ -265,15 +262,15 @@ func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceIn
 func (c *Client) updateUserProvided(ctx context.Context, observed *resource.ServiceInstance, desired *v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
 	upd := resource.NewServiceInstanceUserProvidedUpdate()
 
-	if creds == nil {
-		return nil, errors.New("Missing or invalid credentials")
-
-	}
 	if observed.Name != *desired.Name {
 		upd.WithName(*desired.Name)
 	}
 
-	upd.WithRouteServiceURL(desired.RouteServiceURL).WithSyslogDrainURL(desired.SyslogDrainURL).WithCredentials(creds)
+	if creds != nil {
+		upd.WithCredentials(creds)
+	}
+	upd.WithRouteServiceURL(desired.RouteServiceURL).
+		WithSyslogDrainURL(desired.SyslogDrainURL)
 
 	return c.ServiceInstance.UpdateUserProvided(ctx, observed.GUID, upd)
 }
