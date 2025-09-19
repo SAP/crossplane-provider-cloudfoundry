@@ -23,31 +23,92 @@ func ExtractSecret(ctx context.Context, kube k8s.Client, sr *xpv1.SecretReferenc
 		return nil, nil
 	}
 
-	secret := &v1.Secret{}
-	if err := kube.Get(ctx, types.NamespacedName{Namespace: sr.Namespace, Name: sr.Name}, secret); err != nil {
+	secret, err := fetchSecret(ctx, kube, sr)
+	if err != nil {
 		return nil, err
 	}
 
-	// if key is specified, return the value of the key
 	if key != "" {
-		if v, ok := secret.Data[key]; ok {
-			return v, nil
-		}
-		return nil, nil
+		return extractKey(secret, key)
 	}
+	return marshalSecretData(secret.Data)
+}
 
-	// if key is not specified, return all data from the secret, also string or nested JSON
-	data := make(map[string]interface{})
-	for k, v := range secret.Data {
-		// Try to parse as JSON first
-		var jsonValue interface{}
-		if err := json.Unmarshal(v, &jsonValue); err == nil {
-			data[k] = jsonValue
+// fetchSecret retrieves a Kubernetes Secret based on the provided SecretReference.
+// It uses Kubernetes client to fetch the Secret from the specified namespace and name.
+//
+// Parameters:
+//   - ctx: The context.
+//   - kube: The Kubernetes client.
+//   - sr: A reference to the Secret, containing its namespace and name.
+//
+// Returns:
+//   - *v1.Secret: The retrieved Secret object.
+//   - error: An error if the Secret could not be fetched or does not exist.
+func fetchSecret(ctx context.Context, kube k8s.Client, sr *xpv1.SecretReference) (*v1.Secret, error) {
+	secret := &v1.Secret{}
+	err := kube.Get(ctx, types.NamespacedName{Namespace: sr.Namespace, Name: sr.Name}, secret)
+	return secret, err
+}
+
+// extractKey retrieves the value associated with the specified key from the given Kubernetes Secret.
+//
+// Parameters:
+//   - secret: A pointer to a Kubernetes Secret object containing the data.
+//   - key: The key to look up in the Secret's data map.
+//
+// Returns:
+//   - []byte: The value associated with the key, if it exists.
+//   - error: Always returns nil as no error handling is implemented for missing keys.
+func extractKey(secret *v1.Secret, key string) ([]byte, error) {
+	if v, ok := secret.Data[key]; ok {
+		return v, nil
+	}
+	return nil, nil
+}
+
+// marshalSecretData attempts to marshal data into a JSON-encoded byte slice. For each key-value pair in the input map:
+//
+// Parameters:
+//   - data: A map where keys are strings and values are byte slices representing secret data.
+//
+// Returns:
+//   - A JSON-encoded byte slice representing the processed secret data.
+//   - An error if the JSON marshaling fails.
+func marshalSecretData(data map[string][]byte) ([]byte, error) {
+	result := make(map[string]interface{})
+	for k, v := range data {
+		if parsedValue, err := tryUnmarshal(v); err == nil {
+			result[k] = parsedValue
 		} else {
-			// If not JSON, store as string
-			data[k] = string(v)
+			result[k] = string(v)
 		}
 	}
+	return json.Marshal(result)
+}
 
-	return json.Marshal(data)
+// tryUnmarshal attempts to unmarshal a byte slice into a Go data structure.
+//
+// Parameters:
+//   - value: The byte slice to be unmarshaled.
+//
+// Returns:
+//   - An interface{} representing the unmarshaled value, or the input as a string
+//     if unmarshaling fails.
+//   - An error if unmarshaling encounters an issue.
+func tryUnmarshal(value []byte) (interface{}, error) {
+	var jsonValue interface{}
+	if err := json.Unmarshal(value, &jsonValue); err == nil {
+		return jsonValue, nil
+	}
+
+	var strValue string
+	if err := json.Unmarshal(value, &strValue); err == nil {
+		if err := json.Unmarshal([]byte(strValue), &jsonValue); err == nil {
+			return jsonValue, nil
+		}
+		return strValue, nil
+	}
+
+	return string(value), nil
 }
