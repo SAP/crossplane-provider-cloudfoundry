@@ -78,7 +78,7 @@ func extractKey(secret *v1.Secret, key string) ([]byte, error) {
 func marshalSecretData(data map[string][]byte) ([]byte, error) {
 	result := make(map[string]interface{})
 	for k, v := range data {
-		if parsedValue, err := tryUnmarshal(v); err == nil {
+		if parsedValue := tryUnmarshal(v); parsedValue != nil {
 			result[k] = parsedValue
 		} else {
 			result[k] = string(v)
@@ -95,20 +95,19 @@ func marshalSecretData(data map[string][]byte) ([]byte, error) {
 // Returns:
 //   - An interface{} representing the unmarshaled value, or the input as a string
 //     if unmarshaling fails.
-//   - An error if unmarshaling encounters an issue.
-func tryUnmarshal(value []byte) (interface{}, error) {
+func tryUnmarshal(value []byte) interface{} {
 	var jsonValue interface{}
 	if err := json.Unmarshal(value, &jsonValue); err == nil {
-		return jsonValue, nil
+		return jsonValue
 	}
 
 	var strValue string
 	if err := json.Unmarshal(value, &strValue); err == nil {
 		if err := json.Unmarshal([]byte(strValue), &jsonValue); err == nil {
-			return jsonValue, nil
+			return jsonValue
 		}
-		return strValue, nil
+		return strValue
 	}
 
-	return string(value), nil
+	return string(value)
 }
