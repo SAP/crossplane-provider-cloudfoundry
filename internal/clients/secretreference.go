@@ -42,7 +42,7 @@ func ExtractSecret(ctx context.Context, kube k8s.Client, sr *xpv1.SecretReferenc
 //
 // Returns:
 //   - []byte: The value associated with the key, if it exists or returns nil for missing keys.
-func extractKey(secret *v1.Secret, key string) ([]byte) {
+func extractKey(secret *v1.Secret, key string) []byte {
 	if v, ok := secret.Data[key]; ok {
 		return v
 	}
