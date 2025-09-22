@@ -16,12 +16,10 @@ func TestExtractKey(t *testing.T) {
 		},
 	}
 
-	value, err := extractKey(secret, "secretKey")
-	require.NoError(t, err)
+	value := extractKey(secret, "secretKey")
 	assert.Equal(t, []byte("secretValue"), value)
 
-	value, err = extractKey(secret, "nonexistent")
-	require.NoError(t, err)
+	value = extractKey(secret, "nonexistent")
 	assert.Nil(t, value)
 }
 

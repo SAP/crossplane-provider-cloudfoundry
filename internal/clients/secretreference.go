@@ -23,32 +23,15 @@ func ExtractSecret(ctx context.Context, kube k8s.Client, sr *xpv1.SecretReferenc
 		return nil, nil
 	}
 
-	secret, err := fetchSecret(ctx, kube, sr)
-	if err != nil {
+	secret := &v1.Secret{}
+	if err := kube.Get(ctx, types.NamespacedName{Namespace: sr.Namespace, Name: sr.Name}, secret); err != nil {
 		return nil, err
 	}
 
 	if key != "" {
-		return extractKey(secret, key)
+		return extractKey(secret, key), nil
 	}
 	return marshalSecretData(secret.Data)
-}
-
-// fetchSecret retrieves a Kubernetes Secret based on the provided SecretReference.
-// It uses Kubernetes client to fetch the Secret from the specified namespace and name.
-//
-// Parameters:
-//   - ctx: The context.
-//   - kube: The Kubernetes client.
-//   - sr: A reference to the Secret, containing its namespace and name.
-//
-// Returns:
-//   - *v1.Secret: The retrieved Secret object.
-//   - error: An error if the Secret could not be fetched or does not exist.
-func fetchSecret(ctx context.Context, kube k8s.Client, sr *xpv1.SecretReference) (*v1.Secret, error) {
-	secret := &v1.Secret{}
-	err := kube.Get(ctx, types.NamespacedName{Namespace: sr.Namespace, Name: sr.Name}, secret)
-	return secret, err
 }
 
 // extractKey retrieves the value associated with the specified key from the given Kubernetes Secret.
@@ -58,13 +41,12 @@ func fetchSecret(ctx context.Context, kube k8s.Client, sr *xpv1.SecretReference)
 //   - key: The key to look up in the Secret's data map.
 //
 // Returns:
-//   - []byte: The value associated with the key, if it exists.
-//   - error: Always returns nil as no error handling is implemented for missing keys.
-func extractKey(secret *v1.Secret, key string) ([]byte, error) {
+//   - []byte: The value associated with the key, if it exists or returns nil for missing keys.
+func extractKey(secret *v1.Secret, key string) ([]byte) {
 	if v, ok := secret.Data[key]; ok {
-		return v, nil
+		return v
 	}
-	return nil, nil
+	return nil
 }
 
 // marshalSecretData attempts to marshal data into a JSON-encoded byte slice. For each key-value pair in the input map:
