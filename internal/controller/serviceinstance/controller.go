@@ -179,7 +179,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		var credentialsUpToDate bool
 		desiredCredentials, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
 		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, errSecret)
+			return managed.ExternalObservation{}, checkDelition(cr, errors.Wrap(err, errSecret))
 		}
 		// If parameter drift detection is enable, get actual credentials from the service instance
 		if cr.Spec.EnableParameterDriftDetection {
@@ -207,6 +207,14 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		// If the last operation is unknown, error out
 		return managed.ExternalObservation{}, errors.New("unknown last operation state")
 	}
+}
+
+func checkDelition(cr *v1alpha1.ServiceInstance, err error) error {
+	if cr.GetDeletionTimestamp() != nil {
+		// we are in deletion, do not return error to avoid retry
+		return nil
+	}
+	return err
 }
 
 // Create attempts to create the external resource.
