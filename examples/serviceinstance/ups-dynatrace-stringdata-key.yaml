@@ -5,23 +5,19 @@ metadata:
   name: my-credentials
   namespace: default
 type: Opaque
-data:
-  login: eyJ1c2VybmFtZSI6ImFkbWluIiwicGFzc3dvcmQiOiJzZWNyZXQifQ==
-  config: eyJkYXRhYmFzZSI6eyJob3N0IjoibG9jYWxob3N0IiwicG9ydCI6NTQzMn19
-
-  # Above are base64 encoded values of below stringData:  
-  # login: |
-  #   {
-  #     "username": "admin",
-  #     "password": "secret"
-  #   }
-  # config: |
-  #   {
-  #     "database": {
-  #       "host": "localhost",
-  #       "port": 5432
-  #     }
-  #   }
+stringData:
+  login: |
+    {
+      "username": "admin",
+      "password": "secret"
+    }
+  config: |
+    {
+      "database": {
+        "host": "localhost",
+        "port": 5432
+      }
+    }
 
 ---
 # UPS with service credentials from a secret ref
@@ -40,6 +36,7 @@ spec:
       policy:
         resolve: Always
     credentialsSecretRef: 
+        key: login
         name: my-credentials
         namespace: default
 

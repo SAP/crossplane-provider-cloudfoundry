@@ -78,7 +78,7 @@ type Managed struct {
 
 	// (Attributes) Same as `parameters`, supplied as a Secret reference. Ignored if `parameters` or `jsonParams` is set.
 	// +kubebuilder:validation:Optional
-	ParametersSecretRef *v1.SecretReference `json:"paramsSecretRef,omitempty" tf:"-"`
+	ParametersSecretRef *SecretKeySelector `json:"paramsSecretRef,omitempty" tf:"-"`
 
 	// (Attributes) Information about the version of this service instance; only shown when `type` is `managed`.
 	MaintenanceInfo MaintenanceInfo `json:"maintenanceInfo,omitempty"`
@@ -98,7 +98,7 @@ type UserProvided struct {
 
 	// (Attributes) Same as `credentials`, supplied as a Secret reference. Ignored if `credentials` or `jsonCredentials` is set.
 	// +kubebuilder:validation:Optional
-	CredentialsSecretRef *v1.SecretReference `json:"credentialsSecretRef,omitempty"`
+	CredentialsSecretRef *SecretKeySelector `json:"credentialsSecretRef,omitempty"`
 
 	// (String) URL to which requests for bound routes will be forwarded; only shown when `type` is `user-provided`.
 	// +kubebuilder:validation:Optional
@@ -108,6 +108,16 @@ type UserProvided struct {
 	// +kubebuilder:validation:Optional
 	SyslogDrainURL string `json:"syslogDrainUrl,omitempty"`
 }
+
+// A SecretKeySelector is a reference to a secret key in an arbitrary namespace.
+type SecretKeySelector struct {
+	*v1.SecretReference `json:",inline"`
+
+	// The key to select.
+	// +kubebuilder:validation:Optional
+	Key string `json:"key,omitempty"`
+}
+
 
 type ServiceInstanceObservation struct {
 	// (String) The GUID of the service instance.
