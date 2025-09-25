@@ -179,7 +179,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		var credentialsUpToDate bool
 		desiredCredentials, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
 		if err != nil {
-			return managed.ExternalObservation{}, checkDelition(cr, errors.Wrap(err, errSecret))
+			return managed.ExternalObservation{}, checkDeletion(cr, errors.Wrap(err, errSecret))
 		}
 		// If parameter drift detection is enable, get actual credentials from the service instance
 		if cr.Spec.EnableParameterDriftDetection {
@@ -209,9 +209,13 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}
 }
 
-func checkDelition(cr *v1alpha1.ServiceInstance, err error) error {
+// checkDeletion returns nil if the ServiceInstance is already marked for deletion.
+// Why: Avoid noisy retries while Kubernetes finalizers finish cleanup.
+// Params:
+//   cr  - ServiceInstance under reconciliation
+//   err - original error (returned only when not deleting)
+func checkDeletion(cr *v1alpha1.ServiceInstance, err error) error {
 	if cr.GetDeletionTimestamp() != nil {
-		// we are in deletion, do not return error to avoid retry
 		return nil
 	}
 	return err
