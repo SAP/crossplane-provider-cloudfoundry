@@ -83,6 +83,13 @@ func withDriftDetection(d bool) modifier {
 	}
 }
 
+func withDeletionTimestamp() modifier {
+	return func(r *v1alpha1.ServiceInstance) {
+		ts := metav1.Now()
+		r.ObjectMeta.DeletionTimestamp = &ts
+	}
+}
+
 func serviceInstance(typ string, m ...modifier) *v1alpha1.ServiceInstance {
 	r := &v1alpha1.ServiceInstance{
 		ObjectMeta: metav1.ObjectMeta{
@@ -379,6 +386,153 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
+		"DeletionFastPath_Exists": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDeletionTimestamp(), // mark as deleting
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDeletionTimestamp(),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").
+						SetName(name).
+						SetGUID(guid).
+						SetServicePlan(servicePlan).
+						SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				// Single() normally not called if Get by GUID succeeds; keep a safe default.
+				m.On("Single").Return(fake.ServiceInstanceNil, fake.ErrNoResultReturned)
+				return m
+			},
+		},
+		"DeletionFastPath_NotFound": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDeletionTimestamp(),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDeletionTimestamp(),
+				),
+				obs: managed.ExternalObservation{ResourceExists: false},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					fake.ServiceInstanceNil,
+					fake.ErrNoResultReturned,
+				)
+				m.On("Single").Return(
+					fake.ServiceInstanceNil,
+					fake.ErrNoResultReturned,
+				)
+				return m
+			},
+		},
+		"DeletionFastPath_AdoptExternalName": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName("not-guid"), // force mismatch
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDeletionTimestamp(), // trigger deletion fast-path
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid), // updated annotation expected
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDeletionTimestamp(),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", "not-guid").Return(
+					fake.ServiceInstanceNil,
+					fake.ErrNoResultReturned, // fall back to Single()
+				)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").
+						SetName(name).
+						SetGUID(guid).
+						SetServicePlan(servicePlan).
+						SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).
+						ServiceInstance,
+					nil,
+				)
+				return m
+			},
+			kube: &test.MockClient{
+				MockUpdate: test.NewMockUpdateFn(nil), // successful update
+			},
+		},
+		"DeletionFastPath_AdoptExternalNameUpdateError": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName("not-guid"),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDeletionTimestamp(),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					// meta.SetExternalName already applied in-memory even though Update fails
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDeletionTimestamp(),
+				),
+				obs: managed.ExternalObservation{},     // aborted with error
+				err: errors.Wrap(errBoom, errUpdateCR), // wrapped update error
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", "not-guid").Return(
+					fake.ServiceInstanceNil,
+					fake.ErrNoResultReturned,
+				)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").
+						SetName(name).
+						SetGUID(guid).
+						SetServicePlan(servicePlan).
+						SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).
+						ServiceInstance,
+					nil,
+				)
+				return m
+			},
+			kube: &test.MockClient{
+				MockUpdate: test.NewMockUpdateFn(errBoom), // force failure -> cover error wrap
+			},
+		},
 		"DriftDetectionLoop": {
 			args: args{
 				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(true)),
@@ -449,10 +603,15 @@ func TestObserve(t *testing.T) {
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
-			c := &external{
-				kube: &test.MockClient{
+
+			kubeClient := tc.kube
+			if kubeClient == nil {
+				kubeClient = &test.MockClient{
 					MockUpdate: test.NewMockUpdateFn(nil),
-				},
+				}
+			}
+			c := &external{
+				kube: kubeClient,
 				serviceinstance: &serviceinstance.Client{
 					ServiceInstance: tc.service(),
 					Job:             nil,

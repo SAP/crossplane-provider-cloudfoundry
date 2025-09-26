@@ -135,8 +135,34 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	// Check if the external resource exists
 	guid := meta.GetExternalName(cr)
-	r, err := serviceinstance.GetByIDOrSpec(ctx, c.serviceinstance, guid, cr.Spec.ForProvider)
 
+	// Deletion fast‑path:
+	// If the object has a deletion timestamp we only need to know whether the external
+	// resource still exists; we skip secret resolution, drift detection and state logic.
+	if meta.WasDeleted(cr) {
+		r, err := serviceinstance.GetByIDOrSpec(ctx, c.serviceinstance, guid, cr.Spec.ForProvider)
+		if err != nil {
+			if clients.ErrorIsNotFound(err) {
+				// Already gone externally; no delete call needed.
+				return managed.ExternalObservation{ResourceExists: false}, nil
+			}
+			return managed.ExternalObservation{}, errors.Wrap(err, errGet)
+		}
+		if r == nil {
+			return managed.ExternalObservation{ResourceExists: false}, nil
+		}
+		if guid != r.GUID {
+			meta.SetExternalName(cr, r.GUID)
+			if err := c.kube.Update(ctx, cr); err != nil {
+				return managed.ExternalObservation{}, errors.Wrap(err, errUpdateCR)
+			}
+		}
+		// We deliberately report up-to-date; reconciler will invoke Delete().
+		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
+	}
+
+	// Normal (non‑deletion) observe path.
+	r, err := serviceinstance.GetByIDOrSpec(ctx, c.serviceinstance, guid, cr.Spec.ForProvider)
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
@@ -179,7 +205,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		var credentialsUpToDate bool
 		desiredCredentials, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
 		if err != nil {
-			return managed.ExternalObservation{}, checkDeletion(cr, errors.Wrap(err, errSecret))
+			return managed.ExternalObservation{}, errors.Wrap(err, errSecret)
 		}
 		// If parameter drift detection is enable, get actual credentials from the service instance
 		if cr.Spec.EnableParameterDriftDetection {
@@ -189,17 +215,13 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 				return managed.ExternalObservation{ResourceExists: true}, errors.Wrap(err, errGetParameters)
 			}
 			cr.Status.AtProvider.Credentials = iSha256(cred)
-
 			credentialsUpToDate = jsonContain(cred, desiredCredentials)
 		} else {
 			desiredHash := iSha256(desiredCredentials)
-
 			credentialsUpToDate = bytes.Equal(desiredHash, cr.Status.AtProvider.Credentials)
 		}
-
 		// Check if the credentials in the spec match the credentials in the external resource
 		upToDate := credentialsUpToDate && serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r)
-
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
 	default:
 		// should never reach here
@@ -207,18 +229,6 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		// If the last operation is unknown, error out
 		return managed.ExternalObservation{}, errors.New("unknown last operation state")
 	}
-}
-
-// checkDeletion returns nil if the ServiceInstance is already marked for deletion.
-// Why: Avoid noisy retries while Kubernetes finalizers finish cleanup.
-// Params:
-//   cr  - ServiceInstance under reconciliation
-//   err - original error (returned only when not deleting)
-func checkDeletion(cr *v1alpha1.ServiceInstance, err error) error {
-	if cr.GetDeletionTimestamp() != nil {
-		return nil
-	}
-	return err
 }
 
 // Create attempts to create the external resource.
