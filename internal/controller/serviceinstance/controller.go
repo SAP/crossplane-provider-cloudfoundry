@@ -135,8 +135,9 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	// Check if the external resource exists
 	guid := meta.GetExternalName(cr)
-	r, err := serviceinstance.GetByIDOrSpec(ctx, c.serviceinstance, guid, cr.Spec.ForProvider)
 
+	// Normal (non‑deletion) observe path.
+	r, err := serviceinstance.GetByIDOrSpec(ctx, c.serviceinstance, guid, cr.Spec.ForProvider)
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
@@ -156,6 +157,13 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	// Update atProvider from the retrieved the service instance
 	serviceinstance.UpdateObservation(&cr.Status.AtProvider, r)
+
+	// If the CR is marked for deletion we stop normal observe logic.
+	// We report "resource exists" so Crossplane will call Delete() next.
+	// (Delete() will handle a "not found" case safely, so we don't check again here.)
+	if meta.WasDeleted(mg) {
+		return managed.ExternalObservation{ResourceExists: true}, nil
+	}
 
 	switch r.LastOperation.State {
 	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
@@ -189,17 +197,13 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 				return managed.ExternalObservation{ResourceExists: true}, errors.Wrap(err, errGetParameters)
 			}
 			cr.Status.AtProvider.Credentials = iSha256(cred)
-
 			credentialsUpToDate = jsonContain(cred, desiredCredentials)
 		} else {
 			desiredHash := iSha256(desiredCredentials)
-
 			credentialsUpToDate = bytes.Equal(desiredHash, cr.Status.AtProvider.Credentials)
 		}
-
 		// Check if the credentials in the spec match the credentials in the external resource
 		upToDate := credentialsUpToDate && serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r)
-
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
 	default:
 		// should never reach here

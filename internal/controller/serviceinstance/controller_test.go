@@ -83,6 +83,13 @@ func withDriftDetection(d bool) modifier {
 	}
 }
 
+func withDeletionTimestamp() modifier {
+	return func(r *v1alpha1.ServiceInstance) {
+		ts := metav1.Now()
+		r.ObjectMeta.DeletionTimestamp = &ts
+	}
+}
+
 func serviceInstance(typ string, m ...modifier) *v1alpha1.ServiceInstance {
 	r := &v1alpha1.ServiceInstance{
 		ObjectMeta: metav1.ObjectMeta{
@@ -376,6 +383,46 @@ func TestObserve(t *testing.T) {
 					fake.JSONRawMessage(""),
 					nil, // no error
 				)
+				return m
+			},
+		},
+		"DeletionFastPath_Exists": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDeletionTimestamp(), // triggers meta.WasDeleted short-circuit
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDeletionTimestamp(),
+					// Status updated by UpdateObservation before early return
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+				),
+				// Early return only sets ResourceExists: true
+				obs: managed.ExternalObservation{ResourceExists: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					// LastOperationFailed + Create would have produced ResourceExists:false in the normal path,
+					// proving we exited early.
+					&fake.NewServiceInstance("managed").
+						SetName(name).
+						SetGUID(guid).
+						SetServicePlan(servicePlan).
+						SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationFailed).
+						ServiceInstance,
+					nil,
+				)
+				// Fallback shouldn't be called, keep safe default.
+				m.On("Single").Return(fake.ServiceInstanceNil, fake.ErrNoResultReturned)
 				return m
 			},
 		},
