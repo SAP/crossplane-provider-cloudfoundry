@@ -136,31 +136,6 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	// Check if the external resource exists
 	guid := meta.GetExternalName(cr)
 
-	// Deletion fast‑path:
-	// If the object has a deletion timestamp we only need to know whether the external
-	// resource still exists; we skip secret resolution, drift detection and state logic.
-	if meta.WasDeleted(cr) {
-		r, err := serviceinstance.GetByIDOrSpec(ctx, c.serviceinstance, guid, cr.Spec.ForProvider)
-		if err != nil {
-			if clients.ErrorIsNotFound(err) {
-				// Already gone externally; no delete call needed.
-				return managed.ExternalObservation{ResourceExists: false}, nil
-			}
-			return managed.ExternalObservation{}, errors.Wrap(err, errGet)
-		}
-		if r == nil {
-			return managed.ExternalObservation{ResourceExists: false}, nil
-		}
-		if guid != r.GUID {
-			meta.SetExternalName(cr, r.GUID)
-			if err := c.kube.Update(ctx, cr); err != nil {
-				return managed.ExternalObservation{}, errors.Wrap(err, errUpdateCR)
-			}
-		}
-		// We deliberately report up-to-date; reconciler will invoke Delete().
-		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
-	}
-
 	// Normal (non‑deletion) observe path.
 	r, err := serviceinstance.GetByIDOrSpec(ctx, c.serviceinstance, guid, cr.Spec.ForProvider)
 	if err != nil {
@@ -182,6 +157,13 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	// Update atProvider from the retrieved the service instance
 	serviceinstance.UpdateObservation(&cr.Status.AtProvider, r)
+
+	// If the CR is marked for deletion we stop normal observe logic.
+	// We report "resource exists" so Crossplane will call Delete() next.
+	// (Delete() will handle a "not found" case safely, so we don't check again here.)
+	if meta.WasDeleted(mg) {
+		return managed.ExternalObservation{ResourceExists: true}, nil
+	}
 
 	switch r.LastOperation.State {
 	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
