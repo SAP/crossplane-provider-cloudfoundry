@@ -97,6 +97,9 @@ spec:
                       Secret reference. Ignored if `credentials` or `jsonCredentials`
                       is set.
                     properties:
+                      key:
+                        description: The key to select.
+                        type: string
                       name:
                         description: Name of the secret.
                         type: string
@@ -145,6 +148,9 @@ spec:
                       Secret reference. Ignored if `parameters` or `jsonParams` is
                       set.
                     properties:
+                      key:
+                        description: The key to select.
+                        type: string
                       name:
                         description: Name of the secret.
                         type: string
