@@ -56,7 +56,7 @@ func TestCloudFoundryServices(t *testing.T) {
 		},
 	)
 
-	var steps = [...]string{"space", "service_instance", "ups", "scb_key"}
+	var steps = [...]string{"space", "service_instance", "ups", "ups_no_credentials", "scb_key"}
 	for _, name := range steps {
 		ft, ok := feats[name]
 		if !ok {
