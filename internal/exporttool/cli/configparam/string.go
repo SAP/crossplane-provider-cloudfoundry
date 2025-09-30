@@ -61,7 +61,7 @@ func (p *StringParam) AttachToCommand(command *cobra.Command) {
 		command.PersistentFlags().String(p.FlagName, p.defaultValue, p.Description)
 	}
 	if p.paramName.EnvVarName != "" {
-		viper.BindEnv(p.FlagName, p.paramName.EnvVarName)
+		viper.BindEnv(p.Name, p.paramName.EnvVarName)
 	}
 	viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName))
 }
