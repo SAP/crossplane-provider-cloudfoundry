@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"log/slog"
 	"os"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/subcommand"
@@ -37,10 +36,8 @@ func RegisterSubCommand(command subcommand.SubCommand) {
 		}
 		Command.AddCommand(cmd)
 		for _, cp := range command.GetConfigParams() {
-			slog.Info("attaching configparam", "cmd", command.GetName(), "param", cp, "param-name", cp.GetName())
 			cp.AttachToCommand(cmd)
 		}
-		// return nil
 		return viper.BindPFlags(cmd.PersistentFlags())
 	})
 }
