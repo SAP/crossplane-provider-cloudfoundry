@@ -6,32 +6,39 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/subcommand"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 )
 
 func login() error {
-	fmt.Println("TODO: login command invoked")
-	fmt.Println(loginSubCommand.ConfigParams.String())
-	apiUrl, err := loginSubCommand.ConfigParams[0].(*configparam.StringParam).ValueOrAsk()
+	apiUrl, err := apiUrlParam.ValueOrAsk()
 	if err != nil {
-		return err
+		return erratt.New("Cannot get API URL parameter").With("subcommand", "login")
 	}
-	fmt.Printf("API URL = '%s'\n", apiUrl)
-	return nil
+	username, err := usernameParam.ValueOrAsk()
+	if err != nil {
+		return erratt.New("Cannot get username parameter")
+	}
+	password, err := passwordParam.ValueOrAsk()
+	if err != nil {
+		return erratt.New("Cannot get password parameter")
+	}
+
+	cfg := cli.ConfigFileSettings{}
+	cfg.Set(apiUrlParam.FlagName, apiUrl)
+	cfg.Set(usernameParam.FlagName, username)
+	cfg.Set(passwordParam.FlagName, password)
+	return cfg.StoreConfig(cli.ConfigFileParam.Value())
 }
 
 var loginSubCommand = &subcommand.Simple{
-	Name:  "login",
-	Short: fmt.Sprintf("Logging in to %s cluster", observedSystem),
-	Long:  fmt.Sprintf("Logging in to %s cluster", observedSystem),
+	Name:             "login",
+	Short:            fmt.Sprintf("Logging in to %s cluster", observedSystem),
+	Long:             fmt.Sprintf("Logging in to %s cluster", observedSystem),
+	IgnoreConfigFile: true,
 	ConfigParams: configparam.ParamList{
-		configparam.String("login API URL", "URL of the Cloud Foundry API").
-			WithShortName("a").
-			WithFlagName("apiUrl").
-			WithEnvVarName("API_URL").
-			WithExample("https://api.cf.enterprise.com"),
-		configparam.Bool("testLong", "log test flag"),
-		configparam.Bool("testShort", "log test short flag").WithShortName("s"),
-		configparam.Bool("testOtherDefault", "log test other default").WithDefaultValue(true),
+		apiUrlParam,
+		usernameParam,
+		passwordParam,
 	},
 }
 
@@ -39,27 +46,3 @@ func init() {
 	loginSubCommand.Logic = login
 	cli.RegisterSubCommand(loginSubCommand)
 }
-
-// type loginSubCommand struct{}
-
-// var _ subcommand.SubCommand = loginSubCommand{}
-
-// func (command loginSubCommand) GetName() string {
-// 	return "login"
-// }
-
-// func (command loginSubCommand) GetShort() string {
-// 	return fmt.Sprintf("Logging in to %s cluster", cli.Configuration.CLIConfiguration.ObservedSystem)
-// }
-
-// func (command loginSubCommand) GetLong() string {
-// 	return fmt.Sprintf("Logging in to %s cluster", cli.Configuration.CLIConfiguration.ObservedSystem)
-// }
-
-// func (command loginSubCommand) GetConfigParams() []configparam.ConfigParam {
-// 	return []configparam.ConfigParam{
-// 		configparam.Bool("testLong", "log test flag"),
-// 		configparam.Bool("testShort", "log test short flag").WithShortName("s"),
-// 		configparam.Bool("testOtherDefault", "log test other default").WithDefaultValue(true),
-// 	}
-// }

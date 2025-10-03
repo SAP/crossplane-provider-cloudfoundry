@@ -15,7 +15,6 @@ type paramName struct {
 	ShortName   *string
 	EnvVarName  string
 	Example     string
-	interactive bool
 }
 
 func newParamName(name, description string) *paramName {
@@ -24,7 +23,6 @@ func newParamName(name, description string) *paramName {
 		Description: description,
 		FlagName:    name,
 		EnvVarName:  name,
-		interactive: false,
 	}
 }
 
@@ -81,11 +79,8 @@ func (p *paramName) askValue(sensitive bool) (string, error) {
 
 type ConfigParam interface {
 	GetName() string
-	WithShortName(name string) ConfigParam
-	WithFlagName(name string) ConfigParam
-	WithEnvVarName(name string) ConfigParam
-	WithExample(example string) ConfigParam
 	AttachToCommand(cmd *cobra.Command)
+	BindConfiguration(cmd *cobra.Command)
 	ValueAsString() string
 	IsSet() bool
 }

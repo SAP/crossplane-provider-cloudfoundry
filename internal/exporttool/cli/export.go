@@ -26,7 +26,7 @@ type exportSubCommand struct {
 
 var ResourceKindParam = configparam.StringSlice("exported kinds", "Resource kinds to export").
 	WithShortName("k").
-	WithFlagName("kind").(*configparam.StringSliceParam)
+	WithFlagName("kind")
 
 var (
 	_         subcommand.SubCommand = &exportSubCommand{}
@@ -54,6 +54,10 @@ func (c *exportSubCommand) GetLong() string {
 
 func (c *exportSubCommand) GetConfigParams() configparam.ParamList {
 	return c.configParams
+}
+
+func (c *exportSubCommand) MustIgnoreConfigFile() bool {
+	return false
 }
 
 func printErrors(ctx context.Context, errChan <-chan erratt.ErrorWithAttrs) {
@@ -85,7 +89,9 @@ func handleResources(ctx context.Context, resourceChan <-chan resource.Object, e
 			if err != nil {
 				errChan <- erratt.Errorf("cannot YAML-marshal resource: %w", err)
 			} else {
-				fmt.Println(y)
+				fmt.Println("---")
+				fmt.Print(y)
+				fmt.Println("...")
 			}
 		case <-ctx.Done():
 			// execution is cancelled
@@ -122,42 +128,3 @@ func AddExportableResourceKinds(kinds ...string) {
 	exportCmd.exportableResourceKinds = append(exportCmd.exportableResourceKinds, kinds...)
 	ResourceKindParam.WithPossibleValues(exportCmd.exportableResourceKinds)
 }
-
-// var exportCmd *cobra.Command
-
-// type defaultConfiguratorExportSubcommand struct{}
-
-// var _ ConfiguratorExportSubcommand = defaultConfiguratorExportSubcommand{}
-
-// func (c defaultConfiguratorExportSubcommand) CommandShort(config *ConfigSchema) string {
-// 	return fmt.Sprintf("Export %s resources", config.CLIConfiguration.ObservedSystem)
-// }
-
-// func (c defaultConfiguratorExportSubcommand) CommandLong(config *ConfigSchema) string {
-// 	return fmt.Sprintf("Export %s resources and transform them into managed resources that the Crossplane provider can consume", config.CLIConfiguration.ObservedSystem)
-// }
-
-// type ExportSubcommandConfiguration struct {
-// 	ConfiguratorExportSubcommand
-
-// 	// SubcommandName
-// 	SubcommandName string
-// }
-
-// func DefaultExportSubcommandConfiguration() ExportSubcommandConfiguration {
-// 	return ExportSubcommandConfiguration{
-// 		ConfiguratorExportSubcommand: defaultConfiguratorExportSubcommand{},
-// 		SubcommandName: "export",
-// 	}
-// }
-
-// func configureExportSubcommand() error {
-// 	config := Configuration.ExportSubcommandConfiguration
-// 	exportCmd = &cobra.Command{
-// 		Use:   config.SubcommandName,
-// 		Short: config.CommandShort(Configuration),
-// 		Long:  config.CommandLong(Configuration),
-// 	}
-// 	Command.AddCommand(exportCmd)
-// 	return nil
-// }
