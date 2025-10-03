@@ -1,6 +1,8 @@
 package configparam
 
 import (
+	"fmt"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -24,22 +26,22 @@ func (p *BoolParam) WithDefaultValue(value bool) *BoolParam {
 	return p
 }
 
-func (p *BoolParam) WithShortName(name string) ConfigParam {
+func (p *BoolParam) WithShortName(name string) *BoolParam {
 	p.paramName.WithShortName(name)
 	return p
 }
 
-func (p *BoolParam) WithFlagName(name string) ConfigParam {
+func (p *BoolParam) WithFlagName(name string) *BoolParam {
 	p.paramName.WithFlagName(name)
 	return p
 }
 
-func (p *BoolParam) WithEnvVarName(name string) ConfigParam {
+func (p *BoolParam) WithEnvVarName(name string) *BoolParam {
 	p.paramName.WithEnvVarName(name)
 	return p
 }
 
-func (p *BoolParam) WithExample(example string) ConfigParam {
+func (p *BoolParam) WithExample(example string) *BoolParam {
 	p.paramName.WithExample(example)
 	return p
 }
@@ -50,15 +52,18 @@ func (p *BoolParam) AttachToCommand(command *cobra.Command) {
 	} else {
 		command.PersistentFlags().Bool(p.FlagName, p.defaultValue, p.Description)
 	}
+}
+
+func (p *BoolParam) BindConfiguration(command *cobra.Command) {
 	if p.paramName.EnvVarName != "" {
 		viper.BindEnv(p.Name, p.paramName.EnvVarName)
 	}
 	viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName))
 }
 
-// func (p *BoolParam) ValueAsString() string {
-// 	return fmt.Sprintf("%t", p.Value())
-// }
+func (p *BoolParam) ValueAsString() string {
+	return fmt.Sprintf("%t", p.Value())
+}
 
 func (p *BoolParam) Value() bool {
 	return viper.GetBool(p.Name)

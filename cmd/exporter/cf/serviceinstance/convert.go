@@ -1,4 +1,4 @@
-package main
+package serviceinstance
 
 import (
 	"context"
@@ -95,7 +95,7 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 	return &v1alpha1.ServiceInstance{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       v1alpha1.ServiceInstance_Kind,
-			APIVersion: v1alpha1.ServiceInstance_KindAPIVersion,
+			APIVersion: v1alpha1.CRDGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: serviceInstance.Name,
