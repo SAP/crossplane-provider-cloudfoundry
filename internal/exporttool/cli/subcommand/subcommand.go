@@ -9,15 +9,17 @@ type SubCommand interface {
 	GetShort() string
 	GetLong() string
 	GetConfigParams() configparam.ParamList
+	MustIgnoreConfigFile() bool
 	Run() func() error
 }
 
 type Simple struct {
-	Name         string
-	Short        string
-	Long         string
-	ConfigParams configparam.ParamList
-	Logic        func() error
+	Name             string
+	Short            string
+	Long             string
+	ConfigParams     configparam.ParamList
+	IgnoreConfigFile bool
+	Logic            func() error
 }
 
 var _ SubCommand = &Simple{}
@@ -36,6 +38,10 @@ func (s *Simple) GetLong() string {
 
 func (s *Simple) GetConfigParams() configparam.ParamList {
 	return s.ConfigParams
+}
+
+func (s *Simple) MustIgnoreConfigFile() bool {
+	return s.IgnoreConfigFile
 }
 
 func (s *Simple) Run() func() error {

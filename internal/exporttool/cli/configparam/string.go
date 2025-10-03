@@ -17,7 +17,7 @@ func String(name, description string) *StringParam {
 	return &StringParam{
 		paramName:    newParamName(name, description),
 		defaultValue: "",
-		sensitive: false,
+		sensitive:    false,
 	}
 }
 
@@ -25,7 +25,7 @@ func SensitiveString(name, description string) *StringParam {
 	return &StringParam{
 		paramName:    newParamName(name, description),
 		defaultValue: "",
-		sensitive: true,
+		sensitive:    true,
 	}
 }
 
@@ -34,22 +34,23 @@ func (p *StringParam) WithDefaultValue(value string) *StringParam {
 	return p
 }
 
-func (p *StringParam) WithShortName(name string) ConfigParam {
+func (p *StringParam) WithShortName(name string) *StringParam {
 	p.paramName.WithShortName(name)
 	return p
 }
 
-func (p *StringParam) WithFlagName(name string) ConfigParam {
+func (p *StringParam) WithFlagName(name string) *StringParam {
 	p.paramName.WithFlagName(name)
 	return p
 }
 
-func (p *StringParam) WithEnvVarName(name string) ConfigParam {
+func (p *StringParam) WithEnvVarName(name string) *StringParam {
 	p.paramName.WithEnvVarName(name)
+	viper.BindEnv(p.Name, name)
 	return p
 }
 
-func (p *StringParam) WithExample(example string) ConfigParam {
+func (p *StringParam) WithExample(example string) *StringParam {
 	p.paramName.WithExample(example)
 	return p
 }
@@ -60,6 +61,9 @@ func (p *StringParam) AttachToCommand(command *cobra.Command) {
 	} else {
 		command.PersistentFlags().String(p.FlagName, p.defaultValue, p.Description)
 	}
+}
+
+func (p *StringParam) BindConfiguration(command *cobra.Command) {
 	if p.paramName.EnvVarName != "" {
 		viper.BindEnv(p.Name, p.paramName.EnvVarName)
 	}
@@ -75,13 +79,21 @@ func (p *StringParam) ValueAsString() string {
 }
 
 func (p *StringParam) Value() string {
-	return viper.GetString(p.Name)
+	if p.paramName.IsSet() {
+		return viper.GetString(p.Name)
+	} else {
+		return p.defaultValue
+	}
 }
 
 func (p *StringParam) ValueOrAsk() (string, error) {
 	if p.paramName.IsSet() {
 		return p.Value(), nil
 	}
+	return p.AskValue()
+}
+
+func (p *StringParam) AskValue() (string, error) {
 	value, err := p.askValue(p.sensitive)
 	if err != nil {
 		return "", err
