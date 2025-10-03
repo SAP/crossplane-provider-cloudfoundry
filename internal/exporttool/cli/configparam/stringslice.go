@@ -52,7 +52,7 @@ func (p *StringSliceParam) WithPossibleValues(values []string) *StringSliceParam
 	return p
 }
 
-func toPairFn(fn func(ctx context.Context) ([]string, error)) possibleValuesFnType {
+func toPairFn(fn func(context.Context) ([]string, error)) possibleValuesFnType {
 	return func(ctx context.Context)([][2]string, error) {
 		values, err := fn(ctx)
 		if err != nil {
@@ -77,22 +77,22 @@ func (p *StringSliceParam) WithPossibleValuesPairFn(fn possibleValuesFnType) *St
 	return p
 }
 
-func (p *StringSliceParam) WithShortName(name string) ConfigParam {
+func (p *StringSliceParam) WithShortName(name string) *StringSliceParam {
 	p.paramName.WithShortName(name)
 	return p
 }
 
-func (p *StringSliceParam) WithFlagName(name string) ConfigParam {
+func (p *StringSliceParam) WithFlagName(name string) *StringSliceParam {
 	p.paramName.WithFlagName(name)
 	return p
 }
 
-func (p *StringSliceParam) WithEnvVarName(name string) ConfigParam {
+func (p *StringSliceParam) WithEnvVarName(name string) *StringSliceParam {
 	p.paramName.WithEnvVarName(name)
 	return p
 }
 
-func (p *StringSliceParam) WithExample(example string) ConfigParam {
+func (p *StringSliceParam) WithExample(example string) *StringSliceParam {
 	p.paramName.WithExample(example)
 	return p
 }
@@ -103,6 +103,13 @@ func (p *StringSliceParam) AttachToCommand(command *cobra.Command) {
 	} else {
 		command.PersistentFlags().StringSlice(p.FlagName, p.defaultValue, p.Description)
 	}
+	if p.paramName.EnvVarName != "" {
+		viper.BindEnv(p.Name, p.paramName.EnvVarName)
+	}
+	viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName))
+}
+
+func (p *StringSliceParam) BindConfiguration(command *cobra.Command) {
 	if p.paramName.EnvVarName != "" {
 		viper.BindEnv(p.Name, p.paramName.EnvVarName)
 	}

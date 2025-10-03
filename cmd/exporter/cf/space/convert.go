@@ -1,4 +1,4 @@
-package main
+package space
 
 import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -11,7 +11,7 @@ func convertSpaceResource(space *resource.Space) *v1alpha1.Space {
 	return &v1alpha1.Space{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       v1alpha1.Space_Kind,
-			APIVersion: v1alpha1.Space_KindAPIVersion,
+			APIVersion: v1alpha1.CRDGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name: space.Name,
