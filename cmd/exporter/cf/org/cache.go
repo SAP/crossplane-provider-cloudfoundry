@@ -22,15 +22,15 @@ func New(orgs []*resource.Organization) *Cache {
 	return c
 }
 
-func (c *Cache) GetByName(name string) ([]*resource.Organization) {
+func (c *Cache) GetByName(name string) []*resource.Organization {
 	return c.nameIndex[name]
 }
 
-func (c *Cache) GetByGUID(guid string) (*resource.Organization) {
+func (c *Cache) GetByGUID(guid string) *resource.Organization {
 	return c.guidIndex[guid]
 }
 
-func (c *Cache) GetGuidsByNames(names []string) ([]string) {
+func (c *Cache) GetGuidsByNames(names []string) []string {
 	guids := make([]string, 0)
 	for _, name := range names {
 		if orgs, ok := c.nameIndex[name]; ok {
@@ -44,7 +44,7 @@ func (c *Cache) GetGuidsByNames(names []string) ([]string) {
 	return guids
 }
 
-func (c *Cache) GetNames() ([]string) {
+func (c *Cache) GetNames() []string {
 	names := make([]string, len(c.nameIndex))
 	i := 0
 	for name := range c.nameIndex {
@@ -54,7 +54,7 @@ func (c *Cache) GetNames() ([]string) {
 	return names
 }
 
-func (c *Cache) GetGUIDs() ([]string) {
+func (c *Cache) GetGUIDs() []string {
 	guids := make([]string, len(c.guidIndex))
 	i := 0
 	for guid := range c.guidIndex {

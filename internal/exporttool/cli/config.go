@@ -17,7 +17,7 @@ type ConfigModule func() error
 
 var (
 	Configuration *ConfigSchema = &ConfigSchema{}
-	configModules = []ConfigModule{}
+	configModules               = []ConfigModule{}
 )
 
 func RegisterConfigModule(module ConfigModule) {

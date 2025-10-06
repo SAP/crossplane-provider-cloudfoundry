@@ -8,10 +8,6 @@ import (
 )
 
 type Cache struct {
-	// sync.RWMutex
-	// collected    bool
-	// cfClient     *client.Client
-	orgGuids     []string
 	guidIndex    map[string]*resource.Space
 	nameIndex    map[string][]*resource.Space
 	orgGuidIndex map[string][]*resource.Space
@@ -19,9 +15,6 @@ type Cache struct {
 
 func New(spaces []*resource.Space) *Cache {
 	c := &Cache{
-		// cfClient:     cfClient,
-		// orgGuids:     orgGuids,
-		// collected:    false,
 		guidIndex:    make(map[string]*resource.Space),
 		nameIndex:    make(map[string][]*resource.Space),
 		orgGuidIndex: make(map[string][]*resource.Space),
@@ -34,63 +27,19 @@ func New(spaces []*resource.Space) *Cache {
 	return c
 }
 
-// func (db *Cache) collectSpaces() error {
-// 	db.Lock()
-// 	defer db.Unlock()
-// 	db.guidIndex = make(map[string]*resource.Space)
-// 	db.nameIndex = make(map[string][]*resource.Space)
-// 	db.orgGuidIndex = make(map[string][]*resource.Space)
-// 	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
-// 	defer cancel()
-
-// 	spaces, err := getSpaces(ctx, db.cfClient, []string{})
-// 	if err != nil {
-// 		return erratt.Errorf("cannot collect spaces: %w", err)
-// 	}
-
-// 	for _, space := range spaces {
-// 		db.guidIndex[space.GUID] = space
-// 		db.nameIndex[space.Name] = append(db.nameIndex[space.Name], space)
-// 		db.orgGuidIndex[space.Relationships.Organization.Data.GUID] = append(db.orgGuidIndex[space.Relationships.Organization.Data.GUID], space)
-// 	}
-// 	db.collected = true
-// 	return nil
-// }
-
 func (c *Cache) GetByName(name string) []*resource.Space {
 	return c.nameIndex[name]
 }
 
 func (c *Cache) GetByGUID(guid string) *resource.Space {
-	// if !db.collected {
-	// 	if err := db.collectSpaces(); err != nil {
-	// 		return nil, err
-	// 	}
-	// }
-	// db.RLock()
-	// defer db.RUnlock()
 	return c.guidIndex[guid]
 }
 
 func (c *Cache) GetByOrgGUID(guid string) []*resource.Space {
-	// if !db.collected {
-	// 	if err := db.collectSpaces(); err != nil {
-	// 		return nil, err
-	// 	}
-	// }
-	// db.RLock()
-	// defer db.RUnlock()
 	return c.orgGuidIndex[guid]
 }
 
 func (c *Cache) GetByOrgGUIDs(guids []string) []*resource.Space {
-	// if !db.collected {
-	// 	if err := db.collectSpaces(); err != nil {
-	// 		return nil, err
-	// 	}
-	// }
-	// db.RLock()
-	// defer db.RUnlock()
 	spaces := make([]*resource.Space, 0)
 	for _, guid := range guids {
 		spaces = append(spaces, c.orgGuidIndex[guid]...)
