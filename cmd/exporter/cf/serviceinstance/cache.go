@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
+
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	cpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
@@ -24,11 +25,11 @@ func New(serviceInstances []*resource.ServiceInstance) *Cache {
 	return c
 }
 
-func (c *Cache) GetByGUID(guid string) (*resource.ServiceInstance) {
+func (c *Cache) GetByGUID(guid string) *resource.ServiceInstance {
 	return c.guidIndex[guid]
 }
 
-func (c *Cache) Export(ctx context.Context, cfClient *client.Client, resChan chan<- cpresource.Object, errChan chan<-erratt.ErrorWithAttrs) {
+func (c *Cache) Export(ctx context.Context, cfClient *client.Client, resChan chan<- cpresource.Object, errChan chan<- erratt.ErrorWithAttrs) {
 	wg := sync.WaitGroup{}
 	tokenChan := make(chan struct{}, 10)
 	for _, serviceInstance := range c.guidIndex {

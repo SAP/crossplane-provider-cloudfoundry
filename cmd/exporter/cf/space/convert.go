@@ -2,9 +2,10 @@ package space
 
 import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func convertSpaceResource(space *resource.Space) *v1alpha1.Space {
@@ -21,18 +22,18 @@ func convertSpaceResource(space *resource.Space) *v1alpha1.Space {
 		},
 		Spec: v1alpha1.SpaceSpec{
 			ResourceSpec: v1.ResourceSpec{
-				ManagementPolicies:               []v1.ManagementAction{
+				ManagementPolicies: []v1.ManagementAction{
 					v1.ManagementActionObserve,
 				},
 			},
-			ForProvider:  v1alpha1.SpaceParameters{
+			ForProvider: v1alpha1.SpaceParameters{
 				// AllowSSH:         false,
 				Annotations:      space.Metadata.Annotations,
 				IsolationSegment: new(string),
 				Labels:           space.Metadata.Labels,
 				Name:             space.Name,
-				OrgReference:     v1alpha1.OrgReference{
-					Org:         &space.Relationships.Organization.Data.GUID,
+				OrgReference: v1alpha1.OrgReference{
+					Org: &space.Relationships.Organization.Data.GUID,
 				},
 			},
 		},

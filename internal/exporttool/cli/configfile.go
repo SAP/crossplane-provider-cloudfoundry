@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
+
 	"github.com/spf13/viper"
 )
 
@@ -30,25 +31,7 @@ func configureConfigFile() error {
 	ConfigFileParam.WithDefaultValue(configFilePath)
 	viper.SetConfigFile(configFilePath)
 	ConfigFileParam.AttachToCommand(Command)
-	// viper.SetConfigName(defaultConfigFileName())
 	viper.SetConfigType("yaml")
-	// if ConfigFileParam.IsSet() {
-	// 	viper.AddConfigPath(ConfigFileParam.(*configparam.StringParam).Value())
-	// }
-	// if home := os.Getenv("XDG_CONFIG_HOME"); home != "" {
-	// 	viper.AddConfigPath("$XDG_CONFIG_HOME")
-	// }
-	// if home := os.Getenv("HOME"); home != "" {
-	// 	viper.AddConfigPath("$HOME")
-	// }
-	// viper.AddConfigPath(".")
-	// if err := viper.ReadInConfig(); err != nil {
-	// 	// if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-	// 	if errors.Is(err, fs.ErrNotExist) {
-	// 		return nil
-	// 	}
-	// 	return err
-	// }
 	return nil
 }
 

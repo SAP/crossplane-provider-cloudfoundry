@@ -5,6 +5,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
+
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
@@ -20,8 +21,7 @@ func convertServiceInstanceTags(tags []string) []*string {
 	return result
 }
 
-func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<-erratt.ErrorWithAttrs) *v1alpha1.ServiceInstance {
-	var servicePlan *v1alpha1.ServicePlanParameters
+func generateServicePlan(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- erratt.ErrorWithAttrs) *v1alpha1.ServicePlanParameters {
 	if serviceInstance.Relationships.ServicePlan != nil &&
 		serviceInstance.Relationships.ServicePlan.Data != nil {
 		sPlan, err := cfClient.ServicePlans.Get(ctx, serviceInstance.Relationships.ServicePlan.Data.GUID)
@@ -35,50 +35,19 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 			return nil
 		}
 
-		servicePlan = &v1alpha1.ServicePlanParameters{
+		return &v1alpha1.ServicePlanParameters{
 			ID:       ptr.To(serviceInstance.Relationships.ServicePlan.Data.GUID),
 			Plan:     &sPlan.Name,
 			Offering: &sOffering.Name,
 		}
 	}
-	var maintenanceInfoDescription *string
-	var maintenanceInfoVersion *string
-	if mInfo := serviceInstance.MaintenanceInfo; mInfo != nil {
-		maintenanceInfoDescription = ptr.To(mInfo.Description)
-		maintenanceInfoVersion = ptr.To(mInfo.Description)
+	return nil
+}
 
-	}
-	var jsonParams *string
+func generateJsonCreds(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- erratt.ErrorWithAttrs) *string {
 	var jsonCreds *string
-	// var rawExtensionParams *runtime.RawExtension
-	if serviceInstance.Type == "managed" {
-		params, err := cfClient.ServiceInstances.GetManagedParameters(ctx, serviceInstance.GUID)
-		if err == nil {
-			// rawParams := &unstructured.Unstructured{}
-			jsonParamsBytes, err := params.MarshalJSON()
-			if err != nil {
-				errChan <- erratt.Errorf("cannot JSON marshal service instance managed parameters: %w", err).With("guid", serviceInstance.GUID)
-				return nil
-			}
-			jsonParams = ptr.To(string(jsonParamsBytes))
-			// err = json.Unmarshal(jsonParamsBytes, &rawParams)
-			// if err != nil {
-			// 	return nil, erratt.Errorf("cannot JSON unmarshal service instance managed parameters: %w", err).With("guid", serviceInstance.GUID)
-			// }
-			// yamlBytes, err := yaml.Marshal(rawParams)
-			// if err != nil {
-			// 	return nil, erratt.Errorf("cannot YAML marshal service instance managed parameters: %w", err).With("guid", serviceInstance.GUID)
-			// }
 
-			// slog.Info("yaml conversion", "yamlBytes", string(yamlBytes))
-			// rawExtensionParams = &runtime.RawExtension{
-			// 	Raw: []byte("a: 1"),
-			// }
-		} else {
-			errChan <- erratt.Errorf("cannot get service instance managed parameters: %w", err).With("serviceinstance-guid", serviceInstance.GUID)
-			// return nil, erratt.Errorf("cannot get service instance managed parameters: %w", err).With("guid", serviceInstance.GUID)
-		}
-	} else {
+	if serviceInstance.Type != "managed" {
 		creds, err := cfClient.ServiceInstances.GetUserProvidedCredentials(ctx, serviceInstance.GUID)
 		if err != nil {
 			errChan <- erratt.Errorf("cannot get service instance provided credentials: %w", err).With("guid", serviceInstance.GUID)
@@ -91,6 +60,40 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 		}
 		jsonCreds = ptr.To(string(jsonCredsBytes))
 	}
+	return jsonCreds
+}
+
+func generateJsonParams(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- erratt.ErrorWithAttrs) *string {
+	var jsonParams *string
+	if serviceInstance.Type == "managed" {
+		params, err := cfClient.ServiceInstances.GetManagedParameters(ctx, serviceInstance.GUID)
+		if err == nil {
+			jsonParamsBytes, err := params.MarshalJSON()
+			if err != nil {
+				errChan <- erratt.Errorf("cannot JSON marshal service instance managed parameters: %w", err).With("guid", serviceInstance.GUID)
+				return nil
+			}
+			jsonParams = ptr.To(string(jsonParamsBytes))
+		} else {
+			errChan <- erratt.Errorf("cannot get service instance managed parameters: %w", err).With("serviceinstance-guid", serviceInstance.GUID)
+		}
+	}
+	return jsonParams
+}
+
+func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- erratt.ErrorWithAttrs) *v1alpha1.ServiceInstance {
+	servicePlan := generateServicePlan(ctx, cfClient, serviceInstance, errChan)
+
+	var maintenanceInfoDescription *string
+	var maintenanceInfoVersion *string
+	if mInfo := serviceInstance.MaintenanceInfo; mInfo != nil {
+		maintenanceInfoDescription = ptr.To(mInfo.Description)
+		maintenanceInfoVersion = ptr.To(mInfo.Description)
+
+	}
+
+	jsonParams := generateJsonParams(ctx, cfClient, serviceInstance, errChan)
+	jsonCreds := generateJsonCreds(ctx, cfClient, serviceInstance, errChan)
 
 	return &v1alpha1.ServiceInstance{
 		TypeMeta: metav1.TypeMeta{

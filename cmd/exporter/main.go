@@ -12,6 +12,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
+
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 )
@@ -26,19 +27,6 @@ var (
 	spaceCache           *space.Cache
 	serviceInstanceCache *serviceinstance.Cache
 )
-
-// func selectOrgsGUIDs(ctx context.Context) ([]string, error) {
-// 	orgNames, err := orgsParam.ValueOrAsk(ctx)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	listOptions := client.NewSpaceListOptions()
-// 	listOptions.OrganizationGUIDs.Values, err = orgCache.GetGuidsByNames(orgNames)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// }
 
 func getOrgs(cfClient *client.Client) (*org.Cache, error) {
 	if orgCache != nil {
@@ -118,18 +106,13 @@ func getServiceInstances(cfClient *client.Client) (*serviceinstance.Cache, error
 	return serviceInstanceCache, nil
 }
 
-func convertPossibleValuesCtxFn(fn func(context.Context) []string) func(context.Context) ([]string, error) {
-	return func(ctx context.Context) ([]string, error) {
-		return fn(ctx), nil
-	}
-}
-
 func convertPossibleValuesFn(fn func() []string) func(context.Context) ([]string, error) {
 	return func(_ context.Context) ([]string, error) {
 		return fn(), nil
 	}
 }
 
+//nolint:gocyclo
 func exportCmd(resourceChan chan<- resource.Object, errChan chan<- erratt.ErrorWithAttrs) error {
 	cfConfig, err := config.Get(apiUrlParam, usernameParam, passwordParam)
 	if err != nil {
@@ -139,6 +122,7 @@ func exportCmd(resourceChan chan<- resource.Object, errChan chan<- erratt.ErrorW
 	if err != nil {
 		return err
 	}
+
 	slog.Info("Connected to Cloud Foundry API",
 		"URL", apiUrlParam.ValueAsString(),
 		"user", usernameParam.ValueAsString(),
@@ -168,7 +152,7 @@ func exportCmd(resourceChan chan<- resource.Object, errChan chan<- erratt.ErrorW
 			if err != nil {
 				return err
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 10 * time.Minute)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
 			serviceInstaces.Export(ctx, cfClient, resourceChan, errChan)
 		default:
