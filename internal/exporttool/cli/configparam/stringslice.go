@@ -1,8 +1,6 @@
 package configparam
 
 import (
-	"context"
-
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/widget"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 
@@ -10,7 +8,7 @@ import (
 	"github.com/spf13/viper"
 )
 
-type possibleValuesFnType func(context.Context) ([][2]string, error)
+type possibleValuesFnType func() ([][2]string, error)
 
 type StringSliceParam struct {
 	*paramName
@@ -53,9 +51,9 @@ func (p *StringSliceParam) WithPossibleValues(values []string) *StringSliceParam
 	return p
 }
 
-func toPairFn(fn func(context.Context) ([]string, error)) possibleValuesFnType {
-	return func(ctx context.Context) ([][2]string, error) {
-		values, err := fn(ctx)
+func toPairFn(fn func() ([]string, error)) possibleValuesFnType {
+	return func() ([][2]string, error) {
+		values, err := fn()
 		if err != nil {
 			return nil, err
 		}
@@ -68,7 +66,7 @@ func toPairFn(fn func(context.Context) ([]string, error)) possibleValuesFnType {
 	}
 }
 
-func (p *StringSliceParam) WithPossibleValuesFn(fn func(context.Context) ([]string, error)) *StringSliceParam {
+func (p *StringSliceParam) WithPossibleValuesFn(fn func() ([]string, error)) *StringSliceParam {
 	p.possibleValuesFn = toPairFn(fn)
 	return p
 }
@@ -137,7 +135,7 @@ func (p *StringSliceParam) Value() []string {
 	return viper.GetStringSlice(p.Name)
 }
 
-func (p *StringSliceParam) ValueOrAsk(ctx context.Context) ([]string, error) {
+func (p *StringSliceParam) ValueOrAsk() ([]string, error) {
 	if p.paramName.IsSet() {
 		return p.Value(), nil
 	}
@@ -147,7 +145,7 @@ func (p *StringSliceParam) ValueOrAsk(ctx context.Context) ([]string, error) {
 	possibleValues := p.possibleValues
 	if len(possibleValues) == 0 {
 		var err error
-		possibleValues, err = p.possibleValuesFn(ctx)
+		possibleValues, err = p.possibleValuesFn()
 		if err != nil {
 			return nil, erratt.Errorf("cannot get possible values: %w", err)
 		}

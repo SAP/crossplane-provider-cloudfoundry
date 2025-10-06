@@ -1,8 +1,6 @@
 package space
 
 import (
-	"context"
-
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	cpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 )
@@ -45,23 +43,6 @@ func (c *Cache) GetByOrgGUIDs(guids []string) []*resource.Space {
 		spaces = append(spaces, c.orgGuidIndex[guid]...)
 	}
 	return spaces
-}
-
-type key int
-
-var orgGuidsKey key
-
-func (c *Cache) GetNamesByOrgGUIDs(ctx context.Context) []string {
-	orgGuids, ok := ctx.Value(orgGuidsKey).([]string)
-	if !ok {
-		panic("spaceDB.getNamesByOrgGUIDs requires that ctx value with key orgGuidsKey is set")
-	}
-	spaces := c.GetByOrgGUIDs(orgGuids)
-	names := make([]string, len(spaces))
-	for i, space := range spaces {
-		names[i] = space.Name
-	}
-	return names
 }
 
 func (c *Cache) GetGuidsByNames(names []string) []string {
