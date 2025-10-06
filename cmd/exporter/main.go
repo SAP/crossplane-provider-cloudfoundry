@@ -51,7 +51,7 @@ func getSpaces(cfClient *client.Client) (*space.Cache, error) {
 	if err != nil {
 		return nil, err
 	}
-	selectedOrgs, err := orgsParam.ValueOrAsk(context.Background())
+	selectedOrgs, err := orgsParam.ValueOrAsk()
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +65,6 @@ func getSpaces(cfClient *client.Client) (*space.Cache, error) {
 	}
 	spaceCache = space.New(spaces)
 	spacesParam.WithPossibleValuesFn(convertPossibleValuesFn(spaceCache.GetNames))
-	// spacesParam.WithPossibleValuesFn(convertPossibleValuesCtxFn(spaceCache.GetNamesByOrgGUIDs))
 	return spaceCache, nil
 }
 
@@ -77,7 +76,7 @@ func getServiceInstances(cfClient *client.Client) (*serviceinstance.Cache, error
 	if err != nil {
 		return nil, err
 	}
-	selectedOrgs, err := orgsParam.ValueOrAsk(context.Background())
+	selectedOrgs, err := orgsParam.ValueOrAsk()
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +85,7 @@ func getServiceInstances(cfClient *client.Client) (*serviceinstance.Cache, error
 	if err != nil {
 		return nil, err
 	}
-	selectedSpaces, err := spacesParam.ValueOrAsk(context.Background())
+	selectedSpaces, err := spacesParam.ValueOrAsk()
 	if err != nil {
 		return nil, err
 	}
@@ -106,8 +105,8 @@ func getServiceInstances(cfClient *client.Client) (*serviceinstance.Cache, error
 	return serviceInstanceCache, nil
 }
 
-func convertPossibleValuesFn(fn func() []string) func(context.Context) ([]string, error) {
-	return func(_ context.Context) ([]string, error) {
+func convertPossibleValuesFn(fn func() []string) func() ([]string, error) {
+	return func() ([]string, error) {
 		return fn(), nil
 	}
 }
@@ -128,7 +127,7 @@ func exportCmd(resourceChan chan<- resource.Object, errChan chan<- erratt.ErrorW
 		"user", usernameParam.ValueAsString(),
 	)
 
-	selectedResources, err := cli.ResourceKindParam.ValueOrAsk(context.Background())
+	selectedResources, err := cli.ResourceKindParam.ValueOrAsk()
 	if err != nil {
 		return erratt.Errorf("cannot get the value for resource kind parameter: %w", err)
 	}
