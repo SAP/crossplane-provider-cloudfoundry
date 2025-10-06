@@ -52,10 +52,10 @@ var _ = Describe("Erratt", func() {
 			var ea erratt.ErrorWithAttrs
 			Context("and no attributes", func() {
 				BeforeEach(func() {
-					ea = erratt.Errorf(errStr)
+					ea = erratt.Errorf("test error")
 				})
 				It("has the proper message", func() {
-					Expect(ea.Error()).To(Equal(errStr))
+					Expect(ea.Error()).To(Equal("test error"))
 				})
 				It("contains no wrapped errors", func() {
 					Expect(ea.Unwrap()).To(BeNil())
@@ -66,10 +66,10 @@ var _ = Describe("Erratt", func() {
 			})
 			Context("and a single string attribute", func() {
 				BeforeEach(func() {
-					ea = erratt.Errorf(errStr).With("key", "value")
+					ea = erratt.Errorf("test error").With("key", "value")
 				})
 				It("has the proper message", func() {
-					Expect(ea.Error()).To(Equal(errStr))
+					Expect(ea.Error()).To(Equal("test error"))
 				})
 				It("contains no wrapped errors", func() {
 					Expect(ea.Unwrap()).To(BeNil())
@@ -82,10 +82,10 @@ var _ = Describe("Erratt", func() {
 			})
 			Context("and a single int attribute", func() {
 				BeforeEach(func() {
-					ea = erratt.Errorf(errStr).With("key", 11)
+					ea = erratt.Errorf("test error").With("key", 11)
 				})
 				It("has the proper message", func() {
-					Expect(ea.Error()).To(Equal(errStr))
+					Expect(ea.Error()).To(Equal("test error"))
 				})
 				It("contains no wrapped errors", func() {
 					Expect(ea.Unwrap()).To(BeNil())

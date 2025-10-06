@@ -56,9 +56,13 @@ func (p *BoolParam) AttachToCommand(command *cobra.Command) {
 
 func (p *BoolParam) BindConfiguration(command *cobra.Command) {
 	if p.paramName.EnvVarName != "" {
-		viper.BindEnv(p.Name, p.paramName.EnvVarName)
+		if err := viper.BindEnv(p.Name, p.paramName.EnvVarName); err != nil {
+			panic(err)
+		}
 	}
-	viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName))
+	if err := viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName)); err != nil {
+		panic(err)
+	}
 }
 
 func (p *BoolParam) ValueAsString() string {

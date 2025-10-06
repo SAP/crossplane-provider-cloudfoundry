@@ -1,16 +1,15 @@
 package cli
 
 import (
+	"errors"
 	"os"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/subcommand"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
-
-func printConfiguration(cmd *cobra.Command) {
-}
 
 func makeCobraRun(fn func() error) func(*cobra.Command, []string) {
 	return func(_ *cobra.Command, _ []string) {
@@ -33,7 +32,7 @@ func RegisterSubCommand(command subcommand.SubCommand) {
 				}
 				if !command.MustIgnoreConfigFile() {
 					if err := viper.ReadInConfig(); err != nil {
-						if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
+						if !errors.Is(err, viper.ConfigFileNotFoundError{}) {
 							erratt.Slog(erratt.New("cannot read config file"))
 						}
 					}

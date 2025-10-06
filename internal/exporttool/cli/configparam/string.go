@@ -46,7 +46,9 @@ func (p *StringParam) WithFlagName(name string) *StringParam {
 
 func (p *StringParam) WithEnvVarName(name string) *StringParam {
 	p.paramName.WithEnvVarName(name)
-	viper.BindEnv(p.Name, name)
+	if err := viper.BindEnv(p.Name, name); err != nil {
+		panic(err)
+	}
 	return p
 }
 
@@ -65,9 +67,13 @@ func (p *StringParam) AttachToCommand(command *cobra.Command) {
 
 func (p *StringParam) BindConfiguration(command *cobra.Command) {
 	if p.paramName.EnvVarName != "" {
-		viper.BindEnv(p.Name, p.paramName.EnvVarName)
+		if err := viper.BindEnv(p.Name, p.paramName.EnvVarName); err != nil {
+			panic(err)
+		}
 	}
-	viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName))
+	if err := viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName)); err != nil {
+		panic(err)
+	}
 }
 
 func (p *StringParam) ValueAsString() string {
