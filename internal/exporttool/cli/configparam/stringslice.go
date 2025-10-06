@@ -5,6 +5,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/widget"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -53,7 +54,7 @@ func (p *StringSliceParam) WithPossibleValues(values []string) *StringSliceParam
 }
 
 func toPairFn(fn func(context.Context) ([]string, error)) possibleValuesFnType {
-	return func(ctx context.Context)([][2]string, error) {
+	return func(ctx context.Context) ([][2]string, error) {
 		values, err := fn(ctx)
 		if err != nil {
 			return nil, err
@@ -104,16 +105,24 @@ func (p *StringSliceParam) AttachToCommand(command *cobra.Command) {
 		command.PersistentFlags().StringSlice(p.FlagName, p.defaultValue, p.Description)
 	}
 	if p.paramName.EnvVarName != "" {
-		viper.BindEnv(p.Name, p.paramName.EnvVarName)
+		if err := viper.BindEnv(p.Name, p.paramName.EnvVarName); err != nil {
+			panic(err)
+		}
 	}
-	viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName))
+	if err := viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName)); err != nil {
+		panic(err)
+	}
 }
 
 func (p *StringSliceParam) BindConfiguration(command *cobra.Command) {
 	if p.paramName.EnvVarName != "" {
-		viper.BindEnv(p.Name, p.paramName.EnvVarName)
+		if err := viper.BindEnv(p.Name, p.paramName.EnvVarName); err != nil {
+			panic(err)
+		}
 	}
-	viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName))
+	if err := viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName)); err != nil {
+		panic(err)
+	}
 }
 
 func (p *StringSliceParam) ValueAsString() string {

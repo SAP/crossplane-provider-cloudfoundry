@@ -22,24 +22,28 @@ func makeSelectOptionPair(options [][2]string) []huh.Option[string] {
 
 func MultiInput(title string, options []string) []string {
 	selected := []string{}
-	huh.NewMultiSelect[string]().
+	if err := huh.NewMultiSelect[string]().
 		Options(
-			makeSelectOption(options)...
+			makeSelectOption(options)...,
 		).
 		Title(title).
 		Value(&selected).
-		Run()
+		Run(); err != nil {
+		panic(err)
+	}
 	return selected
 }
 
 func MultiInputPair(title string, options [][2]string) []string {
 	selected := []string{}
-	huh.NewMultiSelect[string]().
+	if err := huh.NewMultiSelect[string]().
 		Options(
-			makeSelectOptionPair(options)...
+			makeSelectOptionPair(options)...,
 		).
 		Title(title).
 		Value(&selected).
-		Run()
+		Run(); err != nil {
+		panic(err)
+	}
 	return selected
 }

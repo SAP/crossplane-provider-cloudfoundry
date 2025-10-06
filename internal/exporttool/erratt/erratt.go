@@ -1,6 +1,7 @@
 package erratt
 
 import (
+	"errors"
 	"fmt"
 	"log/slog"
 )
@@ -8,8 +9,7 @@ import (
 type ErrorWithAttrs struct {
 	text       string
 	wrappedErr error
-	// attrs      []slog.Attr
-	attrs []any
+	attrs      []any
 }
 
 // ErroWithAttrs is an error type
@@ -19,8 +19,7 @@ func New(text string, args ...any) ErrorWithAttrs {
 	return ErrorWithAttrs{
 		text:       text,
 		wrappedErr: nil,
-		// attrs:      argsToAttrSlice(args),
-		attrs: args,
+		attrs:      args,
 	}
 }
 
@@ -66,16 +65,11 @@ func Errorf(format string, a ...any) ErrorWithAttrs {
 }
 
 func SlogWith(err error, logger *slog.Logger) {
-	switch tErr := err.(type) {
-	case ErrorWithAttrs:
-		// anyAttrs := make([]any, len(tErr.attrs))
-		// for i := range tErr.attrs {
-		// 	anyAttrs[i] = any(tErr.attrs[i])
-		// }
-		logger.Error(tErr.text, tErr.attrs...)
-	case error:
-		logger.Error(tErr.Error())
+	ewa := ErrorWithAttrs{}
+	if errors.As(err, &ewa) {
+		logger.Error(ewa.text, ewa.attrs...)
 	}
+	logger.Error(err.Error())
 }
 
 func Slog(err error) {
