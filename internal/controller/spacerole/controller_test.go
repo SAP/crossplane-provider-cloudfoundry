@@ -183,13 +183,56 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
+		"NotFound by uuid is not found": {
+			args: args{
+				mg: fakeSpaceRole(withSpace("my-space"), withExternalName(guidRole)),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withSpace("my-space"), withExternalName(guidRole)),
+				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: false, ResourceLateInitialized: false},
+				err: nil,
+			},
+			service: func() *fake.MockSpaceRole {
+				m := &fake.MockSpaceRole{}
+
+				var emptyRole []*cfresource.Role
+				var emptyUser []*cfresource.User
+
+				m.On("ListIncludeUsersAll").Return(
+					emptyRole,
+					emptyUser,
+					fake.ErrNoResultReturned,
+				)
+				return m
+			},
+		},
 		"Successful": {
 			args: args{
 				mg: fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager)),
 			},
 			want: want{
-				mg:  fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager)),
+				mg:  fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager), withExternalName(guidRole)),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
+				err: nil,
+			},
+			service: func() *fake.MockSpaceRole {
+				m := &fake.MockSpaceRole{}
+
+				m.On("ListIncludeUsersAll").Return(
+					[]*cfresource.Role{healthyRole},
+					[]*cfresource.User{healthyUser},
+					nil,
+				)
+				return m
+			},
+		},
+		"Successful when SpaceRole guid is found": {
+			args: args{
+				mg: fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager), withExternalName(guidRole)),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager), withExternalName(guidRole)),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
 			service: func() *fake.MockSpaceRole {
