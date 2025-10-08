@@ -25,8 +25,8 @@ var (
 	errBoom      = errors.New("boom")
 	errSpace     = errors.New(role.ErrSpaceNotSpecified)
 	resourceName = "my-space-roles"
-	guidSpace    = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69u"
-	guidRole     = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69r"
+	guidSpace    = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a"
+	guidRole     = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69b"
 
 	guidNoRefUser   = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 	guidHealthyUser = "1d1b0d04-d537-4e4e-8c6f-f09ca0e7f11f"
@@ -195,13 +195,9 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockSpaceRole {
 				m := &fake.MockSpaceRole{}
 
-				var emptyRole []*cfresource.Role
-				var emptyUser []*cfresource.User
-
-				m.On("ListIncludeUsersAll").Return(
-					emptyRole,
-					emptyUser,
-					fake.ErrNoResultReturned,
+				m.On("Get", guidRole).Return(
+					fake.SpaceRoleNil,
+					nil,
 				)
 				return m
 			},
@@ -238,9 +234,8 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockSpaceRole {
 				m := &fake.MockSpaceRole{}
 
-				m.On("ListIncludeUsersAll").Return(
-					[]*cfresource.Role{healthyRole},
-					[]*cfresource.User{healthyUser},
+				m.On("Get", guidRole).Return(
+					healthyRole,
 					nil,
 				)
 				return m
