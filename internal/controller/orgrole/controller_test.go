@@ -206,7 +206,6 @@ func TestObserve(t *testing.T) {
 				mg: fakeOrgRole(
 					withOrg(guidOrg),
 					withUsername("user1"),
-					withExternalName(guidRole),
 					withType(v1alpha1.OrgManager),
 					withExternalName(guidRole)),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: false, ResourceLateInitialized: false},
@@ -233,7 +232,6 @@ func TestObserve(t *testing.T) {
 				mg: fakeOrgRole(
 					withOrg(guidOrg),
 					withUsername("user1"),
-					withExternalName(guidRole),
 					withType(v1alpha1.OrgManager),
 					withExternalName(guidRole)),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
@@ -254,15 +252,12 @@ func TestObserve(t *testing.T) {
 			args: args{
 				mg: fakeOrgRole(
 					withOrg(guidOrg),
-					withUsername("user1"),
-					withType(v1alpha1.OrgManager),
 					withExternalName(guidRole)),
 			},
 			want: want{
 				mg: fakeOrgRole(
 					withOrg(guidOrg),
 					withUsername("user1"),
-					withExternalName(guidRole),
 					withType(v1alpha1.OrgManager),
 					withExternalName(guidRole)),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
