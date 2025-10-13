@@ -1,7 +1,7 @@
 package space
 
 import (
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
 
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 )
@@ -70,7 +70,7 @@ func (c *Cache) GetNames() []string {
 	return names
 }
 
-func (c *Cache) Export(evHandler cli.EventHandler) {
+func (c *Cache) Export(evHandler export.EventHandler) {
 	for _, space := range c.guidIndex {
 		evHandler.Resource(convertSpaceResource(space))
 	}
