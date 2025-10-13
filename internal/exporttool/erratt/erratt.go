@@ -6,44 +6,44 @@ import (
 	"log/slog"
 )
 
-type ErrorWithAttrs struct {
+type Error struct {
 	text       string
 	wrappedErr error
 	attrs      []any
 }
 
-// ErroWithAttrs is an error type
-var _ error = ErrorWithAttrs{}
+// Error is an error type
+var _ error = &Error{}
 
-func New(text string, args ...any) ErrorWithAttrs {
-	return ErrorWithAttrs{
+func New(text string, args ...any) *Error {
+	return &Error{
 		text:       text,
 		wrappedErr: nil,
 		attrs:      args,
 	}
 }
 
-func (ea ErrorWithAttrs) Error() string {
+func (ea *Error) Error() string {
 	return ea.text
 }
 
-func (ea ErrorWithAttrs) Attrs() []any {
+func (ea *Error) Attrs() []any {
 	return ea.attrs
 }
 
-func (ea ErrorWithAttrs) Unwrap() error {
+func (ea *Error) Unwrap() error {
 	return ea.wrappedErr
 }
 
-func (ea ErrorWithAttrs) With(args ...any) ErrorWithAttrs {
-	return ErrorWithAttrs{
+func (ea *Error) With(args ...any) *Error {
+	return &Error{
 		text:       ea.text,
 		wrappedErr: ea.wrappedErr,
 		attrs:      append(ea.attrs, args...),
 	}
 }
 
-func Errorf(format string, a ...any) ErrorWithAttrs {
+func Errorf(format string, a ...any) *Error {
 	err := fmt.Errorf(format, a...)
 	var wrappedErr error
 	var attrs []any
@@ -57,7 +57,7 @@ func Errorf(format string, a ...any) ErrorWithAttrs {
 			attrs = attrErr.Attrs()
 		}
 	}
-	return ErrorWithAttrs{
+	return &Error{
 		text:       err.Error(),
 		wrappedErr: wrappedErr,
 		attrs:      attrs,
@@ -65,7 +65,7 @@ func Errorf(format string, a ...any) ErrorWithAttrs {
 }
 
 func SlogWith(err error, logger *slog.Logger) {
-	ewa := ErrorWithAttrs{}
+	ewa := &Error{}
 	if errors.As(err, &ewa) {
 		logger.Error(ewa.text, ewa.attrs...)
 	}
