@@ -90,9 +90,7 @@ func handleResources(ctx context.Context, resourceChan <-chan resource.Object, e
 			if err != nil {
 				errChan <- erratt.Errorf("cannot YAML-marshal resource: %w", err)
 			} else {
-				fmt.Println("---")
 				fmt.Print(y)
-				fmt.Println("...")
 			}
 		case <-ctx.Done():
 			// execution is cancelled
