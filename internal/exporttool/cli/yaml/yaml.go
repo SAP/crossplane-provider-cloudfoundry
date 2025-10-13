@@ -12,6 +12,13 @@ func Marshal(resource any) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return fmt.Sprintf("---\n%s...\n", string(b)), nil
+}
+
+func MarshalPretty(resource any) (string, error) {
+	b, err := yaml.Marshal(resource)
+	if err != nil {
+		return "", err
+	}
 	return glamour.Render(fmt.Sprintf("```yaml\n---\n%s...\n```", string(b)), "auto")
-	// return string(b), nil
 }
