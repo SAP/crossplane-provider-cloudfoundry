@@ -11,6 +11,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -111,7 +112,7 @@ func convertPossibleValuesFn(fn func() []string) func() ([]string, error) {
 }
 
 //nolint:gocyclo
-func exportCmd(evHandler cli.EventHandler) error {
+func exportCmd(evHandler export.EventHandler) error {
 	cfConfig, err := config.Get(apiUrlParam, usernameParam, passwordParam)
 	if err != nil {
 		return err
@@ -126,7 +127,7 @@ func exportCmd(evHandler cli.EventHandler) error {
 		"user", usernameParam.ValueAsString(),
 	)
 
-	selectedResources, err := cli.ResourceKindParam.ValueOrAsk()
+	selectedResources, err := export.ResourceKindParam.ValueOrAsk()
 	if err != nil {
 		return erratt.Errorf("cannot get the value for resource kind parameter: %w", err)
 	}
@@ -183,14 +184,14 @@ var (
 func main() {
 	cli.Configuration.ShortName = shortName
 	cli.Configuration.ObservedSystem = observedSystem
-	cli.SetExportCommand(exportCmd)
-	cli.AddExportCommandParams(
+	export.SetCommand(exportCmd)
+	export.AddCommandParams(
 		apiUrlParam,
 		usernameParam,
 		passwordParam,
 		orgsParam,
 		spacesParam,
 	)
-	cli.AddExportableResourceKinds("organization", "space", "serviceinstance")
+	export.AddResourceKinds("organization", "space", "serviceinstance")
 	cli.Execute()
 }

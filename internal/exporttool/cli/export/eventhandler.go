@@ -1,4 +1,4 @@
-package cli
+package export
 
 import (
 	"context"
@@ -7,65 +7,12 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/subcommand"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/yaml"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 
 	"github.com/charmbracelet/log"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 )
-
-func init() {
-	RegisterSubCommand(exportCmd)
-}
-
-type exportSubCommand struct {
-	runCommand              func(EventHandler) error
-	configParams            configparam.ParamList
-	exportableResourceKinds []string
-}
-
-var ResourceKindParam = configparam.StringSlice("exported kinds", "Resource kinds to export").
-	WithShortName("k").
-	WithFlagName("kind")
-
-var OutputParam = configparam.String("output", "redirect the YAML output to a file").
-	WithShortName("o").
-	WithFlagName("output")
-
-var (
-	_         subcommand.SubCommand = &exportSubCommand{}
-	exportCmd                       = &exportSubCommand{
-		runCommand: func(_ EventHandler) error {
-			return erratt.New("export subcommand is not set")
-		},
-		configParams: configparam.ParamList{
-			ResourceKindParam,
-			OutputParam,
-		},
-	}
-)
-
-func (c *exportSubCommand) GetName() string {
-	return "export"
-}
-
-func (c *exportSubCommand) GetShort() string {
-	return fmt.Sprintf("Export %s resources", Configuration.CLIConfiguration.ObservedSystem)
-}
-
-func (c *exportSubCommand) GetLong() string {
-	return fmt.Sprintf("Export %s resources and transform them into managed resources that the Crossplane provider can consume", Configuration.CLIConfiguration.ObservedSystem)
-}
-
-func (c *exportSubCommand) GetConfigParams() configparam.ParamList {
-	return c.configParams
-}
-
-func (c *exportSubCommand) MustIgnoreConfigFile() bool {
-	return false
-}
 
 func printErrors(ctx context.Context, errChan <-chan erratt.Error) {
 	errlog := slog.New(log.NewWithOptions(os.Stderr, log.Options{}))
@@ -197,21 +144,4 @@ func newEventHandler() eventHandler {
 		errorHandler:    newErrorHandler(),
 		resourceHandler: newResourceHandler(),
 	}
-}
-
-func SetExportCommand(cmd func(EventHandler) error) {
-	exportCmd.runCommand = cmd
-}
-
-func AddExportCommandParams(param ...configparam.ConfigParam) {
-	exportCmd.configParams = append(exportCmd.configParams, param...)
-}
-
-func GetExportConfigParams() configparam.ParamList {
-	return exportCmd.configParams
-}
-
-func AddExportableResourceKinds(kinds ...string) {
-	exportCmd.exportableResourceKinds = append(exportCmd.exportableResourceKinds, kinds...)
-	ResourceKindParam.WithPossibleValues(exportCmd.exportableResourceKinds)
 }
