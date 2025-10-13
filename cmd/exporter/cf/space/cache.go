@@ -1,8 +1,9 @@
 package space
 
 import (
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
+
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	cpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 )
 
 type Cache struct {
@@ -69,8 +70,8 @@ func (c *Cache) GetNames() []string {
 	return names
 }
 
-func (c *Cache) Export(resChan chan<- cpresource.Object) {
+func (c *Cache) Export(evHandler cli.EventHandler) {
 	for _, space := range c.guidIndex {
-		resChan <- convertSpaceResource(space)
+		evHandler.Resource(convertSpaceResource(space))
 	}
 }
