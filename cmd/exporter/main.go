@@ -112,7 +112,7 @@ func convertPossibleValuesFn(fn func() []string) func() ([]string, error) {
 }
 
 //nolint:gocyclo
-func exportCmd(resourceChan chan<- resource.Object, errChan chan<- *erratt.Error) error {
+func exportCmd(resourceChan chan<- resource.Object, errChan chan<- erratt.Error) error {
 	cfConfig, err := config.Get(apiUrlParam, usernameParam, passwordParam)
 	if err != nil {
 		return err
