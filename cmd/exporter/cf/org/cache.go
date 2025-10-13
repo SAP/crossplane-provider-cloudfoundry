@@ -1,7 +1,7 @@
 package org
 
 import (
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
 
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 )
@@ -65,7 +65,7 @@ func (c *Cache) GetGUIDs() []string {
 	return guids
 }
 
-func (c *Cache) Export(evHandler cli.EventHandler) {
+func (c *Cache) Export(evHandler export.EventHandler) {
 	for _, org := range c.guidIndex {
 		evHandler.Resource(convertOrgResource(org))
 	}
