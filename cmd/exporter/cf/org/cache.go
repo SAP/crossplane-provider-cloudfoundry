@@ -1,8 +1,9 @@
 package org
 
 import (
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
+
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	cpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 )
 
 type Cache struct {
@@ -64,8 +65,8 @@ func (c *Cache) GetGUIDs() []string {
 	return guids
 }
 
-func (c *Cache) Export(resChan chan<- cpresource.Object) {
+func (c *Cache) Export(evHandler cli.EventHandler) {
 	for _, org := range c.guidIndex {
-		resChan <- convertOrgResource(org)
+		evHandler.Resource(convertOrgResource(org))
 	}
 }
