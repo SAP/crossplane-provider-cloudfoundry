@@ -12,7 +12,7 @@ import (
 var _ = Describe("Erratt", func() {
 	var (
 		errStr string
-		ea     *erratt.Error
+		ea     erratt.Error
 	)
 
 	BeforeEach(func() {
@@ -49,7 +49,7 @@ var _ = Describe("Erratt", func() {
 	})
 	Describe("Errorf function", func() {
 		Context("with a single string", func() {
-			var ea *erratt.Error
+			var ea erratt.Error
 			Context("and no attributes", func() {
 				BeforeEach(func() {
 					ea = erratt.Errorf("test error")
@@ -152,7 +152,7 @@ var _ = Describe("Erratt", func() {
 			})
 		})
 		Context("with a wrapped erratt error", func() {
-			var wrappedErratt *erratt.Error
+			var wrappedErratt erratt.Error
 			BeforeEach(func() {
 				wrappedErratt = erratt.New("wrapped", "key", "value")
 			})
