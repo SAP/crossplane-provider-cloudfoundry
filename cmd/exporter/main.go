@@ -14,7 +14,6 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
 )
 
 const (
@@ -112,7 +111,7 @@ func convertPossibleValuesFn(fn func() []string) func() ([]string, error) {
 }
 
 //nolint:gocyclo
-func exportCmd(resourceChan chan<- resource.Object, errChan chan<- erratt.Error) error {
+func exportCmd(evHandler cli.EventHandler) error {
 	cfConfig, err := config.Get(apiUrlParam, usernameParam, passwordParam)
 	if err != nil {
 		return err
@@ -139,13 +138,13 @@ func exportCmd(resourceChan chan<- resource.Object, errChan chan<- erratt.Error)
 			if err != nil {
 				return err
 			}
-			orgs.Export(resourceChan)
+			orgs.Export(evHandler)
 		case "space":
 			spaces, err := getSpaces(cfClient)
 			if err != nil {
 				return err
 			}
-			spaces.Export(resourceChan)
+			spaces.Export(evHandler)
 		case "serviceinstance":
 			serviceInstaces, err := getServiceInstances(cfClient)
 			if err != nil {
@@ -153,7 +152,7 @@ func exportCmd(resourceChan chan<- resource.Object, errChan chan<- erratt.Error)
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 			defer cancel()
-			serviceInstaces.Export(ctx, cfClient, resourceChan, errChan)
+			serviceInstaces.Export(ctx, cfClient, evHandler)
 		default:
 			return erratt.New("unknown resource kind specified", "kind", kind)
 		}

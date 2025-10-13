@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -21,17 +22,17 @@ func convertServiceInstanceTags(tags []string) []*string {
 	return result
 }
 
-func generateServicePlan(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- erratt.Error) *v1alpha1.ServicePlanParameters {
+func generateServicePlan(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler cli.EventHandler) *v1alpha1.ServicePlanParameters {
 	if serviceInstance.Relationships.ServicePlan != nil &&
 		serviceInstance.Relationships.ServicePlan.Data != nil {
 		sPlan, err := cfClient.ServicePlans.Get(ctx, serviceInstance.Relationships.ServicePlan.Data.GUID)
 		if err != nil {
-			errChan <- erratt.Errorf("cannot get service plan of service instance: %w", err).With("service-instance-guid", serviceInstance.GUID, "service-plan-guid", serviceInstance.Relationships.ServicePlan.Data.GUID)
+			evHandler.Error(erratt.Errorf("cannot get service plan of service instance: %w", err).With("service-instance-guid", serviceInstance.GUID, "service-plan-guid", serviceInstance.Relationships.ServicePlan.Data.GUID))
 			return nil
 		}
 		sOffering, err := cfClient.ServiceOfferings.Get(ctx, sPlan.Relationships.ServiceOffering.Data.GUID)
 		if err != nil {
-			errChan <- erratt.Errorf("cannot get service offering of service plan: %w", err).With("service-ofering-guid", sPlan.Relationships.ServiceOffering.Data.GUID, "service-plan-guid", serviceInstance.Relationships.ServicePlan.Data.GUID)
+			evHandler.Error(erratt.Errorf("cannot get service offering of service plan: %w", err).With("service-ofering-guid", sPlan.Relationships.ServiceOffering.Data.GUID, "service-plan-guid", serviceInstance.Relationships.ServicePlan.Data.GUID))
 			return nil
 		}
 
@@ -44,18 +45,18 @@ func generateServicePlan(ctx context.Context, cfClient *client.Client, serviceIn
 	return nil
 }
 
-func generateJsonCreds(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- erratt.Error) *string {
+func generateJsonCreds(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler cli.EventHandler) *string {
 	var jsonCreds *string
 
 	if serviceInstance.Type != "managed" {
 		creds, err := cfClient.ServiceInstances.GetUserProvidedCredentials(ctx, serviceInstance.GUID)
 		if err != nil {
-			errChan <- erratt.Errorf("cannot get service instance provided credentials: %w", err).With("guid", serviceInstance.GUID)
+			evHandler.Error(erratt.Errorf("cannot get service instance provided credentials: %w", err).With("guid", serviceInstance.GUID))
 			return nil
 		}
 		jsonCredsBytes, err := creds.MarshalJSON()
 		if err != nil {
-			errChan <- erratt.Errorf("cannot JSON marshal service instance provided credentials: %w", err).With("guid", serviceInstance.GUID)
+			evHandler.Error(erratt.Errorf("cannot JSON marshal service instance provided credentials: %w", err).With("guid", serviceInstance.GUID))
 			return nil
 		}
 		jsonCreds = ptr.To(string(jsonCredsBytes))
@@ -63,26 +64,26 @@ func generateJsonCreds(ctx context.Context, cfClient *client.Client, serviceInst
 	return jsonCreds
 }
 
-func generateJsonParams(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- erratt.Error) *string {
+func generateJsonParams(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler cli.EventHandler) *string {
 	var jsonParams *string
 	if serviceInstance.Type == "managed" {
 		params, err := cfClient.ServiceInstances.GetManagedParameters(ctx, serviceInstance.GUID)
 		if err == nil {
 			jsonParamsBytes, err := params.MarshalJSON()
 			if err != nil {
-				errChan <- erratt.Errorf("cannot JSON marshal service instance managed parameters: %w", err).With("guid", serviceInstance.GUID)
+				evHandler.Error(erratt.Errorf("cannot JSON marshal service instance managed parameters: %w", err).With("guid", serviceInstance.GUID))
 				return nil
 			}
 			jsonParams = ptr.To(string(jsonParamsBytes))
 		} else {
-			errChan <- erratt.Errorf("cannot get service instance managed parameters: %w", err).With("serviceinstance-guid", serviceInstance.GUID)
+			evHandler.Error(erratt.Errorf("cannot get service instance managed parameters: %w", err).With("serviceinstance-guid", serviceInstance.GUID))
 		}
 	}
 	return jsonParams
 }
 
-func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- erratt.Error) *v1alpha1.ServiceInstance {
-	servicePlan := generateServicePlan(ctx, cfClient, serviceInstance, errChan)
+func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler cli.EventHandler) *v1alpha1.ServiceInstance {
+	servicePlan := generateServicePlan(ctx, cfClient, serviceInstance, evHandler)
 
 	var maintenanceInfoDescription *string
 	var maintenanceInfoVersion *string
@@ -92,8 +93,8 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 
 	}
 
-	jsonParams := generateJsonParams(ctx, cfClient, serviceInstance, errChan)
-	jsonCreds := generateJsonCreds(ctx, cfClient, serviceInstance, errChan)
+	jsonParams := generateJsonParams(ctx, cfClient, serviceInstance, evHandler)
+	jsonCreds := generateJsonCreds(ctx, cfClient, serviceInstance, evHandler)
 
 	return &v1alpha1.ServiceInstance{
 		TypeMeta: metav1.TypeMeta{

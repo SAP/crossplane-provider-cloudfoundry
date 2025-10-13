@@ -21,7 +21,7 @@ func init() {
 }
 
 type exportSubCommand struct {
-	runCommand              func(resourceChan chan<- resource.Object, errChan chan<- erratt.Error) error
+	runCommand              func(EventHandler) error
 	configParams            configparam.ParamList
 	exportableResourceKinds []string
 }
@@ -37,7 +37,7 @@ var OutputParam = configparam.String("output", "redirect the YAML output to a fi
 var (
 	_         subcommand.SubCommand = &exportSubCommand{}
 	exportCmd                       = &exportSubCommand{
-		runCommand: func(_ chan<- resource.Object, _ chan<- erratt.Error) error {
+		runCommand: func(_ EventHandler) error {
 			return erratt.New("export subcommand is not set")
 		},
 		configParams: configparam.ParamList{
@@ -150,15 +150,56 @@ func (c *exportSubCommand) Run() func() error {
 	return func() error {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		errChan := make(chan erratt.Error)
-		go printErrors(ctx, errChan)
-		resourceChan := make(chan resource.Object)
-		go handleResources(ctx, resourceChan, errChan)
-		return c.runCommand(resourceChan, errChan)
+		// errChan := make(chan erratt.Error)
+		evHandler := newEventHandler()
+		go printErrors(ctx, evHandler.errorHandler)
+		// resourceChan := make(chan resource.Object)
+
+		go handleResources(ctx, evHandler.resourceHandler, evHandler.errorHandler)
+		return c.runCommand(evHandler)
 	}
 }
 
-func SetExportCommand(cmd func(resourceChan chan<- resource.Object, errChan chan<- erratt.Error) error) {
+type errorHandler chan erratt.Error
+
+func newErrorHandler() errorHandler {
+	return make(chan erratt.Error)
+}
+
+func (eh errorHandler) Error(err erratt.Error) {
+	eh <- err
+}
+
+type resourceHandler chan resource.Object
+
+func newResourceHandler() resourceHandler {
+	return make(chan resource.Object)
+}
+
+func (rh resourceHandler) Resource(res resource.Object) {
+	rh <- res
+}
+
+type EventHandler interface {
+	Error(erratt.Error)
+	Resource(resource.Object)
+}
+
+type eventHandler struct {
+	errorHandler
+	resourceHandler
+}
+
+var _ EventHandler = eventHandler{}
+
+func newEventHandler() eventHandler {
+	return eventHandler{
+		errorHandler:    newErrorHandler(),
+		resourceHandler: newResourceHandler(),
+	}
+}
+
+func SetExportCommand(cmd func(EventHandler) error) {
 	exportCmd.runCommand = cmd
 }
 
