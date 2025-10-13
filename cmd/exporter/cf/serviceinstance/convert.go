@@ -21,7 +21,7 @@ func convertServiceInstanceTags(tags []string) []*string {
 	return result
 }
 
-func generateServicePlan(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- erratt.ErrorWithAttrs) *v1alpha1.ServicePlanParameters {
+func generateServicePlan(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- *erratt.Error) *v1alpha1.ServicePlanParameters {
 	if serviceInstance.Relationships.ServicePlan != nil &&
 		serviceInstance.Relationships.ServicePlan.Data != nil {
 		sPlan, err := cfClient.ServicePlans.Get(ctx, serviceInstance.Relationships.ServicePlan.Data.GUID)
@@ -44,7 +44,7 @@ func generateServicePlan(ctx context.Context, cfClient *client.Client, serviceIn
 	return nil
 }
 
-func generateJsonCreds(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- erratt.ErrorWithAttrs) *string {
+func generateJsonCreds(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- *erratt.Error) *string {
 	var jsonCreds *string
 
 	if serviceInstance.Type != "managed" {
@@ -63,7 +63,7 @@ func generateJsonCreds(ctx context.Context, cfClient *client.Client, serviceInst
 	return jsonCreds
 }
 
-func generateJsonParams(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- erratt.ErrorWithAttrs) *string {
+func generateJsonParams(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- *erratt.Error) *string {
 	var jsonParams *string
 	if serviceInstance.Type == "managed" {
 		params, err := cfClient.ServiceInstances.GetManagedParameters(ctx, serviceInstance.GUID)
@@ -81,7 +81,7 @@ func generateJsonParams(ctx context.Context, cfClient *client.Client, serviceIns
 	return jsonParams
 }
 
-func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- erratt.ErrorWithAttrs) *v1alpha1.ServiceInstance {
+func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, errChan chan<- *erratt.Error) *v1alpha1.ServiceInstance {
 	servicePlan := generateServicePlan(ctx, cfClient, serviceInstance, errChan)
 
 	var maintenanceInfoDescription *string

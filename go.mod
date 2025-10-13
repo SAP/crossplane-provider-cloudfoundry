@@ -6,6 +6,7 @@ toolchain go1.24.5
 
 require (
 	github.com/charmbracelet/bubbles v0.21.0
+	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/huh v0.7.0
 	github.com/charmbracelet/lipgloss v1.1.0
 	github.com/charmbracelet/log v0.4.2
