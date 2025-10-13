@@ -21,7 +21,7 @@ func init() {
 }
 
 type exportSubCommand struct {
-	runCommand              func(resourceChan chan<- resource.Object, errChan chan<- *erratt.Error) error
+	runCommand              func(resourceChan chan<- resource.Object, errChan chan<- erratt.Error) error
 	configParams            configparam.ParamList
 	exportableResourceKinds []string
 }
@@ -37,7 +37,7 @@ var OutputParam = configparam.String("output", "redirect the YAML output to a fi
 var (
 	_         subcommand.SubCommand = &exportSubCommand{}
 	exportCmd                       = &exportSubCommand{
-		runCommand: func(_ chan<- resource.Object, _ chan<- *erratt.Error) error {
+		runCommand: func(_ chan<- resource.Object, _ chan<- erratt.Error) error {
 			return erratt.New("export subcommand is not set")
 		},
 		configParams: configparam.ParamList{
@@ -67,7 +67,7 @@ func (c *exportSubCommand) MustIgnoreConfigFile() bool {
 	return false
 }
 
-func printErrors(ctx context.Context, errChan <-chan *erratt.Error) {
+func printErrors(ctx context.Context, errChan <-chan erratt.Error) {
 	errlog := slog.New(log.NewWithOptions(os.Stderr, log.Options{}))
 	for {
 		select {
@@ -84,7 +84,7 @@ func printErrors(ctx context.Context, errChan <-chan *erratt.Error) {
 	}
 }
 
-func openOutput() (*os.File, *erratt.Error) {
+func openOutput() (*os.File, erratt.Error) {
 	var fileOutput *os.File
 	if o := OutputParam.Value(); o != "" {
 		var err error
@@ -98,7 +98,7 @@ func openOutput() (*os.File, *erratt.Error) {
 	return fileOutput, nil
 }
 
-func resourceLoop(ctx context.Context, fileOutput *os.File, resourceChan <-chan resource.Object, errChan chan<- *erratt.Error) {
+func resourceLoop(ctx context.Context, fileOutput *os.File, resourceChan <-chan resource.Object, errChan chan<- erratt.Error) {
 	for {
 		select {
 		case res, ok := <-resourceChan:
@@ -132,7 +132,7 @@ func resourceLoop(ctx context.Context, fileOutput *os.File, resourceChan <-chan 
 	}
 }
 
-func handleResources(ctx context.Context, resourceChan <-chan resource.Object, errChan chan<- *erratt.Error) {
+func handleResources(ctx context.Context, resourceChan <-chan resource.Object, errChan chan<- erratt.Error) {
 	fileOutput, err := openOutput()
 	if err != nil {
 		errChan <- err
@@ -150,7 +150,7 @@ func (c *exportSubCommand) Run() func() error {
 	return func() error {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
-		errChan := make(chan *erratt.Error)
+		errChan := make(chan erratt.Error)
 		go printErrors(ctx, errChan)
 		resourceChan := make(chan resource.Object)
 		go handleResources(ctx, resourceChan, errChan)
@@ -158,7 +158,7 @@ func (c *exportSubCommand) Run() func() error {
 	}
 }
 
-func SetExportCommand(cmd func(resourceChan chan<- resource.Object, errChan chan<- *erratt.Error) error) {
+func SetExportCommand(cmd func(resourceChan chan<- resource.Object, errChan chan<- erratt.Error) error) {
 	exportCmd.runCommand = cmd
 }
 
