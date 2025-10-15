@@ -6,6 +6,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/yaml"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
@@ -14,7 +15,8 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 )
 
-func printErrors(ctx context.Context, errChan <-chan erratt.Error) {
+func printErrors(ctx context.Context, wg *sync.WaitGroup, errChan <-chan erratt.Error) {
+	defer wg.Done()
 	errlog := slog.New(log.NewWithOptions(os.Stderr, log.Options{}))
 	for {
 		select {
@@ -79,15 +81,18 @@ func resourceLoop(ctx context.Context, fileOutput *os.File, resourceChan <-chan 
 	}
 }
 
-func handleResources(ctx context.Context, resourceChan <-chan resource.Object, errChan chan<- erratt.Error) {
+func handleResources(ctx context.Context, wg *sync.WaitGroup, resourceChan <-chan resource.Object, errChan chan<- erratt.Error) {
+	defer wg.Done()
 	fileOutput, err := openOutput()
 	if err != nil {
 		errChan <- err
 	}
 	defer func() {
-		err := fileOutput.Close()
-		if err != nil {
-			errChan <- erratt.Errorf("Cannot close output file: %w", err).With("output", fileOutput.Name())
+		if fileOutput != nil {
+			err := fileOutput.Close()
+			if err != nil {
+				errChan <- erratt.Errorf("Cannot close output file: %w", err).With("output", fileOutput.Name())
+			}
 		}
 	}()
 	resourceLoop(ctx, fileOutput, resourceChan, errChan)
@@ -99,11 +104,19 @@ func (c *exportSubCommand) Run() func() error {
 		defer cancel()
 		// errChan := make(chan erratt.Error)
 		evHandler := newEventHandler()
-		go printErrors(ctx, evHandler.errorHandler)
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go printErrors(ctx, &wg, evHandler.errorHandler)
 		// resourceChan := make(chan resource.Object)
 
-		go handleResources(ctx, evHandler.resourceHandler, evHandler.errorHandler)
-		return c.runCommand(evHandler)
+		wg.Add(1)
+		go handleResources(ctx, &wg, evHandler.resourceHandler, evHandler.errorHandler)
+		err := c.runCommand(evHandler)
+		if err != nil {
+			return err
+		}
+		wg.Wait()
+		return nil
 	}
 }
 
@@ -130,6 +143,7 @@ func (rh resourceHandler) Resource(res resource.Object) {
 type EventHandler interface {
 	Error(erratt.Error)
 	Resource(resource.Object)
+	Stop()
 }
 
 type eventHandler struct {
@@ -144,4 +158,9 @@ func newEventHandler() eventHandler {
 		errorHandler:    newErrorHandler(),
 		resourceHandler: newResourceHandler(),
 	}
+}
+
+func (eh eventHandler) Stop() {
+	close(eh.errorHandler)
+	close(eh.resourceHandler)
 }

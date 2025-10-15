@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/config"
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/guidname"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/serviceinstance"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
@@ -34,12 +35,27 @@ func getOrgs(cfClient *client.Client) (*org.Cache, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	orgs, err := org.GetAll(ctx, cfClient)
+	orgsParam.WithPossibleValuesFn(org.GetAllNamesFn(ctx, cfClient))
+
+	selectedOrgs, err := orgsParam.ValueOrAsk()
 	if err != nil {
-		return nil, erratt.Errorf("cannot get organizations: %w", err)
+		return nil, err
+	}
+
+	orgNames := make([]string, len(selectedOrgs))
+	for i, orgName := range selectedOrgs {
+		name, err := guidname.ParseName(orgName)
+		if err != nil {
+			return nil, err
+		}
+		orgNames[i] = name.Name
+	}
+	slog.Info("collecting orgs", "org-names", orgNames)
+	orgs, err := org.GetAll(ctx, cfClient, orgNames)
+	if err != nil {
+		return nil, err
 	}
 	orgCache = org.New(orgs)
-	orgsParam.WithPossibleValuesFn(convertPossibleValuesFn(orgCache.GetNames))
 	return orgCache, nil
 }
 
@@ -51,15 +67,26 @@ func getSpaces(cfClient *client.Client) (*space.Cache, error) {
 	if err != nil {
 		return nil, err
 	}
-	selectedOrgs, err := orgsParam.ValueOrAsk()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	spacesParam.WithPossibleValuesFn(space.GetAllNamesFn(ctx, cfClient, orgs.GetGUIDs()))
+
+	selectedSpaces, err := spacesParam.ValueOrAsk()
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
+	spaceNames := make([]string, len(selectedSpaces))
+	for i, spaceName := range selectedSpaces {
+		name, err := guidname.ParseName(spaceName)
+		if err != nil {
+			return nil, err
+		}
+		spaceNames[i] = name.Name
+	}
 
-	spaces, err := space.GetAll(ctx, cfClient, orgs.GetGuidsByNames(selectedOrgs))
+	spaces, err := space.GetAll(ctx, cfClient, orgs.GetGUIDs(), spaceNames)
 	if err != nil {
 		return nil, erratt.Errorf("cannot get spaces: %w", err)
 	}
@@ -72,11 +99,8 @@ func getServiceInstances(cfClient *client.Client) (*serviceinstance.Cache, error
 	if serviceInstanceCache != nil {
 		return serviceInstanceCache, nil
 	}
+
 	orgs, err := getOrgs(cfClient)
-	if err != nil {
-		return nil, err
-	}
-	selectedOrgs, err := orgsParam.ValueOrAsk()
 	if err != nil {
 		return nil, err
 	}
@@ -85,18 +109,30 @@ func getServiceInstances(cfClient *client.Client) (*serviceinstance.Cache, error
 	if err != nil {
 		return nil, err
 	}
-	selectedSpaces, err := spacesParam.ValueOrAsk()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	serviceInstanceParam.WithPossibleValuesFn(serviceinstance.GetAllNamesFn(ctx, cfClient, orgs.GetGUIDs(), spaces.GetGUIDs()))
+
+	selectedServiceInstances, err := serviceInstanceParam.ValueOrAsk()
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
+	serviceInstanceNames := make([]string, len(selectedServiceInstances))
+	for i, serviceInstanceName := range selectedServiceInstances {
+		name, err := guidname.ParseName(serviceInstanceName)
+		if err != nil {
+			return nil, err
+		}
+		serviceInstanceNames[i] = name.Name
+	}
 
 	serviceInstances, err := serviceinstance.GetAll(ctx,
 		cfClient,
-		orgs.GetGuidsByNames(selectedOrgs),
-		spaces.GetGuidsByNames(selectedSpaces),
+		orgs.GetGUIDs(),
+		spaces.GetGUIDs(),
+		serviceInstanceNames,
 	)
 	if err != nil {
 		return nil, err
@@ -139,6 +175,7 @@ func exportCmd(evHandler export.EventHandler) error {
 			if err != nil {
 				return err
 			}
+			slog.Info("orgs collected", "orgs", orgs)
 			orgs.Export(evHandler)
 		case "space":
 			spaces, err := getSpaces(cfClient)
@@ -158,6 +195,7 @@ func exportCmd(evHandler export.EventHandler) error {
 			return erratt.New("unknown resource kind specified", "kind", kind)
 		}
 	}
+	evHandler.Stop()
 	return nil
 }
 
@@ -179,6 +217,8 @@ var (
 			WithFlagName("org")
 	spacesParam = configparam.StringSlice("space", "Filter for Cloud Foundry spaces").
 			WithFlagName("space")
+	serviceInstanceParam = configparam.StringSlice("serviceinstance", "Filter for Cloud Foundry service instances").
+				WithFlagName("serviceinstance")
 )
 
 func main() {

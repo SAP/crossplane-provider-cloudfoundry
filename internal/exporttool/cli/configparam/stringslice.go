@@ -8,24 +8,33 @@ import (
 	"github.com/spf13/viper"
 )
 
-type possibleValuesFnType func() ([][2]string, error)
+type possibleValuesFnType func() ([]string, error)
 
 type StringSliceParam struct {
 	*paramName
 	defaultValue     []string
 	sensitive        bool
-	possibleValues   [][2]string
+	possibleValues   []string
 	possibleValuesFn possibleValuesFnType
 }
 
 var _ ConfigParam = &StringSliceParam{}
+
+// func basicValueToPair(ss []string) [][2]string {
+// 	result := make([][2]string, len(ss))
+// 	for i, s := range ss {
+// 		result[i][0] = s
+// 		result[i][1] = s
+// 	}
+// 	return result
+// }
 
 func StringSlice(name, description string) *StringSliceParam {
 	return &StringSliceParam{
 		paramName:      newParamName(name, description),
 		defaultValue:   []string{},
 		sensitive:      false,
-		possibleValues: [][2]string{},
+		possibleValues: []string{},
 	}
 }
 
@@ -43,38 +52,24 @@ func (p *StringSliceParam) WithDefaultValue(values []string) *StringSliceParam {
 }
 
 func (p *StringSliceParam) WithPossibleValues(values []string) *StringSliceParam {
-	p.possibleValues = make([][2]string, len(values))
-	for i, v := range values {
-		p.possibleValues[i][0] = v
-		p.possibleValues[i][1] = v
-	}
+	p.possibleValues = values
 	return p
 }
 
-func toPairFn(fn func() ([]string, error)) possibleValuesFnType {
-	return func() ([][2]string, error) {
-		values, err := fn()
-		if err != nil {
-			return nil, err
-		}
-		pairValues := make([][2]string, len(values))
-		for i, v := range values {
-			pairValues[i][0] = v
-			pairValues[i][1] = v
-		}
-		return pairValues, nil
-	}
-}
-
-func (p *StringSliceParam) WithPossibleValuesFn(fn func() ([]string, error)) *StringSliceParam {
-	p.possibleValuesFn = toPairFn(fn)
-	return p
-}
-
-func (p *StringSliceParam) WithPossibleValuesPairFn(fn possibleValuesFnType) *StringSliceParam {
-	p.possibleValuesFn = fn
-	return p
-}
+// func toPairFn(fn func() ([]string, error)) possibleValuesFnType {
+// 	return func() ([][2]string, error) {
+// 		values, err := fn()
+// 		if err != nil {
+// 			return nil, err
+// 		}
+// 		pairValues := make([][2]string, len(values))
+// 		for i, v := range values {
+// 			pairValues[i][0] = v
+// 			pairValues[i][1] = v
+// 		}
+// 		return pairValues, nil
+// 	}
+// }
 
 func (p *StringSliceParam) WithShortName(name string) *StringSliceParam {
 	p.paramName.WithShortName(name)
@@ -85,6 +80,16 @@ func (p *StringSliceParam) WithFlagName(name string) *StringSliceParam {
 	p.paramName.WithFlagName(name)
 	return p
 }
+
+func (p *StringSliceParam) WithPossibleValuesFn(fn func() ([]string, error)) *StringSliceParam {
+	p.possibleValuesFn = fn
+	return p
+}
+
+// func (p *StringSliceParam) WithPossibleValuesPairFn(fn possibleValuesFnType) *StringSliceParam {
+// 	p.possibleValuesFn = fn
+// 	return p
+// }
 
 func (p *StringSliceParam) WithEnvVarName(name string) *StringSliceParam {
 	p.paramName.WithEnvVarName(name)
