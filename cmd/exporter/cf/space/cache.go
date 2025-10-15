@@ -70,6 +70,16 @@ func (c *Cache) GetNames() []string {
 	return names
 }
 
+func (c *Cache) GetGUIDs() []string {
+	guids := make([]string, len(c.guidIndex))
+	i := 0
+	for guid := range c.guidIndex {
+		guids[i] = guid
+		i++
+	}
+	return guids
+}
+
 func (c *Cache) Export(evHandler export.EventHandler) {
 	for _, space := range c.guidIndex {
 		evHandler.Resource(convertSpaceResource(space))
