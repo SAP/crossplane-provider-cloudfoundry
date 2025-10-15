@@ -84,27 +84,3 @@ type ConfigParam interface {
 	ValueAsString() string
 	IsSet() bool
 }
-
-// type GlobalConfigParam struct {
-// 	ConfigParam
-// }
-
-// func NewGlobalBoolConfigParam(name, description string) *GlobalConfigParam {
-// 	return &GlobalConfigParam{
-// 		ConfigParam: *NewBoolConfigParam(name, description),
-// 	}
-// }
-
-// func (p *GlobalConfigParam) WithShortName(shortName string) *GlobalConfigParam {
-// 	p.ConfigParam.WithShortName(shortName)
-// 	return p
-// }
-
-// func (p *GlobalConfigParam) WithDefaultValue(value any) *GlobalConfigParam {
-// 	p.ConfigParam.WithDefaultValue(value)
-// 	return p
-// }
-
-// func (p *GlobalConfigParam) Configure(command *cobra.Command) {
-// 	p.ConfigParam.ForCommand(command)
-// }

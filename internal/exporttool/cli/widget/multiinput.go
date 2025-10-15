@@ -12,10 +12,10 @@ func makeSelectOption(options []string) []huh.Option[string] {
 	return selects
 }
 
-func makeSelectOptionPair(options [][2]string) []huh.Option[string] {
+func makeSelectOptionPair(options []string) []huh.Option[string] {
 	selects := make([]huh.Option[string], len(options))
 	for i := range options {
-		selects[i] = huh.NewOption(options[i][1], options[i][0])
+		selects[i] = huh.NewOption(options[i], options[i])
 	}
 	return selects
 }
@@ -34,7 +34,7 @@ func MultiInput(title string, options []string) []string {
 	return selected
 }
 
-func MultiInputPair(title string, options [][2]string) []string {
+func MultiInputPair(title string, options []string) []string {
 	selected := []string{}
 	if err := huh.NewMultiSelect[string]().
 		Options(
