@@ -1,6 +1,7 @@
 package export
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
@@ -14,7 +15,7 @@ func init() {
 }
 
 type exportSubCommand struct {
-	runCommand              func(EventHandler) error
+	runCommand              func(context.Context, EventHandler) error
 	configParams            configparam.ParamList
 	exportableResourceKinds []string
 }
@@ -30,7 +31,7 @@ var OutputParam = configparam.String("output", "redirect the YAML output to a fi
 var (
 	_         subcommand.SubCommand = &exportSubCommand{}
 	exportCmd                       = &exportSubCommand{
-		runCommand: func(_ EventHandler) error {
+		runCommand: func(_ context.Context, _ EventHandler) error {
 			return erratt.New("export subcommand is not set")
 		},
 		configParams: configparam.ParamList{
@@ -60,7 +61,7 @@ func (c *exportSubCommand) MustIgnoreConfigFile() bool {
 	return false
 }
 
-func SetCommand(cmd func(EventHandler) error) {
+func SetCommand(cmd func(context.Context, EventHandler) error) {
 	exportCmd.runCommand = cmd
 }
 
