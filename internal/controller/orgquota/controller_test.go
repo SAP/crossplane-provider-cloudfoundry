@@ -87,6 +87,7 @@ func fakeOrgQuotaResource(id string) *cfresource.OrganizationQuota {
 	r := &cfresource.OrganizationQuota{}
 	r.GUID = id
 	r.Name = "test-org-quota"
+	r.Services.PaidServicesAllowed = true
 	return r
 }
 
@@ -295,6 +296,7 @@ func TestCreate(t *testing.T) {
 				mg: fakeOrgQuota(
 					withName("test-quota"),
 					withExternalName(guid),
+					withAllowPaidServicePlans(true),
 				),
 				obs: managed.ExternalCreation{},
 				err: nil,
