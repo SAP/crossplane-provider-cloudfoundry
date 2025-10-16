@@ -231,6 +231,7 @@ func main() {
 		passwordParam,
 		orgsParam,
 		spacesParam,
+		serviceInstanceParam,
 	)
 	export.AddResourceKinds("organization", "space", "serviceinstance")
 	cli.Execute()
