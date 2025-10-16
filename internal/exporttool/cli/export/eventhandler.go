@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/yaml"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 
@@ -100,18 +101,16 @@ func handleResources(ctx context.Context, wg *sync.WaitGroup, resourceChan <-cha
 
 func (c *exportSubCommand) Run() func() error {
 	return func() error {
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
-		// errChan := make(chan erratt.Error)
-		evHandler := newEventHandler()
+		defer cli.Cancel()
+
+		evHandler := newEventHandler(cli.CliCtx)
 		wg := sync.WaitGroup{}
 		wg.Add(1)
-		go printErrors(ctx, &wg, evHandler.errorHandler)
-		// resourceChan := make(chan resource.Object)
+		go printErrors(cli.CliCtx, &wg, evHandler.errorHandler.ch)
 
 		wg.Add(1)
-		go handleResources(ctx, &wg, evHandler.resourceHandler, evHandler.errorHandler)
-		err := c.runCommand(evHandler)
+		go handleResources(cli.CliCtx, &wg, evHandler.resourceHandler.ch, evHandler.errorHandler.ch)
+		err := c.runCommand(cli.CliCtx, evHandler)
 		if err != nil {
 			return err
 		}
@@ -120,24 +119,35 @@ func (c *exportSubCommand) Run() func() error {
 	}
 }
 
-type errorHandler chan erratt.Error
-
-func newErrorHandler() errorHandler {
-	return make(chan erratt.Error)
+type handler[T any] struct {
+	ctx    context.Context
+	closed bool
+	ch     chan T
 }
 
-func (eh errorHandler) Error(err erratt.Error) {
-	eh <- err
+func newHandler[T any](ctx context.Context) *handler[T] {
+	return &handler[T]{
+		ctx:    ctx,
+		closed: false,
+		ch:     make(chan T),
+	}
 }
 
-type resourceHandler chan resource.Object
-
-func newResourceHandler() resourceHandler {
-	return make(chan resource.Object)
+func (h *handler[T]) Event(event T) {
+	if !h.closed {
+		select {
+		case h.ch <- event:
+		case <-h.ctx.Done():
+			h.Stop()
+		}
+	}
 }
 
-func (rh resourceHandler) Resource(res resource.Object) {
-	rh <- res
+func (h *handler[T]) Stop() {
+	if !h.closed {
+		h.closed = true
+		close(h.ch)
+	}
 }
 
 type EventHandler interface {
@@ -147,20 +157,28 @@ type EventHandler interface {
 }
 
 type eventHandler struct {
-	errorHandler
-	resourceHandler
+	errorHandler    *handler[erratt.Error]
+	resourceHandler *handler[resource.Object]
 }
 
 var _ EventHandler = eventHandler{}
 
-func newEventHandler() eventHandler {
+func newEventHandler(ctx context.Context) eventHandler {
 	return eventHandler{
-		errorHandler:    newErrorHandler(),
-		resourceHandler: newResourceHandler(),
+		errorHandler:    newHandler[erratt.Error](ctx),
+		resourceHandler: newHandler[resource.Object](ctx),
 	}
 }
 
+func (eh eventHandler) Error(err erratt.Error) {
+	eh.errorHandler.Event(err)
+}
+
+func (eh eventHandler) Resource(res resource.Object) {
+	eh.resourceHandler.Event(res)
+}
+
 func (eh eventHandler) Stop() {
-	close(eh.errorHandler)
-	close(eh.resourceHandler)
+	eh.errorHandler.Stop()
+	eh.resourceHandler.Stop()
 }
