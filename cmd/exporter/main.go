@@ -29,11 +29,11 @@ var (
 	serviceInstanceCache *serviceinstance.Cache
 )
 
-func getOrgs(cfClient *client.Client) (*org.Cache, error) {
+func getOrgs(ctx context.Context, cfClient *client.Client) (*org.Cache, error) {
 	if orgCache != nil {
 		return orgCache, nil
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	orgsParam.WithPossibleValuesFn(org.GetAllNamesFn(ctx, cfClient))
 
@@ -59,16 +59,16 @@ func getOrgs(cfClient *client.Client) (*org.Cache, error) {
 	return orgCache, nil
 }
 
-func getSpaces(cfClient *client.Client) (*space.Cache, error) {
+func getSpaces(ctx context.Context, cfClient *client.Client) (*space.Cache, error) {
 	if spaceCache != nil {
 		return spaceCache, nil
 	}
-	orgs, err := getOrgs(cfClient)
+	orgs, err := getOrgs(ctx, cfClient)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	spacesParam.WithPossibleValuesFn(space.GetAllNamesFn(ctx, cfClient, orgs.GetGUIDs()))
 
@@ -95,22 +95,22 @@ func getSpaces(cfClient *client.Client) (*space.Cache, error) {
 	return spaceCache, nil
 }
 
-func getServiceInstances(cfClient *client.Client) (*serviceinstance.Cache, error) {
+func getServiceInstances(ctx context.Context, cfClient *client.Client) (*serviceinstance.Cache, error) {
 	if serviceInstanceCache != nil {
 		return serviceInstanceCache, nil
 	}
 
-	orgs, err := getOrgs(cfClient)
+	orgs, err := getOrgs(ctx, cfClient)
 	if err != nil {
 		return nil, err
 	}
 
-	spaces, err := getSpaces(cfClient)
+	spaces, err := getSpaces(ctx, cfClient)
 	if err != nil {
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	serviceInstanceParam.WithPossibleValuesFn(serviceinstance.GetAllNamesFn(ctx, cfClient, orgs.GetGUIDs(), spaces.GetGUIDs()))
 
@@ -148,7 +148,7 @@ func convertPossibleValuesFn(fn func() []string) func() ([]string, error) {
 }
 
 //nolint:gocyclo
-func exportCmd(evHandler export.EventHandler) error {
+func exportCmd(ctx context.Context, evHandler export.EventHandler) error {
 	cfConfig, err := config.Get(apiUrlParam, usernameParam, passwordParam)
 	if err != nil {
 		return err
@@ -171,24 +171,24 @@ func exportCmd(evHandler export.EventHandler) error {
 	for _, kind := range selectedResources {
 		switch kind {
 		case "organization":
-			orgs, err := getOrgs(cfClient)
+			orgs, err := getOrgs(ctx, cfClient)
 			if err != nil {
 				return err
 			}
 			slog.Info("orgs collected", "orgs", orgs)
 			orgs.Export(evHandler)
 		case "space":
-			spaces, err := getSpaces(cfClient)
+			spaces, err := getSpaces(ctx, cfClient)
 			if err != nil {
 				return err
 			}
 			spaces.Export(evHandler)
 		case "serviceinstance":
-			serviceInstaces, err := getServiceInstances(cfClient)
+			serviceInstaces, err := getServiceInstances(ctx, cfClient)
 			if err != nil {
 				return err
 			}
-			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+			ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 			defer cancel()
 			serviceInstaces.Export(ctx, cfClient, evHandler)
 		default:

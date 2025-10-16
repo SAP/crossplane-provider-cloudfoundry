@@ -31,16 +31,25 @@ func (c *Cache) GetByGUID(guid string) *resource.ServiceInstance {
 func (c *Cache) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler) {
 	wg := sync.WaitGroup{}
 	tokenChan := make(chan struct{}, 10)
+	defer close(tokenChan)
 	for _, serviceInstance := range c.guidIndex {
 		wg.Add(1)
-		tokenChan <- struct{}{}
+		select {
+		case tokenChan <- struct{}{}:
+		case <-ctx.Done():
+			return
+		}
 		go func() {
 			defer wg.Done()
 			si := convertServiceInstanceResource(ctx, cfClient, serviceInstance, evHandler)
 			if si != nil {
 				evHandler.Resource(si)
 			}
-			<-tokenChan
+			select {
+			case <-tokenChan:
+			case <-ctx.Done():
+				return
+			}
 		}()
 	}
 	wg.Wait()

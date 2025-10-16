@@ -155,7 +155,7 @@ func (p *StringSliceParam) ValueOrAsk() ([]string, error) {
 			return nil, erratt.Errorf("cannot get possible values: %w", err)
 		}
 	}
-	values := widget.MultiInputPair(p.paramName.Description,
+	values := widget.MultiInput(p.paramName.Description,
 		possibleValues,
 	)
 	viper.Set(p.Name, values)
