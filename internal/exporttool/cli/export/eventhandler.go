@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/yaml"
 
@@ -97,26 +96,6 @@ func handleResources(ctx context.Context, wg *sync.WaitGroup, resourceChan <-cha
 		}
 	}()
 	resourceLoop(ctx, fileOutput, resourceChan, errChan)
-}
-
-func (c *exportSubCommand) Run() func() error {
-	return func() error {
-		defer cli.Cancel()
-
-		evHandler := newEventHandler(cli.CliCtx)
-		wg := sync.WaitGroup{}
-		wg.Add(1)
-		go printErrors(cli.CliCtx, &wg, evHandler.errorHandler.ch)
-
-		wg.Add(1)
-		go handleResources(cli.CliCtx, &wg, evHandler.resourceHandler.ch, evHandler.errorHandler.ch)
-		err := c.runCommand(cli.CliCtx, evHandler)
-		if err != nil {
-			return err
-		}
-		wg.Wait()
-		return nil
-	}
 }
 
 type handler[T any] struct {

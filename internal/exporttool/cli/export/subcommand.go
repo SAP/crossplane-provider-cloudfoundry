@@ -3,6 +3,7 @@ package export
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
@@ -59,6 +60,26 @@ func (c *exportSubCommand) GetConfigParams() configparam.ParamList {
 
 func (c *exportSubCommand) MustIgnoreConfigFile() bool {
 	return false
+}
+
+func (c *exportSubCommand) Run() func(context.Context) error {
+	return func(ctx context.Context) error {
+		defer cli.Cancel()
+
+		evHandler := newEventHandler(ctx)
+		wg := sync.WaitGroup{}
+		wg.Add(1)
+		go printErrors(ctx, &wg, evHandler.errorHandler.ch)
+
+		wg.Add(1)
+		go handleResources(ctx, &wg, evHandler.resourceHandler.ch, evHandler.errorHandler.ch)
+		err := c.runCommand(ctx, evHandler)
+		if err != nil {
+			return err
+		}
+		wg.Wait()
+		return nil
+	}
 }
 
 func SetCommand(cmd func(context.Context, EventHandler) error) {

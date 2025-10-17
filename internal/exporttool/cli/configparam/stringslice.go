@@ -1,6 +1,8 @@
 package configparam
 
 import (
+	"context"
+
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/widget"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 
@@ -19,15 +21,6 @@ type StringSliceParam struct {
 }
 
 var _ ConfigParam = &StringSliceParam{}
-
-// func basicValueToPair(ss []string) [][2]string {
-// 	result := make([][2]string, len(ss))
-// 	for i, s := range ss {
-// 		result[i][0] = s
-// 		result[i][1] = s
-// 	}
-// 	return result
-// }
 
 func StringSlice(name, description string) *StringSliceParam {
 	return &StringSliceParam{
@@ -56,21 +49,6 @@ func (p *StringSliceParam) WithPossibleValues(values []string) *StringSliceParam
 	return p
 }
 
-// func toPairFn(fn func() ([]string, error)) possibleValuesFnType {
-// 	return func() ([][2]string, error) {
-// 		values, err := fn()
-// 		if err != nil {
-// 			return nil, err
-// 		}
-// 		pairValues := make([][2]string, len(values))
-// 		for i, v := range values {
-// 			pairValues[i][0] = v
-// 			pairValues[i][1] = v
-// 		}
-// 		return pairValues, nil
-// 	}
-// }
-
 func (p *StringSliceParam) WithShortName(name string) *StringSliceParam {
 	p.paramName.WithShortName(name)
 	return p
@@ -85,11 +63,6 @@ func (p *StringSliceParam) WithPossibleValuesFn(fn func() ([]string, error)) *St
 	p.possibleValuesFn = fn
 	return p
 }
-
-// func (p *StringSliceParam) WithPossibleValuesPairFn(fn possibleValuesFnType) *StringSliceParam {
-// 	p.possibleValuesFn = fn
-// 	return p
-// }
 
 func (p *StringSliceParam) WithEnvVarName(name string) *StringSliceParam {
 	p.paramName.WithEnvVarName(name)
@@ -140,7 +113,7 @@ func (p *StringSliceParam) Value() []string {
 	return viper.GetStringSlice(p.Name)
 }
 
-func (p *StringSliceParam) ValueOrAsk() ([]string, error) {
+func (p *StringSliceParam) ValueOrAsk(ctx context.Context) ([]string, error) {
 	if p.paramName.IsSet() {
 		return p.Value(), nil
 	}
@@ -155,9 +128,13 @@ func (p *StringSliceParam) ValueOrAsk() ([]string, error) {
 			return nil, erratt.Errorf("cannot get possible values: %w", err)
 		}
 	}
-	values := widget.MultiInput(p.paramName.Description,
+	values, err := widget.MultiInput(ctx,
+		p.paramName.Description,
 		possibleValues,
 	)
+	if err != nil {
+		return nil, err
+	}
 	viper.Set(p.Name, values)
 	return values, nil
 }
