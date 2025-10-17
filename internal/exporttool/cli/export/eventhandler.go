@@ -26,7 +26,7 @@ func printErrors(ctx context.Context, wg *sync.WaitGroup, errChan <-chan erratt.
 				// error channel is closed
 				return
 			}
-			erratt.SlogWith(err, errlog)
+			erratt.SlogWarnWith(err, errlog)
 		case <-ctx.Done():
 			// execution is cancelled
 			return
