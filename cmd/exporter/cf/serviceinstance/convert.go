@@ -11,6 +11,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 )
 
@@ -45,8 +46,8 @@ func generateServicePlan(ctx context.Context, cfClient *client.Client, serviceIn
 	return nil
 }
 
-func generateJsonCreds(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler export.EventHandler) *string {
-	var jsonCreds *string
+func generateCreds(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler export.EventHandler) *runtime.RawExtension {
+	var jsonCredsBytes []byte
 
 	if serviceInstance.Type != "managed" {
 		creds, err := cfClient.ServiceInstances.GetUserProvidedCredentials(ctx, serviceInstance.GUID)
@@ -54,32 +55,34 @@ func generateJsonCreds(ctx context.Context, cfClient *client.Client, serviceInst
 			evHandler.Error(erratt.Errorf("cannot get service instance provided credentials: %w", err).With("guid", serviceInstance.GUID))
 			return nil
 		}
-		jsonCredsBytes, err := creds.MarshalJSON()
+		jsonCredsBytes, err = creds.MarshalJSON()
 		if err != nil {
 			evHandler.Error(erratt.Errorf("cannot JSON marshal service instance provided credentials: %w", err).With("guid", serviceInstance.GUID))
 			return nil
 		}
-		jsonCreds = ptr.To(string(jsonCredsBytes))
 	}
-	return jsonCreds
+	return &runtime.RawExtension{
+		Raw: jsonCredsBytes,
+	}
 }
 
-func generateJsonParams(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler export.EventHandler) *string {
-	var jsonParams *string
+func generateParams(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler export.EventHandler) *runtime.RawExtension {
+	var jsonParams []byte
 	if serviceInstance.Type == "managed" {
 		params, err := cfClient.ServiceInstances.GetManagedParameters(ctx, serviceInstance.GUID)
 		if err == nil {
-			jsonParamsBytes, err := params.MarshalJSON()
+			jsonParams, err = params.MarshalJSON()
 			if err != nil {
 				evHandler.Error(erratt.Errorf("cannot JSON marshal service instance managed parameters: %w", err).With("guid", serviceInstance.GUID))
 				return nil
 			}
-			jsonParams = ptr.To(string(jsonParamsBytes))
 		} else {
 			evHandler.Error(erratt.Errorf("cannot get service instance managed parameters: %w", err).With("serviceinstance-guid", serviceInstance.GUID))
 		}
 	}
-	return jsonParams
+	return &runtime.RawExtension{
+		Raw: jsonParams,
+	}
 }
 
 func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler export.EventHandler) *v1alpha1.ServiceInstance {
@@ -93,8 +96,8 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 
 	}
 
-	jsonParams := generateJsonParams(ctx, cfClient, serviceInstance, evHandler)
-	jsonCreds := generateJsonCreds(ctx, cfClient, serviceInstance, evHandler)
+	params := generateParams(ctx, cfClient, serviceInstance, evHandler)
+	creds := generateCreds(ctx, cfClient, serviceInstance, evHandler)
 
 	return &v1alpha1.ServiceInstance{
 		TypeMeta: metav1.TypeMeta{
@@ -121,8 +124,8 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 				},
 				Managed: v1alpha1.Managed{
 					ServicePlan: servicePlan,
-					// Parameters:          rawExtensionParams,
-					JSONParams: jsonParams,
+					Parameters:  params,
+					// JSONParams: jsonParams,
 					// ParametersSecretRef: &v1.SecretReference{},
 					MaintenanceInfo: v1alpha1.MaintenanceInfo{
 						Description: maintenanceInfoDescription,
@@ -130,8 +133,8 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 					},
 				},
 				UserProvided: v1alpha1.UserProvided{
-					// Credentials:          &runtime.RawExtension{},
-					JSONCredentials: jsonCreds,
+					Credentials: creds,
+					// JSONCredentials: jsonCreds,
 					// CredentialsSecretRef: &v1.SecretReference{},
 					RouteServiceURL: ptr.Deref(serviceInstance.RouteServiceURL, ""),
 					SyslogDrainURL:  ptr.Deref(serviceInstance.SyslogDrainURL, ""),
