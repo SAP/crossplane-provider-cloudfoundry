@@ -1,6 +1,8 @@
 package configparam
 
 import (
+	"context"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -92,15 +94,15 @@ func (p *StringParam) Value() string {
 	}
 }
 
-func (p *StringParam) ValueOrAsk() (string, error) {
+func (p *StringParam) ValueOrAsk(ctx context.Context) (string, error) {
 	if p.paramName.IsSet() {
 		return p.Value(), nil
 	}
-	return p.AskValue()
+	return p.AskValue(ctx)
 }
 
-func (p *StringParam) AskValue() (string, error) {
-	value, err := p.askValue(p.sensitive)
+func (p *StringParam) AskValue(ctx context.Context) (string, error) {
+	value, err := p.askValue(ctx, p.sensitive)
 	if err != nil {
 		return "", err
 	}

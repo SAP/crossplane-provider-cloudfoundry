@@ -35,7 +35,7 @@ func getOrgs(ctx context.Context, cfClient *client.Client) (*org.Cache, error) {
 	}
 	orgsParam.WithPossibleValuesFn(org.GetAllNamesFn(ctx, cfClient))
 
-	selectedOrgs, err := orgsParam.ValueOrAsk()
+	selectedOrgs, err := orgsParam.ValueOrAsk(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func getSpaces(ctx context.Context, cfClient *client.Client) (*space.Cache, erro
 
 	spacesParam.WithPossibleValuesFn(space.GetAllNamesFn(ctx, cfClient, orgs.GetGUIDs()))
 
-	selectedSpaces, err := spacesParam.ValueOrAsk()
+	selectedSpaces, err := spacesParam.ValueOrAsk(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -112,7 +112,7 @@ func getServiceInstances(ctx context.Context, cfClient *client.Client) (*service
 
 	serviceInstanceParam.WithPossibleValuesFn(serviceinstance.GetAllNamesFn(ctx, cfClient, orgs.GetGUIDs(), spaces.GetGUIDs()))
 
-	selectedServiceInstances, err := serviceInstanceParam.ValueOrAsk()
+	selectedServiceInstances, err := serviceInstanceParam.ValueOrAsk(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -149,7 +149,7 @@ func convertPossibleValuesFn(fn func() []string) func() ([]string, error) {
 
 //nolint:gocyclo
 func exportCmd(ctx context.Context, evHandler export.EventHandler) error {
-	cfConfig, err := config.Get(apiUrlParam, usernameParam, passwordParam)
+	cfConfig, err := config.Get(ctx, apiUrlParam, usernameParam, passwordParam)
 	if err != nil {
 		return err
 	}
@@ -163,7 +163,7 @@ func exportCmd(ctx context.Context, evHandler export.EventHandler) error {
 		"user", usernameParam.ValueAsString(),
 	)
 
-	selectedResources, err := export.ResourceKindParam.ValueOrAsk()
+	selectedResources, err := export.ResourceKindParam.ValueOrAsk(ctx)
 	if err != nil {
 		return erratt.Errorf("cannot get the value for resource kind parameter: %w", err)
 	}
