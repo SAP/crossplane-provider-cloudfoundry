@@ -33,8 +33,6 @@ func getOrgs(ctx context.Context, cfClient *client.Client) (*org.Cache, error) {
 	if orgCache != nil {
 		return orgCache, nil
 	}
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	orgsParam.WithPossibleValuesFn(org.GetAllNamesFn(ctx, cfClient))
 
 	selectedOrgs, err := orgsParam.ValueOrAsk()
@@ -50,7 +48,9 @@ func getOrgs(ctx context.Context, cfClient *client.Client) (*org.Cache, error) {
 		}
 		orgNames[i] = name.Name
 	}
-	slog.Info("collecting orgs", "org-names", orgNames)
+
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	orgs, err := org.GetAll(ctx, cfClient, orgNames)
 	if err != nil {
 		return nil, err
@@ -68,8 +68,6 @@ func getSpaces(ctx context.Context, cfClient *client.Client) (*space.Cache, erro
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	spacesParam.WithPossibleValuesFn(space.GetAllNamesFn(ctx, cfClient, orgs.GetGUIDs()))
 
 	selectedSpaces, err := spacesParam.ValueOrAsk()
@@ -86,6 +84,8 @@ func getSpaces(ctx context.Context, cfClient *client.Client) (*space.Cache, erro
 		spaceNames[i] = name.Name
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	spaces, err := space.GetAll(ctx, cfClient, orgs.GetGUIDs(), spaceNames)
 	if err != nil {
 		return nil, erratt.Errorf("cannot get spaces: %w", err)
@@ -110,8 +110,6 @@ func getServiceInstances(ctx context.Context, cfClient *client.Client) (*service
 		return nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
 	serviceInstanceParam.WithPossibleValuesFn(serviceinstance.GetAllNamesFn(ctx, cfClient, orgs.GetGUIDs(), spaces.GetGUIDs()))
 
 	selectedServiceInstances, err := serviceInstanceParam.ValueOrAsk()
@@ -128,6 +126,8 @@ func getServiceInstances(ctx context.Context, cfClient *client.Client) (*service
 		serviceInstanceNames[i] = name.Name
 	}
 
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
 	serviceInstances, err := serviceinstance.GetAll(ctx,
 		cfClient,
 		orgs.GetGUIDs(),
