@@ -1,6 +1,8 @@
 package subcommand
 
 import (
+	"context"
+
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
 )
 
@@ -10,7 +12,7 @@ type SubCommand interface {
 	GetLong() string
 	GetConfigParams() configparam.ParamList
 	MustIgnoreConfigFile() bool
-	Run() func() error
+	Run() func(context.Context) error
 }
 
 type Simple struct {
@@ -19,7 +21,7 @@ type Simple struct {
 	Long             string
 	ConfigParams     configparam.ParamList
 	IgnoreConfigFile bool
-	Logic            func() error
+	Logic            func(context.Context) error
 }
 
 var _ SubCommand = &Simple{}
@@ -44,6 +46,6 @@ func (s *Simple) MustIgnoreConfigFile() bool {
 	return s.IgnoreConfigFile
 }
 
-func (s *Simple) Run() func() error {
+func (s *Simple) Run() func(context.Context) error {
 	return s.Logic
 }
