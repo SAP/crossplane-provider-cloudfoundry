@@ -72,12 +72,28 @@ func Errorf(format string, a ...any) Error {
 	}
 }
 
+
+func SlogWarnWith(err error, logger *slog.Logger) {
+	ewa := &errorWithAttrs{}
+	if errors.As(err, &ewa) {
+		logger.Warn(ewa.text, ewa.attrs...)
+	} else {
+		logger.Warn(err.Error())
+	}
+
+}
+
 func SlogWith(err error, logger *slog.Logger) {
 	ewa := &errorWithAttrs{}
 	if errors.As(err, &ewa) {
 		logger.Error(ewa.text, ewa.attrs...)
+	} else {
+		logger.Error(err.Error())
 	}
-	logger.Error(err.Error())
+}
+
+func SlogWarn(err error) {
+	SlogWarnWith(err, slog.Default())
 }
 
 func Slog(err error) {
