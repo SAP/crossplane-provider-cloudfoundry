@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"errors"
 	"os"
 
@@ -11,9 +12,9 @@ import (
 	"github.com/spf13/viper"
 )
 
-func makeCobraRun(fn func() error) func(*cobra.Command, []string) {
+func makeCobraRun(fn func(context.Context) error) func(*cobra.Command, []string) {
 	return func(_ *cobra.Command, _ []string) {
-		if err := fn(); err != nil {
+		if err := fn(CliCtx); err != nil {
 			erratt.Slog(err)
 			os.Exit(1)
 		}

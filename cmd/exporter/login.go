@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
@@ -9,16 +10,16 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 )
 
-func login() error {
-	apiUrl, err := apiUrlParam.ValueOrAsk()
+func login(ctx context.Context) error {
+	apiUrl, err := apiUrlParam.ValueOrAsk(ctx)
 	if err != nil {
 		return erratt.New("Cannot get API URL parameter").With("subcommand", "login")
 	}
-	username, err := usernameParam.ValueOrAsk()
+	username, err := usernameParam.ValueOrAsk(ctx)
 	if err != nil {
 		return erratt.New("Cannot get username parameter")
 	}
-	password, err := passwordParam.ValueOrAsk()
+	password, err := passwordParam.ValueOrAsk(ctx)
 	if err != nil {
 		return erratt.New("Cannot get password parameter")
 	}

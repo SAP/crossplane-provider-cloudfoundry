@@ -1,9 +1,11 @@
 package configparam
 
 import (
+	"context"
 	"fmt"
 
-	"github.com/charmbracelet/huh"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/widget"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
@@ -62,19 +64,12 @@ func (p *paramName) inputPrompt() string {
 	return fmt.Sprintf("%s [%s]: ", p.Description, p.Name)
 }
 
-func (p *paramName) askValue(sensitive bool) (string, error) {
-	var value string
-	echoMode := huh.EchoModeNormal
-	if sensitive {
-		echoMode = huh.EchoModePassword
-	}
-	err := huh.NewInput().
-		Value(&value).
-		Title(p.inputPrompt()).
-		Placeholder(p.Example).
-		EchoMode(echoMode).
-		Run()
-	return value, err
+func (p *paramName) askValue(ctx context.Context, sensitive bool) (string, error) {
+	return widget.TextInput(ctx,
+		p.inputPrompt(),
+		p.Example,
+		sensitive,
+	)
 }
 
 type ConfigParam interface {
