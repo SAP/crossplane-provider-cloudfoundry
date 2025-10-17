@@ -7,6 +7,8 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+// Marshal returns the YAML representation of a Kubernetes resource,
+// indented and wrapped with "---" and "..." markers.
 func Marshal(resource any) (string, error) {
 	b, err := yaml.Marshal(resource)
 	if err != nil {
@@ -15,6 +17,8 @@ func Marshal(resource any) (string, error) {
 	return fmt.Sprintf("---\n%s...\n", string(b)), nil
 }
 
+// MarshalPretty returns a syntax-highlighted YAML string suitable for
+// terminal display.
 func MarshalPretty(resource any) (string, error) {
 	b, err := yaml.Marshal(resource)
 	if err != nil {
