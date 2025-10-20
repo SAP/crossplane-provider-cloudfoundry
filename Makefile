@@ -40,8 +40,12 @@ GO111MODULE = on
 GOLANGCILINT_VERSION ?= 1.64.5
 -include build/makelib/golang.mk
 
+# kind-related versions
+KIND_VERSION ?= v0.26.0
+KIND_NODE_IMAGE_TAG ?= v1.32.0
+
 # Setup Kubernetes tools
-KIND_VERSION = v0.22.0
+
 UP_VERSION = v0.31.0
 UP_CHANNEL = stable
 UPTEST_VERSION = v0.11.1
@@ -53,7 +57,6 @@ IMAGES = provider-cloudfoundry
 -include build/makelib/imagelight.mk
 
 
-
 # Import upgrade test environment variables from shell
 export UPGRADE_TEST_FROM_TAG
 export UPGRADE_TEST_TO_TAG
@@ -63,6 +66,8 @@ export CF_EMAIL
 export CF_USERNAME
 export CF_PASSWORD
 export CF_ENDPOINT
+
+
 # NOTE(hasheddan): we ensure up is installed prior to running platform-specific
 # build steps in parallel to avoid encountering an installation race condition.
 build.init: $(UP)
@@ -181,8 +186,6 @@ test-acceptance: local-deploy $(KUBECTL)
 	@$(KUBECTL) create namespace crossplane-system
 	@$(INFO) running integration tests
 	@$(INFO) Skipping long running tests
-	@$(INFO) ${E2E_IMAGES}
-	@echo "E2E_IMAGES=$$E2E_IMAGES"
 	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -timeout=15m -run '$(testFilter)' 2>&1 | tee test-output.log
 	@echo "===========Test Summary==========="
 	@grep -E "PASS|FAIL" test-output.log
