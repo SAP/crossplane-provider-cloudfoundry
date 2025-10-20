@@ -2,103 +2,78 @@ package configparam
 
 import (
 	"context"
+	"fmt"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/widget"
 
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
+// StringParam type represents a configuration parameter that
+// holds a []string value.
 type StringParam struct {
-	*paramName
-	defaultValue string
-	sensitive    bool
+	sensitive bool
+	*configWithDefaultValue[StringParam, string]
 }
 
 var _ ConfigParam = &StringParam{}
 
+func stringGenerator(name, description string, sensitive bool) *StringParam {
+	p := &StringParam{
+		sensitive: sensitive,
+	}
+	p.configWithDefaultValue = newConfigWithDefaultValue(p, name, description, "")
+	return p
+}
+
+// String creates a [StringParam] value. The mandatory name and
+// description parameters must be set.
 func String(name, description string) *StringParam {
-	return &StringParam{
-		paramName:    newParamName(name, description),
-		defaultValue: "",
-		sensitive:    false,
-	}
+	return stringGenerator(name, description, false)
 }
 
+// SensitiveString returns a new [StringParam] whose contents are
+// masked when the parameter is printed to the console. Both name and
+// description are required.
 func SensitiveString(name, description string) *StringParam {
-	return &StringParam{
-		paramName:    newParamName(name, description),
-		defaultValue: "",
-		sensitive:    true,
-	}
+	return stringGenerator(name, description, true)
 }
 
-func (p *StringParam) WithDefaultValue(value string) *StringParam {
-	p.defaultValue = value
-	return p
-}
-
-func (p *StringParam) WithShortName(name string) *StringParam {
-	p.paramName.WithShortName(name)
-	return p
-}
-
-func (p *StringParam) WithFlagName(name string) *StringParam {
-	p.paramName.WithFlagName(name)
-	return p
-}
-
-func (p *StringParam) WithEnvVarName(name string) *StringParam {
-	p.paramName.WithEnvVarName(name)
-	if err := viper.BindEnv(p.Name, name); err != nil {
-		panic(err)
-	}
-	return p
-}
-
-func (p *StringParam) WithExample(example string) *StringParam {
-	p.paramName.WithExample(example)
-	return p
-}
-
+// AttachToCommand registers the persistent string flag (long form and
+// optional short form) with the supplied cobra.Command.
 func (p *StringParam) AttachToCommand(command *cobra.Command) {
-	if p.paramName.ShortName != nil {
-		command.PersistentFlags().StringP(p.FlagName, *p.ShortName, p.defaultValue, p.Description)
-	} else {
-		command.PersistentFlags().String(p.FlagName, p.defaultValue, p.Description)
-	}
+	p.attachToCommand(command.PersistentFlags().String, command.PersistentFlags().StringP)
 }
 
-func (p *StringParam) BindConfiguration(command *cobra.Command) {
-	if p.paramName.EnvVarName != "" {
-		if err := viper.BindEnv(p.Name, p.paramName.EnvVarName); err != nil {
-			panic(err)
-		}
-	}
-	if err := viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName)); err != nil {
-		panic(err)
-	}
-}
-
-func (p *StringParam) ValueAsString() string {
-	if p.sensitive {
-		return "*****"
-	} else {
-		return p.paramName.ValueAsString()
-	}
-}
-
+// Value returns the user configured string. If the user has not
+// configured any values, the default value is returned.
 func (p *StringParam) Value() string {
-	if p.paramName.IsSet() {
-		return viper.GetString(p.Name)
-	} else {
-		return p.defaultValue
-	}
+	return p.value(viper.GetString)
 }
 
+// ValueOrAsk returns the configured slice or prompts the user to
+// enter a value value.
+//
+// After successful selection the entered string is stored and the
+// parameter is considered set.
 func (p *StringParam) ValueOrAsk(ctx context.Context) (string, error) {
-	if p.paramName.IsSet() {
+	if p.configParam.IsSet() {
 		return p.Value(), nil
 	}
 	return p.AskValue(ctx)
+}
+
+func (p *StringParam) inputPrompt() string {
+	return fmt.Sprintf("%s [%s]: ", p.configParam.Description, p.configParam.Name)
+}
+
+func (p *StringParam) askValue(ctx context.Context, sensitive bool) (string, error) {
+	return widget.TextInput(ctx,
+		p.inputPrompt(),
+		p.configParam.Example,
+		sensitive,
+	)
 }
 
 func (p *StringParam) AskValue(ctx context.Context) (string, error) {
@@ -106,6 +81,6 @@ func (p *StringParam) AskValue(ctx context.Context) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	viper.Set(p.Name, value)
+	viper.Set(p.configParam.Name, value)
 	return value, nil
 }
