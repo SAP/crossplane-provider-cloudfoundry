@@ -50,8 +50,9 @@ jobs:
         run: make vendor vendor.check
 
       - name: Build Images
-        run: make build PLATFORM=linux_amd64 VERSION=${{ steps.version.outputs.version }}
-        run: make build PLATFORM=linux_arm64 VERSION=${{ steps.version.outputs.version }}
+        run: |
+          make build PLATFORM=linux_amd64 VERSION=${{ steps.version.outputs.version }}
+          make build PLATFORM=linux_arm64 VERSION=${{ steps.version.outputs.version }}
 
       - name: Login to Container Registry
         uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
