@@ -8,7 +8,6 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 func init() {
@@ -79,15 +78,21 @@ func (c DefaultConfiguratorCLI) CommandLong(config *ConfigSchema) string {
 
 func configureCLI() error {
 	config := Configuration.CLIConfiguration
+	verboseFlag := configparam.Bool("verbose", "Verbose output").
+		WithShortName("v")
 	Command = &cobra.Command{
 		Use:   config.CommandUse(Configuration),
 		Short: config.CommandShort(Configuration),
 		Long:  config.CommandLong(Configuration),
+		PreRun: func(cmd *cobra.Command, _ []string) {
+			if config.HasVerboseFlag {
+				verboseFlag.BindConfiguration(cmd)
+			}
+		},
 	}
 	if config.HasVerboseFlag {
-		// Command.Flags().BoolP("verbose", "v", false, "Verbose output")
-		configparam.Bool("verbose", "Verbose output").WithShortName("v").AttachToCommand(Command)
+		verboseFlag.AttachToCommand(Command)
 	}
 
-	return viper.BindPFlags(Command.PersistentFlags())
+	return nil
 }

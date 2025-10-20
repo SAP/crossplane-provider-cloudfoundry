@@ -159,8 +159,8 @@ func exportCmd(ctx context.Context, evHandler export.EventHandler) error {
 	}
 
 	slog.Info("Connected to Cloud Foundry API",
-		"URL", apiUrlParam.ValueAsString(),
-		"user", usernameParam.ValueAsString(),
+		"URL", apiUrlParam.Value(),
+		"user", usernameParam.Value(),
 	)
 
 	selectedResources, err := export.ResourceKindParam.ValueOrAsk(ctx)
