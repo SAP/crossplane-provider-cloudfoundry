@@ -1,74 +1,34 @@
 package configparam
 
 import (
-	"fmt"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
+// BoolParam type represents a configuration parameter that holds a
+// bool value.
 type BoolParam struct {
-	*paramName
-	defaultValue bool
+	*configWithDefaultValue[BoolParam, bool]
 }
 
 var _ ConfigParam = &BoolParam{}
 
+// Bool creates [BoolParam] value. The mandatory name and description
+// parameters must be set.
 func Bool(name, description string) *BoolParam {
-	return &BoolParam{
-		paramName:    newParamName(name, description),
-		defaultValue: false,
-	}
-}
-
-func (p *BoolParam) WithDefaultValue(value bool) *BoolParam {
-	p.defaultValue = value
+	p := &BoolParam{}
+	p.configWithDefaultValue = newConfigWithDefaultValue(p, name, description, false)
 	return p
 }
 
-func (p *BoolParam) WithShortName(name string) *BoolParam {
-	p.paramName.WithShortName(name)
-	return p
-}
-
-func (p *BoolParam) WithFlagName(name string) *BoolParam {
-	p.paramName.WithFlagName(name)
-	return p
-}
-
-func (p *BoolParam) WithEnvVarName(name string) *BoolParam {
-	p.paramName.WithEnvVarName(name)
-	return p
-}
-
-func (p *BoolParam) WithExample(example string) *BoolParam {
-	p.paramName.WithExample(example)
-	return p
-}
-
+// AttachToCommand registers the persistent bool flag (long form and
+// optional short form) with the supplied [cobra.Command].
 func (p *BoolParam) AttachToCommand(command *cobra.Command) {
-	if p.paramName.ShortName != nil {
-		command.PersistentFlags().BoolP(p.FlagName, *p.ShortName, p.defaultValue, p.Description)
-	} else {
-		command.PersistentFlags().Bool(p.FlagName, p.defaultValue, p.Description)
-	}
+	p.attachToCommand(command.PersistentFlags().Bool, command.PersistentFlags().BoolP)
 }
 
-func (p *BoolParam) BindConfiguration(command *cobra.Command) {
-	if p.paramName.EnvVarName != "" {
-		if err := viper.BindEnv(p.Name, p.paramName.EnvVarName); err != nil {
-			panic(err)
-		}
-	}
-	if err := viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName)); err != nil {
-		panic(err)
-	}
-}
-
-func (p *BoolParam) ValueAsString() string {
-	return fmt.Sprintf("%t", p.Value())
-}
-
+// Value returns the user configured string slice. If the user has not
+// configured any values, the default value is returned.
 func (p *BoolParam) Value() bool {
-	return viper.GetBool(p.Name)
+	return p.value(viper.GetBool)
 }

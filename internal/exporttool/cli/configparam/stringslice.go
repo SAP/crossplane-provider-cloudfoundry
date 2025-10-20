@@ -12,9 +12,10 @@ import (
 
 type possibleValuesFnType func() ([]string, error)
 
+// StringSliceParam type represents a configuration parameterkxo that
+// holds a []string value.
 type StringSliceParam struct {
-	*paramName
-	defaultValue     []string
+	*configWithDefaultValue[StringSliceParam, []string]
 	sensitive        bool
 	possibleValues   []string
 	possibleValuesFn possibleValuesFnType
@@ -22,103 +23,68 @@ type StringSliceParam struct {
 
 var _ ConfigParam = &StringSliceParam{}
 
-func StringSlice(name, description string) *StringSliceParam {
-	return &StringSliceParam{
-		paramName:      newParamName(name, description),
-		defaultValue:   []string{},
-		sensitive:      false,
+func stringSliceGenerator(name, description string, sensitive bool) *StringSliceParam {
+	p := &StringSliceParam{
+		sensitive:      sensitive,
 		possibleValues: []string{},
 	}
-}
-
-func SensitiveStringSlice(name, description string) *StringSliceParam {
-	return &StringSliceParam{
-		paramName:    newParamName(name, description),
-		defaultValue: []string{},
-		sensitive:    true,
-	}
-}
-
-func (p *StringSliceParam) WithDefaultValue(values []string) *StringSliceParam {
-	p.defaultValue = values
+	p.configWithDefaultValue = newConfigWithDefaultValue(p, name, description, []string{})
 	return p
 }
 
+// StringSlice creates a [StringSliceParam] value. The mandatory name
+// and description parameters must be set.
+func StringSlice(name, description string) *StringSliceParam {
+	return stringSliceGenerator(name, description, false)
+}
+
+// SensitiveStringSlice returns a new [StringSliceParam] whose
+// contents are masked when the parameter is printed to the
+// console. Both name and description are required.
+func SensitiveStringSlice(name, description string) *StringSliceParam {
+	return stringSliceGenerator(name, description, true)
+}
+
+// WithPossibleValues restricts the interactive selection to the
+// supplied slice. When the CLI prompts the user, only these strings
+// are offered as choices.
 func (p *StringSliceParam) WithPossibleValues(values []string) *StringSliceParam {
 	p.possibleValues = values
 	return p
 }
 
-func (p *StringSliceParam) WithShortName(name string) *StringSliceParam {
-	p.paramName.WithShortName(name)
-	return p
-}
-
-func (p *StringSliceParam) WithFlagName(name string) *StringSliceParam {
-	p.paramName.WithFlagName(name)
-	return p
-}
-
+// WithPossibleValuesFn lazily supplies the valid choices for
+// interactive selection. The given function is called when the CLI
+// prompts the user. The returned strings are presented as options.
 func (p *StringSliceParam) WithPossibleValuesFn(fn func() ([]string, error)) *StringSliceParam {
 	p.possibleValuesFn = fn
 	return p
 }
 
-func (p *StringSliceParam) WithEnvVarName(name string) *StringSliceParam {
-	p.paramName.WithEnvVarName(name)
-	return p
-}
-
-func (p *StringSliceParam) WithExample(example string) *StringSliceParam {
-	p.paramName.WithExample(example)
-	return p
-}
-
+// AttachToCommand registers the persistent string-slice flag (long form and
+// optional short form) with the supplied [cobra.Command].
 func (p *StringSliceParam) AttachToCommand(command *cobra.Command) {
-	if p.paramName.ShortName != nil {
-		command.PersistentFlags().StringSliceP(p.FlagName, *p.ShortName, p.defaultValue, p.Description)
-	} else {
-		command.PersistentFlags().StringSlice(p.FlagName, p.defaultValue, p.Description)
-	}
-	if p.paramName.EnvVarName != "" {
-		if err := viper.BindEnv(p.Name, p.paramName.EnvVarName); err != nil {
-			panic(err)
-		}
-	}
-	if err := viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName)); err != nil {
-		panic(err)
-	}
+	p.attachToCommand(command.PersistentFlags().StringSlice, command.PersistentFlags().StringSliceP)
 }
 
-func (p *StringSliceParam) BindConfiguration(command *cobra.Command) {
-	if p.paramName.EnvVarName != "" {
-		if err := viper.BindEnv(p.Name, p.paramName.EnvVarName); err != nil {
-			panic(err)
-		}
-	}
-	if err := viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName)); err != nil {
-		panic(err)
-	}
-}
-
-func (p *StringSliceParam) ValueAsString() string {
-	if p.sensitive {
-		return "*****"
-	} else {
-		return p.paramName.ValueAsString()
-	}
-}
-
+// Value returns the user configured string slice. If the user has not
+// configured any values, the default value is returned.
 func (p *StringSliceParam) Value() []string {
-	return viper.GetStringSlice(p.Name)
+	return p.value(viper.GetStringSlice)
 }
 
+// ValueOrAsk returns the configured slice or prompts the user to
+// choose from the values supplied via [WithPossibleValues] or
+// [WithPossibleValuesFn].  It fails if neither has been set.
+//
+// After successful selection the chosen slice is stored and the
+// parameter is considered set.
 func (p *StringSliceParam) ValueOrAsk(ctx context.Context) ([]string, error) {
-	if p.paramName.IsSet() {
+	if p.configParam.IsSet() {
 		return p.Value(), nil
 	}
 	if len(p.possibleValues) == 0 && p.possibleValuesFn == nil {
-		return nil, erratt.New("StringSliceParam ValueOrAsk invoked but possibleValues are not set", "name", p.paramName.Name)
+		return nil, erratt.New("StringSliceParam ValueOrAsk invoked but possibleValues are not set", "name", p.configParam.Name)
 	}
 	possibleValues := p.possibleValues
 	if len(possibleValues) == 0 {
@@ -129,7 +95,7 @@ func (p *StringSliceParam) ValueOrAsk(ctx context.Context) ([]string, error) {
 		}
 	}
 	values, err := widget.MultiInput(ctx,
-		p.paramName.Description,
+		p.configParam.Description,
 		possibleValues,
 	)
 	if err != nil {

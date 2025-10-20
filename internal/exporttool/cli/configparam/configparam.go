@@ -1,81 +1,124 @@
 package configparam
 
 import (
-	"context"
-	"fmt"
-
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/widget"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 )
 
-type paramName struct {
+type configParam[T any] struct {
 	Name        string
 	Description string
-	FlagName    string
 	ShortName   *string
+	FlagName    string
 	EnvVarName  string
 	Example     string
+	parent      *T
 }
 
-func newParamName(name, description string) *paramName {
-	return &paramName{
+func newConfigParam[T any](parent *T, name, description string) *configParam[T] {
+	return &configParam[T]{
+		parent:      parent,
 		Name:        name,
-		Description: description,
 		FlagName:    name,
-		EnvVarName:  name,
+		Description: description,
 	}
 }
 
-func (p *paramName) GetName() string {
-	return p.Name
+// WithShortName sets the short name of the command line flag that can
+// be used to configure the parameter value.
+func (p *configParam[T]) WithShortName(shortName string) *T {
+	p.ShortName = &shortName
+	return p.parent
 }
 
-func (p *paramName) ValueAsString() string {
-	return viper.GetString(p.Name)
+// WithFlagName sets the name of the command line flag that can be
+// used to configure the parameter value.
+func (p *configParam[T]) WithFlagName(flagName string) *T {
+	p.FlagName = flagName
+	return p.parent
 }
 
-func (p *paramName) WithShortName(name string) *paramName {
-	p.ShortName = &name
-	return p
+// WithEnvVarName sets the name of the environment variable that can
+// be used to configure the parameter value.
+func (p *configParam[T]) WithEnvVarName(envVarName string) *T {
+	p.EnvVarName = envVarName
+	return p.parent
 }
 
-func (p *paramName) WithFlagName(name string) *paramName {
-	p.FlagName = name
-	return p
-}
-
-func (p *paramName) WithEnvVarName(name string) *paramName {
-	p.EnvVarName = name
-	return p
-}
-
-func (p *paramName) WithExample(example string) *paramName {
+// WithExample sets an example value for the parameter.
+func (p *configParam[T]) WithExample(example string) *T {
 	p.Example = example
-	return p
+	return p.parent
 }
 
-func (p *paramName) IsSet() bool {
+// IsSet returns true of the configuration parameter is set.
+func (p *configParam[T]) IsSet() bool {
 	return viper.IsSet(p.Name)
 }
 
-func (p *paramName) inputPrompt() string {
-	return fmt.Sprintf("%s [%s]: ", p.Description, p.Name)
+func (p *configParam[T]) BindConfiguration(command *cobra.Command) {
+	if p.EnvVarName != "" {
+		if err := viper.BindEnv(p.Name, p.EnvVarName); err != nil {
+			panic(err)
+		}
+	}
+	if err := viper.BindPFlag(p.Name, command.PersistentFlags().Lookup(p.FlagName)); err != nil {
+		panic(err)
+	}
+
 }
 
-func (p *paramName) askValue(ctx context.Context, sensitive bool) (string, error) {
-	return widget.TextInput(ctx,
-		p.inputPrompt(),
-		p.Example,
-		sensitive,
-	)
+type defaultValue[CP, T any] struct {
+	defaultValue T
+	parent       *CP
 }
 
+func newDefaultValue[CP, T any](parent *CP, defaultDefault T) *defaultValue[CP, T] {
+	return &defaultValue[CP, T]{
+		parent:       parent,
+		defaultValue: defaultDefault,
+	}
+}
+
+// WithDefaultValue sets the default value of the configured
+// configuration parameter.
+func (v *defaultValue[CP, T]) WithDefaultValue(value T) *CP {
+	v.defaultValue = value
+	return v.parent
+}
+
+type configWithDefaultValue[CP, T any] struct {
+	*defaultValue[CP, T]
+	*configParam[CP]
+}
+
+func newConfigWithDefaultValue[CP, T any](parent *CP, name, description string, defaultDefault T) *configWithDefaultValue[CP, T] {
+	return &configWithDefaultValue[CP, T]{
+		defaultValue: newDefaultValue(parent, defaultDefault),
+		configParam:  newConfigParam(parent, name, description),
+	}
+}
+
+func (p *configWithDefaultValue[CP, T]) attachToCommand(flagFn func(name string, value T, usage string) *T, flagShortFn func(name, shorthand string, value T, usage string) *T) {
+	if p.ShortName != nil {
+		flagShortFn(p.configParam.FlagName, *p.configParam.ShortName, p.defaultValue.defaultValue, p.configParam.Description)
+	} else {
+		flagFn(p.configParam.FlagName, p.defaultValue.defaultValue, p.configParam.Description)
+	}
+}
+
+func (p *configWithDefaultValue[CP, T]) value(valueGetter func(string) T) T {
+	if p.configParam.IsSet() {
+		return valueGetter(p.configParam.Name)
+	}
+	return p.defaultValue.defaultValue
+}
+
+// ConfigParam interface defines the methods that a configuration
+// parameter type must implement.
 type ConfigParam interface {
-	GetName() string
 	AttachToCommand(cmd *cobra.Command)
 	BindConfiguration(cmd *cobra.Command)
-	ValueAsString() string
-	IsSet() bool
 }
+
+type ParamList []ConfigParam
