@@ -109,7 +109,7 @@ jobs:
         run: |
           make xpkg.build PLATFORM=linux_amd64 VERSION=${{ steps.version.outputs.version }} BRANCH_NAME=${GITHUB_REF##*/}
           make xpkg.build PLATFORM=linux_arm64 VERSION=${{ steps.version.outputs.version }} BRANCH_NAME=${GITHUB_REF##*/}
-          make xpkg.release.publish
+          make xpkg.release.publish VERSION=${{ steps.version.outputs.version }}
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@9ed2f89a662bf1735a48bc8557fd212fa902bebf # v6.1.0

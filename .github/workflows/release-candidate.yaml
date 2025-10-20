@@ -65,4 +65,4 @@ jobs:
         run: |
           make xpkg.build PLATFORM=linux_amd64 VERSION=${{ steps.version.outputs.version }}
           make xpkg.build PLATFORM=linux_arm64 VERSION=${{ steps.version.outputs.version }}
-          make xpkg.release.publish
+          make xpkg.release.publish VERSION=${{ steps.version.outputs.version }}
