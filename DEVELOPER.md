@@ -92,7 +92,8 @@ To start the local e2e test:
 
 ```console
 export CF_ENVIRONMENT=https://cf-environment.com
-export CF_CREDENTIALS={"user": "someuserEmail", "email": "useremailaddress@s.e", "password": "supersecretPassword"}make test-acceptance
+export CF_CREDENTIALS={"user": "someuserEmail", "email": "useremailaddress@s.e", "password": "supersecretPassword"}
+make test-acceptance
 ```
 
 ## Report a Bug
