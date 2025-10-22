@@ -111,13 +111,14 @@ func (e *externalClient) Observe(ctx context.Context, res resource.Managed) (man
 		return managed.ExternalObservation{}, errors.New(errNotOrgQuota)
 	}
 
-	// TODO: external_name are set to metadata.name by default.
-	if meta.GetExternalName(managedOrgQuota) == "" {
-		return managed.ExternalObservation{}, nil
+	external_name := meta.GetExternalName(managedOrgQuota)
+	// If external name is not set, use metadata.name as default
+	if external_name == "" {
+		external_name = managedOrgQuota.GetName()
 	}
 
 	// get by external name
-	externalOrgQuota, err := e.cloudFoundryClient.Get(ctx, meta.GetExternalName(managedOrgQuota))
+	externalOrgQuota, err := e.cloudFoundryClient.Get(ctx, external_name)
 
 	// not found or error
 	if err != nil {
