@@ -1,0 +1,24 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Mta
+metadata:
+  name: test
+  namespace: default
+spec:
+  forProvider:
+    namespace: default
+    spaceRef:
+      name: my-space
+    blueGreenDeploy: true
+    file:
+      url: <url>
+      credentialsSecretRef:
+        name: secret
+        namespace: default
+    extension: |
+      _schema-version: 3.3.0
+      extends: my-app
+      ID: my-app.extension
+      modules:
+        - name: my-app-srv
+          parameters:
+            instances: 2
