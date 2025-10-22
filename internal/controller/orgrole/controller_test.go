@@ -26,8 +26,8 @@ var (
 	errBoom            = errors.New("boom")
 	errOrgNotSpecified = errors.New(role.ErrOrgNotSpecified)
 	resourceName       = "my-org-roles"
-	guidOrg            = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69u"
-	guidRole           = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69r"
+	guidOrg            = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a"
+	guidRole           = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69b"
 
 	guidNoRefUser   = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 	guidHealthyUser = "1d1b0d04-d537-4e4e-8c6f-f09ca0e7f11f"
@@ -194,12 +194,46 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
-		"Successful": {
+		"NotFoundByUUID": {
 			args: args{
-				mg: fakeOrgRole(withOrg(guidOrg), withUsername("user1"), withType(v1alpha1.OrgManager)),
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withUsername("user1"),
+					withType(v1alpha1.OrgManager),
+					withExternalName(guidRole)),
 			},
 			want: want{
-				mg:  fakeOrgRole(withOrg(guidOrg), withUsername("user1"), withExternalName(guidRole), withType(v1alpha1.OrgManager)),
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withUsername("user1"),
+					withType(v1alpha1.OrgManager),
+					withExternalName(guidRole)),
+				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: false, ResourceLateInitialized: false},
+				err: nil,
+			},
+			service: func() *fake.MockOrgRole {
+				m := &fake.MockOrgRole{}
+
+				m.On("Get", guidRole).Return(
+					fake.OrganizationRoleNil,
+					nil,
+				)
+				return m
+			},
+		},
+		"Successful": {
+			args: args{
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withUsername("user1"),
+					withType(v1alpha1.OrgManager)),
+			},
+			want: want{
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withUsername("user1"),
+					withType(v1alpha1.OrgManager),
+					withExternalName(guidRole)),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
@@ -209,6 +243,31 @@ func TestObserve(t *testing.T) {
 				m.On("ListIncludeUsersAll").Return(
 					[]*cfresource.Role{healthyRole},
 					[]*cfresource.User{healthyUser},
+					nil,
+				)
+				return m
+			},
+		},
+		"SuccessfulWithUUID": {
+			args: args{
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withExternalName(guidRole)),
+			},
+			want: want{
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withUsername("user1"),
+					withType(v1alpha1.OrgManager),
+					withExternalName(guidRole)),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
+				err: nil,
+			},
+			service: func() *fake.MockOrgRole {
+				m := &fake.MockOrgRole{}
+
+				m.On("Get", guidRole).Return(
+					healthyRole,
 					nil,
 				)
 				return m
