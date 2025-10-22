@@ -13,18 +13,18 @@ type ConfigSchema struct {
 	// ExportSubcommandConfiguration
 }
 
-type ConfigModule func() error
+type configModule func() error
 
 var (
 	Configuration *ConfigSchema = &ConfigSchema{}
-	configModules               = []ConfigModule{}
+	configModules               = []configModule{}
 )
 
-func RegisterConfigModule(module ConfigModule) {
+func registerConfigModule(module configModule) {
 	configModules = append(configModules, module)
 }
 
-func configModuleName(module ConfigModule) string {
+func configModuleName(module configModule) string {
 	s := strings.Split(runtime.FuncForPC(reflect.ValueOf(module).Pointer()).Name(), ".")
 	if len(s) == 0 {
 		panic("invalid configModule name")

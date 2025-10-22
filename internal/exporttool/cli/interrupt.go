@@ -7,10 +7,10 @@ import (
 )
 
 var (
-	CliCtx context.Context
-	Cancel context.CancelFunc
+	rootCtx context.Context    // A context.Context to be used to detect ctrl-c interrupts. Its Done channel closes on SIGINT or SIGTERM.
+	cancel  context.CancelFunc // A function to close the Done channel of Ctx.
 )
 
 func init() {
-	CliCtx, Cancel = signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	rootCtx, cancel = signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 }

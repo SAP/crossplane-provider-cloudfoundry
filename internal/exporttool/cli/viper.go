@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	RegisterConfigModule(configureViper)
+	registerConfigModule(configureViper)
 }
 
 func configureViper() error {
