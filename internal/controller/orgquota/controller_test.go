@@ -83,11 +83,11 @@ func fakeOrgQuota(m ...modifier) *v1alpha1.OrgQuota {
 	return r
 }
 
-func fakeOrgQuotaResource(id string) *cfresource.OrganizationQuota {
+func fakeOrgQuotaResource(id string, p bool) *cfresource.OrganizationQuota {
 	r := &cfresource.OrganizationQuota{}
 	r.GUID = id
 	r.Name = "test-org-quota"
-	r.Services.PaidServicesAllowed = true
+	r.Services.PaidServicesAllowed = p
 	return r
 }
 
@@ -206,7 +206,7 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
 				m.On("Get", guid).Return(
-					fakeOrgQuotaResource(guid),
+					fakeOrgQuotaResource(guid, true),
 					nil,
 				)
 				return m
@@ -232,7 +232,7 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
 				m.On("Get", "test-org-quota").Return(
-					fakeOrgQuotaResource(guid),
+					fakeOrgQuotaResource(guid, true),
 					nil,
 				)
 				return m
@@ -304,7 +304,7 @@ func TestCreate(t *testing.T) {
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
 				m.On("Create").Return(
-					fakeOrgQuotaResource(guid),
+					fakeOrgQuotaResource(guid, true),
 					nil,
 				)
 				return m
@@ -403,7 +403,7 @@ func TestUpdate(t *testing.T) {
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
 				m.On("Update").Return(
-					fakeOrgQuotaResource(guid),
+					fakeOrgQuotaResource(guid, true),
 					nil,
 				)
 				return m
