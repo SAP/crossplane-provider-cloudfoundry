@@ -24,5 +24,5 @@ func MarshalPretty(resource any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return glamour.Render(fmt.Sprintf("```yaml\n---\n%s...\n```", string(b)), "auto")
+	return glamour.Render(fmt.Sprintf("```yaml\n---\n%s...\n```", string(b)), "dracula")
 }

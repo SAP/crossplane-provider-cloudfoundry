@@ -28,12 +28,12 @@ func generateServicePlan(ctx context.Context, cfClient *client.Client, serviceIn
 		serviceInstance.Relationships.ServicePlan.Data != nil {
 		sPlan, err := cfClient.ServicePlans.Get(ctx, serviceInstance.Relationships.ServicePlan.Data.GUID)
 		if err != nil {
-			evHandler.Error(erratt.Errorf("cannot get service plan of service instance: %w", err).With("service-instance-guid", serviceInstance.GUID, "service-plan-guid", serviceInstance.Relationships.ServicePlan.Data.GUID))
+			evHandler.Warn(erratt.Errorf("cannot get service plan of service instance: %w", err).With("service-instance-guid", serviceInstance.GUID, "service-plan-guid", serviceInstance.Relationships.ServicePlan.Data.GUID))
 			return nil
 		}
 		sOffering, err := cfClient.ServiceOfferings.Get(ctx, sPlan.Relationships.ServiceOffering.Data.GUID)
 		if err != nil {
-			evHandler.Error(erratt.Errorf("cannot get service offering of service plan: %w", err).With("service-ofering-guid", sPlan.Relationships.ServiceOffering.Data.GUID, "service-plan-guid", serviceInstance.Relationships.ServicePlan.Data.GUID))
+			evHandler.Warn(erratt.Errorf("cannot get service offering of service plan: %w", err).With("service-ofering-guid", sPlan.Relationships.ServiceOffering.Data.GUID, "service-plan-guid", serviceInstance.Relationships.ServicePlan.Data.GUID))
 			return nil
 		}
 
@@ -52,12 +52,12 @@ func generateCreds(ctx context.Context, cfClient *client.Client, serviceInstance
 	if serviceInstance.Type != "managed" {
 		creds, err := cfClient.ServiceInstances.GetUserProvidedCredentials(ctx, serviceInstance.GUID)
 		if err != nil {
-			evHandler.Error(erratt.Errorf("cannot get service instance provided credentials: %w", err).With("guid", serviceInstance.GUID))
+			evHandler.Warn(erratt.Errorf("cannot get service instance provided credentials: %w", err).With("guid", serviceInstance.GUID))
 			return nil
 		}
 		jsonCredsBytes, err = creds.MarshalJSON()
 		if err != nil {
-			evHandler.Error(erratt.Errorf("cannot JSON marshal service instance provided credentials: %w", err).With("guid", serviceInstance.GUID))
+			evHandler.Warn(erratt.Errorf("cannot JSON marshal service instance provided credentials: %w", err).With("guid", serviceInstance.GUID))
 			return nil
 		}
 	}
@@ -73,11 +73,11 @@ func generateParams(ctx context.Context, cfClient *client.Client, serviceInstanc
 		if err == nil {
 			jsonParams, err = params.MarshalJSON()
 			if err != nil {
-				evHandler.Error(erratt.Errorf("cannot JSON marshal service instance managed parameters: %w", err).With("guid", serviceInstance.GUID))
+				evHandler.Warn(erratt.Errorf("cannot JSON marshal service instance managed parameters: %w", err).With("guid", serviceInstance.GUID))
 				return nil
 			}
 		} else {
-			evHandler.Error(erratt.Errorf("cannot get service instance managed parameters: %w", err).With("serviceinstance-guid", serviceInstance.GUID))
+			evHandler.Warn(erratt.Errorf("cannot get service instance managed parameters: %w", err).With("serviceinstance-guid", serviceInstance.GUID))
 		}
 	}
 	return &runtime.RawExtension{
