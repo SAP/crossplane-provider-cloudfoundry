@@ -1,0 +1,16 @@
+package provider
+
+// ProviderConfig defines the configuration for a provider
+type ProviderConfig interface {
+	// GetProviderConfigRef returns the provider config reference
+	GetProviderConfigRef() ProviderConfigRef
+
+	// Validate validates the configuration
+	Validate() bool
+}
+
+// ConfigParser parses configuration for resources to import
+type ConfigParser interface {
+	// ParseConfig parses the configuration file
+	ParseConfig(configPath string) (ProviderConfig, []ResourceFilter, error)
+}
