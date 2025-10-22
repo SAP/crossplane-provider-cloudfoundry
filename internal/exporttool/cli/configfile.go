@@ -12,27 +12,32 @@ import (
 )
 
 func init() {
-	RegisterConfigModule(configureConfigFile)
+	registerConfigModule(configSetup)
 }
 
 func defaultConfigFileName() string {
-	return fmt.Sprintf("config-%s", Configuration.CLIConfiguration.ShortName)
+	return fmt.Sprintf("export-cli-config-%s", Configuration.CLIConfiguration.ShortName)
 }
 
 var ConfigFileParam = configparam.String("config", "Configuration file").WithShortName("c")
 
-func configureConfigFile() error {
+func configSetup() error {
+	ConfigFileParam.AttachToCommand(rootCommand)
+	return nil
+}
+
+func configureConfigFile() {
 	configFilePath := "."
-	if v := os.Getenv("XDG_CONFIG_HOME"); v != "" {
+	if ConfigFileParam.IsSet() {
+		configFilePath = ConfigFileParam.Value()
+	} else if v := os.Getenv("XDG_CONFIG_HOME"); v != "" {
 		configFilePath = filepath.Join(v, defaultConfigFileName())
 	} else if v := os.Getenv("HOME"); v != "" {
 		configFilePath = filepath.Join(v, defaultConfigFileName())
 	}
 	ConfigFileParam.WithDefaultValue(configFilePath)
 	viper.SetConfigFile(configFilePath)
-	ConfigFileParam.AttachToCommand(Command)
 	viper.SetConfigType("yaml")
-	return nil
 }
 
 type ConfigFileSettings map[string]any

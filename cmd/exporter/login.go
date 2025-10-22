@@ -6,7 +6,6 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/subcommand"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 )
 
@@ -31,7 +30,7 @@ func login(ctx context.Context) error {
 	return cfg.StoreConfig(cli.ConfigFileParam.Value())
 }
 
-var loginSubCommand = &subcommand.Simple{
+var loginSubCommand = &cli.BasicSubCommand{
 	Name:             "login",
 	Short:            fmt.Sprintf("Logging in to %s cluster", observedSystem),
 	Long:             fmt.Sprintf("Logging in to %s cluster", observedSystem),
@@ -44,6 +43,6 @@ var loginSubCommand = &subcommand.Simple{
 }
 
 func init() {
-	loginSubCommand.Logic = login
+	loginSubCommand.Run = login
 	cli.RegisterSubCommand(loginSubCommand)
 }
