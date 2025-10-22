@@ -15,7 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 )
 
-func printErrors(ctx context.Context, wg *sync.WaitGroup, errChan <-chan erratt.Error) {
+func printErrors(ctx context.Context, wg *sync.WaitGroup, errChan <-chan error) {
 	defer wg.Done()
 	errlog := slog.New(log.NewWithOptions(os.Stderr, log.Options{}))
 	for {
@@ -47,7 +47,7 @@ func openOutput() (*os.File, erratt.Error) {
 	return fileOutput, nil
 }
 
-func resourceLoop(ctx context.Context, fileOutput *os.File, resourceChan <-chan resource.Object, errChan chan<- erratt.Error) {
+func resourceLoop(ctx context.Context, fileOutput *os.File, resourceChan <-chan resource.Object, errChan chan<- error) {
 	for {
 		select {
 		case res, ok := <-resourceChan:
@@ -81,7 +81,7 @@ func resourceLoop(ctx context.Context, fileOutput *os.File, resourceChan <-chan 
 	}
 }
 
-func handleResources(ctx context.Context, wg *sync.WaitGroup, resourceChan <-chan resource.Object, errChan chan<- erratt.Error) {
+func handleResources(ctx context.Context, wg *sync.WaitGroup, resourceChan <-chan resource.Object, errChan chan<- error) {
 	defer wg.Done()
 	fileOutput, err := openOutput()
 	if err != nil {
@@ -130,13 +130,13 @@ func (h *handler[T]) Stop() {
 }
 
 type EventHandler interface {
-	Error(erratt.Error)
+	Warn(error)
 	Resource(resource.Object)
 	Stop()
 }
 
 type eventHandler struct {
-	errorHandler    *handler[erratt.Error]
+	errorHandler    *handler[error]
 	resourceHandler *handler[resource.Object]
 }
 
@@ -144,12 +144,12 @@ var _ EventHandler = eventHandler{}
 
 func newEventHandler(ctx context.Context) eventHandler {
 	return eventHandler{
-		errorHandler:    newHandler[erratt.Error](ctx),
+		errorHandler:    newHandler[error](ctx),
 		resourceHandler: newHandler[resource.Object](ctx),
 	}
 }
 
-func (eh eventHandler) Error(err erratt.Error) {
+func (eh eventHandler) Warn(err error) {
 	eh.errorHandler.Event(err)
 }
 

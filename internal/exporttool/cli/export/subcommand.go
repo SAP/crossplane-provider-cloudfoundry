@@ -7,7 +7,6 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/subcommand"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 )
 
@@ -30,8 +29,8 @@ var OutputParam = configparam.String("output", "redirect the YAML output to a fi
 	WithFlagName("output")
 
 var (
-	_         subcommand.SubCommand = &exportSubCommand{}
-	exportCmd                       = &exportSubCommand{
+	_         cli.SubCommand = &exportSubCommand{}
+	exportCmd                = &exportSubCommand{
 		runCommand: func(_ context.Context, _ EventHandler) error {
 			return erratt.New("export subcommand is not set")
 		},
@@ -62,10 +61,8 @@ func (c *exportSubCommand) MustIgnoreConfigFile() bool {
 	return false
 }
 
-func (c *exportSubCommand) Run() func(context.Context) error {
+func (c *exportSubCommand) GetRun() func(context.Context) error {
 	return func(ctx context.Context) error {
-		defer cli.Cancel()
-
 		evHandler := newEventHandler(ctx)
 		wg := sync.WaitGroup{}
 		wg.Add(1)
@@ -86,7 +83,7 @@ func SetCommand(cmd func(context.Context, EventHandler) error) {
 	exportCmd.runCommand = cmd
 }
 
-func AddCommandParams(param ...configparam.ConfigParam) {
+func AddConfigParams(param ...configparam.ConfigParam) {
 	exportCmd.configParams = append(exportCmd.configParams, param...)
 }
 

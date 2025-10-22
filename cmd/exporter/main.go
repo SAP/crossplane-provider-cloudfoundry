@@ -225,7 +225,7 @@ func main() {
 	cli.Configuration.ShortName = shortName
 	cli.Configuration.ObservedSystem = observedSystem
 	export.SetCommand(exportCmd)
-	export.AddCommandParams(
+	export.AddConfigParams(
 		apiUrlParam,
 		usernameParam,
 		passwordParam,
