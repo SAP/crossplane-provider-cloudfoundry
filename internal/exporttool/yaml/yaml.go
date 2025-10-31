@@ -1,0 +1,28 @@
+package yaml
+
+import (
+	"fmt"
+
+	"github.com/charmbracelet/glamour"
+	"sigs.k8s.io/yaml"
+)
+
+// Marshal returns the YAML representation of a Kubernetes resource,
+// indented and wrapped with "---" and "..." markers.
+func Marshal(resource any) (string, error) {
+	b, err := yaml.Marshal(resource)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("---\n%s...\n", string(b)), nil
+}
+
+// MarshalPretty returns a syntax-highlighted YAML string suitable for
+// terminal display.
+func MarshalPretty(resource any) (string, error) {
+	b, err := yaml.Marshal(resource)
+	if err != nil {
+		return "", err
+	}
+	return glamour.Render(fmt.Sprintf("```yaml\n---\n%s...\n```", string(b)), "dracula")
+}
