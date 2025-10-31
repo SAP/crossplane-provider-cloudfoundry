@@ -46,6 +46,7 @@ func RegisterSubCommand(command SubCommand) {
 						}
 					}
 				}
+				configureLogging()
 				return nil
 			},
 			Run: makeCobraRun(command.GetRun()),

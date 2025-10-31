@@ -6,7 +6,9 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
+	_ "github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/widget"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 )
 
 var subcommand = &cli.BasicSubCommand{
@@ -19,7 +21,7 @@ var subcommand = &cli.BasicSubCommand{
 	Run: widgetTesting,
 }
 
-var selectorParam = configparam.StringSlice("select", "Which widget to test").
+var selectorParam = configparam.StringSlice("select", "Which widget to test. Possible values: text, sensitive or multi").
 	WithShortName("s").
 	WithPossibleValues([]string{"text", "sensitive", "multi"}).
 	WithEnvVarName("SELECT")
@@ -31,22 +33,28 @@ func widgetTesting(ctx context.Context) error {
 		return err
 	}
 	for _, selectedWidget := range selectedWidgets {
+		slog.Debug("processing selection parameter", "parameter", selectedWidget)
 		switch selectedWidget {
 		case "text":
-			_, err := widget.TextInput(ctx, "Testing TextInput", "enter text", false)
+			text, err := widget.TextInput(ctx, "Testing TextInput", "enter text", false)
 			if err != nil {
 				return err
 			}
+			slog.Debug("Text entered", "value", text)
 		case "sensitive":
-			_, err = widget.TextInput(ctx, "Testing sensitive TextInput", "", true)
+			sensitive, err := widget.TextInput(ctx, "Testing sensitive TextInput", "", true)
 			if err != nil {
 				return err
 			}
+			slog.Debug("Sensitive text entered", "value", sensitive)
 		case "multi":
-			_, err = widget.MultiInput(ctx, "Testing MultiInput", []string{"option A", "option B", "option C"})
+			options, err := widget.MultiInput(ctx, "Testing MultiInput", []string{"option A", "option B", "option C"})
 			if err != nil {
 				return err
 			}
+			slog.Debug("Options selected", "values", options)
+		default:
+			return erratt.New("invalid parameter value", "parameter", selectorParam.Name, "value", selectedWidget)
 		}
 	}
 	return nil
