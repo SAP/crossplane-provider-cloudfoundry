@@ -23,7 +23,6 @@ func Execute() {
 		erratt.Slog(err)
 		os.Exit(1)
 	}
-	configureLogging()
 	if err := rootCommand.Execute(); err != nil {
 		erratt.Slog(err)
 		os.Exit(1)
