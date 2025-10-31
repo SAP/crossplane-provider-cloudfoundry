@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log/slog"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
@@ -11,7 +12,9 @@ import (
 )
 
 func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export invoked", "kind", export.ResourceKindParam.Value())
 	for i := 0; i < 20; i++ {
+		slog.Debug("exporting resource", "i", i)
 		events.Resource(&unstructured.Unstructured{
 			Object: map[string]interface{}{
 				"user":     fmt.Sprintf("test-%d", i),

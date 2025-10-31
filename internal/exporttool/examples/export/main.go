@@ -2,12 +2,15 @@ package main
 
 import (
 	"context"
+	"log/slog"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
 )
 
-func exportLogic(_ context.Context,_ export.EventHandler) error {
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+	events.Stop()
 	return nil
 }
 
