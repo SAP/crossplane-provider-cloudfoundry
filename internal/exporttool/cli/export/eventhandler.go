@@ -10,14 +10,14 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/yaml"
-
 	"github.com/charmbracelet/log"
+
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 )
 
 func printErrors(ctx context.Context, wg *sync.WaitGroup, errChan <-chan error) {
 	defer wg.Done()
-	errlog := slog.New(log.NewWithOptions(os.Stderr, log.Options{}))
+	errlog := slog.New(log.NewWithOptions(os.Stdout, log.Options{}))
 	for {
 		select {
 		case err, ok := <-errChan:
