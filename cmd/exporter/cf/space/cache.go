@@ -12,7 +12,7 @@ type Cache struct {
 	orgGuidIndex map[string][]*resource.Space
 }
 
-func New(spaces []*resource.Space) *Cache {
+func newCache(spaces []*resource.Space) *Cache {
 	c := &Cache{
 		guidIndex:    make(map[string]*resource.Space),
 		nameIndex:    make(map[string][]*resource.Space),

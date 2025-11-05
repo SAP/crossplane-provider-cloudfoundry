@@ -3,17 +3,68 @@ package space
 import (
 	"context"
 	"regexp"
+	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/guidname"
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 )
 
-func GetAllNamesFn(ctx context.Context, cfClient *client.Client, orgGuids []string) func() ([]string, error) {
+var (
+	cache *Cache
+	Param = configparam.StringSlice("space", "Filter for Cloud Foundry spaces").
+		WithFlagName("space")
+)
+
+func Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
+	if cache != nil {
+		return cache, nil
+	}
+	orgs, err := org.Get(ctx, cfClient)
+	if err != nil {
+		return nil, err
+	}
+
+	Param.WithPossibleValuesFn(getAllNamesFn(ctx, cfClient, orgs.GetGUIDs()))
+
+	selectedSpaces, err := Param.ValueOrAsk(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	spaceNames := make([]string, len(selectedSpaces))
+	for i, spaceName := range selectedSpaces {
+		name, err := guidname.ParseName(spaceName)
+		if err != nil {
+			return nil, err
+		}
+		spaceNames[i] = name.Name
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	spaces, err := getAll(ctx, cfClient, orgs.GetGUIDs(), spaceNames)
+	if err != nil {
+		return nil, erratt.Errorf("cannot get spaces: %w", err)
+	}
+	cache = newCache(spaces)
+	Param.WithPossibleValuesFn(convertPossibleValuesFn(cache.GetNames))
+	return cache, nil
+}
+
+func convertPossibleValuesFn(fn func() []string) func() ([]string, error) {
 	return func() ([]string, error) {
-		resources, err := GetAll(ctx, cfClient, orgGuids, []string{})
+		return fn(), nil
+	}
+}
+
+func getAllNamesFn(ctx context.Context, cfClient *client.Client, orgGuids []string) func() ([]string, error) {
+	return func() ([]string, error) {
+		resources, err := getAll(ctx, cfClient, orgGuids, []string{})
 		if err != nil {
 			return nil, err
 		}
@@ -25,7 +76,7 @@ func GetAllNamesFn(ctx context.Context, cfClient *client.Client, orgGuids []stri
 	}
 }
 
-func GetAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spaceNames []string) ([]*resource.Space, error) {
+func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spaceNames []string) ([]*resource.Space, error) {
 	var nameRxs []*regexp.Regexp
 
 	if len(spaceNames) > 0 {
