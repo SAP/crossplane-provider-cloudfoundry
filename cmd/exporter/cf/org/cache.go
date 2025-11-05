@@ -11,7 +11,7 @@ type Cache struct {
 	nameIndex map[string][]*resource.Organization
 }
 
-func New(orgs []*resource.Organization) *Cache {
+func newCache(orgs []*resource.Organization) *Cache {
 	c := &Cache{
 		guidIndex: make(map[string]*resource.Organization),
 		nameIndex: make(map[string][]*resource.Organization),
