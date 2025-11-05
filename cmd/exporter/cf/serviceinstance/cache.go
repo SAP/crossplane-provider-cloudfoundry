@@ -14,7 +14,7 @@ type Cache struct {
 	guidIndex map[string]*resource.ServiceInstance
 }
 
-func New(serviceInstances []*resource.ServiceInstance) *Cache {
+func newCache(serviceInstances []*resource.ServiceInstance) *Cache {
 	c := &Cache{
 		guidIndex: make(map[string]*resource.ServiceInstance),
 	}

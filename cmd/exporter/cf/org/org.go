@@ -3,17 +3,55 @@ package org
 import (
 	"context"
 	"regexp"
+	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/guidname"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 )
 
-func GetAllNamesFn(ctx context.Context, cfClient *client.Client) func() ([]string, error) {
+var (
+	cache *Cache
+	Param = configparam.StringSlice("org", "Filter for Cloud Foundry organizations").
+		WithFlagName("org")
+)
+
+func Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
+	if cache != nil {
+		return cache, nil
+	}
+	Param.WithPossibleValuesFn(getAllNamesFn(ctx, cfClient))
+
+	selectedOrgs, err := Param.ValueOrAsk(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	orgNames := make([]string, len(selectedOrgs))
+	for i, orgName := range selectedOrgs {
+		name, err := guidname.ParseName(orgName)
+		if err != nil {
+			return nil, err
+		}
+		orgNames[i] = name.Name
+	}
+
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
+	defer cancel()
+	orgs, err := getAll(ctx, cfClient, orgNames)
+	if err != nil {
+		return nil, err
+	}
+	cache = newCache(orgs)
+	return cache, nil
+}
+
+func getAllNamesFn(ctx context.Context, cfClient *client.Client) func() ([]string, error) {
 	return func() ([]string, error) {
-		resources, err := GetAll(ctx, cfClient, []string{})
+		resources, err := getAll(ctx, cfClient, []string{})
 		if err != nil {
 			return nil, err
 		}
@@ -25,7 +63,7 @@ func GetAllNamesFn(ctx context.Context, cfClient *client.Client) func() ([]strin
 	}
 }
 
-func GetAll(ctx context.Context, cfClient *client.Client, orgNames []string) ([]*resource.Organization, error) {
+func getAll(ctx context.Context, cfClient *client.Client, orgNames []string) ([]*resource.Organization, error) {
 	var nameRxs []*regexp.Regexp
 
 	if len(orgNames) > 0 {
