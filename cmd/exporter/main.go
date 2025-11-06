@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
-	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/serviceinstance"
-	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
+	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
+	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/serviceinstance"
+	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
@@ -40,11 +41,12 @@ func main() {
 		apiUrlParam,
 		usernameParam,
 		passwordParam,
-		org.Param,
-		space.Param,
-		serviceinstance.Param,
+		// org.Org.Param(),
+		// space.Space.Param(),
+		// serviceinstance.ServiceInstance.Param(),
 		useCfLoginMethod,
 	)
+	export.AddConfigParams(resources.ConfigParams()...)
 	export.AddResourceKinds("organization", "space", "serviceinstance")
 	cli.Execute()
 }

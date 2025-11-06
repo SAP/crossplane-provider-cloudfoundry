@@ -24,6 +24,11 @@ func newConfigParam[T any](parent *T, name, description string) *configParam[T] 
 	}
 }
 
+// Name returns with the configured name of the configparam value.
+func (p *configParam[T]) GetName() string {
+	return p.Name
+}
+
 // WithShortName sets the short name of the command line flag that can
 // be used to configure the parameter value.
 func (p *configParam[T]) WithShortName(shortName string) *T {
@@ -117,6 +122,7 @@ func (p *configWithDefaultValue[CP, T]) value(valueGetter func(string) T) T {
 // ConfigParam interface defines the methods that a configuration
 // parameter type must implement.
 type ConfigParam interface {
+	GetName() string
 	AttachToCommand(cmd *cobra.Command)
 	BindConfiguration(cmd *cobra.Command)
 }

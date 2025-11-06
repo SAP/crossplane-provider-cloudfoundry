@@ -2,36 +2,64 @@ package space
 
 import (
 	"context"
+	"log/slog"
 	"regexp"
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/guidname"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 )
 
+func init() {
+	resources.RegisterKind(param.Name, Space)
+}
+
+type space struct{}
+
+var _ resources.Kind = space{}
+
 var (
 	cache *Cache
-	Param = configparam.StringSlice("space", "Filter for Cloud Foundry spaces").
+	param = configparam.StringSlice("space", "Filter for Cloud Foundry spaces").
 		WithFlagName("space")
+	Space = space{}
 )
 
-func Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
+func (s space) Param() configparam.ConfigParam {
+	return param
+}
+
+func (s space) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler) error {
+	spaces, err := s.Get(ctx, cfClient)
+	if err != nil {
+		return err
+	}
+	if spaces.Len() == 0 {
+		evHandler.Warn(erratt.New("no space found", "spaces", param.Value()))
+	} else {
+		spaces.Export(evHandler)
+	}
+	return nil
+}
+
+func (s space) Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
 	if cache != nil {
 		return cache, nil
 	}
-	orgs, err := org.Get(ctx, cfClient)
+	orgs, err := org.Org.Get(ctx, cfClient)
 	if err != nil {
 		return nil, err
 	}
+	param.WithPossibleValuesFn(getAllNamesFn(ctx, cfClient, orgs.GetGUIDs()))
 
-	Param.WithPossibleValuesFn(getAllNamesFn(ctx, cfClient, orgs.GetGUIDs()))
-
-	selectedSpaces, err := Param.ValueOrAsk(ctx)
+	selectedSpaces, err := param.ValueOrAsk(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -52,7 +80,8 @@ func Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
 		return nil, erratt.Errorf("cannot get spaces: %w", err)
 	}
 	cache = newCache(spaces)
-	Param.WithPossibleValuesFn(convertPossibleValuesFn(cache.GetNames))
+	param.WithPossibleValuesFn(convertPossibleValuesFn(cache.GetNames))
+	slog.Debug("spaces collected", "spaces", cache.GetNames())
 	return cache, nil
 }
 
