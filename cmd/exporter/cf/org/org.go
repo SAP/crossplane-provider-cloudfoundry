@@ -2,30 +2,59 @@ package org
 
 import (
 	"context"
+	"log/slog"
 	"regexp"
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/guidname"
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 )
 
+func init() {
+	resources.RegisterKind(param.Name, Org)
+}
+
+type org struct{}
+
+var _ resources.Kind = org{}
+
 var (
 	cache *Cache
-	Param = configparam.StringSlice("org", "Filter for Cloud Foundry organizations").
+	param = configparam.StringSlice("organization", "Filter for Cloud Foundry organizations").
 		WithFlagName("org")
+	Org = org{}
 )
 
-func Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
+func (o org) Param() configparam.ConfigParam {
+	return param
+}
+
+func (o org) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler) error {
+	orgs, err := o.Get(ctx, cfClient)
+	if err != nil {
+		return err
+	}
+	if orgs.Len() == 0 {
+		evHandler.Warn(erratt.New("no orgs found", "orgs", param.Value()))
+	} else {
+		orgs.Export(evHandler)
+	}
+	return nil
+}
+
+func (o org) Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
 	if cache != nil {
 		return cache, nil
 	}
-	Param.WithPossibleValuesFn(getAllNamesFn(ctx, cfClient))
+	param.WithPossibleValuesFn(getAllNamesFn(ctx, cfClient))
 
-	selectedOrgs, err := Param.ValueOrAsk(ctx)
+	selectedOrgs, err := param.ValueOrAsk(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -46,6 +75,7 @@ func Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
 		return nil, err
 	}
 	cache = newCache(orgs)
+	slog.Debug("orgs collected", "orgs", cache.GetNames())
 	return cache, nil
 }
 

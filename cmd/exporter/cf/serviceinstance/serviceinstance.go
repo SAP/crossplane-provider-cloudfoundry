@@ -2,43 +2,74 @@ package serviceinstance
 
 import (
 	"context"
+	"log/slog"
 	"regexp"
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/guidname"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 )
 
+func init() {
+	resources.RegisterKind(param.Name, ServiceInstance)
+}
+
+type serviceinstance struct{}
+
+var _ resources.Kind = serviceinstance{}
+
 var (
 	cache *Cache
-	Param = configparam.StringSlice("serviceinstance", "Filter for Cloud Foundry service instances").
+	param = configparam.StringSlice("serviceinstance", "Filter for Cloud Foundry service instances").
 		WithFlagName("serviceinstance")
+	ServiceInstance = serviceinstance{}
 )
 
-func Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
+func (si serviceinstance) Param() configparam.ConfigParam {
+	return param
+}
+
+func (si serviceinstance) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler) error {
+	serviceInstances, err := si.Get(ctx, cfClient)
+	if err != nil {
+		return err
+	}
+	if serviceInstances.Len() == 0 {
+		evHandler.Warn(erratt.New("no serviceinstance found", "serviceinstances", param.Value()))
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
+	defer cancel()
+	serviceInstances.Export(ctx, cfClient, evHandler)
+	return nil
+}
+
+func (si serviceinstance) Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
 	if cache != nil {
 		return cache, nil
 	}
 
-	orgs, err := org.Get(ctx, cfClient)
+	orgs, err := org.Org.Get(ctx, cfClient)
 	if err != nil {
 		return nil, err
 	}
 
-	spaces, err := space.Get(ctx, cfClient)
+	spaces, err := space.Space.Get(ctx, cfClient)
 	if err != nil {
 		return nil, err
 	}
 
-	Param.WithPossibleValuesFn(getAllNamesFn(ctx, cfClient, orgs.GetGUIDs(), spaces.GetGUIDs()))
+	param.WithPossibleValuesFn(getAllNamesFn(ctx, cfClient, orgs.GetGUIDs(), spaces.GetGUIDs()))
 
-	selectedServiceInstances, err := Param.ValueOrAsk(ctx)
+	selectedServiceInstances, err := param.ValueOrAsk(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -64,6 +95,7 @@ func Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
 		return nil, err
 	}
 	cache = newCache(serviceInstances)
+	slog.Debug("serviceinstances collected", "serviceinstances", cache.GetNames())
 	return cache, nil
 }
 

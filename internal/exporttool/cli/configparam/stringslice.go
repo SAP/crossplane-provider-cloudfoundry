@@ -93,6 +93,9 @@ func (p *StringSliceParam) ValueOrAsk(ctx context.Context) ([]string, error) {
 		if err != nil {
 			return nil, erratt.Errorf("cannot get possible values: %w", err)
 		}
+		if len(possibleValues) == 0 {
+			return []string{}, nil
+		}
 	}
 	values, err := widget.MultiInput(ctx,
 		p.configParam.Description,

@@ -26,6 +26,10 @@ func newCache(spaces []*resource.Space) *Cache {
 	return c
 }
 
+func (c *Cache) Len() int {
+	return len(c.guidIndex)
+}
+
 func (c *Cache) GetByName(name string) []*resource.Space {
 	return c.nameIndex[name]
 }

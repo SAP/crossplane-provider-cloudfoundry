@@ -24,8 +24,22 @@ func newCache(serviceInstances []*resource.ServiceInstance) *Cache {
 	return c
 }
 
+func (c *Cache) GetNames() []string {
+	names := make([]string, len(c.guidIndex))
+	i := 0
+	for _, si := range c.guidIndex {
+		names[i] = si.Name
+		i++
+	}
+	return names
+}
+
 func (c *Cache) GetByGUID(guid string) *resource.ServiceInstance {
 	return c.guidIndex[guid]
+}
+
+func (c *Cache) Len() int {
+	return len(c.guidIndex)
 }
 
 func (c *Cache) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler) {
