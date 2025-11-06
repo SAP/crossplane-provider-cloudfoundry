@@ -23,6 +23,10 @@ func newCache(orgs []*resource.Organization) *Cache {
 	return c
 }
 
+func (c *Cache) Len() int {
+	return len(c.guidIndex)
+}
+
 func (c *Cache) GetByName(name string) []*resource.Organization {
 	return c.nameIndex[name]
 }
