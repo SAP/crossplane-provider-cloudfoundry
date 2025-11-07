@@ -31,20 +31,24 @@ import (
 )
 
 const (
-	resourceType          = "ServiceInstance"
-	externalSystem        = "Cloud Foundry"
-	errTrackPCUsage       = "cannot track ProviderConfig usage"
-	errNewClient          = "cannot create a client for " + externalSystem
-	errWrongCRType        = "managed resource is not a " + resourceType
-	errUpdateCR           = "cannot update the managed resource"
-	errGet                = "cannot get " + resourceType + " in " + externalSystem
-	errCreate             = "cannot create " + resourceType + " in " + externalSystem
-	errUpdate             = "cannot update " + resourceType + " in " + externalSystem
-	errDelete             = "cannot delete " + resourceType + " in " + externalSystem
-	errCleanFailed        = "cannot delete failed service instance"
-	errSecret             = "cannot resolve secret reference"
-	errGetParameters      = "cannot get parameters of the service instance for drift detection. Please check this is supported or set enableParameterDriftDetection to false."
-	errMissingServicePlan = "managed resource service instance requires a service plan"
+	resourceType             = "ServiceInstance"
+	externalSystem           = "Cloud Foundry"
+	errTrackPCUsage          = "cannot track ProviderConfig usage"
+	errNewClient             = "cannot create a client for " + externalSystem
+	errWrongCRType           = "managed resource is not a " + resourceType
+	errUpdateCR              = "cannot update the managed resource"
+	errGet                   = "cannot get " + resourceType + " in " + externalSystem
+	errCreate                = "cannot create " + resourceType + " in " + externalSystem
+	errUpdate                = "cannot update " + resourceType + " in " + externalSystem
+	errDelete                = "cannot delete " + resourceType + " in " + externalSystem
+	errCleanFailed           = "cannot delete failed service instance"
+	errSecret                = "cannot resolve secret reference"
+	errGetParameters         = "cannot get parameters of the service instance for drift detection. Please check this is supported or set enableParameterDriftDetection to false."
+	errMissingServicePlan    = "managed resource service instance requires a service plan"
+	errCreateOperationFailed = "Service Instance create operation failed: %s"
+	errUpdateOperationFailed = "Service Instance update operation failed: %s"
+	errDeleteOperationFailed = "Service Instance delete operation failed: %s"
+	errUnknownFailure        = "unknown failed operation type: %s"
 )
 
 // Setup adds a controller that reconciles ServiceInstance CR.
@@ -177,10 +181,37 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	case v1alpha1.LastOperationFailed:
 		// If the last operation failed, set the CR to unavailable and signal that the reconciler should retry the last operation
 		cr.SetConditions(xpv1.Unavailable().WithMessage(r.LastOperation.Description))
-		return managed.ExternalObservation{
-			ResourceExists:   r.LastOperation.Type != v1alpha1.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
-			ResourceUpToDate: r.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
-		}, nil
+		switch r.LastOperation.Type {
+		case v1alpha1.LastOperationCreate:
+			// CREATE failed - the resource might partially exist in CF
+			// Report it exists so Crossplane doesn't immediately retry Create
+			// Return error to trigger exponential backoff
+			return managed.ExternalObservation{
+				ResourceExists:   true,  // Assume it exists, (Create() will clean up if not)
+				ResourceUpToDate: false, // Needs work
+
+			}, errors.Errorf(errCreateOperationFailed, r.LastOperation.Description)
+		case v1alpha1.LastOperationUpdate:
+			// UPDATE failed - resource exists but update was rejected
+			// For HANA: CF might not support the requested update at all
+			// Return error to trigger backoff instead of immediate retry
+			return managed.ExternalObservation{
+				ResourceExists:   true,
+				ResourceUpToDate: false,
+			}, errors.Errorf(errUpdateOperationFailed, r.LastOperation.Description)
+		case v1alpha1.LastOperationDelete:
+			// DELETE failed - resource still exists
+			// Return error to trigger backoff instead of immediate retry
+			return managed.ExternalObservation{
+				ResourceExists:   true,
+				ResourceUpToDate: true, // Not relevant during deletion
+			}, errors.Errorf(errDeleteOperationFailed, r.LastOperation.Description)
+		default:
+			return managed.ExternalObservation{
+				ResourceExists: true,
+			}, errors.Errorf(errUnknownFailure, r.LastOperation.Type)
+		}
+
 	case v1alpha1.LastOperationSucceeded:
 		// If the last operation succeeded, set the CR to available
 		cr.SetConditions(xpv1.Available())
