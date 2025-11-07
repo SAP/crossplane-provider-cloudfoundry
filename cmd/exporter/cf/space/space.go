@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/guidname"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
@@ -17,20 +18,32 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 )
 
+var (
+	c     cache.CacheWithGUIDAndName[*res]
+	param = configparam.StringSlice("space", "Filter for Cloud Foundry spaces").
+		WithFlagName("space")
+	Space = space{}
+)
+
 func init() {
 	resources.RegisterKind(param.Name, Space)
+}
+
+type res struct {
+	*resource.Space
+}
+
+func (r *res) GetGUID() string {
+	return r.GUID
+}
+
+func (r *res) GetName() string {
+	return r.Name
 }
 
 type space struct{}
 
 var _ resources.Kind = space{}
-
-var (
-	cache *Cache
-	param = configparam.StringSlice("space", "Filter for Cloud Foundry spaces").
-		WithFlagName("space")
-	Space = space{}
-)
 
 func (s space) Param() configparam.ConfigParam {
 	return param
@@ -44,14 +57,16 @@ func (s space) Export(ctx context.Context, cfClient *client.Client, evHandler ex
 	if spaces.Len() == 0 {
 		evHandler.Warn(erratt.New("no space found", "spaces", param.Value()))
 	} else {
-		spaces.Export(evHandler)
+		for _, space := range spaces.AllByGUIDs() {
+			evHandler.Resource(convertSpaceResource(space.Space))
+		}
 	}
 	return nil
 }
 
-func (s space) Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
-	if cache != nil {
-		return cache, nil
+func (s space) Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndName[*res], error) {
+	if c != nil {
+		return c, nil
 	}
 	orgs, err := org.Org.Get(ctx, cfClient)
 	if err != nil {
@@ -79,16 +94,10 @@ func (s space) Get(ctx context.Context, cfClient *client.Client) (*Cache, error)
 	if err != nil {
 		return nil, erratt.Errorf("cannot get spaces: %w", err)
 	}
-	cache = newCache(spaces)
-	param.WithPossibleValuesFn(convertPossibleValuesFn(cache.GetNames))
-	slog.Debug("spaces collected", "spaces", cache.GetNames())
-	return cache, nil
-}
-
-func convertPossibleValuesFn(fn func() []string) func() ([]string, error) {
-	return func() ([]string, error) {
-		return fn(), nil
-	}
+	c = cache.NewWithGUIDAndName[*res]()
+	c.StoreWithGUIDAndName(spaces...)
+	slog.Debug("spaces collected", "spaces", c.GetNames())
+	return c, nil
 }
 
 func getAllNamesFn(ctx context.Context, cfClient *client.Client, orgGuids []string) func() ([]string, error) {
@@ -105,7 +114,7 @@ func getAllNamesFn(ctx context.Context, cfClient *client.Client, orgGuids []stri
 	}
 }
 
-func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spaceNames []string) ([]*resource.Space, error) {
+func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spaceNames []string) ([]*res, error) {
 	var nameRxs []*regexp.Regexp
 
 	if len(spaceNames) > 0 {
@@ -131,11 +140,11 @@ func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spa
 		return nil, err
 	}
 
-	var results []*resource.Space
+	var results []*res
 	for _, space := range spaces {
 		for _, nameRx := range nameRxs {
 			if nameRx.MatchString(space.Name) {
-				results = append(results, space)
+				results = append(results, &res{space})
 			}
 		}
 	}
