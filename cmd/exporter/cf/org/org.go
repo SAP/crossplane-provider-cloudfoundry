@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/guidname"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
@@ -16,20 +17,32 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 )
 
+var (
+	c     cache.CacheWithGUIDAndName[*res]
+	param = configparam.StringSlice("organization", "Filter for Cloud Foundry organizations").
+		WithFlagName("org")
+	Org = org{}
+)
+
 func init() {
 	resources.RegisterKind(param.Name, Org)
+}
+
+type res struct {
+	*resource.Organization
+}
+
+func (o *res) GetGUID() string {
+	return o.GUID
+}
+
+func (o *res) GetName() string {
+	return o.Name
 }
 
 type org struct{}
 
 var _ resources.Kind = org{}
-
-var (
-	cache *Cache
-	param = configparam.StringSlice("organization", "Filter for Cloud Foundry organizations").
-		WithFlagName("org")
-	Org = org{}
-)
 
 func (o org) Param() configparam.ConfigParam {
 	return param
@@ -43,14 +56,16 @@ func (o org) Export(ctx context.Context, cfClient *client.Client, evHandler expo
 	if orgs.Len() == 0 {
 		evHandler.Warn(erratt.New("no orgs found", "orgs", param.Value()))
 	} else {
-		orgs.Export(evHandler)
+		for _, org := range orgs.AllByGUIDs() {
+			evHandler.Resource(convertOrgResource(org.Organization))
+		}
 	}
 	return nil
 }
 
-func (o org) Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
-	if cache != nil {
-		return cache, nil
+func (o org) Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndName[*res], error) {
+	if c != nil {
+		return c, nil
 	}
 	param.WithPossibleValuesFn(getAllNamesFn(ctx, cfClient))
 
@@ -74,9 +89,10 @@ func (o org) Get(ctx context.Context, cfClient *client.Client) (*Cache, error) {
 	if err != nil {
 		return nil, err
 	}
-	cache = newCache(orgs)
-	slog.Debug("orgs collected", "orgs", cache.GetNames())
-	return cache, nil
+	c = cache.NewWithGUIDAndName[*res]()
+	c.StoreWithGUIDAndName(orgs...)
+	slog.Debug("orgs collected", "orgs", c.GetNames())
+	return c, nil
 }
 
 func getAllNamesFn(ctx context.Context, cfClient *client.Client) func() ([]string, error) {
@@ -93,7 +109,7 @@ func getAllNamesFn(ctx context.Context, cfClient *client.Client) func() ([]strin
 	}
 }
 
-func getAll(ctx context.Context, cfClient *client.Client, orgNames []string) ([]*resource.Organization, error) {
+func getAll(ctx context.Context, cfClient *client.Client, orgNames []string) ([]*res, error) {
 	var nameRxs []*regexp.Regexp
 
 	if len(orgNames) > 0 {
@@ -114,11 +130,11 @@ func getAll(ctx context.Context, cfClient *client.Client, orgNames []string) ([]
 		return nil, err
 	}
 
-	var results []*resource.Organization
+	var results []*res
 	for _, org := range orgs {
 		for _, nameRx := range nameRxs {
 			if nameRx.MatchString(org.Name) {
-				results = append(results, org)
+				results = append(results, &res{org})
 			}
 		}
 	}
