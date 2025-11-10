@@ -6,6 +6,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/yaml"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
@@ -14,6 +15,20 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 )
+
+type serviceInstanceWithComment struct {
+	comment *string
+	*v1alpha1.ServiceInstance
+}
+
+var _ yaml.CommentedYAML = &serviceInstanceWithComment{}
+
+func (si *serviceInstanceWithComment) Comment() (string, bool) {
+	if si.comment == nil {
+		return "", false
+	}
+	return *si.comment, true
+}
 
 func convertServiceInstanceTags(tags []string) []*string {
 	result := make([]*string, len(tags))
@@ -66,26 +81,30 @@ func generateCreds(ctx context.Context, cfClient *client.Client, serviceInstance
 	}
 }
 
-func generateParams(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler export.EventHandler) *runtime.RawExtension {
+func generateParams(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler export.EventHandler) (*runtime.RawExtension, *string) {
 	var jsonParams []byte
+	var comment *string
 	if serviceInstance.Type == "managed" {
 		params, err := cfClient.ServiceInstances.GetManagedParameters(ctx, serviceInstance.GUID)
 		if err == nil {
 			jsonParams, err = params.MarshalJSON()
 			if err != nil {
 				evHandler.Warn(erratt.Errorf("cannot JSON marshal service instance managed parameters: %w", err).With("guid", serviceInstance.GUID))
-				return nil
+				return nil, comment
 			}
 		} else {
-			evHandler.Warn(erratt.Errorf("cannot get service instance managed parameters: %w", err).With("serviceinstance-guid", serviceInstance.GUID))
+			err = erratt.Errorf("cannot get service instance managed parameters: %w", err).With("serviceinstance-guid", serviceInstance.GUID)
+			evHandler.Warn(err)
+			comment = ptr.To(err.Error())
 		}
 	}
-	return &runtime.RawExtension{
+	re := &runtime.RawExtension{
 		Raw: jsonParams,
 	}
+	return re, comment
 }
 
-func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler export.EventHandler) *v1alpha1.ServiceInstance {
+func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler export.EventHandler) *serviceInstanceWithComment {
 	servicePlan := generateServicePlan(ctx, cfClient, serviceInstance, evHandler)
 
 	var maintenanceInfoDescription *string
@@ -93,59 +112,61 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 	if mInfo := serviceInstance.MaintenanceInfo; mInfo != nil {
 		maintenanceInfoDescription = ptr.To(mInfo.Description)
 		maintenanceInfoVersion = ptr.To(mInfo.Description)
-
 	}
 
-	params := generateParams(ctx, cfClient, serviceInstance, evHandler)
+	params, comment := generateParams(ctx, cfClient, serviceInstance, evHandler)
 	creds := generateCreds(ctx, cfClient, serviceInstance, evHandler)
 
-	return &v1alpha1.ServiceInstance{
-		TypeMeta: metav1.TypeMeta{
-			Kind:       v1alpha1.ServiceInstance_Kind,
-			APIVersion: v1alpha1.CRDGroupVersion.String(),
-		},
-		ObjectMeta: metav1.ObjectMeta{
-			Name: serviceInstance.Name,
-			Annotations: map[string]string{
-				"crossplane.io/external-name": serviceInstance.GUID,
+	return &serviceInstanceWithComment{
+		comment: comment,
+		ServiceInstance: &v1alpha1.ServiceInstance{
+			TypeMeta: metav1.TypeMeta{
+				Kind:       v1alpha1.ServiceInstance_Kind,
+				APIVersion: v1alpha1.CRDGroupVersion.String(),
 			},
-		},
-		Spec: v1alpha1.ServiceInstanceSpec{
-			ResourceSpec: v1.ResourceSpec{
-				ManagementPolicies: []v1.ManagementAction{
-					v1.ManagementActionObserve,
+			ObjectMeta: metav1.ObjectMeta{
+				Name: serviceInstance.Name,
+				Annotations: map[string]string{
+					"crossplane.io/external-name": serviceInstance.GUID,
 				},
 			},
-			ForProvider: v1alpha1.ServiceInstanceParameters{
-				Name: &serviceInstance.Name,
-				Type: v1alpha1.ServiceInstanceType(serviceInstance.Type),
-				SpaceReference: v1alpha1.SpaceReference{
-					Space: &serviceInstance.Relationships.Space.Data.GUID,
-				},
-				Managed: v1alpha1.Managed{
-					ServicePlan: servicePlan,
-					Parameters:  params,
-					// JSONParams: jsonParams,
-					// ParametersSecretRef: &v1.SecretReference{},
-					MaintenanceInfo: v1alpha1.MaintenanceInfo{
-						Description: maintenanceInfoDescription,
-						Version:     maintenanceInfoVersion,
+			Spec: v1alpha1.ServiceInstanceSpec{
+				ResourceSpec: v1.ResourceSpec{
+					ManagementPolicies: []v1.ManagementAction{
+						v1.ManagementActionObserve,
 					},
 				},
-				UserProvided: v1alpha1.UserProvided{
-					Credentials: creds,
-					// JSONCredentials: jsonCreds,
-					// CredentialsSecretRef: &v1.SecretReference{},
-					RouteServiceURL: ptr.Deref(serviceInstance.RouteServiceURL, ""),
-					SyslogDrainURL:  ptr.Deref(serviceInstance.SyslogDrainURL, ""),
+				ForProvider: v1alpha1.ServiceInstanceParameters{
+					Name: &serviceInstance.Name,
+					Type: v1alpha1.ServiceInstanceType(serviceInstance.Type),
+					SpaceReference: v1alpha1.SpaceReference{
+						Space: &serviceInstance.Relationships.Space.Data.GUID,
+					},
+					Managed: v1alpha1.Managed{
+						ServicePlan: servicePlan,
+						Parameters:  params,
+						// JSONParams: jsonParams,
+						// ParametersSecretRef: &v1.SecretReference{},
+						MaintenanceInfo: v1alpha1.MaintenanceInfo{
+							Description: maintenanceInfoDescription,
+							Version:     maintenanceInfoVersion,
+						},
+					},
+					UserProvided: v1alpha1.UserProvided{
+						Credentials: creds,
+						// JSONCredentials: jsonCreds,
+						// CredentialsSecretRef: &v1.SecretReference{},
+						RouteServiceURL: ptr.Deref(serviceInstance.RouteServiceURL, ""),
+						SyslogDrainURL:  ptr.Deref(serviceInstance.SyslogDrainURL, ""),
+					},
+					// Timeouts:    v1alpha1.TimeoutsParameters{
+					// 	Create: new(string),
+					// 	Delete: new(string),
+					// 	Update: new(string),
+					// },
+					Tags:        convertServiceInstanceTags(serviceInstance.Tags),
+					Annotations: serviceInstance.Metadata.Annotations,
 				},
-				// Timeouts:    v1alpha1.TimeoutsParameters{
-				// 	Create: new(string),
-				// 	Delete: new(string),
-				// 	Update: new(string),
-				// },
-				Tags:        convertServiceInstanceTags(serviceInstance.Tags),
-				Annotations: serviceInstance.Metadata.Annotations,
 			},
 		},
 	}

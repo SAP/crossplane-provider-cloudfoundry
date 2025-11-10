@@ -41,9 +41,6 @@ func main() {
 		apiUrlParam,
 		usernameParam,
 		passwordParam,
-		// org.Org.Param(),
-		// space.Space.Param(),
-		// serviceinstance.ServiceInstance.Param(),
 		useCfLoginMethod,
 	)
 	export.AddConfigParams(resources.ConfigParams()...)
