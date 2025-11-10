@@ -50,7 +50,7 @@ func (si serviceinstance) Param() configparam.ConfigParam {
 	return param
 }
 
-func (si serviceinstance) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler) error {
+func (si serviceinstance) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler, resolveReferences bool) error {
 	serviceInstances, err := si.Get(ctx, cfClient)
 	if err != nil {
 		return err
@@ -62,7 +62,7 @@ func (si serviceinstance) Export(ctx context.Context, cfClient *client.Client, e
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 	for _, sInstance := range serviceInstances.AllByGUIDs() {
-		evHandler.Resource(convertServiceInstanceResource(ctx, cfClient, sInstance.ServiceInstance, evHandler))
+		evHandler.Resource(convertServiceInstanceResource(ctx, cfClient, sInstance.ServiceInstance, evHandler, resolveReferences))
 	}
 	return nil
 }

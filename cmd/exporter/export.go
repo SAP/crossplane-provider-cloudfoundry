@@ -30,7 +30,7 @@ func exportCmd(ctx context.Context, evHandler export.EventHandler) error {
 	slog.Debug("kinds selected", "kinds", selectedResources)
 	for _, kind := range selectedResources {
 		if eFn := resources.ExportFn(kind); eFn != nil {
-			if err := eFn(ctx, cfClient, evHandler); err != nil {
+			if err := eFn(ctx, cfClient, evHandler, resolveRefencesParam.Value()); err != nil {
 				return err
 			}
 		} else {
