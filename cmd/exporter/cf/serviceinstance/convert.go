@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/yaml"
@@ -104,7 +105,7 @@ func generateParams(ctx context.Context, cfClient *client.Client, serviceInstanc
 	return re, comment
 }
 
-func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler export.EventHandler) *serviceInstanceWithComment {
+func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client, serviceInstance *resource.ServiceInstance, evHandler export.EventHandler, resolveReferences bool) *serviceInstanceWithComment {
 	servicePlan := generateServicePlan(ctx, cfClient, serviceInstance, evHandler)
 
 	var maintenanceInfoDescription *string
@@ -116,6 +117,15 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 
 	params, comment := generateParams(ctx, cfClient, serviceInstance, evHandler)
 	creds := generateCreds(ctx, cfClient, serviceInstance, evHandler)
+
+	spaceReference := v1alpha1.SpaceReference{
+		Space: &serviceInstance.Relationships.Space.Data.GUID,
+	}
+	if resolveReferences {
+		if err := space.Space.ResolveReference(ctx, cfClient, &spaceReference); err != nil {
+			evHandler.Warn(erratt.Errorf("cannot resolve space reference: %w", err).With("serviceinstance-name", serviceInstance.Name))
+		}
+	}
 
 	return &serviceInstanceWithComment{
 		comment: comment,
@@ -137,11 +147,9 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 					},
 				},
 				ForProvider: v1alpha1.ServiceInstanceParameters{
-					Name: &serviceInstance.Name,
-					Type: v1alpha1.ServiceInstanceType(serviceInstance.Type),
-					SpaceReference: v1alpha1.SpaceReference{
-						Space: &serviceInstance.Relationships.Space.Data.GUID,
-					},
+					Name:           &serviceInstance.Name,
+					Type:           v1alpha1.ServiceInstanceType(serviceInstance.Type),
+					SpaceReference: spaceReference,
 					Managed: v1alpha1.Managed{
 						ServicePlan: servicePlan,
 						Parameters:  params,

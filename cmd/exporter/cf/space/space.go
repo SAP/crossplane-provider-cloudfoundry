@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/guidname"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 )
 
 var (
@@ -49,7 +51,7 @@ func (s space) Param() configparam.ConfigParam {
 	return param
 }
 
-func (s space) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler) error {
+func (s space) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler, resolveReferences bool) error {
 	spaces, err := s.Get(ctx, cfClient)
 	if err != nil {
 		return err
@@ -58,7 +60,7 @@ func (s space) Export(ctx context.Context, cfClient *client.Client, evHandler ex
 		evHandler.Warn(erratt.New("no space found", "spaces", param.Value()))
 	} else {
 		for _, space := range spaces.AllByGUIDs() {
-			evHandler.Resource(convertSpaceResource(space.Space))
+			evHandler.Resource(convertSpaceResource(ctx, cfClient, space.Space, evHandler, resolveReferences))
 		}
 	}
 	return nil
@@ -98,6 +100,25 @@ func (s space) Get(ctx context.Context, cfClient *client.Client) (cache.CacheWit
 	c.StoreWithGUIDAndName(spaces...)
 	slog.Debug("spaces collected", "spaces", c.GetNames())
 	return c, nil
+}
+
+func (s space) ResolveReference(ctx context.Context, cfClient *client.Client, spaceRef *v1alpha1.SpaceReference) error {
+	if spaceRef.Space == nil {
+		panic("spaceRef.Space not set")
+	}
+	spaces, err := s.Get(ctx, cfClient)
+	if err != nil {
+		return erratt.Errorf("cannot get orgs: %w", err)
+	}
+	space := spaces.GetByGUID(*spaceRef.Space)
+	if space == nil {
+		return erratt.New("space reference not found", "GUID", *spaceRef.Space)
+	}
+	spaceRef.SpaceRef = &v1.Reference{
+		Name: space.Name,
+	}
+	spaceRef.Space = nil
+	return nil
 }
 
 func getAllNamesFn(ctx context.Context, cfClient *client.Client, orgGuids []string) func() ([]string, error) {

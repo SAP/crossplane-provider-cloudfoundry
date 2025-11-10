@@ -6,6 +6,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/guidname"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 )
 
 var (
@@ -48,7 +50,7 @@ func (o org) Param() configparam.ConfigParam {
 	return param
 }
 
-func (o org) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler) error {
+func (o org) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler, resolveReferences bool) error {
 	orgs, err := o.Get(ctx, cfClient)
 	if err != nil {
 		return err
@@ -93,6 +95,25 @@ func (o org) Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithG
 	c.StoreWithGUIDAndName(orgs...)
 	slog.Debug("orgs collected", "orgs", c.GetNames())
 	return c, nil
+}
+
+func (o org) ResolveReference(ctx context.Context, cfClient *client.Client, orgRef *v1alpha1.OrgReference) error {
+	if orgRef.Org == nil {
+		panic("orgRef.Org not set")
+	}
+	orgs, err := o.Get(ctx, cfClient)
+	if err != nil {
+		return erratt.Errorf("cannot get orgs: %w", err)
+	}
+	org := orgs.GetByGUID(*orgRef.Org)
+	if org == nil {
+		return erratt.New("space reference not found", "GUID", *orgRef.Org)
+	}
+	orgRef.OrgRef = &v1.Reference{
+		Name: org.Name,
+	}
+	orgRef.Org = nil
+	return nil
 }
 
 func getAllNamesFn(ctx context.Context, cfClient *client.Client) func() ([]string, error) {
