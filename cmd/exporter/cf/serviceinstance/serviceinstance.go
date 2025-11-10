@@ -27,7 +27,7 @@ var (
 )
 
 func init() {
-	resources.RegisterKind(param.Name, ServiceInstance)
+	resources.RegisterKind(ServiceInstance)
 }
 
 type res struct {
