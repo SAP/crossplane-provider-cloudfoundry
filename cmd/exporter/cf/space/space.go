@@ -26,7 +26,7 @@ var (
 )
 
 func init() {
-	resources.RegisterKind(param.Name, Space)
+	resources.RegisterKind(Space)
 }
 
 type res struct {
