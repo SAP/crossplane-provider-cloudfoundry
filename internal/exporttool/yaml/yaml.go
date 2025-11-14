@@ -3,8 +3,10 @@ package yaml
 import (
 	"bufio"
 	"bytes"
+	"encoding/json"
 	"fmt"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
 	"github.com/charmbracelet/glamour"
 	"sigs.k8s.io/yaml"
 )
@@ -32,7 +34,12 @@ func Marshal(resource any) (string, error) {
 func MarshalPretty(resource any) (string, error) {
 	b, err := yaml.Marshal(resource)
 	if err != nil {
+		jsonBytes, err2 := json.Marshal(resource)
+		if err2 == nil {
+			return "", erratt.Errorf("error marshalling to YAML: %w", err).With("json", string(jsonBytes))
+		}
 		return "", err
+
 	}
 	return glamour.Render(fmt.Sprintf("```yaml\n%s```",
 		wrapResource(resource, string(b))),
