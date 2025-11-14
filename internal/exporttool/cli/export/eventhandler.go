@@ -59,17 +59,18 @@ func resourceLoop(ctx context.Context, fileOutput *os.File, resourceChan <-chan 
 				// output to file
 				y, err := yaml.Marshal(res)
 				if err != nil {
-					errChan <- erratt.Errorf("cannot YAML-marshal resource: %w", err)
+					erratt.Slog(erratt.Errorf("cannot YAML-marshal resource: %w", err).With("resource", res))
 				} else {
 					if _, err := fmt.Fprint(fileOutput, y); err != nil {
-						errChan <- erratt.Errorf("cannot write YAML to output: %w", err).With("output", fileOutput.Name())
+						erratt.Slog(erratt.Errorf("cannot write YAML to output: %w", err).With("output", fileOutput.Name()))
 					}
 				}
 			} else {
 				// output to console
+				slog.Debug("marshalling resource", "res", res)
 				y, err := yaml.MarshalPretty(res)
 				if err != nil {
-					errChan <- erratt.Errorf("cannot YAML-marshal resource: %w", err)
+					erratt.Slog(erratt.Errorf("cannot YAML-marshal resource: %w", err).With("resource", res))
 				} else {
 					fmt.Print(y)
 				}
