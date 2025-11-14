@@ -17,3 +17,5 @@ dev.env
 secrets.env
 *~
 /test/e2e/logs/
+/internal/exporttool/examples/configparams/config.yaml
+/internal/exporttool/examples/exportresource/output.yaml
