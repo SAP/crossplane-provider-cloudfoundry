@@ -2,6 +2,7 @@ package main
 
 import (
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
+	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/orgrole"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/serviceinstance"
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
@@ -48,6 +49,6 @@ func main() {
 		resolveRefencesParam,
 	)
 	export.AddConfigParams(resources.ConfigParams()...)
-	export.AddResourceKinds("organization", "space", "serviceinstance")
+	export.AddResourceKinds(resources.KindNames()...)
 	cli.Execute()
 }
