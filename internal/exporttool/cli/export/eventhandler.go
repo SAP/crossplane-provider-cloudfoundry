@@ -47,7 +47,7 @@ func openOutput() (*os.File, erratt.Error) {
 	return fileOutput, nil
 }
 
-func resourceLoop(ctx context.Context, fileOutput *os.File, resourceChan <-chan resource.Object, errChan chan<- error) {
+func resourceLoop(ctx context.Context, fileOutput *os.File, resourceChan <-chan resource.Object) {
 	for {
 		select {
 		case res, ok := <-resourceChan:
@@ -96,7 +96,7 @@ func handleResources(ctx context.Context, wg *sync.WaitGroup, resourceChan <-cha
 			}
 		}
 	}()
-	resourceLoop(ctx, fileOutput, resourceChan, errChan)
+	resourceLoop(ctx, fileOutput, resourceChan)
 }
 
 type handler[T any] struct {

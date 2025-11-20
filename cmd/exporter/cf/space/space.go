@@ -24,15 +24,15 @@ var (
 	c     cache.CacheWithGUIDAndName[*res]
 	param = configparam.StringSlice("space", "Filter for Cloud Foundry spaces").
 		WithFlagName("space")
-	Space = space{}
 )
 
 func init() {
-	resources.RegisterKind(Space)
+	resources.RegisterKind(space{})
 }
 
 type res struct {
 	*resource.Space
+	*cache.ResourceWithComment
 }
 
 func (r *res) GetGUID() string {
@@ -50,9 +50,12 @@ var _ resources.Kind = space{}
 func (s space) Param() configparam.ConfigParam {
 	return param
 }
+func (s space) KindName() string {
+	return param.GetName()
+}
 
 func (s space) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler, resolveReferences bool) error {
-	spaces, err := s.Get(ctx, cfClient)
+	spaces, err := Get(ctx, cfClient)
 	if err != nil {
 		return err
 	}
@@ -60,17 +63,17 @@ func (s space) Export(ctx context.Context, cfClient *client.Client, evHandler ex
 		evHandler.Warn(erratt.New("no space found", "spaces", param.Value()))
 	} else {
 		for _, space := range spaces.AllByGUIDs() {
-			evHandler.Resource(convertSpaceResource(ctx, cfClient, space.Space, evHandler, resolveReferences))
+			evHandler.Resource(convertSpaceResource(ctx, cfClient, space, evHandler, resolveReferences))
 		}
 	}
 	return nil
 }
 
-func (s space) Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndName[*res], error) {
+func Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndName[*res], error) {
 	if c != nil {
 		return c, nil
 	}
-	orgs, err := org.Org.Get(ctx, cfClient)
+	orgs, err := org.Get(ctx, cfClient)
 	if err != nil {
 		return nil, err
 	}
@@ -102,11 +105,11 @@ func (s space) Get(ctx context.Context, cfClient *client.Client) (cache.CacheWit
 	return c, nil
 }
 
-func (s space) ResolveReference(ctx context.Context, cfClient *client.Client, spaceRef *v1alpha1.SpaceReference) error {
+func ResolveReference(ctx context.Context, cfClient *client.Client, spaceRef *v1alpha1.SpaceReference) error {
 	if spaceRef.Space == nil {
 		panic("spaceRef.Space not set")
 	}
-	spaces, err := s.Get(ctx, cfClient)
+	spaces, err := Get(ctx, cfClient)
 	if err != nil {
 		return erratt.Errorf("cannot get orgs: %w", err)
 	}
@@ -165,7 +168,10 @@ func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spa
 	for _, space := range spaces {
 		for _, nameRx := range nameRxs {
 			if nameRx.MatchString(space.Name) {
-				results = append(results, &res{space})
+				results = append(results, &res{
+					ResourceWithComment: &cache.ResourceWithComment{},
+					Space:               space,
+				})
 			}
 		}
 	}

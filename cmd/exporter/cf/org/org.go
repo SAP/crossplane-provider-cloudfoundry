@@ -23,15 +23,15 @@ var (
 	c     cache.CacheWithGUIDAndName[*res]
 	param = configparam.StringSlice("organization", "Filter for Cloud Foundry organizations").
 		WithFlagName("org")
-	Org = org{}
 )
 
 func init() {
-	resources.RegisterKind(Org)
+	resources.RegisterKind(org{})
 }
 
 type res struct {
 	*resource.Organization
+	*cache.ResourceWithComment
 }
 
 func (o *res) GetGUID() string {
@@ -50,8 +50,12 @@ func (o org) Param() configparam.ConfigParam {
 	return param
 }
 
+func (o org) KindName() string {
+	return param.GetName()
+}
+
 func (o org) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler, resolveReferences bool) error {
-	orgs, err := o.Get(ctx, cfClient)
+	orgs, err := Get(ctx, cfClient)
 	if err != nil {
 		return err
 	}
@@ -59,13 +63,13 @@ func (o org) Export(ctx context.Context, cfClient *client.Client, evHandler expo
 		evHandler.Warn(erratt.New("no orgs found", "orgs", param.Value()))
 	} else {
 		for _, org := range orgs.AllByGUIDs() {
-			evHandler.Resource(convertOrgResource(org.Organization))
+			evHandler.Resource(convertOrgResource(org))
 		}
 	}
 	return nil
 }
 
-func (o org) Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndName[*res], error) {
+func Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndName[*res], error) {
 	if c != nil {
 		return c, nil
 	}
@@ -97,11 +101,11 @@ func (o org) Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithG
 	return c, nil
 }
 
-func (o org) ResolveReference(ctx context.Context, cfClient *client.Client, orgRef *v1alpha1.OrgReference) error {
+func ResolveReference(ctx context.Context, cfClient *client.Client, orgRef *v1alpha1.OrgReference) error {
 	if orgRef.Org == nil {
 		panic("orgRef.Org not set")
 	}
-	orgs, err := o.Get(ctx, cfClient)
+	orgs, err := Get(ctx, cfClient)
 	if err != nil {
 		return erratt.Errorf("cannot get orgs: %w", err)
 	}
@@ -155,7 +159,10 @@ func getAll(ctx context.Context, cfClient *client.Client, orgNames []string) ([]
 	for _, org := range orgs {
 		for _, nameRx := range nameRxs {
 			if nameRx.MatchString(org.Name) {
-				results = append(results, &res{org})
+				results = append(results, &res{
+					ResourceWithComment: &cache.ResourceWithComment{},
+					Organization:        org,
+				})
 			}
 		}
 	}
