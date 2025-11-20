@@ -2,6 +2,8 @@ package resources
 
 import (
 	"context"
+	"maps"
+	"slices"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
@@ -11,6 +13,7 @@ import (
 
 // Kind interface must be implemented by each CF resource kinds.
 type Kind interface {
+	KindName() string
 	// Param method returns the configuration parameters specific
 	// to a resource kind.
 	Param() configparam.ConfigParam
@@ -27,19 +30,24 @@ var kinds = map[string]Kind{}
 
 // RegisterKind function registers a resource kind.
 func RegisterKind(kind Kind) {
-	kinds[kind.Param().GetName()] = kind
+	kinds[kind.KindName()] = kind
 }
 
 // ConfigParams() function returns the configuration parameters of all
 // registered resource kinds.
 func ConfigParams() []configparam.ConfigParam {
-	result := make([]configparam.ConfigParam, len(kinds))
-	i := 0
+	result := make([]configparam.ConfigParam, 0, len(kinds))
 	for _, kind := range kinds {
-		result[i] = kind.Param()
-		i++
+		if p := kind.Param(); p != nil {
+			result = append(result, p)
+		}
 	}
 	return result
+}
+
+// KindNames function returns the names of the registered kinds.
+func KindNames() []string {
+	return slices.Collect(maps.Keys(kinds))
 }
 
 // ExportFn returns the export function of a given kind.
