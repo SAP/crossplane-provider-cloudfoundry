@@ -95,32 +95,166 @@ spec:
                     required:
                     - self
                     type: object
-                  relationships:
+                  route_service_url:
+                    type: string
+                  routeGUID:
+                    description: |-
+                      ServiceInstanceRef *xpv1.Reference `json:"serviceInstanceRef"`
+
+
+                      RouteRef *xpv1.Reference `json:"routeRef"`
+                    type: string
+                  routeGUIDRef:
+                    description: A Reference to a named object.
                     properties:
-                      route:
+                      name:
+                        description: Name of the referenced object.
+                        type: string
+                      policy:
+                        description: Policies for referencing.
                         properties:
-                          guid:
+                          resolution:
+                            default: Required
+                            description: |-
+                              Resolution specifies whether resolution of this reference is required.
+                              The default is 'Required', which means the reconcile will fail if the
+                              reference cannot be resolved. 'Optional' means this reference will be
+                              a no-op if it cannot be resolved.
+                            enum:
+                            - Required
+                            - Optional
                             type: string
-                        required:
-                        - guid
-                        type: object
-                      service_instance:
-                        properties:
-                          guid:
+                          resolve:
+                            description: |-
+                              Resolve specifies when this reference should be resolved. The default
+                              is 'IfNotPresent', which will attempt to resolve the reference only when
+                              the corresponding field is not present. Use 'Always' to resolve the
+                              reference on every reconcile.
+                            enum:
+                            - Always
+                            - IfNotPresent
                             type: string
-                        required:
-                        - guid
                         type: object
                     required:
-                    - route
-                    - service_instance
+                    - name
                     type: object
-                  route_service_url:
-                    description: 'TODO: we most likely want to reference a other resource
-                      here and not just have a string'
+                  routeGuidSelector:
+                    description: A Selector selects an object.
+                    properties:
+                      matchControllerRef:
+                        description: |-
+                          MatchControllerRef ensures an object with the same controller reference
+                          as the selecting object is selected.
+                        type: boolean
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: MatchLabels ensures an object with matching labels
+                          is selected.
+                        type: object
+                      policy:
+                        description: Policies for selection.
+                        properties:
+                          resolution:
+                            default: Required
+                            description: |-
+                              Resolution specifies whether resolution of this reference is required.
+                              The default is 'Required', which means the reconcile will fail if the
+                              reference cannot be resolved. 'Optional' means this reference will be
+                              a no-op if it cannot be resolved.
+                            enum:
+                            - Required
+                            - Optional
+                            type: string
+                          resolve:
+                            description: |-
+                              Resolve specifies when this reference should be resolved. The default
+                              is 'IfNotPresent', which will attempt to resolve the reference only when
+                              the corresponding field is not present. Use 'Always' to resolve the
+                              reference on every reconcile.
+                            enum:
+                            - Always
+                            - IfNotPresent
+                            type: string
+                        type: object
+                    type: object
+                  serviceInstanceGUID:
                     type: string
+                  serviceInstanceGUIDRef:
+                    description: A Reference to a named object.
+                    properties:
+                      name:
+                        description: Name of the referenced object.
+                        type: string
+                      policy:
+                        description: Policies for referencing.
+                        properties:
+                          resolution:
+                            default: Required
+                            description: |-
+                              Resolution specifies whether resolution of this reference is required.
+                              The default is 'Required', which means the reconcile will fail if the
+                              reference cannot be resolved. 'Optional' means this reference will be
+                              a no-op if it cannot be resolved.
+                            enum:
+                            - Required
+                            - Optional
+                            type: string
+                          resolve:
+                            description: |-
+                              Resolve specifies when this reference should be resolved. The default
+                              is 'IfNotPresent', which will attempt to resolve the reference only when
+                              the corresponding field is not present. Use 'Always' to resolve the
+                              reference on every reconcile.
+                            enum:
+                            - Always
+                            - IfNotPresent
+                            type: string
+                        type: object
+                    required:
+                    - name
+                    type: object
+                  serviceInstanceSelector:
+                    description: A Selector selects an object.
+                    properties:
+                      matchControllerRef:
+                        description: |-
+                          MatchControllerRef ensures an object with the same controller reference
+                          as the selecting object is selected.
+                        type: boolean
+                      matchLabels:
+                        additionalProperties:
+                          type: string
+                        description: MatchLabels ensures an object with matching labels
+                          is selected.
+                        type: object
+                      policy:
+                        description: Policies for selection.
+                        properties:
+                          resolution:
+                            default: Required
+                            description: |-
+                              Resolution specifies whether resolution of this reference is required.
+                              The default is 'Required', which means the reconcile will fail if the
+                              reference cannot be resolved. 'Optional' means this reference will be
+                              a no-op if it cannot be resolved.
+                            enum:
+                            - Required
+                            - Optional
+                            type: string
+                          resolve:
+                            description: |-
+                              Resolve specifies when this reference should be resolved. The default
+                              is 'IfNotPresent', which will attempt to resolve the reference only when
+                              the corresponding field is not present. Use 'Always' to resolve the
+                              reference on every reconcile.
+                            enum:
+                            - Always
+                            - IfNotPresent
+                            type: string
+                        type: object
+                    type: object
                 required:
-                - relationships
                 - route_service_url
                 type: object
               managementPolicies:
@@ -366,36 +500,21 @@ spec:
                     required:
                     - self
                     type: object
-                  relationships:
-                    properties:
-                      route:
-                        properties:
-                          guid:
-                            type: string
-                        required:
-                        - guid
-                        type: object
-                      service_instance:
-                        properties:
-                          guid:
-                            type: string
-                        required:
-                        - guid
-                        type: object
-                    required:
-                    - route
-                    - service_instance
-                    type: object
                   route_service_url:
                     description: 'TODO: we most likely want to reference a other resource
                       here and not just have a string'
+                    type: string
+                  routeGUID:
+                    description: GUID of the Route in CF
+                    type: string
+                  serviceInstanceGUID:
+                    description: GUID of the ServiceRouteBinding in CF
                     type: string
                   updatedAt:
                     description: (String) The date and time when the resource was
                       updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                 required:
-                - relationships
                 - route_service_url
                 type: object
               conditions:

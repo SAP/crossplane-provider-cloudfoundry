@@ -277,6 +277,48 @@ func (mg *ServiceInstance) ResolveReferences(ctx context.Context, c client.Reade
 	return nil
 }
 
+// ResolveReferences of this ServiceRouteBinding.
+func (mg *ServiceRouteBinding) ResolveReferences(ctx context.Context, c client.Reader) error {
+	r := reference.NewAPIResolver(c, mg)
+
+	var rsp reference.ResolutionResponse
+	var err error
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: mg.Spec.ForProvider.RouteGUID,
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.RouteGUIDRef,
+		Selector:     mg.Spec.ForProvider.RouteGUIDSelector,
+		To: reference.To{
+			List:    &RouteList{},
+			Managed: &Route{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.RouteGUID")
+	}
+	mg.Spec.ForProvider.RouteGUID = rsp.ResolvedValue
+	mg.Spec.ForProvider.RouteGUIDRef = rsp.ResolvedReference
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: mg.Spec.ForProvider.ServiceInstanceGUID,
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.ServiceInstanceGUIDRef,
+		Selector:     mg.Spec.ForProvider.ServiceInstanceGUIDSelector,
+		To: reference.To{
+			List:    &ServiceInstanceList{},
+			Managed: &ServiceInstance{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.ServiceInstanceGUID")
+	}
+	mg.Spec.ForProvider.ServiceInstanceGUID = rsp.ResolvedValue
+	mg.Spec.ForProvider.ServiceInstanceGUIDRef = rsp.ResolvedReference
+
+	return nil
+}
+
 // ResolveReferences of this Space.
 func (mg *Space) ResolveReferences(ctx context.Context, c client.Reader) error {
 	r := reference.NewAPIResolver(c, mg)

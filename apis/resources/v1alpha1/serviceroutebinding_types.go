@@ -24,12 +24,28 @@ type ServiceRouteBindingList struct {
 }
 
 type ServiceRouteBindingParameters struct {
-	//TODO: we most likely want to reference a other resource here and not just have a string
+	/*
+		ServiceInstanceRef *xpv1.Reference `json:"serviceInstanceRef"`
+
+		RouteRef *xpv1.Reference `json:"routeRef"`
+	*/
+	// +crossplane:generate:reference:type=Route
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
+	RouteGUID         string          `json:"routeGUID,omitempty"`
+	RouteGUIDRef      *xpv1.Reference `json:"routeGUIDRef,omitempty"`
+	RouteGUIDSelector *xpv1.Selector  `json:"routeGuidSelector,omitempty"`
+
+	// +crossplane:generate:reference:type=ServiceInstance
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
+	ServiceInstanceGUID         string          `json:"serviceInstanceGUID,omitempty"`
+	ServiceInstanceGUIDRef      *xpv1.Reference `json:"serviceInstanceGUIDRef,omitempty"`
+	ServiceInstanceGUIDSelector *xpv1.Selector  `json:"serviceInstanceSelector,omitempty"`
+
 	RouteServiceUrl string `json:"route_service_url"`
 
 	ResourceMetadata `json:",inline"`
 
-	Relationships Relation `json:"relationships"`
+	//Relationships Relation `json:"relationships"`
 
 	Links Links `json:"links,omitempty"`
 }
@@ -44,9 +60,15 @@ type ServiceRouteBindingObservation struct {
 
 	ResourceMetadata `json:",inline"`
 
-	Relationships Relation `json:"relationships"`
-
 	Links Links `json:"links,omitempty"`
+
+	// GUID of the ServiceRouteBinding in CF
+	// +kubebuilder:validation:Optional
+	ServiceInstanceGUID string `json:"serviceInstanceGUID,omitempty"`
+
+	// GUID of the Route in CF
+	// +kubebuilder:validation:Optional
+	RouteGUID string `json:"routeGUID,omitempty"`
 }
 
 type Relation struct {

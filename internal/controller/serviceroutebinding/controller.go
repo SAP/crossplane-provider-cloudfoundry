@@ -160,8 +160,8 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, nil
 	}
 
-	routeGUID := cr.Spec.ForProvider.Relationships.Route.GUID
-	serviceInstanceGUID := cr.Spec.ForProvider.Relationships.ServiceInstance.GUID
+	routeGUID := cr.Spec.ForProvider.RouteGUID
+	serviceInstanceGUID := cr.Spec.ForProvider.ServiceInstanceGUID
 	if routeGUID == "" || serviceInstanceGUID == "" {
 		return managed.ExternalCreation{}, fmt.Errorf(errCreate, fmt.Errorf(errMissingRelationshipGUIDs, routeGUID, serviceInstanceGUID))
 	}
