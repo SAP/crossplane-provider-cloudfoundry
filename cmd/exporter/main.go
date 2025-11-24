@@ -6,9 +6,9 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/serviceinstance"
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
 )
 
 const (
