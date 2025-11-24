@@ -285,36 +285,36 @@ func (mg *ServiceRouteBinding) ResolveReferences(ctx context.Context, c client.R
 	var err error
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
-		CurrentValue: mg.Spec.ForProvider.RouteGUID,
+		CurrentValue: mg.Spec.ForProvider.RouteReference.Route,
 		Extract:      resources.ExternalID(),
-		Reference:    mg.Spec.ForProvider.RouteGUIDRef,
-		Selector:     mg.Spec.ForProvider.RouteGUIDSelector,
+		Reference:    mg.Spec.ForProvider.RouteReference.RouteRef,
+		Selector:     mg.Spec.ForProvider.RouteReference.RouteSelector,
 		To: reference.To{
 			List:    &RouteList{},
 			Managed: &Route{},
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "mg.Spec.ForProvider.RouteGUID")
+		return errors.Wrap(err, "mg.Spec.ForProvider.RouteReference.Route")
 	}
-	mg.Spec.ForProvider.RouteGUID = rsp.ResolvedValue
-	mg.Spec.ForProvider.RouteGUIDRef = rsp.ResolvedReference
+	mg.Spec.ForProvider.RouteReference.Route = rsp.ResolvedValue
+	mg.Spec.ForProvider.RouteReference.RouteRef = rsp.ResolvedReference
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
-		CurrentValue: mg.Spec.ForProvider.ServiceInstanceGUID,
+		CurrentValue: mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstance,
 		Extract:      resources.ExternalID(),
-		Reference:    mg.Spec.ForProvider.ServiceInstanceGUIDRef,
-		Selector:     mg.Spec.ForProvider.ServiceInstanceGUIDSelector,
+		Reference:    mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstanceRef,
+		Selector:     mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstanceSelector,
 		To: reference.To{
 			List:    &ServiceInstanceList{},
 			Managed: &ServiceInstance{},
 		},
 	})
 	if err != nil {
-		return errors.Wrap(err, "mg.Spec.ForProvider.ServiceInstanceGUID")
+		return errors.Wrap(err, "mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstance")
 	}
-	mg.Spec.ForProvider.ServiceInstanceGUID = rsp.ResolvedValue
-	mg.Spec.ForProvider.ServiceInstanceGUIDRef = rsp.ResolvedReference
+	mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstance = rsp.ResolvedValue
+	mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstanceRef = rsp.ResolvedReference
 
 	return nil
 }

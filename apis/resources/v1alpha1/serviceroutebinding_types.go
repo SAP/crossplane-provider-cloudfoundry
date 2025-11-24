@@ -3,6 +3,7 @@ package v1alpha1
 import (
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -24,37 +25,21 @@ type ServiceRouteBindingList struct {
 }
 
 type ServiceRouteBindingParameters struct {
-	/*
-		ServiceInstanceRef *xpv1.Reference `json:"serviceInstanceRef"`
+	RouteReference `json:",inline,omitempty"`
 
-		RouteRef *xpv1.Reference `json:"routeRef"`
-	*/
-	// +crossplane:generate:reference:type=Route
-	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
-	RouteGUID         string          `json:"routeGUID,omitempty"`
-	RouteGUIDRef      *xpv1.Reference `json:"routeGUIDRef,omitempty"`
-	RouteGUIDSelector *xpv1.Selector  `json:"routeGuidSelector,omitempty"`
-
-	// +crossplane:generate:reference:type=ServiceInstance
-	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
-	ServiceInstanceGUID         string          `json:"serviceInstanceGUID,omitempty"`
-	ServiceInstanceGUIDRef      *xpv1.Reference `json:"serviceInstanceGUIDRef,omitempty"`
-	ServiceInstanceGUIDSelector *xpv1.Selector  `json:"serviceInstanceSelector,omitempty"`
-
-	RouteServiceUrl string `json:"route_service_url"`
+	ServiceInstanceReference `json:",inline,omitempty"`
 
 	ResourceMetadata `json:",inline"`
 
-	//Relationships Relation `json:"relationships"`
-
-	Links Links `json:"links,omitempty"`
+	// A map of arbitrary key/value paris to be send to the service broker during binding
+	// +kubebuilder:validation:Optional
+	Parameters runtime.RawExtension `json:"parameters,omitempty"`
 }
 
 type ServiceRouteBindingObservation struct {
 	Resource `json:",inline"`
 
-	//TODO: we most likely want to reference a other resource here and not just have a string
-	RouteServiceUrl string `json:"route_service_url"`
+	RouteServiceUrl string `json:"routeServiceUrl"`
 
 	LastOperation *LastOperation `json:"lastOperation,omitempty"`
 
@@ -64,11 +49,17 @@ type ServiceRouteBindingObservation struct {
 
 	// GUID of the ServiceRouteBinding in CF
 	// +kubebuilder:validation:Optional
-	ServiceInstanceGUID string `json:"serviceInstanceGUID,omitempty"`
+	ServiceInstance string `json:"serviceInstanceGUID,omitempty"`
 
 	// GUID of the Route in CF
 	// +kubebuilder:validation:Optional
-	RouteGUID string `json:"routeGUID,omitempty"`
+	Route string `json:"routeGUID,omitempty"`
+
+	// TODO: Parameters are not returned from CF API so most likely we cannot store them here???
+	// Solutin: GET /v3/service_route_bindings/:guid/parameters
+	// A map of arbitrary key/value paris to be send to the service broker during binding
+	// +kubebuilder:validation:Optional
+	Parameters runtime.RawExtension `json:"parameters,omitempty"`
 }
 
 type Relation struct {
@@ -87,27 +78,7 @@ type Link struct {
 	Method *string `json:"method,omitempty"`
 }
 
-// -------------------------------------------------------------------------------------------------
-// Link modeling options:
-// We need a required 'self' link plus any number of additional dynamic links returned by CF (e.g. service_instance, route, parameters).
-// Option 1 uses a flat map (LinksMap) matching CF JSON exactly, but cannot enforce 'self' at schema level (must validate in controller).
-// Option 2 (active) uses a struct with a required Self field and an 'additional' map to hold any other links, enabling schema enforcement.
-// TODO: find out if its just service_instance, route, parameters fields (Typed) or dynamic keys!!!
-// check out proposed solution https://github.com/SAP/crossplane-provider-cloudfoundry/issues/81
-
-// Option 1:
-type LinksMap map[string]Link
-
-// Option 2: Struct-based enforced 'self' (CURRENTLY ACTIVE)
-type Links struct {
-	// +kubebuilder:validation:Required
-	Self Link `json:"self"`
-	// Additional dynamic links (e.g. service_instance, route, parameters, future).
-	// +kubebuilder:validation:Optional
-	Additional map[string]Link `json:"additional,omitempty"`
-}
-
-// -------------------------------------------------------------------------------------------------
+type Links map[string]Link
 
 // ServiceRouteBindingSpec defines the desired state of ServiceRouteBinding
 type ServiceRouteBindingSpec struct {
@@ -131,4 +102,22 @@ var (
 
 func init() {
 	SchemeBuilder.Register(&ServiceRouteBinding{}, &ServiceRouteBindingList{})
+}
+
+type ServiceInstanceReference struct {
+	//GUID of the ServiceInstance in CF
+	// +crossplane:generate:reference:type=ServiceInstance
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
+	ServiceInstance         string          `json:"serviceInstance,omitempty"`
+	ServiceInstanceRef      *xpv1.Reference `json:"serviceInstanceRef,omitempty"`
+	ServiceInstanceSelector *xpv1.Selector  `json:"serviceInstanceSelector,omitempty"`
+}
+
+type RouteReference struct {
+	//GUID of the Route in CF
+	// +crossplane:generate:reference:type=Route
+	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
+	Route         string          `json:"route,omitempty"`
+	RouteRef      *xpv1.Reference `json:"routeRef,omitempty"`
+	RouteSelector *xpv1.Selector  `json:"routeSelector,omitempty"`
 }

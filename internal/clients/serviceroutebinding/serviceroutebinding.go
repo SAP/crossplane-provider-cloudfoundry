@@ -2,7 +2,6 @@ package serviceroutebinding
 
 import (
 	"context"
-	"strings"
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -63,8 +62,8 @@ func GetByIDOrSearch(ctx context.Context, srbClient ServiceRouteBinding, guid st
 	} else {
 		// search by spec
 		opts := cfclient.NewServiceRouteBindingListOptions()
-		opts.RouteGUIDs.EqualTo(forProvider.RouteGUID)
-		opts.ServiceInstanceGUIDs.EqualTo(forProvider.ServiceInstanceGUID)
+		opts.RouteGUIDs.EqualTo(forProvider.Route)
+		opts.ServiceInstanceGUIDs.EqualTo(forProvider.ServiceInstance)
 		return srbClient.Single(ctx, opts)
 	}
 }
@@ -96,7 +95,7 @@ func newCreateOption(forProvider v1alpha1.ServiceRouteBindingParameters) (*cfres
 	// Option 2 (active) uses a struct with a required Self field and an 'additional' map to hold any other links, enabling schema enforcement.
 	// TODO: find out if its just service_instance, route, parameters fields (Typed) or dynamic keys!!!
 	// check out proposed solution https://github.com/SAP/crossplane-provider-cloudfoundry/issues/81
-	return cfresource.NewServiceRouteBindingCreate(forProvider.RouteGUID, forProvider.ServiceInstanceGUID), nil
+	return cfresource.NewServiceRouteBindingCreate(forProvider.Route, forProvider.ServiceInstance), nil
 }
 
 func createToListOptions(create *cfresource.ServiceRouteBindingCreate) *client.ServiceRouteBindingListOptions {
@@ -134,98 +133,33 @@ func UpdateObservation(observation *v1alpha1.ServiceRouteBindingObservation, r *
 		CreatedAt: r.CreatedAt.UTC().Format(time.RFC3339),
 		UpdatedAt: r.CreatedAt.UTC().Format(time.RFC3339),
 	}
-	observation.RouteServiceUrl = r.RouteServiceURL
-	/*
-		observation.Relationships = v1alpha1.Relation{
-			Route:           v1alpha1.Data{GUID: r.Relationships.Route.Data.GUID},
-			ServiceInstance: v1alpha1.Data{GUID: r.Relationships.ServiceInstance.Data.GUID},
-		}
-	*/
-	observation.Links = v1alpha1.Links{
-		Self:       buildSelfLink(r.Links),
-		Additional: buildAdditionalLinks(r.Links),
-	}
+
+	observation.Links = buildLinks(r.Links)
 	observation.ResourceMetadata = v1alpha1.ResourceMetadata{
 		Labels:      r.Metadata.Labels,
 		Annotations: r.Metadata.Annotations,
 	}
+
+	observation.ServiceInstance = r.Relationships.ServiceInstance.Data.GUID
+	observation.Route = r.Relationships.Route.Data.GUID
+	observation.RouteServiceUrl = r.RouteServiceURL
+
+	// add parameters but there not in *resource.ServiceRouteBinding
+	//observation.Parameters = r.Parameters
 }
 
-// returns the 'self' link from CF links
-func buildSelfLink(cfLinks cfresource.Links) v1alpha1.Link {
-	var self v1alpha1.Link
+// builds links map from CF links including self
+func buildLinks(cfLinks cfresource.Links) v1alpha1.Links {
 	if cfLinks == nil {
-		return self
+		return v1alpha1.Links{}
 	}
-	cfSelf := cfLinks.Self()
-	self.Href = cfSelf.Href
-	if cfSelf.Method != "" {
-		self.Method = &cfSelf.Method
-	}
-	return self
-}
-
-// builds additional links map from CF links excluding 'self'
-func buildAdditionalLinks(cfLinks cfresource.Links) map[string]v1alpha1.Link {
-	if cfLinks == nil {
-		return nil
-	}
-	var additional map[string]v1alpha1.Link
+	links := make(v1alpha1.Links)
 	for k, v := range cfLinks {
-		if strings.EqualFold(k, "self") {
-			continue
-		}
 		l := v1alpha1.Link{Href: v.Href}
 		if v.Method != "" {
 			l.Method = &v.Method
 		}
-		if additional == nil {
-			additional = make(map[string]v1alpha1.Link)
-		}
-		additional[k] = l
+		links[k] = l
 	}
-	return additional
+	return links
 }
-
-/*
-func getServiceInstance(ctx context.Context, kube k8s.Client, cr *v1alpha1.ServiceRouteBinding) (*v1alpha1.ServiceInstance, error) {
-	si := &v1alpha1.ServiceInstance{}
-	if err := kube.Get(ctx, k8s.ObjectKey{
-		Namespace: cr.Spec.ForProvider.ServiceInstanceRef.Namespace,
-		Name:      cr.Spec.ForProvider.ServiceInstanceRef.Name,
-	}, si); err != nil {
-		return nil, err
-	}
-	return si, nil
-}
-
-func setServiceInstance(ctx context.Context, kube k8s.Client, cr *v1alpha1.ServiceRouteBinding) error {
-	si, err := getServiceInstance(ctx, kube, cr)
-	if err != nil {
-		return err
-	}
-	cr.Status.AtProvider.ServiceInstanceGUID = *si.Status.AtProvider.ID
-	cr.Status.AtProvider.RouteServiceUrl = *si.Status.AtProvider.RouteServiceURL
-	return nil
-}
-
-func getRoute(ctx context.Context, kube k8s.Client, cr *v1alpha1.ServiceRouteBinding) (*v1alpha1.Route, error) {
-	route := &v1alpha1.Route{}
-	if err := kube.Get(ctx, k8s.ObjectKey{
-		Namespace: cr.Spec.ForProvider.RouteRef.Namespace,
-		Name:      cr.Spec.ForProvider.RouteRef.Name,
-	}, route); err != nil {
-		return nil, err
-	}
-	return route, nil
-}
-
-func setRoute(ctx context.Context, kube k8s.Client, cr *v1alpha1.ServiceRouteBinding) error {
-	route, err := getRoute(ctx, kube, cr)
-	if err != nil {
-		return err
-	}
-	cr.Status.AtProvider.RouteGUID = route.Status.AtProvider.GUID
-	return nil
-}
-*/

@@ -66,45 +66,15 @@ spec:
                     description: (Map of String) The labels associated with the resource.
                       Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
-                  links:
-                    description: 'Option 2: Struct-based enforced ''self'' (CURRENTLY
-                      ACTIVE)'
-                    properties:
-                      additional:
-                        additionalProperties:
-                          properties:
-                            href:
-                              type: string
-                            method:
-                              type: string
-                          required:
-                          - href
-                          type: object
-                        description: Additional dynamic links (e.g. service_instance,
-                          route, parameters, future).
-                        type: object
-                      self:
-                        properties:
-                          href:
-                            type: string
-                          method:
-                            type: string
-                        required:
-                        - href
-                        type: object
-                    required:
-                    - self
+                  parameters:
+                    description: A map of arbitrary key/value paris to be send to
+                      the service broker during binding
                     type: object
-                  route_service_url:
+                    x-kubernetes-preserve-unknown-fields: true
+                  route:
+                    description: GUID of the Route in CF
                     type: string
-                  routeGUID:
-                    description: |-
-                      ServiceInstanceRef *xpv1.Reference `json:"serviceInstanceRef"`
-
-
-                      RouteRef *xpv1.Reference `json:"routeRef"`
-                    type: string
-                  routeGUIDRef:
+                  routeRef:
                     description: A Reference to a named object.
                     properties:
                       name:
@@ -138,7 +108,7 @@ spec:
                     required:
                     - name
                     type: object
-                  routeGuidSelector:
+                  routeSelector:
                     description: A Selector selects an object.
                     properties:
                       matchControllerRef:
@@ -178,9 +148,10 @@ spec:
                             type: string
                         type: object
                     type: object
-                  serviceInstanceGUID:
+                  serviceInstance:
+                    description: GUID of the ServiceInstance in CF
                     type: string
-                  serviceInstanceGUIDRef:
+                  serviceInstanceRef:
                     description: A Reference to a named object.
                     properties:
                       name:
@@ -254,8 +225,6 @@ spec:
                             type: string
                         type: object
                     type: object
-                required:
-                - route_service_url
                 type: object
               managementPolicies:
                 default:
@@ -472,40 +441,27 @@ spec:
                         type: string
                     type: object
                   links:
-                    description: 'Option 2: Struct-based enforced ''self'' (CURRENTLY
-                      ACTIVE)'
-                    properties:
-                      additional:
-                        additionalProperties:
-                          properties:
-                            href:
-                              type: string
-                            method:
-                              type: string
-                          required:
-                          - href
-                          type: object
-                        description: Additional dynamic links (e.g. service_instance,
-                          route, parameters, future).
-                        type: object
-                      self:
-                        properties:
-                          href:
-                            type: string
-                          method:
-                            type: string
-                        required:
-                        - href
-                        type: object
-                    required:
-                    - self
+                    additionalProperties:
+                      properties:
+                        href:
+                          type: string
+                        method:
+                          type: string
+                      required:
+                      - href
+                      type: object
                     type: object
-                  route_service_url:
-                    description: 'TODO: we most likely want to reference a other resource
-                      here and not just have a string'
-                    type: string
+                  parameters:
+                    description: |-
+                      TODO: Parameters are not returned from CF API so most likely we cannot store them here???
+                      Solutin: GET /v3/service_route_bindings/:guid/parameters
+                      A map of arbitrary key/value paris to be send to the service broker during binding
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
                   routeGUID:
                     description: GUID of the Route in CF
+                    type: string
+                  routeServiceUrl:
                     type: string
                   serviceInstanceGUID:
                     description: GUID of the ServiceRouteBinding in CF
@@ -515,7 +471,7 @@ spec:
                       updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
                     type: string
                 required:
-                - route_service_url
+                - routeServiceUrl
                 type: object
               conditions:
                 description: Conditions of the resource.
