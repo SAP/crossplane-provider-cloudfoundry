@@ -6,6 +6,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/userrole"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/yaml"
@@ -23,7 +24,7 @@ type orgRoleWithComment struct {
 
 var _ yaml.CommentedYAML = &orgRoleWithComment{}
 
-func convertOrgRoleResource(ctx context.Context, cfClient *client.Client, orgRole *role, evHandler export.EventHandler, resolveReferences bool) *orgRoleWithComment {
+func convertOrgRoleResource(ctx context.Context, cfClient *client.Client, orgRole *userrole.Role, evHandler export.EventHandler, resolveReferences bool) *orgRoleWithComment {
 	oRole := &orgRoleWithComment{
 		ResourceWithComment: &cache.ResourceWithComment{},
 	}
