@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"fmt"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/yaml"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/yaml"
 
 	"k8s.io/utils/ptr"
 )

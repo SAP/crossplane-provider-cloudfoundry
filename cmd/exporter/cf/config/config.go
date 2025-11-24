@@ -4,7 +4,7 @@ import (
 	"context"
 	"log/slog"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
 
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 )

@@ -6,8 +6,8 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/config"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 )
