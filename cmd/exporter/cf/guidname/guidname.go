@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"regexp"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
 )
 
 type Name struct {

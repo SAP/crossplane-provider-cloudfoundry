@@ -5,8 +5,8 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/export"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 )

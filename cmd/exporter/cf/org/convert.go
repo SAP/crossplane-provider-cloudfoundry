@@ -3,7 +3,7 @@ package org
 import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/yaml"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/yaml"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

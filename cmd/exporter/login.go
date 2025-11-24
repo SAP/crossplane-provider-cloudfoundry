@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/cli/configparam"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/exporttool/erratt"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
 )
 
 func login(ctx context.Context) error {
