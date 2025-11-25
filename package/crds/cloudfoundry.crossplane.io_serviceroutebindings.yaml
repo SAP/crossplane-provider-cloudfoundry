@@ -98,11 +98,27 @@ spec:
                       service instances
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
+                  paramsSecretRef:
+                    description: (Attributes) Use a reference to a secret to pass
+                      `parameters` to the service broker. Ignored if `parameters`
+                      is set.
+                    properties:
+                      name:
+                        description: Name of the secret.
+                        type: string
+                      namespace:
+                        description: Namespace of the secret.
+                        type: string
+                    required:
+                    - name
+                    - namespace
+                    type: object
                   route:
-                    description: GUID of the Route in CF
+                    description: GUID of the Route in CF if RouteRef or RouteSelector
+                      is set it will be overwritten
                     type: string
                   routeRef:
-                    description: A Reference to a named object.
+                    description: If set will overwrite Route
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -136,7 +152,7 @@ spec:
                     - name
                     type: object
                   routeSelector:
-                    description: A Selector selects an object.
+                    description: If set will overwrite Route
                     properties:
                       matchControllerRef:
                         description: |-
@@ -176,10 +192,11 @@ spec:
                         type: object
                     type: object
                   serviceInstance:
-                    description: GUID of the ServiceInstance in CF
+                    description: GUID of the ServiceInstance in CF if ServiceInstanceRef
+                      or ServiceInstanceSelector is set it will be overwritten
                     type: string
                   serviceInstanceRef:
-                    description: A Reference to a named object.
+                    description: If set will overwrite ServiceInstance
                     properties:
                       name:
                         description: Name of the referenced object.
@@ -213,7 +230,7 @@ spec:
                     - name
                     type: object
                   serviceInstanceSelector:
-                    description: A Selector selects an object.
+                    description: If set will overwrite ServiceInstance
                     properties:
                       matchControllerRef:
                         description: |-
@@ -565,20 +582,20 @@ spec:
         - spec
         type: object
         x-kubernetes-validations:
-        - message: 'ServiceInstanceReference validation: one of, serviceInstanceRef,
+        - message: 'ServiceInstanceReference validation: one of serviceInstance, serviceInstanceRef,
             or serviceInstanceSelector must be set'
-          rule: has(self.spec.forProvider.serviceInstanceRef) || has(self.spec.forProvider.serviceInstanceSelector)
-        - message: 'ServiceInstanceReference validation: only one of, serviceInstanceRef,
-            or serviceInstanceSelector can be set'
-          rule: '[has(self.spec.forProvider.serviceInstanceRef), has(self.spec.forProvider.serviceInstanceSelector)].filter(x,
-            x).size() <= 1'
+          rule: has(self.spec.forProvider.serviceInstance) || has(self.spec.forProvider.serviceInstanceRef)
+            || has(self.spec.forProvider.serviceInstanceSelector)
+        - message: 'ServiceInstanceReference validation: serviceInstanceRef and serviceInstanceSelector
+            are mutually exclusive'
+          rule: '!has(self.spec.forProvider.serviceInstanceRef) || !has(self.spec.forProvider.serviceInstanceSelector)'
         - message: 'RouteReference validation: one of route, routeRef, or routeSelector
             must be set'
-          rule: has(self.spec.forProvider.routeRef) || has(self.spec.forProvider.routeSelector)
-        - message: 'RouteReference validation: only one of route, routeRef, or routeSelector
-            can be set'
-          rule: '[has(self.spec.forProvider.routeRef), has(self.spec.forProvider.routeSelector)].filter(x,
-            x).size() <= 1'
+          rule: has(self.spec.forProvider.route) || has(self.spec.forProvider.routeRef)
+            || has(self.spec.forProvider.routeSelector)
+        - message: 'RouteReference validation: routeRef and routeSelector are mutually
+            exclusive'
+          rule: '!has(self.spec.forProvider.routeRef) || !has(self.spec.forProvider.routeSelector)'
     served: true
     storage: true
     subresources:

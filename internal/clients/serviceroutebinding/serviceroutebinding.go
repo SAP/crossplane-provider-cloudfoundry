@@ -71,8 +71,8 @@ func GetByIDOrSearch(ctx context.Context, srbClient ServiceRouteBinding, guid st
 	}
 }
 
-func Create(ctx context.Context, srbClient ServiceRouteBinding, forProvider v1alpha1.ServiceRouteBindingParameters) (*resource.ServiceRouteBinding, error) {
-	opt, err := newCreateOption(forProvider)
+func Create(ctx context.Context, srbClient ServiceRouteBinding, forProvider v1alpha1.ServiceRouteBindingParameters, parametersFromSecret runtime.RawExtension) (*resource.ServiceRouteBinding, error) {
+	opt, err := newCreateOption(forProvider, parametersFromSecret)
 	if err != nil {
 		return nil, err
 	}
@@ -89,11 +89,13 @@ func Create(ctx context.Context, srbClient ServiceRouteBinding, forProvider v1al
 	return srbClient.Single(ctx, createToListOptions(opt))
 }
 
-func newCreateOption(forProvider v1alpha1.ServiceRouteBindingParameters) (*cfresource.ServiceRouteBindingCreate, error) {
+func newCreateOption(forProvider v1alpha1.ServiceRouteBindingParameters, parametersFromSecret runtime.RawExtension) (*cfresource.ServiceRouteBindingCreate, error) {
 	creationPayload := cfresource.NewServiceRouteBindingCreate(forProvider.Route, forProvider.ServiceInstance)
 
 	if forProvider.Parameters.Raw != nil {
 		creationPayload.Parameters = (*json.RawMessage)(&forProvider.Parameters.Raw)
+	} else if parametersFromSecret.Raw != nil {
+		creationPayload.Parameters = (*json.RawMessage)(&parametersFromSecret.Raw)
 	}
 	return creationPayload, nil
 }

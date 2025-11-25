@@ -177,7 +177,17 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, fmt.Errorf(errCreate, fmt.Errorf(errMissingRelationshipGUIDs, routeGUID, serviceInstanceGUID))
 	}
 
-	binding, err := srb.Create(ctx, e.srbClient, cr.Spec.ForProvider)
+	// Get ParametersSecretRef if provided
+	parameterFromSecret := runtime.RawExtension{}
+	if cr.Spec.ForProvider.Parameters.Raw == nil && cr.Spec.ForProvider.ParametersSecretRef != nil {
+		parameters, err := resolveParametersSecret(ctx, e.kube, cr.Spec.ForProvider)
+		if err != nil {
+			return managed.ExternalCreation{}, fmt.Errorf(errExtractParams, err)
+		}
+		parameterFromSecret = *parameters
+	}
+
+	binding, err := srb.Create(ctx, e.srbClient, cr.Spec.ForProvider, parameterFromSecret)
 	if err != nil {
 		return managed.ExternalCreation{}, fmt.Errorf(errCreate, err)
 	}
@@ -187,6 +197,24 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 	cr.SetConditions(xpv1.Creating())
 	return managed.ExternalCreation{}, nil
+}
+
+// resolveParameters resolves ParametersSecretRef if set and returns the updated forProvider
+func resolveParametersSecret(ctx context.Context, kube k8s.Client, forProvider v1alpha1.ServiceRouteBindingParameters) (*runtime.RawExtension, error) {
+	if forProvider.ParametersSecretRef == nil {
+		return nil, fmt.Errorf("ParametersSecretRef is not set")
+	}
+
+	jsonBytes, err := clients.ExtractSecret(ctx, kube, forProvider.ParametersSecretRef, "")
+	if err != nil {
+		return nil, err
+	}
+
+	if len(jsonBytes) == 0 {
+		return nil, fmt.Errorf("no data found in secret")
+	}
+
+	return &runtime.RawExtension{Raw: jsonBytes}, nil
 }
 
 // Updates the external resource.

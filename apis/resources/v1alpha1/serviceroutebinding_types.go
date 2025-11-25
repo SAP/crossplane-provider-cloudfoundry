@@ -17,10 +17,10 @@ import (
 // +kubebuilder:printcolumn:name="SERVICE-INSTANCE",type="string",JSONPath=".status.atProvider.serviceInstanceGUID",priority=1
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name",priority=1
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:validation:XValidation:rule="has(self.spec.forProvider.serviceInstanceRef) || has(self.spec.forProvider.serviceInstanceSelector)",message="ServiceInstanceReference validation: one of, serviceInstanceRef, or serviceInstanceSelector must be set"
-// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.serviceInstanceRef), has(self.spec.forProvider.serviceInstanceSelector)].filter(x, x).size() <= 1",message="ServiceInstanceReference validation: only one of, serviceInstanceRef, or serviceInstanceSelector can be set"
-// +kubebuilder:validation:XValidation:rule="has(self.spec.forProvider.routeRef) || has(self.spec.forProvider.routeSelector)",message="RouteReference validation: one of route, routeRef, or routeSelector must be set"
-// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.routeRef), has(self.spec.forProvider.routeSelector)].filter(x, x).size() <= 1",message="RouteReference validation: only one of route, routeRef, or routeSelector can be set"
+// +kubebuilder:validation:XValidation:rule="has(self.spec.forProvider.serviceInstance) || has(self.spec.forProvider.serviceInstanceRef) || has(self.spec.forProvider.serviceInstanceSelector)",message="ServiceInstanceReference validation: one of serviceInstance, serviceInstanceRef, or serviceInstanceSelector must be set"
+// +kubebuilder:validation:XValidation:rule="!has(self.spec.forProvider.serviceInstanceRef) || !has(self.spec.forProvider.serviceInstanceSelector)",message="ServiceInstanceReference validation: serviceInstanceRef and serviceInstanceSelector are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="has(self.spec.forProvider.route) || has(self.spec.forProvider.routeRef) || has(self.spec.forProvider.routeSelector)",message="RouteReference validation: one of route, routeRef, or routeSelector must be set"
+// +kubebuilder:validation:XValidation:rule="!has(self.spec.forProvider.routeRef) || !has(self.spec.forProvider.routeSelector)",message="RouteReference validation: routeRef and routeSelector are mutually exclusive"
 type ServiceRouteBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -46,6 +46,10 @@ type ServiceRouteBindingParameters struct {
 	// A map of arbitrary key/value paris to be send to the service broker during binding only supported for user-provided service instances
 	// +kubebuilder:validation:Optional
 	Parameters runtime.RawExtension `json:"parameters,omitempty"`
+
+	// (Attributes) Use a reference to a secret to pass `parameters` to the service broker. Ignored if `parameters` is set.
+	// +kubebuilder:validation:Optional
+	ParametersSecretRef *xpv1.SecretReference `json:"paramsSecretRef,omitempty"`
 }
 
 type ServiceRouteBindingObservation struct {
@@ -124,19 +128,23 @@ func init() {
 }
 
 type ServiceInstanceReference struct {
-	//GUID of the ServiceInstance in CF
+	//GUID of the ServiceInstance in CF if ServiceInstanceRef or ServiceInstanceSelector is set it will be overwritten
 	// +crossplane:generate:reference:type=ServiceInstance
 	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
-	ServiceInstance         string          `json:"serviceInstance,omitempty"`
-	ServiceInstanceRef      *xpv1.Reference `json:"serviceInstanceRef,omitempty"`
-	ServiceInstanceSelector *xpv1.Selector  `json:"serviceInstanceSelector,omitempty"`
+	ServiceInstance string `json:"serviceInstance,omitempty"`
+	// If set will overwrite ServiceInstance
+	ServiceInstanceRef *xpv1.Reference `json:"serviceInstanceRef,omitempty"`
+	// If set will overwrite ServiceInstance
+	ServiceInstanceSelector *xpv1.Selector `json:"serviceInstanceSelector,omitempty"`
 }
 
 type RouteReference struct {
-	//GUID of the Route in CF
+	//GUID of the Route in CF if RouteRef or RouteSelector is set it will be overwritten
 	// +crossplane:generate:reference:type=Route
 	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
-	Route         string          `json:"route,omitempty"`
-	RouteRef      *xpv1.Reference `json:"routeRef,omitempty"`
-	RouteSelector *xpv1.Selector  `json:"routeSelector,omitempty"`
+	Route string `json:"route,omitempty"`
+	// If set will overwrite Route
+	RouteRef *xpv1.Reference `json:"routeRef,omitempty"`
+	// If set will overwrite Route
+	RouteSelector *xpv1.Selector `json:"routeSelector,omitempty"`
 }
