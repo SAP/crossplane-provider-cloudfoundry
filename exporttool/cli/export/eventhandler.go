@@ -67,7 +67,6 @@ func resourceLoop(ctx context.Context, fileOutput *os.File, resourceChan <-chan 
 				}
 			} else {
 				// output to console
-				slog.Debug("marshalling resource", "res", res)
 				y, err := yaml.MarshalPretty(res)
 				if err != nil {
 					erratt.Slog(erratt.Errorf("cannot YAML-marshal resource: %w", err).With("resource", res))
