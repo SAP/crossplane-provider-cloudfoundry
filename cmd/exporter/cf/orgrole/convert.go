@@ -37,7 +37,7 @@ func convertOrgRoleResource(ctx context.Context, cfClient *client.Client, orgRol
 
 	if resolveReferences {
 		if err := org.ResolveReference(ctx, cfClient, &orgReference); err != nil {
-			evHandler.Warn(erratt.Errorf("cannot resolve org reference: %w", err).With("orgRole-name", orgRole.GetName()))
+			evHandler.Warn(erratt.Errorf("cannot resolve org reference: %w", err).With("orgRole-name", orgRole.GetName(), "org-guid", orgRole.Relationships.Org.Data.GUID))
 		}
 	}
 	oRole.OrgRole = &v1alpha1.OrgRole{
