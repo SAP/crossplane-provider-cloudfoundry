@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	OrgRole   = orgRole{}
+	OrgRole = orgRole{}
 )
 
 func init() {
@@ -33,7 +33,7 @@ func (om orgRole) KindName() string {
 }
 
 func (om orgRole) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler, resolveReferences bool) error {
-	orgRoles, _, err := userrole.Get(ctx, cfClient)
+	orgRoles, _, err := userrole.GetOrgRoles(ctx, cfClient)
 	if err != nil {
 		return err
 	}
