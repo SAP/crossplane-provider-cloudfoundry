@@ -8,13 +8,39 @@ metadata:
 spec:
   group: cloudfoundry.crossplane.io
   names:
+    categories:
+    - crossplane
+    - managed
+    - cloudfoundry
     kind: ServiceRouteBinding
     listKind: ServiceRouteBindingList
     plural: serviceroutebindings
     singular: serviceroutebinding
-  scope: Namespaced
+  scope: Cluster
   versions:
-  - name: v1alpha1
+  - additionalPrinterColumns:
+    - jsonPath: .status.conditions[?(@.type=='Ready')].status
+      name: READY
+      type: string
+    - jsonPath: .status.conditions[?(@.type=='Synced')].status
+      name: SYNCED
+      type: string
+    - jsonPath: .status.atProvider.routeGUID
+      name: ROUTE
+      priority: 1
+      type: string
+    - jsonPath: .status.atProvider.serviceInstanceGUID
+      name: SERVICE-INSTANCE
+      priority: 1
+      type: string
+    - jsonPath: .metadata.annotations.crossplane\.io/external-name
+      name: EXTERNAL-NAME
+      priority: 1
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: AGE
+      type: date
+    name: v1alpha1
     schema:
       openAPIV3Schema:
         properties:
@@ -68,7 +94,8 @@ spec:
                     type: object
                   parameters:
                     description: A map of arbitrary key/value paris to be send to
-                      the service broker during binding
+                      the service broker during binding only supported for user-provided
+                      service instances
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   route:
@@ -444,24 +471,31 @@ spec:
                     additionalProperties:
                       properties:
                         href:
+                          description: Contains the href to a related resource in
+                            CF
                           type: string
                         method:
+                          description: (Optional) HTTP method to be used when accessing
+                            the link
                           type: string
                       required:
                       - href
                       type: object
+                    description: The links related to the ServiceRouteBinding, ServiceInstance,
+                      Parameter and Route
                     type: object
                   parameters:
-                    description: |-
-                      TODO: Parameters are not returned from CF API so most likely we cannot store them here???
-                      Solutin: GET /v3/service_route_bindings/:guid/parameters
-                      A map of arbitrary key/value paris to be send to the service broker during binding
+                    description: A map of arbitrary key/value paris to be send to
+                      the service broker during binding only supported for user-provided
+                      service instances
                     type: object
                     x-kubernetes-preserve-unknown-fields: true
                   routeGUID:
                     description: GUID of the Route in CF
                     type: string
                   routeServiceUrl:
+                    description: (String) The URL of the route service if one is associated
+                      with the service route binding.
                     type: string
                   serviceInstanceGUID:
                     description: GUID of the ServiceRouteBinding in CF
@@ -530,6 +564,21 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: 'ServiceInstanceReference validation: one of, serviceInstanceRef,
+            or serviceInstanceSelector must be set'
+          rule: has(self.spec.forProvider.serviceInstanceRef) || has(self.spec.forProvider.serviceInstanceSelector)
+        - message: 'ServiceInstanceReference validation: only one of, serviceInstanceRef,
+            or serviceInstanceSelector can be set'
+          rule: '[has(self.spec.forProvider.serviceInstanceRef), has(self.spec.forProvider.serviceInstanceSelector)].filter(x,
+            x).size() <= 1'
+        - message: 'RouteReference validation: one of route, routeRef, or routeSelector
+            must be set'
+          rule: has(self.spec.forProvider.routeRef) || has(self.spec.forProvider.routeSelector)
+        - message: 'RouteReference validation: only one of route, routeRef, or routeSelector
+            can be set'
+          rule: '[has(self.spec.forProvider.routeRef), has(self.spec.forProvider.routeSelector)].filter(x,
+            x).size() <= 1'
     served: true
     storage: true
     subresources:

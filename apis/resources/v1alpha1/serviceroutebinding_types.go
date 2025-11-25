@@ -9,6 +9,18 @@ import (
 
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
+// +kubebuilder:storageversion
+// +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
+// +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
+// +kubebuilder:printcolumn:name="ROUTE",type="string",JSONPath=".status.atProvider.routeGUID",priority=1
+// +kubebuilder:printcolumn:name="SERVICE-INSTANCE",type="string",JSONPath=".status.atProvider.serviceInstanceGUID",priority=1
+// +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name",priority=1
+// +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
+// +kubebuilder:validation:XValidation:rule="has(self.spec.forProvider.serviceInstanceRef) || has(self.spec.forProvider.serviceInstanceSelector)",message="ServiceInstanceReference validation: one of, serviceInstanceRef, or serviceInstanceSelector must be set"
+// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.serviceInstanceRef), has(self.spec.forProvider.serviceInstanceSelector)].filter(x, x).size() <= 1",message="ServiceInstanceReference validation: only one of, serviceInstanceRef, or serviceInstanceSelector can be set"
+// +kubebuilder:validation:XValidation:rule="has(self.spec.forProvider.routeRef) || has(self.spec.forProvider.routeSelector)",message="RouteReference validation: one of route, routeRef, or routeSelector must be set"
+// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.routeRef), has(self.spec.forProvider.routeSelector)].filter(x, x).size() <= 1",message="RouteReference validation: only one of route, routeRef, or routeSelector can be set"
 type ServiceRouteBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -25,13 +37,13 @@ type ServiceRouteBindingList struct {
 }
 
 type ServiceRouteBindingParameters struct {
-	RouteReference `json:",inline,omitempty"`
+	RouteReference `json:",inline"`
 
-	ServiceInstanceReference `json:",inline,omitempty"`
+	ServiceInstanceReference `json:",inline"`
 
 	ResourceMetadata `json:",inline"`
 
-	// A map of arbitrary key/value paris to be send to the service broker during binding
+	// A map of arbitrary key/value paris to be send to the service broker during binding only supported for user-provided service instances
 	// +kubebuilder:validation:Optional
 	Parameters runtime.RawExtension `json:"parameters,omitempty"`
 }
@@ -39,12 +51,14 @@ type ServiceRouteBindingParameters struct {
 type ServiceRouteBindingObservation struct {
 	Resource `json:",inline"`
 
+	// (String) The URL of the route service if one is associated with the service route binding.
 	RouteServiceUrl string `json:"routeServiceUrl"`
 
 	LastOperation *LastOperation `json:"lastOperation,omitempty"`
 
 	ResourceMetadata `json:",inline"`
 
+	// The links related to the ServiceRouteBinding, ServiceInstance, Parameter and Route
 	Links Links `json:"links,omitempty"`
 
 	// GUID of the ServiceRouteBinding in CF
@@ -55,29 +69,34 @@ type ServiceRouteBindingObservation struct {
 	// +kubebuilder:validation:Optional
 	Route string `json:"routeGUID,omitempty"`
 
-	// TODO: Parameters are not returned from CF API so most likely we cannot store them here???
-	// Solutin: GET /v3/service_route_bindings/:guid/parameters
-	// A map of arbitrary key/value paris to be send to the service broker during binding
+	// A map of arbitrary key/value paris to be send to the service broker during binding only supported for user-provided service instances
 	// +kubebuilder:validation:Optional
 	Parameters runtime.RawExtension `json:"parameters,omitempty"`
 }
 
 type Relation struct {
+	// wrapper for GUID of ServiceInstance in CF
 	ServiceInstance Data `json:"service_instance"`
-	Route           Data `json:"route"`
+
+	// wrapper for GUID of Route in CF
+	Route Data `json:"route"`
 }
 
 type Data struct {
+	// GUID of the related resource in CF
 	GUID string `json:"guid"`
 }
 
 type Link struct {
+	// Contains the href to a related resource in CF
 	Href string `json:"href"`
 
+	// (Optional) HTTP method to be used when accessing the link
 	// +kubebuilder:validation:Optional
 	Method *string `json:"method,omitempty"`
 }
 
+// Contains the links related to the ServiceRouteBinding, ServiceInstance, Parameter and Route
 type Links map[string]Link
 
 // ServiceRouteBindingSpec defines the desired state of ServiceRouteBinding

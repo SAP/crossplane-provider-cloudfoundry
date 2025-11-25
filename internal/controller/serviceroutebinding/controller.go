@@ -26,6 +26,7 @@ import (
 	srb "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/serviceroutebinding"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // using this client https://pkg.go.dev/github.com/cloudfoundry/go-cfclient/v3@v3.0.0-alpha.12/client#ServiceRouteBindingClient
@@ -45,6 +46,7 @@ const (
 	errExtractParams            = "cannot extract specified parameters: %w"
 	errUnknownState             = "unknown last operation state for " + resourceType + " in " + externalSystem
 	errMissingRelationshipGUIDs = "missing relationship GUIDs (route=%q serviceInstance=%q)"
+	errParametersFromCF         = "cannot get parameters from " + resourceType + " in " + externalSystem + ": %w"
 )
 
 // Setup adds a controller that reconciles ServiceRouteBinding CR.
@@ -139,7 +141,16 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	// maybe set external name if not exists/ is this a good practice?
 	//meta.SetExternalName(cr, binding.GUID)
 
-	srb.UpdateObservation(&cr.Status.AtProvider, servicerouteBinding)
+	// detect if their should be parameters / if its a user-provided service instance (Is their a better way to detect this?)
+	paramMap := &runtime.RawExtension{}
+	if cr.Spec.ForProvider.Parameters.Raw != nil {
+		paramMap, err = srb.GetParameters(ctx, e.srbClient, servicerouteBinding.GUID)
+		if err != nil {
+			return managed.ExternalObservation{}, fmt.Errorf(errExtractParams, err)
+		}
+	}
+
+	srb.UpdateObservation(&cr.Status.AtProvider, servicerouteBinding, paramMap)
 
 	obs, herr := handleObservationState(servicerouteBinding, cr)
 	if herr != nil {

@@ -2,6 +2,7 @@ package serviceroutebinding
 
 import (
 	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -12,6 +13,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
+	"k8s.io/apimachinery/pkg/runtime"
 )
 
 // using this client https://pkg.go.dev/github.com/cloudfoundry/go-cfclient/v3@v3.0.0-alpha.12/client#ServiceRouteBindingClient
@@ -39,6 +41,7 @@ type serviceRouteBinding interface {
 	Create(ctx context.Context, r *resource.ServiceRouteBindingCreate) (string, *resource.ServiceRouteBinding, error)
 	Update(ctx context.Context, guid string, r *resource.ServiceRouteBindingUpdate) (*resource.ServiceRouteBinding, error)
 	Delete(context.Context, string) (string, error)
+	GetParameters(ctx context.Context, guid string) (map[string]string, error)
 }
 
 type ServiceRouteBinding interface {
@@ -87,15 +90,12 @@ func Create(ctx context.Context, srbClient ServiceRouteBinding, forProvider v1al
 }
 
 func newCreateOption(forProvider v1alpha1.ServiceRouteBindingParameters) (*cfresource.ServiceRouteBindingCreate, error) {
-	// need to be implimented depending on selected structure
-	// -------------------------------------------------------------------------------------------------
-	// Link modeling options:
-	// We need a required 'self' link plus any number of additional dynamic links returned by CF (e.g. service_instance, route, parameters).
-	// Option 1 uses a flat map (LinksMap) matching CF JSON exactly, but cannot enforce 'self' at schema level (must validate in controller).
-	// Option 2 (active) uses a struct with a required Self field and an 'additional' map to hold any other links, enabling schema enforcement.
-	// TODO: find out if its just service_instance, route, parameters fields (Typed) or dynamic keys!!!
-	// check out proposed solution https://github.com/SAP/crossplane-provider-cloudfoundry/issues/81
-	return cfresource.NewServiceRouteBindingCreate(forProvider.Route, forProvider.ServiceInstance), nil
+	creationPayload := cfresource.NewServiceRouteBindingCreate(forProvider.Route, forProvider.ServiceInstance)
+
+	if forProvider.Parameters.Raw != nil {
+		creationPayload.Parameters = (*json.RawMessage)(&forProvider.Parameters.Raw)
+	}
+	return creationPayload, nil
 }
 
 func createToListOptions(create *cfresource.ServiceRouteBindingCreate) *client.ServiceRouteBindingListOptions {
@@ -121,7 +121,7 @@ func Delete(ctx context.Context, srbClient ServiceRouteBinding, guid string) err
 	return err
 }
 
-func UpdateObservation(observation *v1alpha1.ServiceRouteBindingObservation, r *resource.ServiceRouteBinding) {
+func UpdateObservation(observation *v1alpha1.ServiceRouteBindingObservation, r *resource.ServiceRouteBinding, externalParameters *runtime.RawExtension) {
 	observation.GUID = r.GUID
 	if !r.CreatedAt.IsZero() {
 		formatted := r.CreatedAt.UTC().Format(time.RFC3339)
@@ -144,8 +144,9 @@ func UpdateObservation(observation *v1alpha1.ServiceRouteBindingObservation, r *
 	observation.Route = r.Relationships.Route.Data.GUID
 	observation.RouteServiceUrl = r.RouteServiceURL
 
-	// add parameters but there not in *resource.ServiceRouteBinding
-	//observation.Parameters = r.Parameters
+	// Currently not implemented, since CF API is quite complex https://v3-apidocs.cloudfoundry.org/version/3.196.0/#get-parameters-for-a-route-binding
+	observation.Parameters = *externalParameters
+
 }
 
 // builds links map from CF links including self
@@ -162,4 +163,19 @@ func buildLinks(cfLinks cfresource.Links) v1alpha1.Links {
 		links[k] = l
 	}
 	return links
+}
+
+func GetParameters(ctx context.Context, srbClient ServiceRouteBinding, guid string) (*runtime.RawExtension, error) {
+	params, err := srbClient.GetParameters(ctx, guid)
+	if err != nil {
+		return nil, err
+	}
+
+	// Marshal map to JSON bytes
+	jsonBytes, err := json.Marshal(params)
+	if err != nil {
+		return nil, err
+	}
+
+	return &runtime.RawExtension{Raw: jsonBytes}, nil
 }
