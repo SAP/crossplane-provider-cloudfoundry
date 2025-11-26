@@ -137,21 +137,26 @@ func UpdateObservation(observation *v1alpha1.ServiceRouteBindingObservation, r *
 	}
 
 	observation.Links = buildLinks(r.Links)
-	observation.ResourceMetadata = v1alpha1.ResourceMetadata{
-		Labels:      r.Metadata.Labels,
-		Annotations: r.Metadata.Annotations,
+	if r.Metadata.Labels != nil || r.Metadata.Annotations != nil {
+		observation.ResourceMetadata = v1alpha1.ResourceMetadata{
+			Labels:      r.Metadata.Labels,
+			Annotations: r.Metadata.Annotations,
+		}
 	}
 
-	observation.ServiceInstance = r.Relationships.ServiceInstance.Data.GUID
-	observation.Route = r.Relationships.Route.Data.GUID
+	if r.Relationships.ServiceInstance.Data != nil {
+		observation.ServiceInstance = r.Relationships.ServiceInstance.Data.GUID
+	}
+	if r.Relationships.Route.Data != nil {
+		observation.Route = r.Relationships.Route.Data.GUID
+	}
 	observation.RouteServiceUrl = r.RouteServiceURL
 
-	// Currently not implemented, since CF API is quite complex https://v3-apidocs.cloudfoundry.org/version/3.196.0/#get-parameters-for-a-route-binding
 	observation.Parameters = *externalParameters
 
 }
 
-// builds links map from CF links including self
+// builds links map from CF links
 func buildLinks(cfLinks cfresource.Links) v1alpha1.Links {
 	if cfLinks == nil {
 		return v1alpha1.Links{}
