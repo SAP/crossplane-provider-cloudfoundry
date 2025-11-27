@@ -16,6 +16,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/parsan"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/yaml"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
@@ -33,7 +34,7 @@ func init() {
 
 type res struct {
 	*resource.ServiceInstance
-	*cache.ResourceWithComment
+	*yaml.ResourceWithComment
 }
 
 func (r *res) GetGUID() string {
@@ -180,7 +181,7 @@ func getAll(ctx context.Context, cfClient *client.Client, orgGuids, spaceGuids, 
 			if nameRx.MatchString(serviceInstance.Name) {
 				slog.Debug("matching serviceInstance found", "rx", nameRx.String(), "found", serviceInstance.Name)
 				results = append(results, &res{
-					ResourceWithComment: &cache.ResourceWithComment{},
+					ResourceWithComment: yaml.NewResourceWithComment(nil),
 					ServiceInstance:     serviceInstance,
 				})
 			}

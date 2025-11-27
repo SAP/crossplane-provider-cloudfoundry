@@ -2,6 +2,7 @@ package space
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"regexp"
 	"time"
@@ -14,6 +15,8 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/parsan"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/yaml"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
@@ -32,7 +35,7 @@ func init() {
 
 type res struct {
 	*resource.Space
-	*cache.ResourceWithComment
+	*yaml.ResourceWithComment
 }
 
 func (r *res) GetGUID() string {
@@ -40,7 +43,12 @@ func (r *res) GetGUID() string {
 }
 
 func (r *res) GetName() string {
-	return r.Name
+	names := parsan.ParseAndSanitize(r.Name, parsan.RFC1035Subdomain)
+	if len(names) == 0 {
+		r.AddComment(fmt.Sprintf("error sanitizing name: %s", r.Name))
+		return r.Name
+	}
+	return names[0]
 }
 
 type space struct{}
@@ -169,7 +177,7 @@ func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spa
 		for _, nameRx := range nameRxs {
 			if nameRx.MatchString(space.Name) {
 				results = append(results, &res{
-					ResourceWithComment: &cache.ResourceWithComment{},
+					ResourceWithComment: yaml.NewResourceWithComment(nil),
 					Space:               space,
 				})
 			}

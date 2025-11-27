@@ -5,7 +5,6 @@ import (
 	"log/slog"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
@@ -18,13 +17,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 )
-
-type serviceInstanceWithComment struct {
-	*v1alpha1.ServiceInstance
-	*cache.ResourceWithComment
-}
-
-var _ yaml.CommentedYAML = &serviceInstanceWithComment{}
 
 func convertServiceInstanceTags(tags []string) []*string {
 	result := make([]*string, len(tags))
@@ -102,41 +94,10 @@ func generateParams(ctx context.Context, cfClient *client.Client, serviceInstanc
 	return re, comment
 }
 
-func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client, serviceInstance *res, evHandler export.EventHandler, resolveReferences bool) *serviceInstanceWithComment {
+func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client, serviceInstance *res, evHandler export.EventHandler, resolveReferences bool) *yaml.ResourceWithComment {
 	slog.Debug("converting serviceInstance", "name", serviceInstance.Name)
 
-	si := &serviceInstanceWithComment{
-		ResourceWithComment: &cache.ResourceWithComment{},
-	}
-	si.CloneComment(serviceInstance.ResourceWithComment)
-
-	servicePlan := generateServicePlan(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
-
-	var maintenanceInfoDescription *string
-	var maintenanceInfoVersion *string
-	if mInfo := serviceInstance.MaintenanceInfo; mInfo != nil {
-		maintenanceInfoDescription = ptr.To(mInfo.Description)
-		maintenanceInfoVersion = ptr.To(mInfo.Description)
-	}
-
-	params, comment := generateParams(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
-	if comment != nil {
-		si.AddComment(*comment)
-	}
-	creds := generateCreds(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
-
-	spaceReference := v1alpha1.SpaceReference{
-		Space: &serviceInstance.Relationships.Space.Data.GUID,
-	}
-
-	if resolveReferences {
-		if err := space.ResolveReference(ctx, cfClient, &spaceReference); err != nil {
-			erra := erratt.Errorf("cannot resolve space reference: %w", err).With("serviceinstance-name", serviceInstance.GetName)
-			evHandler.Warn(erra)
-		}
-	}
-
-	si.ServiceInstance = &v1alpha1.ServiceInstance{
+	managedSI := &v1alpha1.ServiceInstance{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       v1alpha1.ServiceInstance_Kind,
 			APIVersion: v1alpha1.CRDGroupVersion.String(),
@@ -154,21 +115,14 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 				},
 			},
 			ForProvider: v1alpha1.ServiceInstanceParameters{
-				Name:           &serviceInstance.Name,
-				Type:           v1alpha1.ServiceInstanceType(serviceInstance.Type),
-				SpaceReference: spaceReference,
+				Name: &serviceInstance.Name,
+				Type: v1alpha1.ServiceInstanceType(serviceInstance.Type),
 				Managed: v1alpha1.Managed{
-					ServicePlan: servicePlan,
-					Parameters:  params,
 					// JSONParams: jsonParams,
 					// ParametersSecretRef: &v1.SecretReference{},
-					MaintenanceInfo: v1alpha1.MaintenanceInfo{
-						Description: maintenanceInfoDescription,
-						Version:     maintenanceInfoVersion,
-					},
+					MaintenanceInfo: v1alpha1.MaintenanceInfo{},
 				},
 				UserProvided: v1alpha1.UserProvided{
-					Credentials: creds,
 					// JSONCredentials: jsonCreds,
 					// CredentialsSecretRef: &v1.SecretReference{},
 					RouteServiceURL: ptr.Deref(serviceInstance.RouteServiceURL, ""),
@@ -184,5 +138,32 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 			},
 		},
 	}
-	return si
+	serviceInstanceWithComment := yaml.NewResourceWithComment(managedSI)
+	serviceInstanceWithComment.CloneComment(serviceInstance.ResourceWithComment)
+
+	managedSI.Spec.ForProvider.ServicePlan = generateServicePlan(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
+
+	if mInfo := serviceInstance.MaintenanceInfo; mInfo != nil {
+		managedSI.Spec.ForProvider.Managed.MaintenanceInfo.Description = &mInfo.Description
+		managedSI.Spec.ForProvider.Managed.MaintenanceInfo.Version = &mInfo.Description
+	}
+
+	var comment *string
+	managedSI.Spec.ForProvider.Managed.Parameters, comment = generateParams(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
+	if comment != nil {
+		serviceInstanceWithComment.AddComment(*comment)
+	}
+	managedSI.Spec.ForProvider.UserProvided.Credentials = generateCreds(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
+
+	managedSI.Spec.ForProvider.SpaceReference = v1alpha1.SpaceReference{
+		Space: &serviceInstance.Relationships.Space.Data.GUID,
+	}
+
+	if resolveReferences {
+		if err := space.ResolveReference(ctx, cfClient, &managedSI.Spec.ForProvider.SpaceReference); err != nil {
+			erra := erratt.Errorf("cannot resolve space reference: %w", err).With("serviceinstance-name", serviceInstance.GetName)
+			evHandler.Warn(erra)
+		}
+	}
+	return serviceInstanceWithComment
 }
