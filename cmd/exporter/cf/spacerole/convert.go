@@ -10,8 +10,8 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/yaml"
-	"github.com/cloudfoundry/go-cfclient/v3/client"
 
+	"github.com/cloudfoundry/go-cfclient/v3/client"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"

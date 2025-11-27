@@ -9,7 +9,7 @@ import (
 
 var _ = Describe("Testing Type", func() {
 	Describe("Terminal", func() {
-		var t parsan.Type
+		var t parsan.Rule
 		Context("with value 'a'", func() {
 			BeforeEach(func() {
 				t = parsan.Terminal("a")
@@ -40,7 +40,7 @@ var _ = Describe("Testing Type", func() {
 		})
 	})
 	Describe("Range", func() {
-		var r parsan.Type
+		var r parsan.Rule
 		Context("with value a-z (a)", func() {
 			BeforeEach(func() {
 				r = parsan.Range('a', 'z').WithSuggestionFunc(parsan.SuggestConstRune('a'))
@@ -66,7 +66,7 @@ var _ = Describe("Testing Type", func() {
 		})
 	})
 	Describe("Concat", func() {
-		var c parsan.Type
+		var c parsan.Rule
 		Context("with empty value", func() {
 			BeforeEach(func() {
 				c = parsan.Concat()
@@ -168,7 +168,7 @@ var _ = Describe("Testing Type", func() {
 		})
 	})
 	Describe("Alternative", func() {
-		var a parsan.Type
+		var a parsan.Rule
 		Context("with empty value", func() {
 			BeforeEach(func() {
 				a = parsan.Alternative()
@@ -223,7 +223,7 @@ var _ = Describe("Testing Type", func() {
 		})
 	})
 	Describe("Named", func() {
-		var n parsan.Type
+		var n parsan.Rule
 		Context("named Terminal('a')", func() {
 			BeforeEach(func() {
 				n = parsan.Named("term-a", parsan.Terminal("a"))
@@ -279,7 +279,7 @@ var _ = Describe("Testing Type", func() {
 		})
 	})
 	Describe("Seq", func() {
-		var s parsan.Type
+		var s parsan.Rule
 		Context("seq(0,0, Terminal(a))", func() {
 			BeforeEach(func() {
 				s = parsan.Seq(0, 0, parsan.Terminal("a"))
