@@ -1,0 +1,123 @@
+#+options: ':nil *:t -:t ::t <:t H:3 \n:nil ^:nil arch:headline
+#+options: author:t broken-links:nil c:nil creator:nil
+#+options: d:(not "LOGBOOK") date:t e:t email:nil expand-links:t f:t
+#+options: inline:t num:t p:nil pri:nil prop:nil stat:t tags:t
+#+options: tasks:t tex:t timestamp:t title:t toc:t todo:t |:t
+#+title: README
+#+date: <2025-11-27 Thu>
+#+author: Gergely Szabo
+#+email: gergely.szabo@sap.com
+#+language: en
+#+select_tags: export
+#+exclude_tags: noexport
+#+creator: Emacs 30.2 (Org mode 9.7.27)
+#+cite_export:
+
+* Introduction
+
+=xp-clifford= (Crossplane CLI Framework for Resource Data Extraction)
+is a Go module that facilitates the development of CLI tools for
+exporting definitions of external resources in the format of specific
+Crossplane provider managed resource definitions.
+
+* Examples
+** The simplest CLI tool
+
+The simplest CLI tool you can create using =xp-clifford= looks like
+this:
+
+#+name: basic-example
+#+begin_src go :noweb yes :tangle examples/basic/main.go :results drawer
+package main
+<<imports>>
+
+<<basic-main>>
+#+end_src
+
+#+RESULTS: basic-example
+:results:
+test system exporting tool is a CLI tool for exporting existing resources as Crossplane managed resources
+
+Usage:
+  test-exporter [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  export      Export test system resources
+  help        Help about any command
+
+Flags:
+  -c, --config string   Configuration file
+  -h, --help            help for test-exporter
+  -v, --verbose         Verbose output
+
+Use "test-exporter [command] --help" for more information about a command.
+:end:
+
+Let's examine the =import= section.
+
+#+name: imports
+#+begin_src go :eval never
+import (
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	_ "github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+#+end_src
+
+Two packages must be imported:
+
+- =github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli=
+- =github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export=
+
+The =cli/export= package is imported for side effects only.
+
+The =main= function:
+
+#+name: basic-main
+#+begin_src go :eval never
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	cli.Execute()
+}
+#+end_src
+
+The =Configuration= variable from the =cli= package is used to set
+specific parameters for the built CLI tool. Here we set the =ShortName= and
+=ObservedSystem= fields.
+
+These fields have the following meanings:
+
+- ShortName :: The abbreviated name of the observed system without
+  spaces, such as "cf" for the CloudFoundry provider
+- ObservedSystem :: The full name of the external
+  system, which may contain spaces, such as "Cloud Foundry"
+
+At the end of the =main= function, we invoke the
+=Execute= function from the =cli= package to start the CLI.
+
+When we run this basic example, it generates the following output:
+
+#+begin_src sh :exports both :results output
+go run ./examples/basic/main.go
+#+end_src
+
+#+RESULTS:
+#+begin_example
+test system exporting tool is a CLI tool for exporting existing resources as Crossplane managed resources
+
+Usage:
+  test-exporter [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  export      Export test system resources
+  help        Help about any command
+
+Flags:
+  -c, --config string   Configuration file
+  -h, --help            help for test-exporter
+  -v, --verbose         Verbose output
+
+Use "test-exporter [command] --help" for more information about a command.
+#+end_example
