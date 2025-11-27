@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/userrole"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
@@ -17,30 +16,8 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-type orgRoleWithComment struct {
-	*v1alpha1.OrgRole
-	*cache.ResourceWithComment
-}
-
-var _ yaml.CommentedYAML = &orgRoleWithComment{}
-
-func convertOrgRoleResource(ctx context.Context, cfClient *client.Client, orgRole *userrole.Role, evHandler export.EventHandler, resolveReferences bool) *orgRoleWithComment {
-	oRole := &orgRoleWithComment{
-		ResourceWithComment: &cache.ResourceWithComment{},
-	}
-
-	oRole.CloneComment(orgRole.ResourceWithComment)
-
-	orgReference := v1alpha1.OrgReference{
-		Org: &orgRole.Relationships.Org.Data.GUID,
-	}
-
-	if resolveReferences {
-		if err := org.ResolveReference(ctx, cfClient, &orgReference); err != nil {
-			evHandler.Warn(erratt.Errorf("cannot resolve org reference: %w", err).With("orgRole-name", orgRole.GetName(), "org-guid", orgRole.Relationships.Org.Data.GUID))
-		}
-	}
-	oRole.OrgRole = &v1alpha1.OrgRole{
+func convertOrgRoleResource(ctx context.Context, cfClient *client.Client, orgRole *userrole.Role, evHandler export.EventHandler, resolveReferences bool) *yaml.ResourceWithComment {
+	managedOrgRole := &v1alpha1.OrgRole{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       v1alpha1.OrgRole_Kind,
 			APIVersion: v1alpha1.CRDGroupVersion.String(),
@@ -58,12 +35,23 @@ func convertOrgRoleResource(ctx context.Context, cfClient *client.Client, orgRol
 				},
 			},
 			ForProvider: v1alpha1.OrgRoleParameters{
-				OrgReference: orgReference,
-				Type:         orgRole.Type,
-				Origin:       orgRole.Origin,
-				Username:     ptr.Deref(orgRole.Username, ""),
+				Type:     orgRole.Type,
+				Origin:   orgRole.Origin,
+				Username: ptr.Deref(orgRole.Username, ""),
 			},
 		},
 	}
-	return oRole
+	orgRoleWithComment := yaml.NewResourceWithComment(managedOrgRole)
+	orgRoleWithComment.CloneComment(orgRole.ResourceWithComment)
+
+	managedOrgRole.Spec.ForProvider.OrgReference = v1alpha1.OrgReference{
+		Org: &orgRole.Relationships.Org.Data.GUID,
+	}
+
+	if resolveReferences {
+		if err := org.ResolveReference(ctx, cfClient, &managedOrgRole.Spec.ForProvider.OrgReference); err != nil {
+			evHandler.Warn(erratt.Errorf("cannot resolve org reference: %w", err).With("orgRole-name", orgRole.GetName(), "org-guid", orgRole.Relationships.Org.Data.GUID))
+		}
+	}
+	return orgRoleWithComment
 }

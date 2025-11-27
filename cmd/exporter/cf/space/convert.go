@@ -5,7 +5,6 @@ import (
 	"log/slog"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
@@ -16,37 +15,17 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type spaceWithComment struct {
-	*cache.ResourceWithComment
-	*v1alpha1.Space
-}
-
-var _ yaml.CommentedYAML = &spaceWithComment{}
-
-func convertSpaceResource(ctx context.Context, cfClient *client.Client, space *res, evHandler export.EventHandler, resolveReferences bool) *spaceWithComment {
+func convertSpaceResource(ctx context.Context, cfClient *client.Client, space *res, evHandler export.EventHandler, resolveReferences bool) *yaml.ResourceWithComment {
 	slog.Debug("converting space", "name", space.GetName())
-	sp := &spaceWithComment{
-		ResourceWithComment: &cache.ResourceWithComment{},
-	}
-	sp.CloneComment(space.ResourceWithComment)
-	orgReference := v1alpha1.OrgReference{
-		Org: &space.Relationships.Organization.Data.GUID,
-	}
-	name := space.GetName()
-	if resolveReferences {
-		if err := org.ResolveReference(ctx, cfClient, &orgReference); err != nil {
-			evHandler.Warn(erratt.Errorf("cannot resolve org reference: %w", err).With("space-name", name))
-		}
-	}
-	sp.Space = &v1alpha1.Space{
+	managedSpace := &v1alpha1.Space{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       v1alpha1.Space_Kind,
 			APIVersion: v1alpha1.CRDGroupVersion.String(),
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Name: name,
+			Name: space.GetName(),
 			Annotations: map[string]string{
-				"crossplane.io/external-name": space.GUID,
+				"crossplane.io/external-name": space.GetGUID(),
 			},
 		},
 		Spec: v1alpha1.SpaceSpec{
@@ -61,9 +40,18 @@ func convertSpaceResource(ctx context.Context, cfClient *client.Client, space *r
 				IsolationSegment: new(string),
 				Labels:           space.Metadata.Labels,
 				Name:             space.Name,
-				OrgReference:     orgReference,
+				OrgReference: v1alpha1.OrgReference{
+					Org: &space.Relationships.Organization.Data.GUID,
+				},
 			},
 		},
 	}
-	return sp
+	spaceWithComment := yaml.NewResourceWithComment(managedSpace)
+	spaceWithComment.CloneComment(space.ResourceWithComment)
+	if resolveReferences {
+		if err := org.ResolveReference(ctx, cfClient, &managedSpace.Spec.ForProvider.OrgReference); err != nil {
+			evHandler.Warn(erratt.Errorf("cannot resolve org reference: %w", err).With("space-name", managedSpace.GetName()))
+		}
+	}
+	return spaceWithComment
 }

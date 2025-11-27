@@ -2,6 +2,7 @@ package org
 
 import (
 	"context"
+	"fmt"
 	"log/slog"
 	"regexp"
 	"time"
@@ -13,6 +14,8 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/parsan"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/yaml"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
@@ -31,15 +34,20 @@ func init() {
 
 type res struct {
 	*resource.Organization
-	*cache.ResourceWithComment
+	*yaml.ResourceWithComment
 }
 
-func (o *res) GetGUID() string {
-	return o.GUID
+func (r *res) GetGUID() string {
+	return r.GUID
 }
 
-func (o *res) GetName() string {
-	return o.Name
+func (r *res) GetName() string {
+	names := parsan.ParseAndSanitize(r.Name, parsan.RFC1035Subdomain)
+	if len(names) == 0 {
+		r.AddComment(fmt.Sprintf("error sanitizing name: %s", r.Name))
+		return r.Name
+	}
+	return names[0]
 }
 
 type org struct{}
@@ -160,7 +168,7 @@ func getAll(ctx context.Context, cfClient *client.Client, orgNames []string) ([]
 		for _, nameRx := range nameRxs {
 			if nameRx.MatchString(org.Name) {
 				results = append(results, &res{
-					ResourceWithComment: &cache.ResourceWithComment{},
+					ResourceWithComment: yaml.NewResourceWithComment(nil),
 					Organization:        org,
 				})
 			}
