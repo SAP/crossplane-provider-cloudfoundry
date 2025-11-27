@@ -12,14 +12,6 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-// CommentedYAML interface specifies a Comment method. When a resource
-// implements this interface, the output YAML will be commented out as
-// long as the Comment method returns `true` as the second result. The
-// first (string) result wil be put over the YAML in a comment.
-type CommentedYAML interface {
-	Comment() (string, bool)
-}
-
 // Marshal returns the YAML representation of a Kubernetes resource,
 // indented and wrapped with "---" and "..." markers.
 func Marshal(resource any) (string, error) {

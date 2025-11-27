@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/userrole"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
@@ -17,17 +16,8 @@ import (
 	"k8s.io/utils/ptr"
 )
 
-type spaceRoleWithComment struct {
-	*v1alpha1.SpaceRole
-	*cache.ResourceWithComment
-}
-
-var _ yaml.CommentedYAML = &spaceRoleWithComment{}
-
-func convertSpaceRoleResource(ctx context.Context, cfClient *client.Client, spRole *userrole.Role, evHandler export.EventHandler, resolveReferences bool) *spaceRoleWithComment {
-	sRole := &spaceRoleWithComment{
-		ResourceWithComment: &cache.ResourceWithComment{},
-	}
+func convertSpaceRoleResource(ctx context.Context, cfClient *client.Client, spRole *userrole.Role, evHandler export.EventHandler, resolveReferences bool) *yaml.ResourceWithComment {
+	sRole := yaml.NewResourceWithComment(nil)
 
 	spaceReference := v1alpha1.SpaceReference{
 		Space: &spRole.Relationships.Space.Data.GUID,
@@ -41,7 +31,7 @@ func convertSpaceRoleResource(ctx context.Context, cfClient *client.Client, spRo
 
 	sRole.CloneComment(spRole.ResourceWithComment)
 
-	sRole.SpaceRole = &v1alpha1.SpaceRole{
+	sRole.SetResource(&v1alpha1.SpaceRole{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       v1alpha1.SpaceRole_Kind,
 			APIVersion: v1alpha1.CRDGroupVersion.String(),
@@ -65,6 +55,6 @@ func convertSpaceRoleResource(ctx context.Context, cfClient *client.Client, spRo
 				Username:       ptr.Deref(spRole.Username, ""),
 			},
 		},
-	}
+	})
 	return sRole
 }

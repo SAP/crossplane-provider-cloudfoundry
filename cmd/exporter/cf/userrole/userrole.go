@@ -10,6 +10,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/parsan"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/yaml"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
@@ -24,7 +25,7 @@ const defaultUserName = "undefined username"
 
 type user struct {
 	*resource.User
-	cache.ResourceWithComment
+	*yaml.ResourceWithComment
 }
 
 func (u *user) GetGUID() string {
@@ -41,7 +42,7 @@ func (u *user) GetName() string {
 type Role struct {
 	*resource.Role
 	*resource.User
-	*cache.ResourceWithComment
+	*yaml.ResourceWithComment
 }
 
 func (r *Role) GetGUID() string {
@@ -136,7 +137,7 @@ func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spa
 
 	for i, r := range roles {
 		roleResults[i] = &Role{
-			ResourceWithComment: &cache.ResourceWithComment{},
+			ResourceWithComment: yaml.NewResourceWithComment(nil),
 			Role:                r,
 			User:                userGUIDMap[r.Relationships.User.Data.GUID],
 		}
