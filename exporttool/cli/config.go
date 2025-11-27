@@ -10,7 +10,6 @@ import (
 
 type ConfigSchema struct {
 	CLIConfiguration
-	// ExportSubcommandConfiguration
 }
 
 type configModule func() error
