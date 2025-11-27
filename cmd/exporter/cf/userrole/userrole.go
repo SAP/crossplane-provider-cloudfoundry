@@ -10,6 +10,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/parsan"
+
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 )
@@ -61,7 +62,7 @@ func (r *Role) GetName() string {
 	return name
 }
 
-func GetOrgRoles(ctx context.Context, cfClient  *client.Client) (cache.CacheWithGUIDAndName[*Role], cache.CacheWithGUID[*user], error) {
+func GetOrgRoles(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndName[*Role], cache.CacheWithGUID[*user], error) {
 	if userCache != nil || roleCache != nil {
 		return roleCache, userCache, nil
 	}
