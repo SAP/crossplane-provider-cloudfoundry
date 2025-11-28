@@ -1,0 +1,545 @@
+#+options: ':nil *:t -:t ::t <:t H:3 \n:nil ^:nil arch:headline
+#+options: author:t broken-links:nil c:nil creator:nil
+#+options: d:(not "LOGBOOK") date:t e:t email:nil expand-links:t f:t
+#+options: inline:t num:t p:nil pri:nil prop:nil stat:t tags:t
+#+options: tasks:t tex:t timestamp:t title:t toc:t todo:t |:t
+#+title: README
+#+date: <2025-11-27 Thu>
+#+author: Gergely Szabo
+#+email: gergely.szabo@sap.com
+#+language: en
+#+select_tags: export
+#+exclude_tags: noexport
+#+creator: Emacs 30.2 (Org mode 9.7.27)
+#+cite_export:
+
+* Introduction
+
+=xp-clifford= (Crossplane CLI Framework for Resource Data Extraction)
+is a Go module that facilitates the development of CLI tools for
+exporting definitions of external resources in the format of specific
+Crossplane provider managed resource definitions.
+
+* Examples
+
+These examples demonstrate the basic features of =xp-clifford= and
+build progressively on one another.
+
+** The simplest CLI tool
+
+The simplest CLI tool you can create using =xp-clifford= looks like
+this:
+
+#+name: basic-example
+#+begin_src go :noweb yes :tangle examples/basic/main.go :results drawer
+package main
+
+<<imports>>
+
+<<basic-main>>
+#+end_src
+
+#+RESULTS: basic-example
+:results:
+test system exporting tool is a CLI tool for exporting existing resources as Crossplane managed resources
+
+Usage:
+  test-exporter [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  export      Export test system resources
+  help        Help about any command
+
+Flags:
+  -c, --config string   Configuration file
+  -h, --help            help for test-exporter
+  -v, --verbose         Verbose output
+
+Use "test-exporter [command] --help" for more information about a command.
+:end:
+
+Let's examine the =import= section.
+
+#+name: imports
+#+begin_src go :eval never
+import (
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	_ "github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+#+end_src
+
+Two packages must be imported:
+
+- =github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli=
+- =github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export=
+
+The =cli/export= package is imported for side effects only.
+
+The =main= function looks like this:
+
+#+name: basic-main
+#+begin_src go :eval never
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	cli.Execute()
+}
+#+end_src
+
+The =Configuration= variable from the =cli= package is used to set
+specific parameters for the built CLI tool. Here we set the =ShortName= and
+=ObservedSystem= fields.
+
+These fields have the following meanings:
+
+- ShortName :: The abbreviated name of the observed system without
+  spaces, such as "cf" for the CloudFoundry provider
+- ObservedSystem :: The full name of the external
+  system, which may contain spaces, such as "Cloud Foundry"
+
+At the end of the =main= function, we invoke the
+=Execute= function from the =cli= package to start the CLI.
+
+When we run this basic example, it generates the following output:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/basic/main.go
+#+end_src
+
+#+RESULTS:
+#+begin_example
+test system exporting tool is a CLI tool for exporting existing resources as Crossplane managed resources
+
+Usage:
+  test-exporter [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  export      Export test system resources
+  help        Help about any command
+
+Flags:
+  -c, --config string   Configuration file
+  -h, --help            help for test-exporter
+  -v, --verbose         Verbose output
+
+Use "test-exporter [command] --help" for more information about a command.
+#+end_example
+
+If you try running the CLI tool with the export subcommand, you get an
+*error* message.
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/basic/main.go export
+#+end_src
+
+#+RESULTS:
+: ERRO export subcommand is not set
+
+** Basic export subcommand
+
+The =export= subcommand is mandatory, but you are responsible for implementing the code that executes when it is invoked.
+
+The code must be defined as a function with the following signature:
+
+#+begin_src go :eval never
+func(ctx context.Context, events export.EventHandler) error
+#+end_src
+
+The =ctx= parameter can be used to handle interruptions, such as when the user presses /Ctrl-C/. In such cases, the =Done()= channel of the context is closed.
+
+The =events= parameter from the =export= package provides three methods for communicating progress to the CLI framework:
+
+- Warn :: Indicates a recoverable error that does not terminate the export operation.
+- Resource :: Indicates a processed managed resource to be printed or stored by the export operation.
+- Stop :: Indicates that exporting has finished. No more =Warn= or =Resource= calls should be made after =Stop=.
+
+A fatal error can be indicated by returning a non-nil error value.
+
+A simple implementation of an export logic function looks like this:
+
+#+name: simple-export-fn
+#+begin_src go :eval never
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+	events.Stop()
+	return nil
+}
+#+end_src
+
+This implementation prints a log message, stops the event handler, and returns a =nil= error value.
+
+You can configure the business logic function using the =SetCommand= function from the =export= package:
+
+#+name: configure-exportlogic
+#+begin_src go
+export.SetCommand(exportLogic)
+#+end_src
+
+A complete example is:
+
+#+name: basic-example
+#+begin_src go :noweb yes :tangle examples/export/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+<<simple-export-fn>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	<<configure-exportlogic>>
+	cli.Execute()
+}
+#+end_src
+
+To invoke the =export= subcommand:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/export/main.go export
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked
+
+** Exporting a resource
+
+In the previous example, we created a proper =export= subcommand, but
+didn't actually export any resources.
+
+To export a resource, use the =Resource= method of the =EventHandler=
+type:
+
+#+begin_src go :eval never
+Resource(res resource.Object) // Object interface defined in
+                              // github.com/crossplane/crossplane-runtime/pkg/resource
+#+end_src
+
+This method accepts a =resource.Object=, an interface implemented by
+all Crossplane resources.
+
+Let's update our =exportLogic= function to export a single
+resource. For simplicity, we'll use the =Unstructured= type from
+=k8s.io/apimachinery/pkg/apis/meta/v1/unstructured=, which implements
+the =resource.Object= interface:
+
+#+name: single-export-fn
+#+begin_src go :eval never
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	res := &unstructured.Unstructured{
+	  Object: map[string]interface{}{
+	      "user": "test-user",
+	      "password": "secret",
+	  },
+	}
+	events.Resource(res)
+
+	events.Stop()
+	return nil
+}
+#+end_src
+
+The complete example now looks like this:
+
+#+name: single-example
+#+begin_src go :noweb yes :tangle examples/exportsingle/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+<<single-export-fn>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	<<configure-exportlogic>>
+	cli.Execute()
+}
+#+end_src
+
+Running this example produces the following output:
+
+#+name: ansi-filter
+#+begin_src elisp :var data="test" :exports none :eval yes
+(ansi-color-filter-apply data)
+#+end_src
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+go run ./examples/exportsingle/main.go export
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked
+:
+:
+:     ---
+:     password: secret
+:     user: test-user
+:     ...
+:
+
+The exported resource is printed to the console. You can redirect the
+output to a file using the =-o= flag:
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+go run ./examples/exportsingle/main.go export -o output.yaml
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked
+: INFO Writing output to file output=output.yaml
+
+The =output.yaml= file contains the exported resource object:
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+cat output.yaml
+#+end_src
+
+#+RESULTS:
+: ---
+: password: secret
+: user: test-user
+: ...
+
+** Displaying warnings
+
+During the processing and conversion of external resources, the export
+logic may encounter unexpected situations such as unstable network
+connections, authentication issues, or unknown resource
+configurations.
+
+These events should not halt the resource export process, but they
+must be reported to the user.
+
+You can report warnings using the =Warn= method of the =EventHandler=
+type:
+
+#+begin_src go :eval never
+Warn(err error)
+#+end_src
+
+The =Warn= method supports =erratt.Error= types. (TODO: more on this
+later)
+
+Let's add a warning message to our =exportLogic= function:
+
+#+name: warn-export-fn
+#+begin_src go :eval never
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	events.Warn(errors.New("generating test resource"))
+
+	res := &unstructured.Unstructured{
+	  Object: map[string]interface{}{
+	      "user": "test-user-with-warning",
+	      "password": "secret",
+	  },
+	}
+	events.Resource(res)
+
+	events.Stop()
+	return nil
+}
+#+end_src
+
+The complete example now looks like this:
+
+#+name: warn-example
+#+begin_src go :noweb yes :tangle examples/exportwarn/main.go
+package main
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+<<warn-export-fn>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	<<configure-exportlogic>>
+	cli.Execute()
+}
+#+end_src
+
+Running this example displays the warning message in the logs:
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+go run ./examples/exportwarn/main.go export
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked
+: WARN generating test resource
+:
+:
+:     ---
+:     password: secret
+:     user: test-user-with-warning
+:     ...
+:
+
+When redirecting the output to a file, the warning appears on screen
+but not in the file:
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+go run ./examples/exportwarn/main.go export -o output.yaml
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked
+: WARN generating test resource
+: INFO Writing output to file output=output.yaml
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+cat output.yaml
+#+end_src
+
+#+RESULTS:
+: ---
+: password: secret
+: user: test-user-with-warning
+: ...
+
+** Exporting commented out resources
+
+During the export process, problems may prevent generation of valid
+managed resource definitions, or the definitions produced may be
+unsafe to apply.
+
+You have two options for handling problematic resources: omit them
+from the output entirely, or include them but commented
+out. Commenting out invalid or unsafe resource definitions ensures
+users won't encounter problems when applying the export tool output.
+
+=xp-clifford= comments out resources that implement the
+=yaml.CommentedYAML= interface, which defines a single method:
+
+#+begin_src go :eval never
+type CommentedYAML interface {
+	Comment() (string, bool)
+}
+#+end_src
+
+The =bool= return value indicates whether the managed resource should
+be commented out. The =string= return value provides a message that
+will be printed as part of the comment.
+
+Since Crossplane managed resources don't typically implement the
+=CommentedYAML= interface, you can wrap them to add this
+functionality.
+
+The =yaml.NewResourceWithComment= function handles this wrapping for
+you:
+
+#+begin_src go :eval never
+func NewResourceWithComment(res resource.Object) *yaml.ResourceWithComment
+#+end_src
+
+The =*yaml.ResourceWithComment= type wraps =res= and implements the
+=yaml.CommentedYAML= interface. It also provides helper methods:
+
+- SetComment :: sets the comment string
+- AddComment :: appends to the comment string
+
+The following example demonstrates the commenting feature:
+
+#+name: comment-export-fn
+#+begin_src go :eval never
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	res := &unstructured.Unstructured{
+	  Object: map[string]interface{}{
+	      "user": "test-user-commented",
+	      "password": "secret",
+	  },
+	}
+
+	commentedResource := yaml.NewResourceWithComment(res)
+	commentedResource.SetComment("don't deploy it, this is a test resource!")
+	events.Resource(commentedResource)
+
+	events.Stop()
+	return nil
+}
+#+end_src
+
+Here is the complete example:
+
+#+name: warn-example
+#+begin_src go :noweb yes :tangle examples/exportcomment/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/yaml"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+<<comment-export-fn>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	<<configure-exportlogic>>
+	cli.Execute()
+}
+#+end_src
+
+Running this example displays the commented resource with its comment
+message:
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+go run ./examples/exportcomment/main.go export
+#+end_src
+
+#+RESULTS:
+#+begin_example
+INFO export command invoked
+
+
+    #
+    # don't deploy it, this is a test resource!
+    #
+    # ---
+    # Object:
+    #   password: secret
+    #   user: test-user-commented
+    # ...
+
+#+end_example
+
+This works equally well when redirecting output to a file using the
+=-o= flag.
