@@ -4,16 +4,25 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 
 	cloudfoundryv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/crossplane-contrib/xp-testing/pkg/envvar"
 	"github.com/crossplane-contrib/xp-testing/pkg/logging"
+	"github.com/crossplane-contrib/xp-testing/pkg/resources"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	corev1 "k8s.io/api/core/v1"
+	kubeErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
+	"sigs.k8s.io/e2e-framework/klient/decoder"
+	"sigs.k8s.io/e2e-framework/klient/k8s"
+	res "sigs.k8s.io/e2e-framework/klient/k8s/resources"
+	"sigs.k8s.io/e2e-framework/klient/wait"
+	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/env"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 )
@@ -21,6 +30,12 @@ import (
 const (
 	crossplaneSystemNamespace = "crossplane-system"
 )
+
+type mockList struct {
+	metav1.ListInterface
+	runtime.Object
+	Items []k8s.Object
+}
 
 // CFCredentials represents the CloudFoundry credentials structure
 type CFCredentials struct {
@@ -139,4 +154,58 @@ func CreateProviderConfigFn(namespace, cfEndpoint, secretName string) env.Func {
 		klog.V(4).Infof("created ProviderConfig 'default' for CF endpoint %s", cfEndpoint)
 		return ctx, nil
 	}
+}
+
+func DeleteResourcesFromDirsGracefully(ctx context.Context, cfg *envconf.Config, resourceDirs []string, timeout wait.Option) error {
+	klog.V(4).Info("Attempt to delete previously imported resources")
+	r, _ := resources.GetResourcesWithRESTConfig(cfg)
+	objects, err := GetObjectsToImport(ctx, cfg, resourceDirs)
+	if err != nil {
+		return err
+	}
+
+	for _, obj := range objects {
+		delErr := r.Delete(ctx, obj)
+		if delErr != nil && !kubeErrors.IsNotFound(delErr) {
+			return delErr
+		}
+	}
+
+	if err = wait.For(
+		conditions.New(r).ResourcesDeleted(&mockList{Items: objects}),
+		timeout,
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func GetObjectsToImport(ctx context.Context, cfg *envconf.Config, dirs []string) ([]k8s.Object, error) {
+	r := resClient(cfg)
+
+	r.WithNamespace(cfg.Namespace())
+
+	objects := make([]k8s.Object, 0)
+	for _, dir := range dirs {
+		err := decoder.DecodeEachFile(
+			ctx, os.DirFS(dir), "*",
+			func(ctx context.Context, obj k8s.Object) error {
+				objects = append(objects, obj)
+				return nil
+			},
+			decoder.MutateNamespace(cfg.Namespace()),
+		)
+
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return objects, nil
+}
+
+func resClient(cfg *envconf.Config) *res.Resources {
+	r, _ := resources.GetResourcesWithRESTConfig(cfg)
+	return r
 }

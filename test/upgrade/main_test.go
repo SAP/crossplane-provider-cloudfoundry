@@ -11,11 +11,11 @@ import (
 	"strings"
 	"testing"
 
+	testutil "github.com/SAP/crossplane-provider-cloudfoundry/test"
 	"github.com/crossplane-contrib/xp-testing/pkg/envvar"
 	"github.com/crossplane-contrib/xp-testing/pkg/images"
 	"github.com/crossplane-contrib/xp-testing/pkg/setup"
 	"github.com/crossplane-contrib/xp-testing/pkg/vendored"
-	testutil "github.com/sap/crossplane-provider-cloudfoundry/test"
 	"github.com/vladimirvivien/gexe"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -119,7 +119,7 @@ func SetupClusterWithCrossplane(namespace string) {
 			Version:  "1.20.1",
 			Registry: setup.DockerRegistry,
 		},
-		DeploymentRuntimeConfig: &deploymentRuntimeConfig,
+		DeploymentRuntimeConfig: deploymentRuntimeConfig,
 	}
 
 	// Register callback for after cluster creation
