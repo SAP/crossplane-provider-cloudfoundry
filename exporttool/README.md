@@ -1,23 +1,26 @@
-- [Introduction](#orgcd7446a)
-- [Examples](#orgaf50e46)
-  - [The simplest CLI tool](#orgb9d1f81)
-  - [Basic export subcommand](#org3c00760)
+- [Introduction](#org8564add)
+- [Examples](#org2786fe5)
+  - [The simplest CLI tool](#org652fca0)
+  - [Basic export subcommand](#org95f926c)
+  - [Exporting a Resource](#orgd9241cd)
 
 
 
-<a id="orgcd7446a"></a>
+<a id="org8564add"></a>
 
 # Introduction
 
 `xp-clifford` (Crossplane CLI Framework for Resource Data Extraction) is a Go module that facilitates the development of CLI tools for exporting definitions of external resources in the format of specific Crossplane provider managed resource definitions.
 
 
-<a id="orgaf50e46"></a>
+<a id="org2786fe5"></a>
 
 # Examples
 
+These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
-<a id="orgb9d1f81"></a>
+
+<a id="org652fca0"></a>
 
 ## The simplest CLI tool
 
@@ -107,7 +110,7 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="org3c00760"></a>
+<a id="org95f926c"></a>
 
 ## Basic export subcommand
 
@@ -181,3 +184,110 @@ go run ./examples/export/main.go export
 ```
 
     INFO export command invoked
+
+
+<a id="orgd9241cd"></a>
+
+## Exporting a Resource
+
+In the previous example, we created a proper `export` subcommand, but didn't actually export any resources.
+
+To export a resource, use the `Resource` method of the `EventHandler` type:
+
+```go
+Resource(res resource.Object) // Object interface defined in
+                              // github.com/crossplane/crossplane-runtime/pkg/resource
+```
+
+This method accepts a `resource.Object`, an interface implemented by all Crossplane resources.
+
+Let's update our `exportLogic` function to export a single resource. For simplicity, we'll use the `Unstructured` type from `k8s.io/apimachinery/pkg/apis/meta/v1/unstructured`, which implements the `resource.Object` interface:
+
+```go
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	res := &unstructured.Unstructured{
+	  Object: map[string]interface{}{
+	      "user": "test-user",
+	      "password": "secret",
+	  },
+	}
+	events.Resource(res)
+
+	events.Stop()
+	return nil
+}
+```
+
+The complete example now looks like this:
+
+```go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	res := &unstructured.Unstructured{
+	  Object: map[string]interface{}{
+	      "user": "test-user",
+	      "password": "secret",
+	  },
+	}
+	events.Resource(res)
+
+	events.Stop()
+	return nil
+}
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.SetCommand(exportLogic)
+	cli.Execute()
+}
+```
+
+Running this example produces the following output:
+
+```sh
+go run ./examples/exportsingle/main.go export
+```
+
+    INFO export command invoked
+    
+    
+        ---
+        password: secret
+        user: test-user
+        ...
+
+The exported resource is printed to the console. You can redirect the output to a file using the `-o` flag:
+
+```sh
+go run ./examples/exportsingle/main.go export -o output.yaml
+```
+
+    INFO export command invoked
+    INFO Writing output to file output=output.yaml
+
+The `output.yaml` file contains the exported resource object:
+
+```sh
+cat output.yaml
+```
+
+    ---
+    password: secret
+    user: test-user
+    ...
