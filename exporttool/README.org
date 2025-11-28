@@ -76,7 +76,7 @@ Two packages must be imported:
 
 The =cli/export= package is imported for side effects only.
 
-The =main= function:
+The =main= function looks like this:
 
 #+name: basic-main
 #+begin_src go :eval never
@@ -210,7 +210,7 @@ go run ./examples/export/main.go export
 #+RESULTS:
 : INFO export command invoked
 
-** Exporting a Resource
+** Exporting a resource
 
 In the previous example, we created a proper =export= subcommand, but
 didn't actually export any resources.
@@ -317,4 +317,112 @@ cat output.yaml
 : ---
 : password: secret
 : user: test-user
+: ...
+
+** Displaying warnings
+
+During the processing and conversion of external resources, the export
+logic may encounter unexpected situations such as unstable network
+connections, authentication issues, or unknown resource
+configurations.
+
+These events should not halt the resource export process, but they
+must be reported to the user.
+
+You can report warnings using the =Warn= method of the =EventHandler=
+type:
+
+#+begin_src go :eval never
+Warn(err error)
+#+end_src
+
+The =Warn= method supports =erratt.Error= types. (TODO: more on this
+later)
+
+Let's add a warning message to our =exportLogic= function:
+
+#+name: warn-export-fn
+#+begin_src go :eval never
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	events.Warn(errors.New("generating test resource"))
+
+	res := &unstructured.Unstructured{
+	  Object: map[string]interface{}{
+	      "user": "test-user-with-warning",
+	      "password": "secret",
+	  },
+	}
+	events.Resource(res)
+
+	events.Stop()
+	return nil
+}
+#+end_src
+
+The complete example now looks like this:
+
+#+name: single-example
+#+begin_src go :noweb yes :tangle examples/exportwarn/main.go
+package main
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+<<warn-export-fn>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	<<configure-exportlogic>>
+	cli.Execute()
+}
+#+end_src
+
+Running this example displays the warning message in the logs:
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+go run ./examples/exportwarn/main.go export
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked
+: WARN generating test resource
+:
+:
+:     ---
+:     password: secret
+:     user: test-user-with-warning
+:     ...
+:
+
+When redirecting the output to a file, the warning appears on screen
+but not in the file:
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+go run ./examples/exportwarn/main.go export -o output.yaml
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked
+: WARN generating test resource
+: INFO Writing output to file output=output.yaml
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+cat output.yaml
+#+end_src
+
+#+RESULTS:
+: ---
+: password: secret
+: user: test-user-with-warning
 : ...

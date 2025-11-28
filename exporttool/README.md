@@ -1,26 +1,27 @@
-- [Introduction](#org8564add)
-- [Examples](#org2786fe5)
-  - [The simplest CLI tool](#org652fca0)
-  - [Basic export subcommand](#org95f926c)
-  - [Exporting a Resource](#orgd9241cd)
+- [Introduction](#orgf423811)
+- [Examples](#org1e5e252)
+  - [The simplest CLI tool](#orgea58dc3)
+  - [Basic export subcommand](#orgdf64cd6)
+  - [Exporting a resource](#orga4c0628)
+  - [Displaying warnings](#org486c074)
 
 
 
-<a id="org8564add"></a>
+<a id="orgf423811"></a>
 
 # Introduction
 
 `xp-clifford` (Crossplane CLI Framework for Resource Data Extraction) is a Go module that facilitates the development of CLI tools for exporting definitions of external resources in the format of specific Crossplane provider managed resource definitions.
 
 
-<a id="org2786fe5"></a>
+<a id="org1e5e252"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="org652fca0"></a>
+<a id="orgea58dc3"></a>
 
 ## The simplest CLI tool
 
@@ -57,7 +58,7 @@ Two packages must be imported:
 
 The `cli/export` package is imported for side effects only.
 
-The `main` function:
+The `main` function looks like this:
 
 ```go
 func main() {
@@ -110,7 +111,7 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="org95f926c"></a>
+<a id="orgdf64cd6"></a>
 
 ## Basic export subcommand
 
@@ -186,9 +187,9 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="orgd9241cd"></a>
+<a id="orga4c0628"></a>
 
-## Exporting a Resource
+## Exporting a resource
 
 In the previous example, we created a proper `export` subcommand, but didn't actually export any resources.
 
@@ -290,4 +291,117 @@ cat output.yaml
     ---
     password: secret
     user: test-user
+    ...
+
+
+<a id="org486c074"></a>
+
+## Displaying warnings
+
+During the processing and conversion of external resources, the export logic may encounter unexpected situations such as unstable network connections, authentication issues, or unknown resource configurations.
+
+These events should not halt the resource export process, but they must be reported to the user.
+
+You can report warnings using the `Warn` method of the `EventHandler` type:
+
+```go
+Warn(err error)
+```
+
+The `Warn` method supports `erratt.Error` types. (TODO: more on this later)
+
+Let's add a warning message to our `exportLogic` function:
+
+```go
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	events.Warn(errors.New("generating test resource"))
+
+	res := &unstructured.Unstructured{
+	  Object: map[string]interface{}{
+	      "user": "test-user-with-warning",
+	      "password": "secret",
+	  },
+	}
+	events.Resource(res)
+
+	events.Stop()
+	return nil
+}
+```
+
+The complete example now looks like this:
+
+```go
+package main
+
+import (
+	"context"
+	"errors"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	events.Warn(errors.New("generating test resource"))
+
+	res := &unstructured.Unstructured{
+	  Object: map[string]interface{}{
+	      "user": "test-user-with-warning",
+	      "password": "secret",
+	  },
+	}
+	events.Resource(res)
+
+	events.Stop()
+	return nil
+}
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.SetCommand(exportLogic)
+	cli.Execute()
+}
+```
+
+Running this example displays the warning message in the logs:
+
+```sh
+go run ./examples/exportwarn/main.go export
+```
+
+    INFO export command invoked
+    WARN generating test resource
+    
+    
+        ---
+        password: secret
+        user: test-user-with-warning
+        ...
+
+When redirecting the output to a file, the warning appears on screen but not in the file:
+
+```sh
+go run ./examples/exportwarn/main.go export -o output.yaml
+```
+
+    INFO export command invoked
+    WARN generating test resource
+    INFO Writing output to file output=output.yaml
+
+```sh
+cat output.yaml
+```
+
+    ---
+    password: secret
+    user: test-user-with-warning
     ...
