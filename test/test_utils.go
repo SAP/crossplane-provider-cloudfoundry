@@ -125,6 +125,11 @@ func ApplySecretInCrossplaneNamespace(secretName string, data map[string][]byte)
 // CloudFoundry managed resources will use if no specific providerConfigRef is set
 func CreateProviderConfigFn(namespace, cfEndpoint, secretName string) env.Func {
 	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
+		// Register the CloudFoundry scheme so the client knows about ProviderConfig
+		err := cloudfoundryv1beta1.SchemeBuilder.AddToScheme(cfg.Client().Resources().GetScheme())
+		if err != nil {
+			return ctx, fmt.Errorf("failed to add CloudFoundry scheme: %w", err)
+		}
 		providerConfig := &cloudfoundryv1beta1.ProviderConfig{
 			ObjectMeta: metav1.ObjectMeta{
 				Name: "default",

@@ -31,7 +31,7 @@ const (
 	providerName = "provider-cloudfoundry"
 
 	// Resource discovery
-	resourceDirectoryRoot = "../e2e/crs/"
+	resourceDirectoryRoot = "./crs"
 
 	// Image paths
 	packageBasePath           = "ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry"
