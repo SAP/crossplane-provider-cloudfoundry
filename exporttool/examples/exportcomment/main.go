@@ -23,7 +23,7 @@ func exportLogic(_ context.Context, events export.EventHandler) error {
 	}
 
 	commentedResource := yaml.NewResourceWithComment(res)
-	commentedResource.SetComment("don't deploy, this is a test resource!")
+	commentedResource.SetComment("don't deploy it, this is a test resource!")
 	events.Resource(commentedResource)
 
 	events.Stop()
