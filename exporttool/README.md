@@ -1,27 +1,28 @@
-- [Introduction](#orgf423811)
-- [Examples](#org1e5e252)
-  - [The simplest CLI tool](#orgea58dc3)
-  - [Basic export subcommand](#orgdf64cd6)
-  - [Exporting a resource](#orga4c0628)
-  - [Displaying warnings](#org486c074)
+- [Introduction](#org662433b)
+- [Examples](#org4ed1ede)
+  - [The simplest CLI tool](#org5b5b3e8)
+  - [Basic export subcommand](#orgca320da)
+  - [Exporting a resource](#orgabe037b)
+  - [Displaying warnings](#org6a5654e)
+  - [Exportint commented out resources](#orgc7acd13)
 
 
 
-<a id="orgf423811"></a>
+<a id="org662433b"></a>
 
 # Introduction
 
 `xp-clifford` (Crossplane CLI Framework for Resource Data Extraction) is a Go module that facilitates the development of CLI tools for exporting definitions of external resources in the format of specific Crossplane provider managed resource definitions.
 
 
-<a id="org1e5e252"></a>
+<a id="org4ed1ede"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="orgea58dc3"></a>
+<a id="org5b5b3e8"></a>
 
 ## The simplest CLI tool
 
@@ -111,7 +112,7 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="orgdf64cd6"></a>
+<a id="orgca320da"></a>
 
 ## Basic export subcommand
 
@@ -187,7 +188,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="orga4c0628"></a>
+<a id="orgabe037b"></a>
 
 ## Exporting a resource
 
@@ -294,7 +295,7 @@ cat output.yaml
     ...
 
 
-<a id="org486c074"></a>
+<a id="org6a5654e"></a>
 
 ## Displaying warnings
 
@@ -405,3 +406,122 @@ cat output.yaml
     password: secret
     user: test-user-with-warning
     ...
+
+
+<a id="orgc7acd13"></a>
+
+## Exportint commented out resources
+
+During the export process, problems may prevent generation of valid managed resource definitions, or the definitions produced may be unsafe to apply.
+
+You have two options for handling problematic resources: omit them from the output entirely, or include them but commented out. Commenting out invalid or unsafe resource definitions ensures users won't encounter problems when applying the export tool output.
+
+`xp-clifford` comments out resources that implement the `yaml.CommentedYAML` interface, which defines a single method:
+
+```go
+type CommentedYAML interface {
+	Comment() (string, bool)
+}
+```
+
+The `bool` return value indicates whether the managed resource should be commented out. The `string` return value provides a message that will be printed as part of the comment.
+
+Since Crossplane managed resources don't typically implement the `CommentedYAML` interface, you can wrap them to add this functionality.
+
+The `yaml.NewResourceWithComment` function handles this wrapping for you:
+
+```go
+func NewResourceWithComment(res resource.Object) *yaml.ResourceWithComment
+```
+
+The `*yaml.ResourceWithComment` type wraps `res` and implements the `yaml.CommentedYAML` interface. It also provides helper methods:
+
+-   **SetComment:** sets the comment string
+-   **AddComment:** appends to the comment string
+
+The following example demonstrates the commenting feature:
+
+```go
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	res := &unstructured.Unstructured{
+	  Object: map[string]interface{}{
+	      "user": "test-user-commented",
+	      "password": "secret",
+	  },
+	}
+
+	commentedResource := yaml.NewResourceWithComment(res)
+	commentedResource.SetComment("don't deploy it, this is a test resource!")
+	events.Resource(commentedResource)
+
+	events.Stop()
+	return nil
+}
+```
+
+Here is the complete example:
+
+```go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/yaml"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	res := &unstructured.Unstructured{
+	  Object: map[string]interface{}{
+	      "user": "test-user-commented",
+	      "password": "secret",
+	  },
+	}
+
+	commentedResource := yaml.NewResourceWithComment(res)
+	commentedResource.SetComment("don't deploy it, this is a test resource!")
+	events.Resource(commentedResource)
+
+	events.Stop()
+	return nil
+}
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.SetCommand(exportLogic)
+	cli.Execute()
+}
+```
+
+Running this example displays the commented resource with its comment message:
+
+```sh
+go run ./examples/exportcomment/main.go export
+```
+
+```
+INFO export command invoked
+
+
+    #
+    # don't deploy, this is a test resource!
+    #
+    # ---
+    # Object:
+    #   password: secret
+    #   user: test-user-commented
+    # ...
+
+```
+
+This works equally well when redirecting output to a file using the `-o` flag.
