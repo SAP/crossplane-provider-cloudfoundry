@@ -139,7 +139,7 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, fmt.Errorf(errGet, err)
 	}
 	// maybe set external name if not exists/ is this a good practice?
-	//meta.SetExternalName(cr, binding.GUID)
+	// meta.SetExternalName(cr, binding.GUID)
 
 	// detect if their should be parameters / if its a user-provided service instance (Is their a better way to detect this?)
 	paramMap := &runtime.RawExtension{}
@@ -166,7 +166,7 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
 	}
 
-	// check if allready exists
+	// check if already exists
 	if existing := meta.GetExternalName(cr); existing != "" {
 		return managed.ExternalCreation{}, nil
 	}

@@ -16,25 +16,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 )
 
-// using this client https://pkg.go.dev/github.com/cloudfoundry/go-cfclient/v3@v3.0.0-alpha.12/client#ServiceRouteBindingClient
-const (
-	resourceType                = "ServiceRouteBinding"
-	externalSystem              = "Cloud Foundry"
-	errTrackPCUsage             = "cannot track ProviderConfig usage: %w"
-	errNewClient                = "cannot create a client for " + externalSystem + ": %w"
-	errWrongCRType              = "managed resource is not a " + resourceType
-	errGet                      = "cannot get " + resourceType + " in " + externalSystem + ": %w"
-	errFind                     = "cannot find " + resourceType + " in " + externalSystem
-	errCreate                   = "cannot create " + resourceType + " in " + externalSystem + ": %w"
-	errUpdate                   = "cannot update " + resourceType + " in " + externalSystem + ": %w"
-	errDelete                   = "cannot delete " + resourceType + " in " + externalSystem + ": %w"
-	errUpdateStatus             = "cannot update status after retiring binding: %w"
-	errExtractParams            = "cannot extract specified parameters: %w"
-	errUnknownState             = "unknown last operation state for " + resourceType + " in " + externalSystem
-	errMissingRelationshipGUIDs = "missing relationship GUIDs (route=%q serviceInstance=%q)"
-	errServiceInstanceNotFound  = "referenced ServiceInstance %q not found"
-)
-
 type serviceRouteBinding interface {
 	Get(ctx context.Context, guid string) (*resource.ServiceRouteBinding, error)
 	Single(ctx context.Context, opts *client.ServiceRouteBindingListOptions) (*resource.ServiceRouteBinding, error)
@@ -72,10 +53,8 @@ func GetByIDOrSearch(ctx context.Context, srbClient ServiceRouteBinding, guid st
 }
 
 func Create(ctx context.Context, srbClient ServiceRouteBinding, forProvider v1alpha1.ServiceRouteBindingParameters, parametersFromSecret runtime.RawExtension) (*resource.ServiceRouteBinding, error) {
-	opt, err := newCreateOption(forProvider, parametersFromSecret)
-	if err != nil {
-		return nil, err
-	}
+	opt := newCreateOption(forProvider, parametersFromSecret)
+
 	jobGUID, binding, err := srbClient.Create(ctx, opt)
 	if err != nil {
 		return binding, err
@@ -89,7 +68,7 @@ func Create(ctx context.Context, srbClient ServiceRouteBinding, forProvider v1al
 	return srbClient.Single(ctx, createToListOptions(opt))
 }
 
-func newCreateOption(forProvider v1alpha1.ServiceRouteBindingParameters, parametersFromSecret runtime.RawExtension) (*cfresource.ServiceRouteBindingCreate, error) {
+func newCreateOption(forProvider v1alpha1.ServiceRouteBindingParameters, parametersFromSecret runtime.RawExtension) *cfresource.ServiceRouteBindingCreate {
 	creationPayload := cfresource.NewServiceRouteBindingCreate(forProvider.Route, forProvider.ServiceInstance)
 
 	if forProvider.Parameters.Raw != nil {
@@ -97,7 +76,7 @@ func newCreateOption(forProvider v1alpha1.ServiceRouteBindingParameters, paramet
 	} else if parametersFromSecret.Raw != nil {
 		creationPayload.Parameters = (*json.RawMessage)(&parametersFromSecret.Raw)
 	}
-	return creationPayload, nil
+	return creationPayload
 }
 
 func createToListOptions(create *cfresource.ServiceRouteBindingCreate) *client.ServiceRouteBindingListOptions {

@@ -128,17 +128,7 @@ func TestNewCreateOption(t *testing.T) {
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			opt, err := newCreateOption(tc.args.forProvider, tc.args.parametersFromSecret)
-
-			if tc.want.err != nil && err != nil {
-				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("newCreateOption(...): want error string != got error string:\n%s", diff)
-				}
-			} else {
-				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("newCreateOption(...): want error != got error:\n%s", diff)
-				}
-			}
+			opt := newCreateOption(tc.args.forProvider, tc.args.parametersFromSecret)
 
 			if tc.want.opt != nil && opt != nil {
 				if opt.Relationships.Route.Data.GUID != tc.want.opt.Relationships.Route.Data.GUID {
@@ -432,7 +422,10 @@ func TestGetParameters(t *testing.T) {
 			},
 			want: want{
 				params: func() *runtime.RawExtension {
-					jsonBytes, _ := json.Marshal(testParamsMap)
+					jsonBytes, err := json.Marshal(testParamsMap)
+					if err != nil {
+						t.Fatalf("Failed to marshal testParamsMap: %v", err)
+					}
 					return &runtime.RawExtension{Raw: jsonBytes}
 				}(),
 				err: nil,
@@ -457,7 +450,10 @@ func TestGetParameters(t *testing.T) {
 			},
 			want: want{
 				params: func() *runtime.RawExtension {
-					jsonBytes, _ := json.Marshal(map[string]string{})
+					jsonBytes, err := json.Marshal(map[string]string{})
+					if err != nil {
+						t.Fatalf("Failed to marshal empty map: %v", err)
+					}
 					return &runtime.RawExtension{Raw: jsonBytes}
 				}(),
 				err: nil,

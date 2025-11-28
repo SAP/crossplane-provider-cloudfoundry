@@ -128,7 +128,7 @@ func init() {
 }
 
 type ServiceInstanceReference struct {
-	//GUID of the ServiceInstance in CF if ServiceInstanceRef or ServiceInstanceSelector is set it will be overwritten
+	// GUID of the ServiceInstance in CF if ServiceInstanceRef or ServiceInstanceSelector is set it will be overwritten
 	// +crossplane:generate:reference:type=ServiceInstance
 	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	ServiceInstance string `json:"serviceInstance,omitempty"`
@@ -139,7 +139,7 @@ type ServiceInstanceReference struct {
 }
 
 type RouteReference struct {
-	//GUID of the Route in CF if RouteRef or RouteSelector is set it will be overwritten
+	// GUID of the Route in CF if RouteRef or RouteSelector is set it will be overwritten
 	// +crossplane:generate:reference:type=Route
 	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	Route string `json:"route,omitempty"`
