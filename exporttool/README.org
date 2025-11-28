@@ -427,7 +427,7 @@ cat output.yaml
 : user: test-user-with-warning
 : ...
 
-** Exportint commented out resources
+** Exporting commented out resources
 
 During the export process, problems may prevent generation of valid
 managed resource definitions, or the definitions produced may be
@@ -531,7 +531,7 @@ INFO export command invoked
 
 
     #
-    # don't deploy, this is a test resource!
+    # don't deploy it, this is a test resource!
     #
     # ---
     # Object:
