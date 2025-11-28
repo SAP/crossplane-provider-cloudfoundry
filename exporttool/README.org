@@ -21,6 +21,10 @@ exporting definitions of external resources in the format of specific
 Crossplane provider managed resource definitions.
 
 * Examples
+
+These examples demonstrate the basic features of =xp-clifford= and
+build progressively on one another.
+
 ** The simplest CLI tool
 
 The simplest CLI tool you can create using =xp-clifford= looks like
@@ -176,7 +180,7 @@ export.SetCommand(exportLogic)
 A complete example is:
 
 #+name: basic-example
-#+begin_src go :noweb yes :tangle examples/export/main.go :results drawer
+#+begin_src go :noweb yes :tangle examples/export/main.go
 package main
 
 import (
@@ -205,3 +209,112 @@ go run ./examples/export/main.go export
 
 #+RESULTS:
 : INFO export command invoked
+
+** Exporting a Resource
+
+In the previous example, we created a proper =export= subcommand, but
+didn't actually export any resources.
+
+To export a resource, use the =Resource= method of the =EventHandler=
+type:
+
+#+begin_src go :eval never
+Resource(res resource.Object) // Object interface defined in
+                              // github.com/crossplane/crossplane-runtime/pkg/resource
+#+end_src
+
+This method accepts a =resource.Object=, an interface implemented by
+all Crossplane resources.
+
+Let's update our =exportLogic= function to export a single
+resource. For simplicity, we'll use the =Unstructured= type from
+=k8s.io/apimachinery/pkg/apis/meta/v1/unstructured=, which implements
+the =resource.Object= interface:
+
+#+name: single-export-fn
+#+begin_src go :eval never
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	res := &unstructured.Unstructured{
+	  Object: map[string]interface{}{
+	      "user": "test-user",
+	      "password": "secret",
+	  },
+	}
+	events.Resource(res)
+
+	events.Stop()
+	return nil
+}
+#+end_src
+
+The complete example now looks like this:
+
+#+name: single-example
+#+begin_src go :noweb yes :tangle examples/exportsingle/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+<<single-export-fn>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	<<configure-exportlogic>>
+	cli.Execute()
+}
+#+end_src
+
+Running this example produces the following output:
+
+#+name: ansi-filter
+#+begin_src elisp :var data="test" :exports none :eval yes
+(ansi-color-filter-apply data)
+#+end_src
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+go run ./examples/exportsingle/main.go export
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked
+:
+:
+:     ---
+:     password: secret
+:     user: test-user
+:     ...
+:
+
+The exported resource is printed to the console. You can redirect the
+output to a file using the =-o= flag:
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+go run ./examples/exportsingle/main.go export -o output.yaml
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked
+: INFO Writing output to file output=output.yaml
+
+The =output.yaml= file contains the exported resource object:
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+cat output.yaml
+#+end_src
+
+#+RESULTS:
+: ---
+: password: secret
+: user: test-user
+: ...
