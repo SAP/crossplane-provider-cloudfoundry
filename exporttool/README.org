@@ -363,7 +363,7 @@ func exportLogic(_ context.Context, events export.EventHandler) error {
 
 The complete example now looks like this:
 
-#+name: single-example
+#+name: warn-example
 #+begin_src go :noweb yes :tangle examples/exportwarn/main.go
 package main
 
@@ -426,3 +426,120 @@ cat output.yaml
 : password: secret
 : user: test-user-with-warning
 : ...
+
+** Exportint commented out resources
+
+During the export process, problems may prevent generation of valid
+managed resource definitions, or the definitions produced may be
+unsafe to apply.
+
+You have two options for handling problematic resources: omit them
+from the output entirely, or include them but commented
+out. Commenting out invalid or unsafe resource definitions ensures
+users won't encounter problems when applying the export tool output.
+
+=xp-clifford= comments out resources that implement the
+=yaml.CommentedYAML= interface, which defines a single method:
+
+#+begin_src go :eval never
+type CommentedYAML interface {
+	Comment() (string, bool)
+}
+#+end_src
+
+The =bool= return value indicates whether the managed resource should
+be commented out. The =string= return value provides a message that
+will be printed as part of the comment.
+
+Since Crossplane managed resources don't typically implement the
+=CommentedYAML= interface, you can wrap them to add this
+functionality.
+
+The =yaml.NewResourceWithComment= function handles this wrapping for
+you:
+
+#+begin_src go :eval never
+func NewResourceWithComment(res resource.Object) *yaml.ResourceWithComment
+#+end_src
+
+The =*yaml.ResourceWithComment= type wraps =res= and implements the
+=yaml.CommentedYAML= interface. It also provides helper methods:
+
+- SetComment :: sets the comment string
+- AddComment :: appends to the comment string
+
+The following example demonstrates the commenting feature:
+
+#+name: comment-export-fn
+#+begin_src go :eval never
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	res := &unstructured.Unstructured{
+	  Object: map[string]interface{}{
+	      "user": "test-user-commented",
+	      "password": "secret",
+	  },
+	}
+
+	commentedResource := yaml.NewResourceWithComment(res)
+	commentedResource.SetComment("don't deploy it, this is a test resource!")
+	events.Resource(commentedResource)
+
+	events.Stop()
+	return nil
+}
+#+end_src
+
+Here is the complete example:
+
+#+name: warn-example
+#+begin_src go :noweb yes :tangle examples/exportcomment/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/yaml"
+
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+)
+
+<<comment-export-fn>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	<<configure-exportlogic>>
+	cli.Execute()
+}
+#+end_src
+
+Running this example displays the commented resource with its comment
+message:
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+go run ./examples/exportcomment/main.go export
+#+end_src
+
+#+RESULTS:
+#+begin_example
+INFO export command invoked
+
+
+    #
+    # don't deploy, this is a test resource!
+    #
+    # ---
+    # Object:
+    #   password: secret
+    #   user: test-user-commented
+    # ...
+
+#+end_example
+
+This works equally well when redirecting output to a file using the
+=-o= flag.
