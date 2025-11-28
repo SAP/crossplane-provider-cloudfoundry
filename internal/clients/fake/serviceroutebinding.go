@@ -16,6 +16,9 @@ type MockServiceRouteBinding struct {
 // Get mocks ServiceRouteBinding.Get
 func (m *MockServiceRouteBinding) Get(ctx context.Context, guid string) (*resource.ServiceRouteBinding, error) {
 	args := m.Called(ctx, guid)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*resource.ServiceRouteBinding), args.Error(1)
 }
 
@@ -28,24 +31,36 @@ func (m *MockServiceRouteBinding) PollComplete(ctx context.Context, jobGUID stri
 // GetParameters mocks ServiceRouteBinding.GetParameters
 func (m *MockServiceRouteBinding) GetParameters(ctx context.Context, guid string) (map[string]string, error) {
 	args := m.Called(ctx, guid)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(map[string]string), args.Error(1)
 }
 
 // Update mocks ServiceRouteBinding.Update
 func (m *MockServiceRouteBinding) Update(ctx context.Context, guid string, r *resource.ServiceRouteBindingUpdate) (*resource.ServiceRouteBinding, error) {
 	args := m.Called(ctx, guid, r)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*resource.ServiceRouteBinding), args.Error(1)
 }
 
 // Single mocks ServiceRouteBinding.Single
 func (m *MockServiceRouteBinding) Single(ctx context.Context, opt *client.ServiceRouteBindingListOptions) (*resource.ServiceRouteBinding, error) {
 	args := m.Called(ctx, opt)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*resource.ServiceRouteBinding), args.Error(1)
 }
 
 // Create mocks ServiceRouteBinding.Create
 func (m *MockServiceRouteBinding) Create(ctx context.Context, r *resource.ServiceRouteBindingCreate) (string, *resource.ServiceRouteBinding, error) {
 	args := m.Called(ctx, r)
+	if args.Get(1) == nil {
+		return args.String(0), nil, args.Error(2)
+	}
 	return args.String(0), args.Get(1).(*resource.ServiceRouteBinding), args.Error(2)
 }
 
@@ -68,6 +83,8 @@ type ServiceRouteBinding struct {
 // NewServiceRouteBinding generate a new ServiceRouteBinding
 func NewServiceRouteBinding() *ServiceRouteBinding {
 	r := &ServiceRouteBinding{}
+	r.CreatedAt = testTime
+	r.UpdatedAt = testTime
 	return r
 }
 
@@ -108,6 +125,7 @@ func (s *ServiceRouteBinding) SetLastOperation(op, state string) *ServiceRouteBi
 		State:       state,
 		Description: op + " " + state,
 		UpdatedAt:   testTime,
+		CreatedAt:   testTime,
 	}
 	return s
 }

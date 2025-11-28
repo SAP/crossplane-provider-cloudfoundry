@@ -247,10 +247,9 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) error {
 	if isNotFoundError(err) {
 		return nil
 	}
-	if err != nil {
+	if err != nil && !errors.Is(err, cfclient.AsyncProcessTimeoutError) {
 		return fmt.Errorf(errDelete, err)
-	}
-	if !errors.Is(err, cfclient.AsyncProcessTimeoutError) {
+	} else if err != nil {
 		return fmt.Errorf(errDelete, err)
 	}
 	return nil

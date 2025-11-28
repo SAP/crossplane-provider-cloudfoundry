@@ -132,12 +132,12 @@ func UpdateObservation(observation *v1alpha1.ServiceRouteBindingObservation, r *
 	observation.LastOperation = &v1alpha1.LastOperation{
 		Type:      r.LastOperation.Type,
 		State:     r.LastOperation.State,
-		CreatedAt: r.CreatedAt.UTC().Format(time.RFC3339),
-		UpdatedAt: r.CreatedAt.UTC().Format(time.RFC3339),
+		CreatedAt: r.LastOperation.CreatedAt.String(),
+		UpdatedAt: r.LastOperation.UpdatedAt.String(),
 	}
 
 	observation.Links = buildLinks(r.Links)
-	if r.Metadata.Labels != nil || r.Metadata.Annotations != nil {
+	if r.Metadata != nil && (r.Metadata.Labels != nil || r.Metadata.Annotations != nil) {
 		observation.ResourceMetadata = v1alpha1.ResourceMetadata{
 			Labels:      r.Metadata.Labels,
 			Annotations: r.Metadata.Annotations,
@@ -152,8 +152,9 @@ func UpdateObservation(observation *v1alpha1.ServiceRouteBindingObservation, r *
 	}
 	observation.RouteServiceUrl = r.RouteServiceURL
 
-	observation.Parameters = *externalParameters
-
+	if externalParameters != nil {
+		observation.Parameters = *externalParameters
+	}
 }
 
 // builds links map from CF links

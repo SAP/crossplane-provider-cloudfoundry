@@ -10,6 +10,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/mock"
 
+	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -499,6 +500,444 @@ func TestCreateToListOptions(t *testing.T) {
 	}
 	if len(opts.ServiceInstanceGUIDs.Values) != 1 || opts.ServiceInstanceGUIDs.Values[0] != testServiceInstance {
 		t.Errorf("createToListOptions(...): ServiceInstanceGUIDs not set correctly, got %v", opts.ServiceInstanceGUIDs.Values)
+	}
+}
+
+func TestGetByIDOrSearch(t *testing.T) {
+	type args struct {
+		ctx         context.Context
+		srbClient   ServiceRouteBinding
+		guid        string
+		forProvider v1alpha1.ServiceRouteBindingParameters
+	}
+
+	type want struct {
+		binding *cfresource.ServiceRouteBinding
+		err     error
+	}
+
+	validGUID := "550e8400-e29b-41d4-a716-446655440000"
+	invalidGUID := "not-a-valid-guid"
+
+	testBinding := &cfresource.ServiceRouteBinding{
+		Resource: cfresource.Resource{
+			GUID: validGUID,
+		},
+		RouteServiceURL: testRouteServiceURL,
+	}
+
+	cases := map[string]struct {
+		args args
+		want want
+	}{
+		"GetByValidGUID": {
+			args: args{
+				ctx:  context.Background(),
+				guid: validGUID,
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Get", mock.Anything, validGUID).Return(testBinding, nil)
+					return mockClient
+				}(),
+				forProvider: v1alpha1.ServiceRouteBindingParameters{},
+			},
+			want: want{
+				binding: testBinding,
+				err:     nil,
+			},
+		},
+		"GetByGUIDError": {
+			args: args{
+				ctx:  context.Background(),
+				guid: validGUID,
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Get", mock.Anything, validGUID).Return(nil, errBoom)
+					return mockClient
+				}(),
+				forProvider: v1alpha1.ServiceRouteBindingParameters{},
+			},
+			want: want{
+				binding: nil,
+				err:     errBoom,
+			},
+		},
+		"SearchByRouteAndServiceInstance": {
+			args: args{
+				ctx:  context.Background(),
+				guid: invalidGUID,
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Single", mock.Anything, mock.MatchedBy(func(opts *cfclient.ServiceRouteBindingListOptions) bool {
+						return len(opts.RouteGUIDs.Values) == 1 && opts.RouteGUIDs.Values[0] == testRouteGUID &&
+							len(opts.ServiceInstanceGUIDs.Values) == 1 && opts.ServiceInstanceGUIDs.Values[0] == testServiceInstance
+					})).Return(testBinding, nil)
+					return mockClient
+				}(),
+				forProvider: v1alpha1.ServiceRouteBindingParameters{
+					RouteReference: v1alpha1.RouteReference{
+						Route: testRouteGUID,
+					},
+					ServiceInstanceReference: v1alpha1.ServiceInstanceReference{
+						ServiceInstance: testServiceInstance,
+					},
+				},
+			},
+			want: want{
+				binding: testBinding,
+				err:     nil,
+			},
+		},
+		"SearchError": {
+			args: args{
+				ctx:  context.Background(),
+				guid: invalidGUID,
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Single", mock.Anything, mock.Anything).Return(nil, errBoom)
+					return mockClient
+				}(),
+				forProvider: v1alpha1.ServiceRouteBindingParameters{
+					RouteReference: v1alpha1.RouteReference{
+						Route: testRouteGUID,
+					},
+					ServiceInstanceReference: v1alpha1.ServiceInstanceReference{
+						ServiceInstance: testServiceInstance,
+					},
+				},
+			},
+			want: want{
+				binding: nil,
+				err:     errBoom,
+			},
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			binding, err := GetByIDOrSearch(tc.args.ctx, tc.args.srbClient, tc.args.guid, tc.args.forProvider)
+
+			if tc.want.err != nil {
+				if err == nil {
+					t.Errorf("GetByIDOrSearch(...): expected error %v, got nil", tc.want.err)
+				} else if !errors.Is(err, tc.want.err) && err.Error() != tc.want.err.Error() {
+					t.Errorf("GetByIDOrSearch(...): expected error %v, got %v", tc.want.err, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("GetByIDOrSearch(...): unexpected error: %v", err)
+				}
+				if diff := cmp.Diff(tc.want.binding, binding); diff != "" {
+					t.Errorf("GetByIDOrSearch(...): -want, +got:\n%s", diff)
+				}
+			}
+		})
+	}
+}
+
+func TestDelete(t *testing.T) {
+	type args struct {
+		ctx       context.Context
+		srbClient ServiceRouteBinding
+		guid      string
+	}
+
+	type want struct {
+		err error
+	}
+
+	testJobGUID := "job-guid-123"
+
+	cases := map[string]struct {
+		args args
+		want want
+	}{
+		"SuccessWithJob": {
+			args: args{
+				ctx:  context.Background(),
+				guid: testGUID,
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Delete", mock.Anything, testGUID).Return(testJobGUID, nil)
+					mockClient.On("PollComplete", mock.Anything, testJobGUID, mock.Anything).Return(nil)
+					return mockClient
+				}(),
+			},
+			want: want{
+				err: nil,
+			},
+		},
+		"SuccessWithoutJob": {
+			args: args{
+				ctx:  context.Background(),
+				guid: testGUID,
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Delete", mock.Anything, testGUID).Return("", nil)
+					return mockClient
+				}(),
+			},
+			want: want{
+				err: nil,
+			},
+		},
+		"DeleteError": {
+			args: args{
+				ctx:  context.Background(),
+				guid: testGUID,
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Delete", mock.Anything, testGUID).Return("", errBoom)
+					return mockClient
+				}(),
+			},
+			want: want{
+				err: errBoom,
+			},
+		},
+		"PollJobError": {
+			args: args{
+				ctx:  context.Background(),
+				guid: testGUID,
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Delete", mock.Anything, testGUID).Return(testJobGUID, nil)
+					mockClient.On("PollComplete", mock.Anything, testJobGUID, mock.Anything).Return(errBoom)
+					return mockClient
+				}(),
+			},
+			want: want{
+				err: errBoom,
+			},
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			err := Delete(tc.args.ctx, tc.args.srbClient, tc.args.guid)
+
+			if tc.want.err != nil {
+				if err == nil {
+					t.Errorf("Delete(...): expected error %v, got nil", tc.want.err)
+				} else if !errors.Is(err, tc.want.err) && err.Error() != tc.want.err.Error() {
+					t.Errorf("Delete(...): expected error %v, got %v", tc.want.err, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Delete(...): unexpected error: %v", err)
+				}
+			}
+		})
+	}
+}
+
+func TestCreate(t *testing.T) {
+	type args struct {
+		ctx                  context.Context
+		srbClient            ServiceRouteBinding
+		forProvider          v1alpha1.ServiceRouteBindingParameters
+		parametersFromSecret runtime.RawExtension
+	}
+
+	type want struct {
+		binding *cfresource.ServiceRouteBinding
+		err     error
+	}
+
+	testJobGUID := "job-guid-123"
+	testParams := json.RawMessage(`{"key": "value"}`)
+
+	testBinding := &cfresource.ServiceRouteBinding{
+		Resource: cfresource.Resource{
+			GUID: testGUID,
+		},
+		RouteServiceURL: testRouteServiceURL,
+		Relationships: cfresource.ServiceRouteBindingRelationships{
+			Route: cfresource.ToOneRelationship{
+				Data: &cfresource.Relationship{GUID: testRouteGUID},
+			},
+			ServiceInstance: cfresource.ToOneRelationship{
+				Data: &cfresource.Relationship{GUID: testServiceInstance},
+			},
+		},
+	}
+
+	cases := map[string]struct {
+		args args
+		want want
+	}{
+		"SuccessWithJob": {
+			args: args{
+				ctx: context.Background(),
+				forProvider: v1alpha1.ServiceRouteBindingParameters{
+					RouteReference: v1alpha1.RouteReference{
+						Route: testRouteGUID,
+					},
+					ServiceInstanceReference: v1alpha1.ServiceInstanceReference{
+						ServiceInstance: testServiceInstance,
+					},
+				},
+				parametersFromSecret: runtime.RawExtension{},
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Create", mock.Anything, mock.MatchedBy(func(opt *cfresource.ServiceRouteBindingCreate) bool {
+						return opt.Relationships.Route.Data.GUID == testRouteGUID &&
+							opt.Relationships.ServiceInstance.Data.GUID == testServiceInstance
+					})).Return(testJobGUID, testBinding, nil)
+					mockClient.On("PollComplete", mock.Anything, testJobGUID, mock.Anything).Return(nil)
+					mockClient.On("Single", mock.Anything, mock.Anything).Return(testBinding, nil)
+					return mockClient
+				}(),
+			},
+			want: want{
+				binding: testBinding,
+				err:     nil,
+			},
+		},
+		"SuccessWithoutJob": {
+			args: args{
+				ctx: context.Background(),
+				forProvider: v1alpha1.ServiceRouteBindingParameters{
+					RouteReference: v1alpha1.RouteReference{
+						Route: testRouteGUID,
+					},
+					ServiceInstanceReference: v1alpha1.ServiceInstanceReference{
+						ServiceInstance: testServiceInstance,
+					},
+				},
+				parametersFromSecret: runtime.RawExtension{},
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Create", mock.Anything, mock.Anything).Return("", testBinding, nil)
+					mockClient.On("Single", mock.Anything, mock.Anything).Return(testBinding, nil)
+					return mockClient
+				}(),
+			},
+			want: want{
+				binding: testBinding,
+				err:     nil,
+			},
+		},
+		"SuccessWithParameters": {
+			args: args{
+				ctx: context.Background(),
+				forProvider: v1alpha1.ServiceRouteBindingParameters{
+					RouteReference: v1alpha1.RouteReference{
+						Route: testRouteGUID,
+					},
+					ServiceInstanceReference: v1alpha1.ServiceInstanceReference{
+						ServiceInstance: testServiceInstance,
+					},
+					Parameters: runtime.RawExtension{Raw: testParams},
+				},
+				parametersFromSecret: runtime.RawExtension{},
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Create", mock.Anything, mock.MatchedBy(func(opt *cfresource.ServiceRouteBindingCreate) bool {
+						return opt.Parameters != nil
+					})).Return("", testBinding, nil)
+					mockClient.On("Single", mock.Anything, mock.Anything).Return(testBinding, nil)
+					return mockClient
+				}(),
+			},
+			want: want{
+				binding: testBinding,
+				err:     nil,
+			},
+		},
+		"CreateError": {
+			args: args{
+				ctx: context.Background(),
+				forProvider: v1alpha1.ServiceRouteBindingParameters{
+					RouteReference: v1alpha1.RouteReference{
+						Route: testRouteGUID,
+					},
+					ServiceInstanceReference: v1alpha1.ServiceInstanceReference{
+						ServiceInstance: testServiceInstance,
+					},
+				},
+				parametersFromSecret: runtime.RawExtension{},
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Create", mock.Anything, mock.Anything).Return("", testBinding, errBoom)
+					return mockClient
+				}(),
+			},
+			want: want{
+				binding: testBinding,
+				err:     errBoom,
+			},
+		},
+		"PollJobError": {
+			args: args{
+				ctx: context.Background(),
+				forProvider: v1alpha1.ServiceRouteBindingParameters{
+					RouteReference: v1alpha1.RouteReference{
+						Route: testRouteGUID,
+					},
+					ServiceInstanceReference: v1alpha1.ServiceInstanceReference{
+						ServiceInstance: testServiceInstance,
+					},
+				},
+				parametersFromSecret: runtime.RawExtension{},
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Create", mock.Anything, mock.Anything).Return(testJobGUID, testBinding, nil)
+					mockClient.On("PollComplete", mock.Anything, testJobGUID, mock.Anything).Return(errBoom)
+					return mockClient
+				}(),
+			},
+			want: want{
+				binding: nil,
+				err:     errBoom,
+			},
+		},
+		"SingleError": {
+			args: args{
+				ctx: context.Background(),
+				forProvider: v1alpha1.ServiceRouteBindingParameters{
+					RouteReference: v1alpha1.RouteReference{
+						Route: testRouteGUID,
+					},
+					ServiceInstanceReference: v1alpha1.ServiceInstanceReference{
+						ServiceInstance: testServiceInstance,
+					},
+				},
+				parametersFromSecret: runtime.RawExtension{},
+				srbClient: func() ServiceRouteBinding {
+					mockClient := &fake.MockServiceRouteBinding{}
+					mockClient.On("Create", mock.Anything, mock.Anything).Return(testJobGUID, testBinding, nil)
+					mockClient.On("PollComplete", mock.Anything, testJobGUID, mock.Anything).Return(nil)
+					mockClient.On("Single", mock.Anything, mock.Anything).Return(nil, errBoom)
+					return mockClient
+				}(),
+			},
+			want: want{
+				binding: nil,
+				err:     errBoom,
+			},
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			binding, err := Create(tc.args.ctx, tc.args.srbClient, tc.args.forProvider, tc.args.parametersFromSecret)
+
+			if tc.want.err != nil {
+				if err == nil {
+					t.Errorf("Create(...): expected error %v, got nil", tc.want.err)
+				} else if !errors.Is(err, tc.want.err) && err.Error() != tc.want.err.Error() {
+					t.Errorf("Create(...): expected error %v, got %v", tc.want.err, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Create(...): unexpected error: %v", err)
+				}
+				if diff := cmp.Diff(tc.want.binding, binding); diff != "" {
+					t.Errorf("Create(...): -want, +got:\n%s", diff)
+				}
+			}
+		})
 	}
 }
 
