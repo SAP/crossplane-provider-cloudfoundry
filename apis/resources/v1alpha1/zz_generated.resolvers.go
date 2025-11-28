@@ -277,6 +277,48 @@ func (mg *ServiceInstance) ResolveReferences(ctx context.Context, c client.Reade
 	return nil
 }
 
+// ResolveReferences of this ServiceRouteBinding.
+func (mg *ServiceRouteBinding) ResolveReferences(ctx context.Context, c client.Reader) error {
+	r := reference.NewAPIResolver(c, mg)
+
+	var rsp reference.ResolutionResponse
+	var err error
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: mg.Spec.ForProvider.RouteReference.Route,
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.RouteReference.RouteRef,
+		Selector:     mg.Spec.ForProvider.RouteReference.RouteSelector,
+		To: reference.To{
+			List:    &RouteList{},
+			Managed: &Route{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.RouteReference.Route")
+	}
+	mg.Spec.ForProvider.RouteReference.Route = rsp.ResolvedValue
+	mg.Spec.ForProvider.RouteReference.RouteRef = rsp.ResolvedReference
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstance,
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstanceRef,
+		Selector:     mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstanceSelector,
+		To: reference.To{
+			List:    &ServiceInstanceList{},
+			Managed: &ServiceInstance{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstance")
+	}
+	mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstance = rsp.ResolvedValue
+	mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstanceRef = rsp.ResolvedReference
+
+	return nil
+}
+
 // ResolveReferences of this Space.
 func (mg *Space) ResolveReferences(ctx context.Context, c client.Reader) error {
 	r := reference.NewAPIResolver(c, mg)

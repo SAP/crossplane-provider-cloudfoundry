@@ -1,0 +1,29 @@
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  namespace: service-test
+  name: e2e-serviceroutebinding-org
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    # change to your testing org
+    name: cf-ci-e2e
+
+---
+# import service-space with roles pre-configured
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  namespace: service-test
+  name: e2e-serviceroutebinding-space
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: space-donotdelete
+    orgRef:
+      name:  e2e-serviceroutebinding-org
+      policy:
+        resolve: Always
