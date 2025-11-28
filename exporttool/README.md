@@ -1,28 +1,28 @@
-- [Introduction](#org662433b)
-- [Examples](#org4ed1ede)
-  - [The simplest CLI tool](#org5b5b3e8)
-  - [Basic export subcommand](#orgca320da)
-  - [Exporting a resource](#orgabe037b)
-  - [Displaying warnings](#org6a5654e)
-  - [Exportint commented out resources](#orgc7acd13)
+- [Introduction](#orgaaa078b)
+- [Examples](#orgf96fad7)
+  - [The simplest CLI tool](#org8c6ff2f)
+  - [Basic export subcommand](#orgdf0f5f1)
+  - [Exporting a resource](#org0ba1afb)
+  - [Displaying warnings](#org64c3eb0)
+  - [Exporting commented out resources](#org9de5937)
 
 
 
-<a id="org662433b"></a>
+<a id="orgaaa078b"></a>
 
 # Introduction
 
 `xp-clifford` (Crossplane CLI Framework for Resource Data Extraction) is a Go module that facilitates the development of CLI tools for exporting definitions of external resources in the format of specific Crossplane provider managed resource definitions.
 
 
-<a id="org4ed1ede"></a>
+<a id="orgf96fad7"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="org5b5b3e8"></a>
+<a id="org8c6ff2f"></a>
 
 ## The simplest CLI tool
 
@@ -112,7 +112,7 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="orgca320da"></a>
+<a id="orgdf0f5f1"></a>
 
 ## Basic export subcommand
 
@@ -188,7 +188,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="orgabe037b"></a>
+<a id="org0ba1afb"></a>
 
 ## Exporting a resource
 
@@ -295,7 +295,7 @@ cat output.yaml
     ...
 
 
-<a id="org6a5654e"></a>
+<a id="org64c3eb0"></a>
 
 ## Displaying warnings
 
@@ -408,9 +408,9 @@ cat output.yaml
     ...
 
 
-<a id="orgc7acd13"></a>
+<a id="org9de5937"></a>
 
-## Exportint commented out resources
+## Exporting commented out resources
 
 During the export process, problems may prevent generation of valid managed resource definitions, or the definitions produced may be unsafe to apply.
 
@@ -514,7 +514,7 @@ INFO export command invoked
 
 
     #
-    # don't deploy, this is a test resource!
+    # don't deploy it, this is a test resource!
     #
     # ---
     # Object:
