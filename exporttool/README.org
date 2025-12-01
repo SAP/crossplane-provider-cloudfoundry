@@ -337,8 +337,8 @@ type:
 Warn(err error)
 #+end_src
 
-The =Warn= method supports =erratt.Error= types. (TODO: more on this
-later)
+The =Warn= method supports =erratt.Error= types. The =erratt.Error=
+type is demonstrated in [[#erratt-example]].
 
 Let's add a warning message to our =exportLogic= function:
 
@@ -546,6 +546,9 @@ This works equally well when redirecting output to a file using the
 =-o= flag.
 
 ** Errors with attributes
+:PROPERTIES:
+:CUSTOM_ID: erratt-example
+:END:
 
 The =erratt= package implements a new =error= type designed for
 efficient use with the =Warn= method of =EventHandler=.
