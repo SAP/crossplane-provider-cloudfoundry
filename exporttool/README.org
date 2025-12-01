@@ -747,4 +747,5 @@ func main() {
 
 See the example in action:
 
-[[file:examples/textinput/example.gif][TextInput example]]
+#+caption: TextInput example
+[[file:examples/textinput/example.gif]]
