@@ -137,7 +137,8 @@ go run ./examples/basic/main.go export
 #+RESULTS:
 : ERRO export subcommand is not set
 
-** Basic export subcommand
+** Exporting
+*** Basic export subcommand
 
 The =export= subcommand is mandatory, but you are responsible for implementing the code that executes when it is invoked.
 
@@ -210,7 +211,7 @@ go run ./examples/export/main.go export
 #+RESULTS:
 : INFO export command invoked
 
-** Exporting a resource
+*** Exporting a resource
 
 In the previous example, we created a proper =export= subcommand, but
 didn't actually export any resources.
@@ -319,7 +320,7 @@ cat output.yaml
 : user: test-user
 : ...
 
-** Displaying warnings
+*** Displaying warnings
 
 During the processing and conversion of external resources, the export
 logic may encounter unexpected situations such as unstable network
@@ -427,7 +428,7 @@ cat output.yaml
 : user: test-user-with-warning
 : ...
 
-** Exporting commented out resources
+*** Exporting commented out resources
 
 During the export process, problems may prevent generation of valid
 managed resource definitions, or the definitions produced may be
@@ -530,7 +531,7 @@ go run ./examples/exportcomment/main.go export
 INFO export command invoked
 
 
-    #
+j    #
     # don't deploy it, this is a test resource!
     #
     # ---
@@ -543,3 +544,126 @@ INFO export command invoked
 
 This works equally well when redirecting output to a file using the
 =-o= flag.
+
+** Errors with attributes
+
+The =erratt= package implements a new =error= type designed for
+efficient use with the =Warn= method of =EventHandler=.
+
+The =erratt.Error= type implements the standard Go =error=
+interface. Additionally, it can be extended with =slog=
+package compatible attributes—key-value pairs used for structured
+logging. The =erratt.Error= type also supports wrapping Go =error=
+values. When an =erratt.Error= is wrapped, its attributes are
+preserved.
+
+You can create a simple =erratt.Error= using the =erratt.New=
+function:
+
+#+begin_src go :eval never
+err := erratt.New("something went wrong")
+errWithAttrs1 := erratt.New("error opening file", "filename", filename)
+errWithAttrs2 := erratt.New("authentication failed", "username", user, "password", pass)
+#+end_src
+
+In this example, =errWithAttrs1= and =errWithAttrs2= include
+additional attributes.
+
+You can wrap an existing =error= value using the =erratt.Errorf=
+function:
+
+#+begin_src go :eval never
+err := callFunction()
+errWrapped := erratt.Errorf("unexpected error occurred: %w", err)
+#+end_src
+
+You can extend an =erratt.Error= value with attributes using the
+=With= method:
+
+#+begin_src go :eval never
+err := connectToServer(url, username, password)
+errWrapped := erratt.Errorf("cannot connect to server: %w", err).
+	With("url", url, "username", username, "password", password)
+#+end_src
+
+For a complete example, consider two functions that return
+=erratt.Error= values and demonstrate wrapping:
+
+#+name: erratt-error-return-func
+#+begin_src go :eval never
+func auth() erratt.Error {
+	return erratt.New("authentication failure",
+		"username", "test-user",
+		"password", "test-password",
+	)
+}
+
+func connect() erratt.Error {
+	err := auth()
+	if err != nil {
+		return erratt.Errorf("connect failed: %w", err).
+			With("url", "https://example.com")
+	}
+	return nil
+}
+#+end_src
+
+The =auth= function returns an =erratt.Error= value with username and
+password attributes.
+
+The =exportLogic= function calls =connect= and handles the error:
+
+#+name: erratt-exportlogic
+#+begin_src go :eval never
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	err := connect()
+
+	events.Stop()
+	return err
+}
+#+end_src
+
+Here is the complete example:
+
+#+name: erratt-example
+#+begin_src go :noweb yes :tangle examples/erratt/main.go :eval never
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
+)
+
+<<erratt-error-return-func>>
+
+<<erratt-exportlogic>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	<<configure-exportlogic>>
+	cli.Execute()
+}
+#+end_src
+
+Running this code produces the following output:
+
+#+begin_src sh :exports both :results output :eval no-export :post ansi-filter(data=*this*)
+go run ./examples/erratt/main.go export
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked
+: ERRO connect failed: authenication failure url=https://example.com username=test-user password=test-password
+
+The error message appears on the console with all attributes
+displayed.
+
+The =EventHandler.Warn= method handles =erratt.Error= values in the
+same manner.
