@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"slices"
 	"strings"
+	"sync"
 )
 
 func init() {
@@ -364,7 +365,10 @@ func (a *alternative) WithSuggestionFunc(fn SuggestionFunc) Rule {
 }
 
 // namedTypes is the global registry that maps rule names to their implementations
-var namedTypes = map[string]Rule{}
+var (
+	namedTypes     = map[string]Rule{}
+	namedTypesLock = sync.RWMutex{}
+)
 
 // named represents a reference to a rule identified by its name
 type named struct {
@@ -376,6 +380,8 @@ var _ Rule = &named{}
 // Named binds a name to the given rule and registers it in the global registry.
 // The named rule can be referenced later using RefNamed, enabling lazy evaluation and recursion.
 func Named(name string, rule Rule) Rule {
+	namedTypesLock.Lock()
+	defer namedTypesLock.Unlock()
 	namedTypes[name] = rule
 	return rule
 }
@@ -419,6 +425,8 @@ func (n *named) validate(ctx *parseContext, in string) <-chan result {
 		return closedCheckedChan
 	}
 	ctx.appendPathNode(np)
+	namedTypesLock.RLock()
+	defer namedTypesLock.RUnlock()
 	if t, ok := namedTypes[n.name]; ok {
 		return t.validate(ctx.clone(), in)
 	}
