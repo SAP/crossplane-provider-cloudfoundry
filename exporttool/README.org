@@ -531,7 +531,7 @@ go run ./examples/exportcomment/main.go export
 INFO export command invoked
 
 
-j    #
+    #
     # don't deploy it, this is a test resource!
     #
     # ---
@@ -554,11 +554,10 @@ The =erratt= package implements a new =error= type designed for
 efficient use with the =Warn= method of =EventHandler=.
 
 The =erratt.Error= type implements the standard Go =error=
-interface. Additionally, it can be extended with =slog=
-package compatible attributes—key-value pairs used for structured
-logging. The =erratt.Error= type also supports wrapping Go =error=
-values. When an =erratt.Error= is wrapped, its attributes are
-preserved.
+interface. Additionally, it can be extended with =slog= package
+compatible key-value pairs used for structured logging. The
+=erratt.Error= type also supports wrapping Go =error= values. When an
+=erratt.Error= is wrapped, its attributes are preserved.
 
 You can create a simple =erratt.Error= using the =erratt.New=
 function:
@@ -663,10 +662,89 @@ go run ./examples/erratt/main.go export
 
 #+RESULTS:
 : INFO export command invoked
-: ERRO connect failed: authenication failure url=https://example.com username=test-user password=test-password
+: ERRO connect failed: authentication failure url=https://example.com username=test-user password=test-password
 
 The error message appears on the console with all attributes
 displayed.
 
 The =EventHandler.Warn= method handles =erratt.Error= values in the
 same manner.
+
+** Widgets
+
+=xp-clifford= provides several CLI widgets to facility the interaction
+with the user.
+
+*** TextInput Widget
+
+The TextInput widget prompts the user for a single line of
+text. Create a TextInput widget using the =TextInput= function from
+the =widget= package.
+
+#+begin_src go :eval never
+func TextInput(ctx context.Context, title, placeholder string, sensitive bool) (string, error)
+#+end_src
+
+Parameters:
+
+- ctx :: Go context for handling Ctrl-C interrupts or timeouts
+- title :: The prompt question displayed to the user
+- placeholder :: Placeholder text shown when the input is empty
+- sensitive :: When true, masks typed characters (useful for passwords)
+
+The following example demonstrates an =exportLogic= function that
+prompts for a username and password:
+
+#+name: textinput-username
+#+begin_src go :eval never
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	username, err := widget.TextInput(ctx, "Username", "anonymous", false)
+	if err != nil {
+		return err
+	}
+
+	password, err := widget.TextInput(ctx, "Password", "", true)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("data acquired",
+		"username", username,
+		"password", password,
+	)
+
+	events.Stop()
+	return err
+}
+#+end_src
+
+Complete example:
+
+#+name: erratt-example
+#+begin_src go :noweb yes :tangle examples/textinput/main.go :eval never
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/widget"
+)
+
+<<textinput-username>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	<<configure-exportlogic>>
+	cli.Execute()
+}
+#+end_src
+
+See the example in action:
+
+[[file:examples/textinput/example.gif][TextInput example]]
