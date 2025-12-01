@@ -1,30 +1,30 @@
-- [Introduction](#org30430c9)
-- [Examples](#org4ce4764)
-  - [The simplest CLI tool](#org4459256)
-  - [Exporting](#org6cbe548)
-    - [Basic export subcommand](#org2fd2bd6)
-    - [Exporting a resource](#orgf541387)
-    - [Displaying warnings](#org04baae4)
-    - [Exporting commented out resources](#orgdddf3e8)
-  - [Errors with attributes](#org3f7547c)
+- [Introduction](#org2c405ef)
+- [Examples](#orgd135ff6)
+  - [The simplest CLI tool](#org4c76d75)
+  - [Exporting](#org918dde9)
+    - [Basic export subcommand](#org604ad13)
+    - [Exporting a resource](#orgb486e1e)
+    - [Displaying warnings](#org054b97f)
+    - [Exporting commented out resources](#org189e8d4)
+  - [Errors with attributes](#erratt-example)
 
 
 
-<a id="org30430c9"></a>
+<a id="org2c405ef"></a>
 
 # Introduction
 
 `xp-clifford` (Crossplane CLI Framework for Resource Data Extraction) is a Go module that facilitates the development of CLI tools for exporting definitions of external resources in the format of specific Crossplane provider managed resource definitions.
 
 
-<a id="org4ce4764"></a>
+<a id="orgd135ff6"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="org4459256"></a>
+<a id="org4c76d75"></a>
 
 ## The simplest CLI tool
 
@@ -114,12 +114,12 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="org6cbe548"></a>
+<a id="org918dde9"></a>
 
 ## Exporting
 
 
-<a id="org2fd2bd6"></a>
+<a id="org604ad13"></a>
 
 ### Basic export subcommand
 
@@ -195,7 +195,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="orgf541387"></a>
+<a id="orgb486e1e"></a>
 
 ### Exporting a resource
 
@@ -302,7 +302,7 @@ cat output.yaml
     ...
 
 
-<a id="org04baae4"></a>
+<a id="org054b97f"></a>
 
 ### Displaying warnings
 
@@ -316,7 +316,7 @@ You can report warnings using the `Warn` method of the `EventHandler` type:
 Warn(err error)
 ```
 
-The `Warn` method supports `erratt.Error` types. (TODO: more on this later)
+The `Warn` method supports `erratt.Error` types. The `erratt.Error` type is demonstrated in [2.3](#erratt-example).
 
 Let's add a warning message to our `exportLogic` function:
 
@@ -415,7 +415,7 @@ cat output.yaml
     ...
 
 
-<a id="orgdddf3e8"></a>
+<a id="org189e8d4"></a>
 
 ### Exporting commented out resources
 
@@ -534,7 +534,7 @@ j    #
 This works equally well when redirecting output to a file using the `-o` flag.
 
 
-<a id="org3f7547c"></a>
+<a id="erratt-example"></a>
 
 ## Errors with attributes
 
