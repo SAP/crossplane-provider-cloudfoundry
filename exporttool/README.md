@@ -1,28 +1,30 @@
-- [Introduction](#orgaaa078b)
-- [Examples](#orgf96fad7)
-  - [The simplest CLI tool](#org8c6ff2f)
-  - [Basic export subcommand](#orgdf0f5f1)
-  - [Exporting a resource](#org0ba1afb)
-  - [Displaying warnings](#org64c3eb0)
-  - [Exporting commented out resources](#org9de5937)
+- [Introduction](#org30430c9)
+- [Examples](#org4ce4764)
+  - [The simplest CLI tool](#org4459256)
+  - [Exporting](#org6cbe548)
+    - [Basic export subcommand](#org2fd2bd6)
+    - [Exporting a resource](#orgf541387)
+    - [Displaying warnings](#org04baae4)
+    - [Exporting commented out resources](#orgdddf3e8)
+  - [Errors with attributes](#org3f7547c)
 
 
 
-<a id="orgaaa078b"></a>
+<a id="org30430c9"></a>
 
 # Introduction
 
 `xp-clifford` (Crossplane CLI Framework for Resource Data Extraction) is a Go module that facilitates the development of CLI tools for exporting definitions of external resources in the format of specific Crossplane provider managed resource definitions.
 
 
-<a id="orgf96fad7"></a>
+<a id="org4ce4764"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="org8c6ff2f"></a>
+<a id="org4459256"></a>
 
 ## The simplest CLI tool
 
@@ -112,9 +114,14 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="orgdf0f5f1"></a>
+<a id="org6cbe548"></a>
 
-## Basic export subcommand
+## Exporting
+
+
+<a id="org2fd2bd6"></a>
+
+### Basic export subcommand
 
 The `export` subcommand is mandatory, but you are responsible for implementing the code that executes when it is invoked.
 
@@ -188,9 +195,9 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="org0ba1afb"></a>
+<a id="orgf541387"></a>
 
-## Exporting a resource
+### Exporting a resource
 
 In the previous example, we created a proper `export` subcommand, but didn't actually export any resources.
 
@@ -295,9 +302,9 @@ cat output.yaml
     ...
 
 
-<a id="org64c3eb0"></a>
+<a id="org04baae4"></a>
 
-## Displaying warnings
+### Displaying warnings
 
 During the processing and conversion of external resources, the export logic may encounter unexpected situations such as unstable network connections, authentication issues, or unknown resource configurations.
 
@@ -408,9 +415,9 @@ cat output.yaml
     ...
 
 
-<a id="org9de5937"></a>
+<a id="orgdddf3e8"></a>
 
-## Exporting commented out resources
+### Exporting commented out resources
 
 During the export process, problems may prevent generation of valid managed resource definitions, or the definitions produced may be unsafe to apply.
 
@@ -513,7 +520,7 @@ go run ./examples/exportcomment/main.go export
 INFO export command invoked
 
 
-    #
+j    #
     # don't deploy it, this is a test resource!
     #
     # ---
@@ -525,3 +532,132 @@ INFO export command invoked
 ```
 
 This works equally well when redirecting output to a file using the `-o` flag.
+
+
+<a id="org3f7547c"></a>
+
+## Errors with attributes
+
+The `erratt` package implements a new `error` type designed for efficient use with the `Warn` method of `EventHandler`.
+
+The `erratt.Error` type implements the standard Go `error` interface. Additionally, it can be extended with `slog` package compatible attributes—key-value pairs used for structured logging. The `erratt.Error` type also supports wrapping Go `error` values. When an `erratt.Error` is wrapped, its attributes are preserved.
+
+You can create a simple `erratt.Error` using the `erratt.New` function:
+
+```go
+err := erratt.New("something went wrong")
+errWithAttrs1 := erratt.New("error opening file", "filename", filename)
+errWithAttrs2 := erratt.New("authentication failed", "username", user, "password", pass)
+```
+
+In this example, `errWithAttrs1` and `errWithAttrs2` include additional attributes.
+
+You can wrap an existing `error` value using the `erratt.Errorf` function:
+
+```go
+err := callFunction()
+errWrapped := erratt.Errorf("unexpected error occurred: %w", err)
+```
+
+You can extend an `erratt.Error` value with attributes using the `With` method:
+
+```go
+err := connectToServer(url, username, password)
+errWrapped := erratt.Errorf("cannot connect to server: %w", err).
+	With("url", url, "username", username, "password", password)
+```
+
+For a complete example, consider two functions that return `erratt.Error` values and demonstrate wrapping:
+
+```go
+func auth() erratt.Error {
+	return erratt.New("authentication failure",
+		"username", "test-user",
+		"password", "test-password",
+	)
+}
+
+func connect() erratt.Error {
+	err := auth()
+	if err != nil {
+		return erratt.Errorf("connect failed: %w", err).
+			With("url", "https://example.com")
+	}
+	return nil
+}
+```
+
+The `auth` function returns an `erratt.Error` value with username and password attributes.
+
+The `exportLogic` function calls `connect` and handles the error:
+
+```go
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	err := connect()
+
+	events.Stop()
+	return err
+}
+```
+
+Here is the complete example:
+
+```go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
+)
+
+func auth() erratt.Error {
+	return erratt.New("authentication failure",
+		"username", "test-user",
+		"password", "test-password",
+	)
+}
+
+func connect() erratt.Error {
+	err := auth()
+	if err != nil {
+		return erratt.Errorf("connect failed: %w", err).
+			With("url", "https://example.com")
+	}
+	return nil
+}
+
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	err := connect()
+
+	events.Stop()
+	return err
+}
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.SetCommand(exportLogic)
+	cli.Execute()
+}
+```
+
+Running this code produces the following output:
+
+```sh
+go run ./examples/erratt/main.go export
+```
+
+    INFO export command invoked
+    ERRO connect failed: authenication failure url=https://example.com username=test-user password=test-password
+
+The error message appears on the console with all attributes displayed.
+
+The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
