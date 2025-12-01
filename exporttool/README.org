@@ -675,7 +675,7 @@ same manner.
 =xp-clifford= provides several CLI widgets to facility the interaction
 with the user.
 
-*** TextInput Widget
+*** TextInput widget
 
 The TextInput widget prompts the user for a single line of
 text. Create a TextInput widget using the =TextInput= function from
@@ -722,7 +722,7 @@ func exportLogic(ctx context.Context, events export.EventHandler) error {
 
 Complete example:
 
-#+name: erratt-example
+#+name: textinput-example
 #+begin_src go :noweb yes :tangle examples/textinput/main.go :eval never
 package main
 
@@ -749,3 +749,74 @@ See the example in action:
 
 #+caption: TextInput example
 [[file:examples/textinput/example.gif]]
+
+** MultiInput widget
+
+The MultiInput widget creates a multi-selection interface that allows users to select multiple items from a predefined list of options:
+
+#+begin_src go :eval never
+func MultiInput(ctx context.Context, title string, options []string) ([]string, error)
+#+end_src
+
+Parameters:
+
+- ctx :: Go context for handling Ctrl-C interrupts or timeouts
+- title :: The selection prompt displayed to the user
+- options :: The list of selectable items
+
+The following example demonstrates an =exportLogic= function that uses the =MultiInput= widget:
+
+#+name: multiinput-example
+#+begin_src go :eval never
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	protocols, err := widget.MultiInput(ctx,
+		"Select the supported protocols",
+		[]string{
+			"FTP",
+			"HTTP",
+			"HTTPS",
+			"SFTP",
+			"SSH",
+		},
+	)
+
+	slog.Info("data acquired",
+		"protocols", protocols,
+	)
+
+	events.Stop()
+	return err
+}
+#+end_src
+
+The complete source code is assembled as follows:
+
+#+name: multiinput-example
+#+begin_src go :noweb yes :tangle examples/multiinput/main.go :eval never
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/widget"
+)
+
+<<multiinput-example>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	<<configure-exportlogic>>
+	cli.Execute()
+}
+#+end_src
+
+Running this example produces the following output:
+
+#+caption: MultiInput example
+[[file:examples/multiinput/example.gif]]
