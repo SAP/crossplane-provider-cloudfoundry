@@ -1,32 +1,33 @@
-- [Introduction](#org96394b5)
-- [Examples](#orgaff6ce1)
-  - [The simplest CLI tool](#org2e6e317)
-  - [Exporting](#org010695b)
-    - [Basic export subcommand](#org75f4d95)
-    - [Exporting a resource](#org17b9a68)
-    - [Displaying warnings](#orgc85edc3)
-    - [Exporting commented out resources](#org12dcf64)
+- [Introduction](#org0dfa982)
+- [Examples](#org73f409c)
+  - [The simplest CLI tool](#orgd867774)
+  - [Exporting](#orgbc9d9c0)
+    - [Basic export subcommand](#org3c00a3a)
+    - [Exporting a resource](#org641166f)
+    - [Displaying warnings](#orgd14d1a1)
+    - [Exporting commented out resources](#org4493378)
   - [Errors with attributes](#erratt-example)
-  - [Widgets](#org5f4c58e)
-    - [TextInput Widget](#org6bc54d5)
+  - [Widgets](#org87b14d6)
+    - [TextInput widget](#org5d91800)
+  - [MultiInput widget](#org60a5068)
 
 
 
-<a id="org96394b5"></a>
+<a id="org0dfa982"></a>
 
 # Introduction
 
 `xp-clifford` (Crossplane CLI Framework for Resource Data Extraction) is a Go module that facilitates the development of CLI tools for exporting definitions of external resources in the format of specific Crossplane provider managed resource definitions.
 
 
-<a id="orgaff6ce1"></a>
+<a id="org73f409c"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="org2e6e317"></a>
+<a id="orgd867774"></a>
 
 ## The simplest CLI tool
 
@@ -116,12 +117,12 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="org010695b"></a>
+<a id="orgbc9d9c0"></a>
 
 ## Exporting
 
 
-<a id="org75f4d95"></a>
+<a id="org3c00a3a"></a>
 
 ### Basic export subcommand
 
@@ -197,7 +198,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="org17b9a68"></a>
+<a id="org641166f"></a>
 
 ### Exporting a resource
 
@@ -304,7 +305,7 @@ cat output.yaml
     ...
 
 
-<a id="orgc85edc3"></a>
+<a id="orgd14d1a1"></a>
 
 ### Displaying warnings
 
@@ -417,7 +418,7 @@ cat output.yaml
     ...
 
 
-<a id="org12dcf64"></a>
+<a id="org4493378"></a>
 
 ### Exporting commented out resources
 
@@ -665,16 +666,16 @@ The error message appears on the console with all attributes displayed.
 The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 
 
-<a id="org5f4c58e"></a>
+<a id="org87b14d6"></a>
 
 ## Widgets
 
 `xp-clifford` provides several CLI widgets to facility the interaction with the user.
 
 
-<a id="org6bc54d5"></a>
+<a id="org5d91800"></a>
 
-### TextInput Widget
+### TextInput widget
 
 The TextInput widget prompts the user for a single line of text. Create a TextInput widget using the `TextInput` function from the `widget` package.
 
@@ -762,3 +763,94 @@ func main() {
 See the example in action:
 
 ![img](examples/textinput/example.gif "TextInput example")
+
+
+<a id="org60a5068"></a>
+
+## MultiInput widget
+
+The MultiInput widget creates a multi-selection interface that allows users to select multiple items from a predefined list of options:
+
+```go
+func MultiInput(ctx context.Context, title string, options []string) ([]string, error)
+```
+
+Parameters:
+
+-   **ctx:** Go context for handling Ctrl-C interrupts or timeouts
+-   **title:** The selection prompt displayed to the user
+-   **options:** The list of selectable items
+
+The following example demonstrates an `exportLogic` function that uses the `MultiInput` widget:
+
+```go
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	protocols, err := widget.MultiInput(ctx,
+		"Select the supported protocols",
+		[]string{
+			"FTP",
+			"HTTP",
+			"HTTPS",
+			"SFTP",
+			"SSH",
+		},
+	)
+
+	slog.Info("data acquired",
+		"protocols", protocols,
+	)
+
+	events.Stop()
+	return err
+}
+```
+
+The complete source code is assembled as follows:
+
+```go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/widget"
+)
+
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	protocols, err := widget.MultiInput(ctx,
+		"Select the supported protocols",
+		[]string{
+			"FTP",
+			"HTTP",
+			"HTTPS",
+			"SFTP",
+			"SSH",
+		},
+	)
+
+	slog.Info("data acquired",
+		"protocols", protocols,
+	)
+
+	events.Stop()
+	return err
+}
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.SetCommand(exportLogic)
+	cli.Execute()
+}
+```
+
+Running this example produces the following output:
+
+![img](examples/multiinput/example.gif "MultiInput example")
