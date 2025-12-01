@@ -35,11 +35,6 @@ const (
 	// Provider identification
 	providerName = "provider-cloudfoundry"
 
-	// Default Values
-	resourceDirectoryRoot = "./crs"
-	defaultVerifyTimeout  = 30 // minutes
-	defaultWaitForPause   = 1  // minutes
-
 	// Image paths
 	packageBasePath           = "ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry"
 	controllerPackageBasePath = "ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry-controller"
@@ -57,6 +52,11 @@ const (
 	resourceDirectoryEnvVar = "UPGRADE_TEST_CRS_PATH"
 	verifyTimeoutEnvVar     = "UPGRADE_TEST_VERIFY_TIMEOUT"
 	waitForPauseEnvVar      = "UPGRADE_TEST_WAIT_FOR_PAUSE"
+
+	// Defaults for optional parameters
+	defaultResourceDirectory = "./crs"
+	defaultVerifyTimeout     = 30
+	defaultWaitForPause      = 1
 )
 
 var (
@@ -67,6 +67,11 @@ var (
 		// Add any directories to ignore here, e.g.:
 		// "../e2e/crs/experimental",
 	}
+
+	// Default Values
+	resourceDirectoryRoot string
+	verifyTimeout         time.Duration
+	waitForPause          time.Duration
 )
 
 var (
