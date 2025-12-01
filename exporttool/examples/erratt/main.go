@@ -11,7 +11,7 @@ import (
 )
 
 func auth() erratt.Error {
-        return erratt.New("authenication failure",
+	return erratt.New("authentication failure",
 		"username", "test-user",
 		"password", "test-password",
 	)

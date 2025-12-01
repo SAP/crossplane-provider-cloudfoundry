@@ -1,30 +1,32 @@
-- [Introduction](#org2c405ef)
-- [Examples](#orgd135ff6)
-  - [The simplest CLI tool](#org4c76d75)
-  - [Exporting](#org918dde9)
-    - [Basic export subcommand](#org604ad13)
-    - [Exporting a resource](#orgb486e1e)
-    - [Displaying warnings](#org054b97f)
-    - [Exporting commented out resources](#org189e8d4)
+- [Introduction](#orgacafcb9)
+- [Examples](#orgf3ec177)
+  - [The simplest CLI tool](#org836db0f)
+  - [Exporting](#org943083c)
+    - [Basic export subcommand](#org5bb8ca2)
+    - [Exporting a resource](#orgdc00c92)
+    - [Displaying warnings](#org0cc8268)
+    - [Exporting commented out resources](#org251a042)
   - [Errors with attributes](#erratt-example)
+  - [Widgets](#orgf95ad9a)
+    - [TextInput Widget](#orgd7debc3)
 
 
 
-<a id="org2c405ef"></a>
+<a id="orgacafcb9"></a>
 
 # Introduction
 
 `xp-clifford` (Crossplane CLI Framework for Resource Data Extraction) is a Go module that facilitates the development of CLI tools for exporting definitions of external resources in the format of specific Crossplane provider managed resource definitions.
 
 
-<a id="orgd135ff6"></a>
+<a id="orgf3ec177"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="org4c76d75"></a>
+<a id="org836db0f"></a>
 
 ## The simplest CLI tool
 
@@ -114,12 +116,12 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="org918dde9"></a>
+<a id="org943083c"></a>
 
 ## Exporting
 
 
-<a id="org604ad13"></a>
+<a id="org5bb8ca2"></a>
 
 ### Basic export subcommand
 
@@ -195,7 +197,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="orgb486e1e"></a>
+<a id="orgdc00c92"></a>
 
 ### Exporting a resource
 
@@ -302,7 +304,7 @@ cat output.yaml
     ...
 
 
-<a id="org054b97f"></a>
+<a id="org0cc8268"></a>
 
 ### Displaying warnings
 
@@ -415,7 +417,7 @@ cat output.yaml
     ...
 
 
-<a id="org189e8d4"></a>
+<a id="org251a042"></a>
 
 ### Exporting commented out resources
 
@@ -520,7 +522,7 @@ go run ./examples/exportcomment/main.go export
 INFO export command invoked
 
 
-j    #
+    #
     # don't deploy it, this is a test resource!
     #
     # ---
@@ -540,7 +542,7 @@ This works equally well when redirecting output to a file using the `-o` flag.
 
 The `erratt` package implements a new `error` type designed for efficient use with the `Warn` method of `EventHandler`.
 
-The `erratt.Error` type implements the standard Go `error` interface. Additionally, it can be extended with `slog` package compatible attributes—key-value pairs used for structured logging. The `erratt.Error` type also supports wrapping Go `error` values. When an `erratt.Error` is wrapped, its attributes are preserved.
+The `erratt.Error` type implements the standard Go `error` interface. Additionally, it can be extended with `slog` package compatible key-value pairs used for structured logging. The `erratt.Error` type also supports wrapping Go `error` values. When an `erratt.Error` is wrapped, its attributes are preserved.
 
 You can create a simple `erratt.Error` using the `erratt.New` function:
 
@@ -656,8 +658,107 @@ go run ./examples/erratt/main.go export
 ```
 
     INFO export command invoked
-    ERRO connect failed: authenication failure url=https://example.com username=test-user password=test-password
+    ERRO connect failed: authentication failure url=https://example.com username=test-user password=test-password
 
 The error message appears on the console with all attributes displayed.
 
 The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
+
+
+<a id="orgf95ad9a"></a>
+
+## Widgets
+
+`xp-clifford` provides several CLI widgets to facility the interaction with the user.
+
+
+<a id="orgd7debc3"></a>
+
+### TextInput Widget
+
+The TextInput widget prompts the user for a single line of text. Create a TextInput widget using the `TextInput` function from the `widget` package.
+
+```go
+func TextInput(ctx context.Context, title, placeholder string, sensitive bool) (string, error)
+```
+
+Parameters:
+
+-   **ctx:** Go context for handling Ctrl-C interrupts or timeouts
+-   **title:** The prompt question displayed to the user
+-   **placeholder:** Placeholder text shown when the input is empty
+-   **sensitive:** When true, masks typed characters (useful for passwords)
+
+The following example demonstrates an `exportLogic` function that prompts for a username and password:
+
+```go
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	username, err := widget.TextInput(ctx, "Username", "anonymous", false)
+	if err != nil {
+		return err
+	}
+
+	password, err := widget.TextInput(ctx, "Password", "", true)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("data acquired",
+		"username", username,
+		"password", password,
+	)
+
+	events.Stop()
+	return err
+}
+```
+
+Complete example:
+
+```go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/widget"
+)
+
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked")
+
+	username, err := widget.TextInput(ctx, "Username", "anonymous", false)
+	if err != nil {
+		return err
+	}
+
+	password, err := widget.TextInput(ctx, "Password", "", true)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("data acquired",
+		"username", username,
+		"password", password,
+	)
+
+	events.Stop()
+	return err
+}
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.SetCommand(exportLogic)
+	cli.Execute()
+}
+```
+
+See the example in action:
+
+[TextInput example](examples/textinput/example.gif)
