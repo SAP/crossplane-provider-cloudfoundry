@@ -1,32 +1,32 @@
-- [Introduction](#orgacafcb9)
-- [Examples](#orgf3ec177)
-  - [The simplest CLI tool](#org836db0f)
-  - [Exporting](#org943083c)
-    - [Basic export subcommand](#org5bb8ca2)
-    - [Exporting a resource](#orgdc00c92)
-    - [Displaying warnings](#org0cc8268)
-    - [Exporting commented out resources](#org251a042)
+- [Introduction](#org96394b5)
+- [Examples](#orgaff6ce1)
+  - [The simplest CLI tool](#org2e6e317)
+  - [Exporting](#org010695b)
+    - [Basic export subcommand](#org75f4d95)
+    - [Exporting a resource](#org17b9a68)
+    - [Displaying warnings](#orgc85edc3)
+    - [Exporting commented out resources](#org12dcf64)
   - [Errors with attributes](#erratt-example)
-  - [Widgets](#orgf95ad9a)
-    - [TextInput Widget](#orgd7debc3)
+  - [Widgets](#org5f4c58e)
+    - [TextInput Widget](#org6bc54d5)
 
 
 
-<a id="orgacafcb9"></a>
+<a id="org96394b5"></a>
 
 # Introduction
 
 `xp-clifford` (Crossplane CLI Framework for Resource Data Extraction) is a Go module that facilitates the development of CLI tools for exporting definitions of external resources in the format of specific Crossplane provider managed resource definitions.
 
 
-<a id="orgf3ec177"></a>
+<a id="orgaff6ce1"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="org836db0f"></a>
+<a id="org2e6e317"></a>
 
 ## The simplest CLI tool
 
@@ -116,12 +116,12 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="org943083c"></a>
+<a id="org010695b"></a>
 
 ## Exporting
 
 
-<a id="org5bb8ca2"></a>
+<a id="org75f4d95"></a>
 
 ### Basic export subcommand
 
@@ -197,7 +197,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="orgdc00c92"></a>
+<a id="org17b9a68"></a>
 
 ### Exporting a resource
 
@@ -304,7 +304,7 @@ cat output.yaml
     ...
 
 
-<a id="org0cc8268"></a>
+<a id="orgc85edc3"></a>
 
 ### Displaying warnings
 
@@ -417,7 +417,7 @@ cat output.yaml
     ...
 
 
-<a id="org251a042"></a>
+<a id="org12dcf64"></a>
 
 ### Exporting commented out resources
 
@@ -665,14 +665,14 @@ The error message appears on the console with all attributes displayed.
 The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 
 
-<a id="orgf95ad9a"></a>
+<a id="org5f4c58e"></a>
 
 ## Widgets
 
 `xp-clifford` provides several CLI widgets to facility the interaction with the user.
 
 
-<a id="orgd7debc3"></a>
+<a id="org6bc54d5"></a>
 
 ### TextInput Widget
 
@@ -761,4 +761,4 @@ func main() {
 
 See the example in action:
 
-[TextInput example](examples/textinput/example.gif)
+![img](examples/textinput/example.gif "TextInput example")
