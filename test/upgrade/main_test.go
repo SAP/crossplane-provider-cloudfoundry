@@ -8,8 +8,10 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	testutil "github.com/SAP/crossplane-provider-cloudfoundry/test"
 	"github.com/crossplane-contrib/xp-testing/pkg/envvar"
@@ -27,11 +29,16 @@ import (
 )
 
 const (
+	// Crossplane version
+	crossplaneVersion = "1.20.1"
+
 	// Provider identification
 	providerName = "provider-cloudfoundry"
 
-	// Resource discovery
+	// Default Values
 	resourceDirectoryRoot = "./crs"
+	defaultVerifyTimeout  = 30 // minutes
+	defaultWaitForPause   = 1  // minutes
 
 	// Image paths
 	packageBasePath           = "ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry"
@@ -45,6 +52,11 @@ const (
 
 	// Environment variables
 	cfEndpointEnvVar = "CF_ENDPOINT"
+
+	// Environment variables - Optional with defaults
+	resourceDirectoryEnvVar = "UPGRADE_TEST_CRS_PATH"
+	verifyTimeoutEnvVar     = "UPGRADE_TEST_VERIFY_TIMEOUT"
+	waitForPauseEnvVar      = "UPGRADE_TEST_WAIT_FOR_PAUSE"
 )
 
 var (
@@ -88,6 +100,9 @@ func SetupClusterWithCrossplane(namespace string) {
 
 	// Load version tags for upgrade (FROM -> TO)
 	fromTag, toTag = loadPackageTags()
+	resourceDirectoryRoot = loadResourceDirectory()
+	verifyTimeout = loadVerifyTimeout()
+	waitForPause = loadWaitForPause()
 
 	// Discover all resource directories
 	loadResourceDirectories()
@@ -116,7 +131,7 @@ func SetupClusterWithCrossplane(namespace string) {
 			ControllerImage: &fromControllerPackage,
 		},
 		CrossplaneSetup: setup.CrossplaneSetup{
-			Version:  "1.20.1",
+			Version:  crossplaneVersion,
 			Registry: setup.DockerRegistry,
 		},
 		DeploymentRuntimeConfig: deploymentRuntimeConfig,
@@ -238,4 +253,62 @@ func mustPullImage(image string) {
 	if p.Err() != nil {
 		panic(fmt.Errorf("docker pull %v failed: %w: %s", image, p.Err(), p.Result()))
 	}
+}
+
+// loadResourceDirectory loads the resource directory path from environment or uses default
+func loadResourceDirectory() string {
+	dir := os.Getenv(resourceDirectoryEnvVar)
+	if dir == "" {
+		dir = defaultResourceDirectory
+		klog.V(4).Infof("Using default resource directory: %s", dir)
+	} else {
+		klog.V(4).Infof("Using resource directory from %s: %s", resourceDirectoryEnvVar, dir)
+	}
+	return dir
+}
+
+// loadVerifyTimeout loads the verify timeout from environment or uses default
+func loadVerifyTimeout() time.Duration {
+	timeoutStr := os.Getenv(verifyTimeoutEnvVar)
+	if timeoutStr == "" {
+		klog.V(4).Infof("Using default verify timeout: %d minutes", defaultVerifyTimeout)
+		return time.Duration(defaultVerifyTimeout) * time.Minute
+	}
+
+	timeoutMin, err := strconv.Atoi(timeoutStr)
+	if err != nil {
+		klog.Warningf("Invalid %s value '%s', using default: %d minutes", verifyTimeoutEnvVar, timeoutStr, defaultVerifyTimeout)
+		return time.Duration(defaultVerifyTimeout) * time.Minute
+	}
+
+	if timeoutMin <= 0 {
+		klog.Warningf("Invalid %s value %d (must be > 0), using default: %d minutes", verifyTimeoutEnvVar, timeoutMin, defaultVerifyTimeout)
+		return time.Duration(defaultVerifyTimeout) * time.Minute
+	}
+
+	klog.V(4).Infof("Using verify timeout from %s: %d minutes", verifyTimeoutEnvVar, timeoutMin)
+	return time.Duration(timeoutMin) * time.Minute
+}
+
+// loadWaitForPause loads the wait for pause duration from environment or uses default
+func loadWaitForPause() time.Duration {
+	waitStr := os.Getenv(waitForPauseEnvVar)
+	if waitStr == "" {
+		klog.V(4).Infof("Using default wait for pause: %d minutes", defaultWaitForPause)
+		return time.Duration(defaultWaitForPause) * time.Minute
+	}
+
+	waitMin, err := strconv.Atoi(waitStr)
+	if err != nil {
+		klog.Warningf("Invalid %s value '%s', using default: %d minutes", waitForPauseEnvVar, waitStr, defaultWaitForPause)
+		return time.Duration(defaultWaitForPause) * time.Minute
+	}
+
+	if waitMin <= 0 {
+		klog.Warningf("Invalid %s value %d (must be > 0), using default: %d minutes", waitForPauseEnvVar, waitMin, defaultWaitForPause)
+		return time.Duration(defaultWaitForPause) * time.Minute
+	}
+
+	klog.V(4).Infof("Using wait for pause from %s: %d minutes", waitForPauseEnvVar, waitMin)
+	return time.Duration(waitMin) * time.Minute
 }

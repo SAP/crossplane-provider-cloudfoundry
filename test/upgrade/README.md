@@ -19,7 +19,7 @@ Upgrade tests verify that resources created with one version of the provider con
 
 ### Required Tools
 
-- **Go** - For running tests
+- **Go+** - For running tests
 - **Docker** - For kind cluster creation
 - **kubectl** - For Kubernetes cluster interaction
 - **kind** - Automatically installed by test framework
@@ -54,16 +54,45 @@ cd test/upgrade
 go test -v -tags=upgrade -timeout=45m ./...
 ```
 
+### 3. Customize (Optional)
+
+Override defaults as needed:
+
+```bash
+# Test with custom resource directory
+export UPGRADE_TEST_CRS_PATH="../e2e/crs-minimal/"
+
+# Increase timeout for slow resources
+export UPGRADE_TEST_VERIFY_TIMEOUT="45"  # minutes
+
+# Increase wait time after upgrade
+export UPGRADE_TEST_WAIT_FOR_PAUSE="2"  # minutes
+
+# Then run tests
+cd test/upgrade
+go test -v -tags=upgrade -timeout=60m ./...
+```
+
 ## Environment Variables
 
-| Variable | Required | Description | Example |
-|----------|----------|-------------|---------|
-| `CF_EMAIL` | Yes | Email for CF authentication | `user@sap.com` |
-| `CF_USERNAME` | Yes | CF username | `your-username` |
-| `CF_PASSWORD` | Yes | CF password | `your-password` |
-| `CF_ENDPOINT` | Yes | CF API endpoint URL | `https://api.cf.eu12.hana.ondemand.com` |
-| `UPGRADE_TEST_FROM_TAG` | Yes | Provider version to upgrade from | `v0.3.0` |
-| `UPGRADE_TEST_TO_TAG` | Yes | Provider version to upgrade to | `v0.3.2` or `main` |
+### Required Variables
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `CF_EMAIL` | Email for CF authentication | `user@sap.com` |
+| `CF_USERNAME` | CF username | `your-username` |
+| `CF_PASSWORD` | CF password | `your-password` |
+| `CF_ENDPOINT` | CF API endpoint URL | `https://api.cf.eu12.hana.ondemand.com` |
+| `UPGRADE_TEST_FROM_TAG` | Provider version to upgrade from | `v0.3.0` |
+| `UPGRADE_TEST_TO_TAG` | Provider version to upgrade to | `v0.3.2` or `main` |
+
+### Optional Variables (with defaults)
+
+| Variable | Description | Default | Example |
+|----------|-------------|---------|---------|
+| `UPGRADE_TEST_CRS_PATH` | Path to test resources directory | `../e2e/crs/` | `../e2e/crs-minimal/` |
+| `UPGRADE_TEST_VERIFY_TIMEOUT` | Timeout for resource verification (minutes) | `30` | `45` |
+| `UPGRADE_TEST_WAIT_FOR_PAUSE` | Wait time after provider upgrade (minutes) | `1` | `2` |
 
 ## Test Resources
 
@@ -73,14 +102,14 @@ Tests use YAML manifests from `test/e2e/crs/`. Currently tested resources:
 
 ### Adding New Test Resources
 
-1. Create a directory under `test/upgrade/crs/`:
+1. Create a directory under `test/e2e/crs/`:
    ```bash
-   mkdir -p test/upgrade/crs/myresource
+   mkdir -p test/e2e/crs/myresource
    ```
 
 2. Add YAML manifest(s):
    ```bash
-   cat > test/upgrade/crs/myresource/myresource.yaml <<EOF
+   cat > test/e2e/crs/myresource/myresource.yaml <<EOF
    apiVersion: cloudfoundry.crossplane.io/v1alpha1
    kind: MyResource
    metadata:
@@ -97,7 +126,7 @@ Tests use YAML manifests from `test/e2e/crs/`. Currently tested resources:
 
 ### Resource Selection Tips
 
-**Suggested resources for testing:**
+**Suggested resources for Initial testing:**
 - ✅ Resources you can create/delete with your credentials
 - ✅ Resources with minimal dependencies
 - ✅ Resources using `managementPolicies: [Observe]` (safest - no creation)
@@ -108,50 +137,25 @@ Tests use YAML manifests from `test/e2e/crs/`. Currently tested resources:
 ```
 test/
 ├── upgrade/
-|    └── crs/   
-|        └── space.yaml         # Resources to test
-│   ├── main_test.go            # Test environment setup
-│   ├── upgrade_test.go         # Actual upgrade test logic
-│   └── README.md               # This file
-├── e2e/
-│   └── crs/                    # Test resource manifests
+|   └── crs/                 # Test resource manifests
 │       └── space/
 │           └── space.yaml
-└── test_utils.go               # Helper functions
+│   ├── main_test.go          # Test environment setup
+│   ├── upgrade_test.go       # Actual upgrade test logic
+│   └── README.md            # This file
+├── e2e/
+│   └── crs/                 # E2E resource manifests
+│       └── space/
+│           └── space.yaml
+└── test_utils.go            # Helper functions
 ```
 
-## Configuration
-
-### Changing Test Resources
-
-Edit `main_test.go` to change the resource directory:
-
-```go
-const (
-    resourceDirectoryRoot = "../upgrade/crs/" 
-)
-```
-
-### Adjusting Timeouts
-
-In `upgrade_test.go`, modify timeout values:
-
-```go
-.Assess(
-    "Verify resources before upgrade",
-    upgrade.VerifyResources(upgradeTest.ResourceDirectories, time.Minute*30),  // 30 min timeout
-)
-```
 
 ### Crossplane Version
 
 Change Crossplane version in `main_test.go`:
-
 ```go
-CrossplaneSetup: setup.CrossplaneSetup{
-    Version:  "1.20.1",  // Change this
-    Registry: setup.DockerRegistry,
-}
+const crossplaneVersion=CHOSEN_VERSION
 ```
 
 ## Troubleshooting
@@ -217,6 +221,7 @@ kind delete cluster --name e2e-<hash>
 kind get clusters | grep e2e | xargs -n1 kind delete cluster --name
 ```
 
+
 ## Development
 
 ### Running Tests Locally
@@ -230,21 +235,9 @@ cd test/upgrade
 go test -v -tags=upgrade -timeout=45m ./...
 ```
 
-### Testing Unreleased Changes
+## Performance
+- TO FILL IN
 
-To test the current codebase:
-
-```bash
-# Build local images
-make build
-
-# Set TO version to use local build
-export UPGRADE_TEST_TO_TAG="main"
-
-# Run tests
-cd test/upgrade
-go test -v -tags=upgrade -timeout=45m ./...
-```
 
 ## Related Documentation
 
@@ -252,12 +245,3 @@ go test -v -tags=upgrade -timeout=45m ./...
 - [Crossplane Documentation](https://docs.crossplane.io)
 - [CloudFoundry Provider](https://github.com/SAP/crossplane-provider-cloudfoundry)
 - [BTP Provider Upgrade Tests](https://github.com/SAP/crossplane-provider-btp/tree/main/test/upgrade) (reference implementation)
-
-## Support
-
-For issues or questions:
-1. Check the [Troubleshooting](#troubleshooting) section
-2. Review test logs in `test/upgrade/logs/`
-3. Open an issue in the repository
-4. Contact the team on Slack
-
