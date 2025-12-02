@@ -29,8 +29,8 @@ func exportLogic(ctx context.Context, events export.EventHandler) error {
 }
 
 var testParam = configparam.String("username", "username used for authentication").
-        WithShortName("u").
-        WithEnvVarName("USERNAME").
+	WithShortName("u").
+	WithEnvVarName("USERNAME").
 	WithDefaultValue("testuser")
 
 func main() {

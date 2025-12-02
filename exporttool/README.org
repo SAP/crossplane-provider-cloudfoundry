@@ -1093,8 +1093,8 @@ Consider the following string configuration parameter:
 #+name: configure-string-def
 #+begin_src go :eval never
 var testParam = configparam.String("username", "username used for authentication").
-        WithShortName("u").
-        WithEnvVarName("USERNAME").
+	WithShortName("u").
+	WithEnvVarName("USERNAME").
 	WithDefaultValue("testuser")
 #+end_src
 
