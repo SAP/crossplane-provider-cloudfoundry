@@ -1,25 +1,25 @@
-- [Introduction](#org1d14795)
-- [Examples](#org2baf025)
-  - [The simplest CLI tool](#orgc5d70c4)
-  - [Exporting](#org0db244e)
-    - [Basic export subcommand](#org21fbd6b)
-    - [Exporting a resource](#org073fb9d)
-    - [Displaying warnings](#org3e34aef)
-    - [Exporting commented out resources](#org56b55cf)
+- [Introduction](#orgda06f2b)
+- [Examples](#org0ab9487)
+  - [The simplest CLI tool](#org63518b0)
+  - [Exporting](#org005e20e)
+    - [Basic export subcommand](#org62e78c3)
+    - [Exporting a resource](#org62212ec)
+    - [Displaying warnings](#orgb0408f7)
+    - [Exporting commented out resources](#org9dbe112)
   - [Errors with attributes](#erratt-example)
-  - [Widgets](#orgf66e2f3)
-    - [TextInput widget](#org717808b)
-    - [MultiInput widget](#orgf0b93ae)
-  - [Configuration parameters](#org48290b7)
-    - [Global configuration parameters](#org65a0115)
-      - [Verbose logging](#orgf784a6c)
-    - [Configuration parameters of the export subcommand](#org7154ee4)
-    - [Bool configuration parameter](#org6370fa9)
-    - [String configuration parameter](#orga88e8e8)
+  - [Widgets](#org7ef640f)
+    - [TextInput widget](#orgf103f8e)
+    - [MultiInput widget](#orgd4e9222)
+  - [Configuration parameters](#org3ce9497)
+    - [Global configuration parameters](#org7107d63)
+      - [Verbose logging](#org79d868a)
+    - [Configuration parameters of the export subcommand](#org06cad6a)
+    - [Bool configuration parameter](#orgf51253d)
+    - [String configuration parameter](#orgac72664)
 
 
 
-<a id="org1d14795"></a>
+<a id="orgda06f2b"></a>
 
 # Introduction
 
@@ -32,14 +32,14 @@ TODO:
 > <https://docs.crossplane.io/v1.20/guides/import-existing-resources/>
 
 
-<a id="org2baf025"></a>
+<a id="org0ab9487"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="orgc5d70c4"></a>
+<a id="org63518b0"></a>
 
 ## The simplest CLI tool
 
@@ -129,12 +129,12 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="org0db244e"></a>
+<a id="org005e20e"></a>
 
 ## Exporting
 
 
-<a id="org21fbd6b"></a>
+<a id="org62e78c3"></a>
 
 ### Basic export subcommand
 
@@ -210,7 +210,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="org073fb9d"></a>
+<a id="org62212ec"></a>
 
 ### Exporting a resource
 
@@ -317,7 +317,7 @@ cat output.yaml
     ...
 
 
-<a id="org3e34aef"></a>
+<a id="orgb0408f7"></a>
 
 ### Displaying warnings
 
@@ -430,7 +430,7 @@ cat output.yaml
     ...
 
 
-<a id="org56b55cf"></a>
+<a id="org9dbe112"></a>
 
 ### Exporting commented out resources
 
@@ -678,14 +678,14 @@ The error message appears on the console with all attributes displayed.
 The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 
 
-<a id="orgf66e2f3"></a>
+<a id="org7ef640f"></a>
 
 ## Widgets
 
 `xp-clifford` provides several CLI widgets to facility the interaction with the user.
 
 
-<a id="org717808b"></a>
+<a id="orgf103f8e"></a>
 
 ### TextInput widget
 
@@ -777,7 +777,7 @@ See the example in action:
 ![img](examples/textinput/example.gif "TextInput example")
 
 
-<a id="orgf0b93ae"></a>
+<a id="orgd4e9222"></a>
 
 ### MultiInput widget
 
@@ -868,7 +868,7 @@ Running this example produces the following output:
 ![img](examples/multiinput/example.gif "MultiInput example")
 
 
-<a id="org48290b7"></a>
+<a id="org3ce9497"></a>
 
 ## Configuration parameters
 
@@ -889,7 +889,7 @@ Currently, the following configuration parameter types are supported:
 All configuration parameters managed by `xp-clifford` implement the `configparam.ConfigParam` interface.
 
 
-<a id="org65a0115"></a>
+<a id="org7107d63"></a>
 
 ### Global configuration parameters
 
@@ -900,7 +900,7 @@ Any CLI tool built using `xp-clifford` includes the following global flags:
 -   **`-h` or `--help`:** Print help message (bool)
 
 
-<a id="orgf784a6c"></a>
+<a id="org79d868a"></a>
 
 #### Verbose logging
 
@@ -958,7 +958,7 @@ go run ./examples/verbose/main.go export -v
     DEBU export command invoked
 
 
-<a id="org7154ee4"></a>
+<a id="org06cad6a"></a>
 
 ### Configuration parameters of the export subcommand
 
@@ -974,7 +974,7 @@ func AddConfigParams(param ...configparam.ConfigParam)
 ```
 
 
-<a id="org6370fa9"></a>
+<a id="orgf51253d"></a>
 
 ### Bool configuration parameter
 
@@ -1036,7 +1036,7 @@ func main() {
 	cli.Configuration.ObservedSystem = "test system"
 	export.AddConfigParams(testParam)
 	export.SetCommand(exportLogic)
-        cli.Execute()
+	cli.Execute()
 }
 ```
 
@@ -1096,7 +1096,7 @@ CLIFFORD_TEST=1 go run ./examples/boolparam/main.go export
     INFO export command invoked test-value=true
 
 
-<a id="orga88e8e8"></a>
+<a id="orgac72664"></a>
 
 ### String configuration parameter
 
