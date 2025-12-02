@@ -1000,7 +1000,7 @@ func main() {
 	cli.Configuration.ObservedSystem = "test system"
 	<<add-bool-def>>
 	<<configure-exportlogic>>
-        cli.Execute()
+	cli.Execute()
 }
 #+end_src
 
