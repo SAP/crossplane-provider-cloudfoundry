@@ -1,24 +1,25 @@
-- [Introduction](#orgf2e41c3)
-- [Examples](#org24edc71)
-  - [The simplest CLI tool](#org58b4f37)
-  - [Exporting](#orgc72787c)
-    - [Basic export subcommand](#orgb89beff)
-    - [Exporting a resource](#org2f5e14e)
-    - [Displaying warnings](#orgf043e4d)
-    - [Exporting commented out resources](#org3b6b6ad)
+- [Introduction](#org20cac78)
+- [Examples](#org1ca92c8)
+  - [The simplest CLI tool](#org57fbdb8)
+  - [Exporting](#orgb8a2f57)
+    - [Basic export subcommand](#orgd7700c3)
+    - [Exporting a resource](#orgc1d3f4f)
+    - [Displaying warnings](#org6b7e6e1)
+    - [Exporting commented out resources](#org3d3262e)
   - [Errors with attributes](#erratt-example)
-  - [Widgets](#org81bb837)
-    - [TextInput widget](#orgd7bbf5a)
-    - [MultiInput widget](#orge15436b)
-  - [Configuration parameters](#org6692eab)
-    - [Global configuration parameters](#org829647a)
-    - [Configuration parameters of the export subcommand](#org67a8c7d)
-    - [Bool configuration parameter](#org7732a33)
-    - [String configuration parameter](#orgdc08a29)
+  - [Widgets](#org8e64f1a)
+    - [TextInput widget](#orge73cbf5)
+    - [MultiInput widget](#org948ed70)
+  - [Configuration parameters](#orgb60736e)
+    - [Global configuration parameters](#org8b28367)
+      - [Verbose logging](#org778c04d)
+    - [Configuration parameters of the export subcommand](#org685ddae)
+    - [Bool configuration parameter](#org664d03b)
+    - [String configuration parameter](#org7ac70fa)
 
 
 
-<a id="orgf2e41c3"></a>
+<a id="org20cac78"></a>
 
 # Introduction
 
@@ -31,14 +32,14 @@ TODO:
 > <https://docs.crossplane.io/v1.20/guides/import-existing-resources/>
 
 
-<a id="org24edc71"></a>
+<a id="org1ca92c8"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="org58b4f37"></a>
+<a id="org57fbdb8"></a>
 
 ## The simplest CLI tool
 
@@ -128,12 +129,12 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="orgc72787c"></a>
+<a id="orgb8a2f57"></a>
 
 ## Exporting
 
 
-<a id="orgb89beff"></a>
+<a id="orgd7700c3"></a>
 
 ### Basic export subcommand
 
@@ -209,7 +210,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="org2f5e14e"></a>
+<a id="orgc1d3f4f"></a>
 
 ### Exporting a resource
 
@@ -316,7 +317,7 @@ cat output.yaml
     ...
 
 
-<a id="orgf043e4d"></a>
+<a id="org6b7e6e1"></a>
 
 ### Displaying warnings
 
@@ -429,7 +430,7 @@ cat output.yaml
     ...
 
 
-<a id="org3b6b6ad"></a>
+<a id="org3d3262e"></a>
 
 ### Exporting commented out resources
 
@@ -677,14 +678,14 @@ The error message appears on the console with all attributes displayed.
 The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 
 
-<a id="org81bb837"></a>
+<a id="org8e64f1a"></a>
 
 ## Widgets
 
 `xp-clifford` provides several CLI widgets to facility the interaction with the user.
 
 
-<a id="orgd7bbf5a"></a>
+<a id="orge73cbf5"></a>
 
 ### TextInput widget
 
@@ -776,7 +777,7 @@ See the example in action:
 ![img](examples/textinput/example.gif "TextInput example")
 
 
-<a id="orge15436b"></a>
+<a id="org948ed70"></a>
 
 ### MultiInput widget
 
@@ -867,7 +868,7 @@ Running this example produces the following output:
 ![img](examples/multiinput/example.gif "MultiInput example")
 
 
-<a id="org6692eab"></a>
+<a id="orgb60736e"></a>
 
 ## Configuration parameters
 
@@ -888,7 +889,7 @@ Currently, the following configuration parameter types are supported:
 All configuration parameters managed by `xp-clifford` implement the `configparam.ConfigParam` interface.
 
 
-<a id="org829647a"></a>
+<a id="org8b28367"></a>
 
 ### Global configuration parameters
 
@@ -898,63 +899,66 @@ Any CLI tool built using `xp-clifford` includes the following global flags:
 -   **`-v` or `--verbose`:** Enable verbose logging (bool)
 -   **`-h` or `--help`:** Print help message (bool)
 
-1.  Verbose logging
 
-    Enable verbose logging with the `-v` or `--verbose` flag. When enabled, structured log messages at the *Debug* level are also printed to the console.
-    
-    An example `exportLogic` function:
-    
-    ```go
-    func exportLogic(_ context.Context, events export.EventHandler) error {
-    	slog.Debug("export command invoked")
-    	events.Stop()
-    	return nil
-    }
-    ```
-    
-    The complete example:
-    
-    ```go
-    package main
-    
-    import (
-    	"context"
-    	"log/slog"
-    
-    	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
-    	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
-    )
-    
-    func exportLogic(_ context.Context, events export.EventHandler) error {
-    	slog.Debug("export command invoked")
-    	events.Stop()
-    	return nil
-    }
-    
-    func main() {
-    	cli.Configuration.ShortName = "test"
-    	cli.Configuration.ObservedSystem = "test system"
-    	export.SetCommand(exportLogic)
-    	cli.Execute()
-    }
-    ```
-    
-    Executing the `export` subcommand without the `-v` flag produces no output:
-    
-    ```sh
-    go run ./examples/verbose/main.go export
-    ```
-    
-    With the `-v` flag, the debug-level message appears:
-    
-    ```sh
-    go run ./examples/verbose/main.go export -v
-    ```
-    
-        DEBU export command invoked
+<a id="org778c04d"></a>
+
+#### Verbose logging
+
+Enable verbose logging with the `-v` or `--verbose` flag. When enabled, structured log messages at the *Debug* level are also printed to the console.
+
+An example `exportLogic` function:
+
+```go
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Debug("export command invoked")
+	events.Stop()
+	return nil
+}
+```
+
+The complete example:
+
+```go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Debug("export command invoked")
+	events.Stop()
+	return nil
+}
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.SetCommand(exportLogic)
+	cli.Execute()
+}
+```
+
+Executing the `export` subcommand without the `-v` flag produces no output:
+
+```sh
+go run ./examples/verbose/main.go export
+```
+
+With the `-v` flag, the debug-level message appears:
+
+```sh
+go run ./examples/verbose/main.go export -v
+```
+
+    DEBU export command invoked
 
 
-<a id="org67a8c7d"></a>
+<a id="org685ddae"></a>
 
 ### Configuration parameters of the export subcommand
 
@@ -970,7 +974,7 @@ func AddConfigParams(param ...configparam.ConfigParam)
 ```
 
 
-<a id="org7732a33"></a>
+<a id="org664d03b"></a>
 
 ### Bool configuration parameter
 
@@ -1092,7 +1096,7 @@ CLIFFORD_TEST=1 go run ./examples/boolparam/main.go export
     INFO export command invoked test-value=true
 
 
-<a id="orgdc08a29"></a>
+<a id="org7ac70fa"></a>
 
 ### String configuration parameter
 
