@@ -998,7 +998,7 @@ func exportLogic(_ context.Context, events export.EventHandler) error {
 func main() {
 	cli.Configuration.ShortName = "test"
 	cli.Configuration.ObservedSystem = "test system"
-        <<add-bool-def>>
+	<<add-bool-def>>
 	<<configure-exportlogic>>
         cli.Execute()
 }

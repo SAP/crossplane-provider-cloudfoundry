@@ -23,7 +23,7 @@ var testParam = configparam.Bool("test", "test bool parameter").
 func main() {
 	cli.Configuration.ShortName = "test"
 	cli.Configuration.ObservedSystem = "test system"
-        export.AddConfigParams(testParam)
+	export.AddConfigParams(testParam)
 	export.SetCommand(exportLogic)
         cli.Execute()
 }
