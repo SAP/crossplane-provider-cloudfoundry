@@ -1,33 +1,44 @@
-- [Introduction](#org0dfa982)
-- [Examples](#org73f409c)
-  - [The simplest CLI tool](#orgd867774)
-  - [Exporting](#orgbc9d9c0)
-    - [Basic export subcommand](#org3c00a3a)
-    - [Exporting a resource](#org641166f)
-    - [Displaying warnings](#orgd14d1a1)
-    - [Exporting commented out resources](#org4493378)
+- [Introduction](#orgf2e41c3)
+- [Examples](#org24edc71)
+  - [The simplest CLI tool](#org58b4f37)
+  - [Exporting](#orgc72787c)
+    - [Basic export subcommand](#orgb89beff)
+    - [Exporting a resource](#org2f5e14e)
+    - [Displaying warnings](#orgf043e4d)
+    - [Exporting commented out resources](#org3b6b6ad)
   - [Errors with attributes](#erratt-example)
-  - [Widgets](#org87b14d6)
-    - [TextInput widget](#org5d91800)
-  - [MultiInput widget](#org60a5068)
+  - [Widgets](#org81bb837)
+    - [TextInput widget](#orgd7bbf5a)
+    - [MultiInput widget](#orge15436b)
+  - [Configuration parameters](#org6692eab)
+    - [Global configuration parameters](#org829647a)
+    - [Configuration parameters of the export subcommand](#org67a8c7d)
+    - [Bool configuration parameter](#org7732a33)
+    - [String configuration parameter](#orgdc08a29)
 
 
 
-<a id="org0dfa982"></a>
+<a id="orgf2e41c3"></a>
 
 # Introduction
 
 `xp-clifford` (Crossplane CLI Framework for Resource Data Extraction) is a Go module that facilitates the development of CLI tools for exporting definitions of external resources in the format of specific Crossplane provider managed resource definitions.
 
+TODO:
 
-<a id="org73f409c"></a>
+> Maybe it makes sense to add a sentence to the introduction, mentioning that the purpose of the tool is to automate creation of resource definitions, that are to be imported into Crossplane as per general import procedure.
+> 
+> <https://docs.crossplane.io/v1.20/guides/import-existing-resources/>
+
+
+<a id="org24edc71"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="orgd867774"></a>
+<a id="org58b4f37"></a>
 
 ## The simplest CLI tool
 
@@ -117,12 +128,12 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="orgbc9d9c0"></a>
+<a id="orgc72787c"></a>
 
 ## Exporting
 
 
-<a id="org3c00a3a"></a>
+<a id="orgb89beff"></a>
 
 ### Basic export subcommand
 
@@ -198,7 +209,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="org641166f"></a>
+<a id="org2f5e14e"></a>
 
 ### Exporting a resource
 
@@ -305,7 +316,7 @@ cat output.yaml
     ...
 
 
-<a id="orgd14d1a1"></a>
+<a id="orgf043e4d"></a>
 
 ### Displaying warnings
 
@@ -418,7 +429,7 @@ cat output.yaml
     ...
 
 
-<a id="org4493378"></a>
+<a id="org3b6b6ad"></a>
 
 ### Exporting commented out resources
 
@@ -666,14 +677,14 @@ The error message appears on the console with all attributes displayed.
 The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 
 
-<a id="org87b14d6"></a>
+<a id="org81bb837"></a>
 
 ## Widgets
 
 `xp-clifford` provides several CLI widgets to facility the interaction with the user.
 
 
-<a id="org5d91800"></a>
+<a id="orgd7bbf5a"></a>
 
 ### TextInput widget
 
@@ -765,9 +776,9 @@ See the example in action:
 ![img](examples/textinput/example.gif "TextInput example")
 
 
-<a id="org60a5068"></a>
+<a id="orge15436b"></a>
 
-## MultiInput widget
+### MultiInput widget
 
 The MultiInput widget creates a multi-selection interface that allows users to select multiple items from a predefined list of options:
 
@@ -854,3 +865,359 @@ func main() {
 Running this example produces the following output:
 
 ![img](examples/multiinput/example.gif "MultiInput example")
+
+
+<a id="org6692eab"></a>
+
+## Configuration parameters
+
+CLI tools built using `xp-clifford` can be configured through several methods:
+
+-   Command-line flags
+-   Environment variables
+-   Configuration files
+
+`xp-clifford` provides types and functions to facilitate configuration and management of these parameters. Configuration parameter handling is also integrated with the widget capabilities of `xp-clifford`.
+
+Currently, the following configuration parameter types are supported:
+
+-   `bool`
+-   `string`
+-   `[]string`
+
+All configuration parameters managed by `xp-clifford` implement the `configparam.ConfigParam` interface.
+
+
+<a id="org829647a"></a>
+
+### Global configuration parameters
+
+Any CLI tool built using `xp-clifford` includes the following global flags:
+
+-   **`-c` or `--config`:** Configuration file for setting additional parameters (string)
+-   **`-v` or `--verbose`:** Enable verbose logging (bool)
+-   **`-h` or `--help`:** Print help message (bool)
+
+1.  Verbose logging
+
+    Enable verbose logging with the `-v` or `--verbose` flag. When enabled, structured log messages at the *Debug* level are also printed to the console.
+    
+    An example `exportLogic` function:
+    
+    ```go
+    func exportLogic(_ context.Context, events export.EventHandler) error {
+    	slog.Debug("export command invoked")
+    	events.Stop()
+    	return nil
+    }
+    ```
+    
+    The complete example:
+    
+    ```go
+    package main
+    
+    import (
+    	"context"
+    	"log/slog"
+    
+    	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+    	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+    )
+    
+    func exportLogic(_ context.Context, events export.EventHandler) error {
+    	slog.Debug("export command invoked")
+    	events.Stop()
+    	return nil
+    }
+    
+    func main() {
+    	cli.Configuration.ShortName = "test"
+    	cli.Configuration.ObservedSystem = "test system"
+    	export.SetCommand(exportLogic)
+    	cli.Execute()
+    }
+    ```
+    
+    Executing the `export` subcommand without the `-v` flag produces no output:
+    
+    ```sh
+    go run ./examples/verbose/main.go export
+    ```
+    
+    With the `-v` flag, the debug-level message appears:
+    
+    ```sh
+    go run ./examples/verbose/main.go export -v
+    ```
+    
+        DEBU export command invoked
+
+
+<a id="org67a8c7d"></a>
+
+### Configuration parameters of the export subcommand
+
+The `export` subcommand includes the following default configuration parameters:
+
+-   **`-k` or `--kind`:** Resource kinds to export ([]string)
+-   **`-o` or `--output`:** Redirect output to a file (string)
+
+You can extend the `export` subcommand with additional configuration parameters using the `export.AddConfigParams` function:
+
+```go
+func AddConfigParams(param ...configparam.ConfigParam)
+```
+
+
+<a id="org7732a33"></a>
+
+### Bool configuration parameter
+
+Create a new *bool* configuration parameter using the `configparam.Bool` function:
+
+```go
+func Bool(name, description string) *BoolParam
+```
+
+The two mandatory arguments are *name* and *description*. Fine-tune the parameter with these methods:
+
+-   **`WithShortName`:** Single-character short command-line flag
+-   **`WithFlagName`:** Long format of the command-line flag (defaults to *name*)
+-   **`WithEnvVarName`:** Environment variable name for the parameter
+-   **`WithDefaultValue`:** Default value of the parameter
+
+Use the `Value()` method to retrieve the parameter value. The `IsSet()` method returns true if the user has explicitly set the value.
+
+Here is a bool configuration parameter definition:
+
+```go
+var testParam = configparam.Bool("test", "test bool parameter").
+        WithShortName("t").
+        WithEnvVarName("CLIFFORD_TEST")
+```
+
+Add the parameter to the `export` subcommand:
+
+```go
+export.AddConfigParams(testParam)
+```
+
+A complete working example:
+
+```go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked", "test-value", testParam.Value())
+	events.Stop()
+	return nil
+}
+
+var testParam = configparam.Bool("test", "test bool parameter").
+        WithShortName("t").
+        WithEnvVarName("CLIFFORD_TEST")
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+        export.AddConfigParams(testParam)
+	export.SetCommand(exportLogic)
+        cli.Execute()
+}
+```
+
+The new parameter appears in the help output:
+
+```sh
+go run ./examples/boolparam/main.go export --help
+```
+
+```
+Export test system resources and transform them into managed resources that the Crossplane provider can consume
+
+Usage:
+  test-exporter export [flags]
+
+Flags:
+  -h, --help            help for export
+  -k, --kind strings    Resource kinds to export
+  -o, --output string   redirect the YAML output to a file
+  -t, --test            test bool parameter
+
+Global Flags:
+  -c, --config string   Configuration file
+  -v, --verbose         Verbose output
+```
+
+By default, test is `false`:
+
+```sh
+go run ./examples/boolparam/main.go export
+```
+
+    INFO export command invoked test-value=false
+
+Enable it using the `--test` flag:
+
+```sh
+go run ./examples/boolparam/main.go export --test
+```
+
+    INFO export command invoked test-value=true
+
+Or using the shorthand `-t` flag:
+
+```sh
+go run ./examples/boolparam/main.go export -t
+```
+
+    INFO export command invoked test-value=true
+
+Or using the `CLIFFORD_TEST` environment variable:
+
+```sh
+CLIFFORD_TEST=1 go run ./examples/boolparam/main.go export
+```
+
+    INFO export command invoked test-value=true
+
+
+<a id="orgdc08a29"></a>
+
+### String configuration parameter
+
+Create a new *string* configuration parameter using the `configparam.String` function:
+
+```go
+func String(name, description string) *StringParam
+```
+
+The two mandatory arguments are *name* and *description*. Fine-tune the parameter with these methods:
+
+-   **`WithShortName`:** Single-character short command-line flag
+-   **`WithFlagName`:** Long format of the command-line flag (defaults to *name*)
+-   **`WithEnvVarName`:** Environment variable name for the parameter
+-   **`WithDefaultValue`:** Default value of the parameter
+
+Use the `Value()` method to retrieve the parameter value. The `IsSet()` method returns true if the user has explicitly set the value.
+
+The `ValueOrAsk` method returns the value if set. Otherwise, it prompts for the value interactively using the `TextInput` widget.
+
+Consider the following string configuration parameter:
+
+```go
+var testParam = configparam.String("username", "username used for authentication").
+        WithShortName("u").
+        WithEnvVarName("USERNAME").
+	WithDefaultValue("testuser")
+```
+
+A complete example:
+
+```go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked",
+		"username", testParam.Value(),
+		"is-set", testParam.IsSet(),
+	)
+
+	// If not set, ask the value
+	username, err := testParam.ValueOrAsk(ctx)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("value set by user", "value", username)
+
+	events.Stop()
+	return nil
+}
+
+var testParam = configparam.String("username", "username used for authentication").
+        WithShortName("u").
+        WithEnvVarName("USERNAME").
+	WithDefaultValue("testuser")
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.AddConfigParams(testParam)
+	export.SetCommand(exportLogic)
+        cli.Execute()
+}
+```
+
+The new parameter appears in the help output:
+
+```sh
+go run ./examples/stringparam/main.go export --help
+```
+
+```
+Export test system resources and transform them into managed resources that the Crossplane provider can consume
+
+Usage:
+  test-exporter export [flags]
+
+Flags:
+  -h, --help              help for export
+  -k, --kind strings      Resource kinds to export
+  -o, --output string     redirect the YAML output to a file
+  -u, --username string   username used for authentication
+
+Global Flags:
+  -c, --config string   Configuration file
+  -v, --verbose         Verbose output
+```
+
+Set the value using the `--username` flag:
+
+```sh
+go run ./examples/stringparam/main.go export --username anonymous
+```
+
+    INFO export command invoked username=anonymous is-set=true
+    INFO value set by user value=anonymous
+
+Or using the shorthand `-u` flag:
+
+```sh
+go run ./examples/stringparam/main.go export -u anonymous
+```
+
+    INFO export command invoked username=anonymous is-set=true
+    INFO value set by user value=anonymous
+
+Or using the `USERNAME` environment variable:
+
+```sh
+USERNAME=anonymous go run ./examples/stringparam/main.go export
+```
+
+    INFO export command invoked username=anonymous is-set=true
+    INFO value set by user value=anonymous
+
+When no value is provided, the `TextInput` widget prompts for it interactively:
+
+![img](examples/stringparam/example.gif "Asking a string config parameter value")

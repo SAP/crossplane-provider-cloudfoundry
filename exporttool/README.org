@@ -20,6 +20,16 @@ is a Go module that facilitates the development of CLI tools for
 exporting definitions of external resources in the format of specific
 Crossplane provider managed resource definitions.
 
+TODO:
+#+begin_quote
+Maybe it makes sense to add a sentence to the introduction, mentioning
+that the purpose of the tool is to automate creation of resource
+definitions, that are to be imported into Crossplane as per general
+import procedure.
+
+https://docs.crossplane.io/v1.20/guides/import-existing-resources/
+#+end_quote
+
 * Examples
 
 These examples demonstrate the basic features of =xp-clifford= and
@@ -750,7 +760,7 @@ See the example in action:
 #+caption: TextInput example
 [[file:examples/textinput/example.gif]]
 
-** MultiInput widget
+*** MultiInput widget
 
 The MultiInput widget creates a multi-selection interface that allows users to select multiple items from a predefined list of options:
 
@@ -820,3 +830,373 @@ Running this example produces the following output:
 
 #+caption: MultiInput example
 [[file:examples/multiinput/example.gif]]
+
+** Configuration parameters
+
+CLI tools built using =xp-clifford= can be configured through several
+methods:
+
+- Command-line flags
+- Environment variables
+- Configuration files
+
+=xp-clifford= provides types and functions to facilitate configuration
+and management of these parameters. Configuration parameter handling
+is also integrated with the widget capabilities of =xp-clifford=.
+
+Currently, the following configuration parameter types are supported:
+
+- =bool=
+- =string=
+- =[]string=
+
+All configuration parameters managed by =xp-clifford= implement the
+=configparam.ConfigParam= interface.
+
+*** Global configuration parameters
+
+Any CLI tool built using =xp-clifford= includes the following global flags:
+
+- =-c= or =--config= :: Configuration file for setting additional
+  parameters (string)
+- =-v= or =--verbose= :: Enable verbose logging (bool)
+- =-h= or =--help= :: Print help message (bool)
+
+**** Verbose logging
+
+Enable verbose logging with the =-v= or =--verbose= flag. When
+enabled, structured log messages at the /Debug/ level are also printed
+to the console.
+
+An example =exportLogic= function:
+
+#+name: verbose-export-fn
+#+begin_src go :eval never
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Debug("export command invoked")
+	events.Stop()
+	return nil
+}
+#+end_src
+
+The complete example:
+
+#+name: basic-example
+#+begin_src go :noweb yes :tangle examples/verbose/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+<<verbose-export-fn>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	<<configure-exportlogic>>
+	cli.Execute()
+}
+#+end_src
+
+Executing the =export= subcommand without the =-v= flag produces no
+output:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/verbose/main.go export
+#+end_src
+
+#+RESULTS:
+
+With the =-v= flag, the debug-level message appears:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/verbose/main.go export -v
+#+end_src
+
+#+RESULTS:
+: DEBU export command invoked
+
+*** Configuration parameters of the export subcommand
+
+The =export= subcommand includes the following default configuration
+parameters:
+
+- =-k= or =--kind= :: Resource kinds to export ([]string)
+- =-o= or =--output= :: Redirect output to a file (string)
+
+You can extend the =export= subcommand with additional configuration
+parameters using the =export.AddConfigParams= function:
+
+#+begin_src go :eval never
+func AddConfigParams(param ...configparam.ConfigParam)
+#+end_src
+
+*** Bool configuration parameter
+
+Create a new /bool/ configuration parameter using the =configparam.Bool= function:
+
+#+begin_src go :eval never
+func Bool(name, description string) *BoolParam
+#+end_src
+
+The two mandatory arguments are /name/ and /description/. Fine-tune
+the parameter with these methods:
+
+- =WithShortName= :: Single-character short command-line flag
+- =WithFlagName= :: Long format of the command-line flag (defaults to
+  /name/)
+- =WithEnvVarName= :: Environment variable name for the parameter
+- =WithDefaultValue= :: Default value of the parameter
+
+Use the =Value()= method to retrieve the parameter value. The
+=IsSet()= method returns true if the user has explicitly set the
+value.
+
+Here is a bool configuration parameter definition:
+
+#+name: configure-bool-def
+#+begin_src go :eval never
+var testParam = configparam.Bool("test", "test bool parameter").
+        WithShortName("t").
+        WithEnvVarName("CLIFFORD_TEST")
+#+end_src
+
+Add the parameter to the =export= subcommand:
+
+#+name: add-bool-def
+#+begin_src go :eval never
+export.AddConfigParams(testParam)
+#+end_src
+
+A complete working example:
+
+#+begin_src go :noweb yes :tangle examples/boolparam/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func exportLogic(_ context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked", "test-value", testParam.Value())
+	events.Stop()
+	return nil
+}
+
+<<configure-bool-def>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+        <<add-bool-def>>
+	<<configure-exportlogic>>
+        cli.Execute()
+}
+#+end_src
+
+The new parameter appears in the help output:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/boolparam/main.go export --help
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Export test system resources and transform them into managed resources that the Crossplane provider can consume
+
+Usage:
+  test-exporter export [flags]
+
+Flags:
+  -h, --help            help for export
+  -k, --kind strings    Resource kinds to export
+  -o, --output string   redirect the YAML output to a file
+  -t, --test            test bool parameter
+
+Global Flags:
+  -c, --config string   Configuration file
+  -v, --verbose         Verbose output
+#+end_example
+
+By default, test is =false=:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/boolparam/main.go export
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked test-value=false
+
+Enable it using the =--test= flag:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/boolparam/main.go export --test
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked test-value=true
+
+Or using the shorthand =-t= flag:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/boolparam/main.go export -t
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked test-value=true
+
+Or using the =CLIFFORD_TEST= environment variable:
+
+#+begin_src sh :exports both :results output :eval no-export
+CLIFFORD_TEST=1 go run ./examples/boolparam/main.go export
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked test-value=true
+
+*** String configuration parameter
+
+Create a new /string/ configuration parameter using the
+=configparam.String= function:
+
+#+begin_src go :eval never
+func String(name, description string) *StringParam
+#+end_src
+
+The two mandatory arguments are /name/ and /description/. Fine-tune
+the parameter with these methods:
+
+- =WithShortName= :: Single-character short command-line flag
+- =WithFlagName= :: Long format of the command-line flag (defaults to /name/)
+- =WithEnvVarName= :: Environment variable name for the parameter
+- =WithDefaultValue= :: Default value of the parameter
+
+Use the =Value()= method to retrieve the parameter value. The
+=IsSet()= method returns true if the user has explicitly set the
+value.
+
+The =ValueOrAsk= method returns the value if set. Otherwise, it
+prompts for the value interactively using the =TextInput= widget.
+
+Consider the following string configuration parameter:
+
+#+name: configure-string-def
+#+begin_src go :eval never
+var testParam = configparam.String("username", "username used for authentication").
+        WithShortName("u").
+        WithEnvVarName("USERNAME").
+	WithDefaultValue("testuser")
+#+end_src
+
+A complete example:
+
+#+begin_src go :noweb yes :tangle examples/stringparam/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked",
+		"username", testParam.Value(),
+		"is-set", testParam.IsSet(),
+	)
+
+	// If not set, ask the value
+	username, err := testParam.ValueOrAsk(ctx)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("value set by user", "value", username)
+
+	events.Stop()
+	return nil
+}
+
+<<configure-string-def>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.AddConfigParams(testParam)
+	<<configure-exportlogic>>
+        cli.Execute()
+}
+#+end_src
+
+The new parameter appears in the help output:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/stringparam/main.go export --help
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Export test system resources and transform them into managed resources that the Crossplane provider can consume
+
+Usage:
+  test-exporter export [flags]
+
+Flags:
+  -h, --help              help for export
+  -k, --kind strings      Resource kinds to export
+  -o, --output string     redirect the YAML output to a file
+  -u, --username string   username used for authentication
+
+Global Flags:
+  -c, --config string   Configuration file
+  -v, --verbose         Verbose output
+#+end_example
+
+Set the value using the =--username= flag:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/stringparam/main.go export --username anonymous
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked username=anonymous is-set=true
+: INFO value set by user value=anonymous
+
+Or using the shorthand =-u= flag:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/stringparam/main.go export -u anonymous
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked username=anonymous is-set=true
+: INFO value set by user value=anonymous
+
+Or using the =USERNAME= environment variable:
+
+#+begin_src sh :exports both :results output :eval no-export
+USERNAME=anonymous go run ./examples/stringparam/main.go export
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked username=anonymous is-set=true
+: INFO value set by user value=anonymous
+
+When no value is provided, the =TextInput= widget prompts for it
+interactively:
+
+#+caption: Asking a string config parameter value
+[[file:examples/stringparam/example.gif]]
