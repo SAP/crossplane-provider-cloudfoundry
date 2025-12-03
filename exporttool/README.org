@@ -1200,3 +1200,234 @@ interactively:
 
 #+caption: Asking a string config parameter value
 [[file:examples/stringparam/example.gif]]
+
+*** String slice configuration parameter
+
+A string slice configuration parameter configures values of type =[]string=.
+
+Create a new /string slice/ configuration parameter using the
+=configparam.StringSlice= function:
+
+#+begin_src go :eval never
+func StringSlice(name, description string) *StringSliceParam
+#+end_src
+
+The two mandatory arguments are /name/ and /description/. Fine-tune
+the parameter with these methods:
+
+- =WithShortName= :: Single-character short command-line flag
+- =WithFlagName= :: Long format of the command-line flag (defaults to
+  /name/)
+- =WithEnvVarName= :: Environment variable name for the parameter
+- =WithDefaultValue= :: Default value of the parameter
+- =WithPossibleValues= :: Limit the selection options offered during =ValueOrAsk=
+- =WithPossibleValuesFn= :: Function that provides the selection
+  options offered during =ValueOrAsk=
+
+Use the =Value()= method to retrieve the parameter value. The
+=IsSet()= method returns true if the user has explicitly set the
+value.
+
+The =ValueOrAsk= method returns the value if set. Otherwise, it
+prompts for the value interactively using the =MultiInput=
+widget. Interactive prompting requires setting possible values with
+=WithPossibleValues= or =WithPossibleValuesFn=.
+
+**** Without setting possible values
+
+The following example configures a /StringSlice/ parameter:
+
+#+name: configure-string-woposs-def
+#+begin_src go :eval never
+var testParam = configparam.StringSlice("protocol", "list of supported protocols").
+	WithShortName("p").
+	WithEnvVarName("PROTOCOLS")
+#+end_src
+
+Complete example:
+
+#+begin_src go :noweb yes :tangle examples/stringslice/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked",
+		"protocols", testParam.Value(),
+		"num-of-protos", len(testParam.Value()),
+		"is-set", testParam.IsSet(),
+	)
+
+	events.Stop()
+	return nil
+}
+
+<<configure-string-woposs-def>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.AddConfigParams(testParam)
+	<<configure-exportlogic>>
+        cli.Execute()
+}
+#+end_src
+
+The new parameter appears in the help output:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/stringslice/main.go export --help
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Export test system resources and transform them into managed resources that the Crossplane provider can consume
+
+Usage:
+  test-exporter export [flags]
+
+Flags:
+  -h, --help               help for export
+  -k, --kind strings       Resource kinds to export
+  -o, --output string      redirect the YAML output to a file
+  -p, --protocol strings   list of supported protocols
+
+Global Flags:
+  -c, --config string   Configuration file
+  -v, --verbose         Verbose output
+#+end_example
+
+Without setting the value:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/stringslice/main.go export
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked protocols=[] num-of-protos=0 is-set=false
+
+
+Set the value using the =--protocol= flag:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/stringslice/main.go export --protocol HTTP --protocol HTTPS --protocol SSH
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked protocols="[HTTP HTTPS SSH]" num-of-protos=3 is-set=true
+
+Set the value using the =-p= flag:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/stringslice/main.go export -p HTTP -p SFTP -p FTP
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked protocols="[HTTP SFTP FTP]" num-of-protos=3 is-set=true
+
+Set the value using the =PROTOCOLS= environment variable:
+
+#+begin_src sh :exports both :results output :eval no-export
+PROTOCOLS="HTTP HTTPS FTP" go run ./examples/stringslice/main.go export
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked protocols="[HTTP HTTPS FTP]" num-of-protos=3 is-set=true
+
+**** With static possible values
+
+To enable interactive prompting with /StringSlice/ configuration
+parameters, add static selection options using the
+=WithPossibleValues= method.
+
+Define the configuration parameter:
+
+#+name: configure-string-static-poss-def
+#+begin_src go :eval never
+var testParam = configparam.StringSlice("protocol", "list of supported protocols").
+	WithShortName("p").
+	WithEnvVarName("PROTOCOLS").
+	WithPossibleValues([]string{"HTTP", "HTTPS", "FTP", "SSH", "SFTP"})
+#+end_src
+
+Complete example:
+
+#+begin_src go :noweb yes :tangle examples/stringslicestatic/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked",
+		"protocols", testParam.Value(),
+		"num-of-protos", len(testParam.Value()),
+		"is-set", testParam.IsSet(),
+	)
+
+	protocols, err := testParam.ValueOrAsk(ctx)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("data acquired", "protocols", protocols)
+
+	events.Stop()
+	return nil
+}
+
+<<configure-string-static-poss-def>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.AddConfigParams(testParam)
+	<<configure-exportlogic>>
+        cli.Execute()
+}
+#+end_src
+
+You can set values with flags or environment variables as before:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/stringslicestatic/main.go export --protocol HTTP --protocol HTTPS --protocol SSH
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked protocols="[HTTP HTTPS SSH]" num-of-protos=3 is-set=true
+: INFO data acquired protocols="[HTTP HTTPS SSH]"
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/stringslicestatic/main.go export -p HTTP -p SFTP -p FTP
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked protocols="[HTTP SFTP FTP]" num-of-protos=3 is-set=true
+: INFO data acquired protocols="[HTTP SFTP FTP]"
+
+#+begin_src sh :exports both :results output :eval no-export
+PROTOCOLS="HTTP HTTPS FTP" go run ./examples/stringslicestatic/main.go export
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked protocols="[HTTP HTTPS FTP]" num-of-protos=3 is-set=true
+: INFO data acquired protocols="[HTTP HTTPS FTP]"
+
+When you omit the parameter values, the CLI tool prompts for them
+interactively:
+
+#+caption: Prompting for StringSlice value
+[[file:examples/stringslicestatic/example.gif]]

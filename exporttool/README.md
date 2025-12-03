@@ -1,25 +1,28 @@
-- [Introduction](#org8542e6a)
-- [Examples](#org5550c71)
-  - [The simplest CLI tool](#orgbdc5d94)
-  - [Exporting](#orgfca94b7)
-    - [Basic export subcommand](#orge7f63de)
-    - [Exporting a resource](#org745c91b)
-    - [Displaying warnings](#orgd8a519d)
-    - [Exporting commented out resources](#org7d2844f)
+- [Introduction](#orgd4bf572)
+- [Examples](#orgf51e282)
+  - [The simplest CLI tool](#orgbeb1b24)
+  - [Exporting](#org20a8dbd)
+    - [Basic export subcommand](#org4c5ff2b)
+    - [Exporting a resource](#orgaa5fada)
+    - [Displaying warnings](#orge0d508b)
+    - [Exporting commented out resources](#org9b29a44)
   - [Errors with attributes](#erratt-example)
-  - [Widgets](#orga3654a8)
-    - [TextInput widget](#org9f6ffc1)
-    - [MultiInput widget](#org5bf4322)
-  - [Configuration parameters](#org94dea3b)
-    - [Global configuration parameters](#orgfd7c454)
-      - [Verbose logging](#org0c38160)
-    - [Configuration parameters of the export subcommand](#org3319ebb)
-    - [Bool configuration parameter](#org9c9589d)
-    - [String configuration parameter](#orge91d281)
+  - [Widgets](#org3c7478c)
+    - [TextInput widget](#org98aaaa2)
+    - [MultiInput widget](#org2ca0921)
+  - [Configuration parameters](#org32b7b82)
+    - [Global configuration parameters](#org7076483)
+      - [Verbose logging](#org3e737bf)
+    - [Configuration parameters of the export subcommand](#orgd974605)
+    - [Bool configuration parameter](#orga659d3b)
+    - [String configuration parameter](#orgfe6a580)
+    - [String slice configuration parameter](#org4935426)
+      - [Without setting possible values](#org149c91c)
+      - [With static possible values](#org6e08a81)
 
 
 
-<a id="org8542e6a"></a>
+<a id="orgd4bf572"></a>
 
 # Introduction
 
@@ -32,14 +35,14 @@ TODO:
 > <https://docs.crossplane.io/v1.20/guides/import-existing-resources/>
 
 
-<a id="org5550c71"></a>
+<a id="orgf51e282"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="orgbdc5d94"></a>
+<a id="orgbeb1b24"></a>
 
 ## The simplest CLI tool
 
@@ -129,12 +132,12 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="orgfca94b7"></a>
+<a id="org20a8dbd"></a>
 
 ## Exporting
 
 
-<a id="orge7f63de"></a>
+<a id="org4c5ff2b"></a>
 
 ### Basic export subcommand
 
@@ -210,7 +213,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="org745c91b"></a>
+<a id="orgaa5fada"></a>
 
 ### Exporting a resource
 
@@ -317,7 +320,7 @@ cat output.yaml
     ...
 
 
-<a id="orgd8a519d"></a>
+<a id="orge0d508b"></a>
 
 ### Displaying warnings
 
@@ -430,7 +433,7 @@ cat output.yaml
     ...
 
 
-<a id="org7d2844f"></a>
+<a id="org9b29a44"></a>
 
 ### Exporting commented out resources
 
@@ -678,14 +681,14 @@ The error message appears on the console with all attributes displayed.
 The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 
 
-<a id="orga3654a8"></a>
+<a id="org3c7478c"></a>
 
 ## Widgets
 
 `xp-clifford` provides several CLI widgets to facility the interaction with the user.
 
 
-<a id="org9f6ffc1"></a>
+<a id="org98aaaa2"></a>
 
 ### TextInput widget
 
@@ -777,7 +780,7 @@ See the example in action:
 ![img](examples/textinput/example.gif "TextInput example")
 
 
-<a id="org5bf4322"></a>
+<a id="org2ca0921"></a>
 
 ### MultiInput widget
 
@@ -868,7 +871,7 @@ Running this example produces the following output:
 ![img](examples/multiinput/example.gif "MultiInput example")
 
 
-<a id="org94dea3b"></a>
+<a id="org32b7b82"></a>
 
 ## Configuration parameters
 
@@ -889,7 +892,7 @@ Currently, the following configuration parameter types are supported:
 All configuration parameters managed by `xp-clifford` implement the `configparam.ConfigParam` interface.
 
 
-<a id="orgfd7c454"></a>
+<a id="org7076483"></a>
 
 ### Global configuration parameters
 
@@ -900,7 +903,7 @@ Any CLI tool built using `xp-clifford` includes the following global flags:
 -   **`-h` or `--help`:** Print help message (bool)
 
 
-<a id="org0c38160"></a>
+<a id="org3e737bf"></a>
 
 #### Verbose logging
 
@@ -958,7 +961,7 @@ go run ./examples/verbose/main.go export -v
     DEBU export command invoked
 
 
-<a id="org3319ebb"></a>
+<a id="orgd974605"></a>
 
 ### Configuration parameters of the export subcommand
 
@@ -974,7 +977,7 @@ func AddConfigParams(param ...configparam.ConfigParam)
 ```
 
 
-<a id="org9c9589d"></a>
+<a id="orga659d3b"></a>
 
 ### Bool configuration parameter
 
@@ -1096,7 +1099,7 @@ CLIFFORD_TEST=1 go run ./examples/boolparam/main.go export
     INFO export command invoked test-value=true
 
 
-<a id="orge91d281"></a>
+<a id="orgfe6a580"></a>
 
 ### String configuration parameter
 
@@ -1225,3 +1228,224 @@ USERNAME=anonymous go run ./examples/stringparam/main.go export
 When no value is provided, the `TextInput` widget prompts for it interactively:
 
 ![img](examples/stringparam/example.gif "Asking a string config parameter value")
+
+
+<a id="org4935426"></a>
+
+### String slice configuration parameter
+
+A string slice configuration parameter configures values of type `[]string`.
+
+Create a new *string slice* configuration parameter using the `configparam.StringSlice` function:
+
+```go
+func StringSlice(name, description string) *StringSliceParam
+```
+
+The two mandatory arguments are *name* and *description*. Fine-tune the parameter with these methods:
+
+-   **`WithShortName`:** Single-character short command-line flag
+-   **`WithFlagName`:** Long format of the command-line flag (defaults to *name*)
+-   **`WithEnvVarName`:** Environment variable name for the parameter
+-   **`WithDefaultValue`:** Default value of the parameter
+-   **`WithPossibleValues`:** Limit the selection options offered during `ValueOrAsk`
+-   **`WithPossibleValuesFn`:** Function that provides the selection options offered during `ValueOrAsk`
+
+Use the `Value()` method to retrieve the parameter value. The `IsSet()` method returns true if the user has explicitly set the value.
+
+The `ValueOrAsk` method returns the value if set. Otherwise, it prompts for the value interactively using the `MultiInput` widget. Interactive prompting requires setting possible values with `WithPossibleValues` or `WithPossibleValuesFn`.
+
+
+<a id="org149c91c"></a>
+
+#### Without setting possible values
+
+The following example configures a *StringSlice* parameter:
+
+```go
+var testParam = configparam.StringSlice("protocol", "list of supported protocols").
+	WithShortName("p").
+	WithEnvVarName("PROTOCOLS")
+```
+
+Complete example:
+
+```go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked",
+		"protocols", testParam.Value(),
+		"num-of-protos", len(testParam.Value()),
+		"is-set", testParam.IsSet(),
+	)
+
+	events.Stop()
+	return nil
+}
+
+var testParam = configparam.StringSlice("protocol", "list of supported protocols").
+	WithShortName("p").
+	WithEnvVarName("PROTOCOLS")
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.AddConfigParams(testParam)
+	export.SetCommand(exportLogic)
+        cli.Execute()
+}
+```
+
+The new parameter appears in the help output:
+
+```sh
+go run ./examples/stringslice/main.go export --help
+```
+
+```
+Export test system resources and transform them into managed resources that the Crossplane provider can consume
+
+Usage:
+  test-exporter export [flags]
+
+Flags:
+  -h, --help               help for export
+  -k, --kind strings       Resource kinds to export
+  -o, --output string      redirect the YAML output to a file
+  -p, --protocol strings   list of supported protocols
+
+Global Flags:
+  -c, --config string   Configuration file
+  -v, --verbose         Verbose output
+```
+
+Without setting the value:
+
+```sh
+go run ./examples/stringslice/main.go export
+```
+
+    INFO export command invoked protocols=[] num-of-protos=0 is-set=false
+
+Set the value using the `--protocol` flag:
+
+```sh
+go run ./examples/stringslice/main.go export --protocol HTTP --protocol HTTPS --protocol SSH
+```
+
+    INFO export command invoked protocols="[HTTP HTTPS SSH]" num-of-protos=3 is-set=true
+
+Set the value using the `-p` flag:
+
+```sh
+go run ./examples/stringslice/main.go export -p HTTP -p SFTP -p FTP
+```
+
+    INFO export command invoked protocols="[HTTP SFTP FTP]" num-of-protos=3 is-set=true
+
+Set the value using the `PROTOCOLS` environment variable:
+
+```sh
+PROTOCOLS="HTTP HTTPS FTP" go run ./examples/stringslice/main.go export
+```
+
+    INFO export command invoked protocols="[HTTP HTTPS FTP]" num-of-protos=3 is-set=true
+
+
+<a id="org6e08a81"></a>
+
+#### With static possible values
+
+To enable interactive prompting with *StringSlice* configuration parameters, add static selection options using the `WithPossibleValues` method.
+
+Define the configuration parameter:
+
+```go
+var testParam = configparam.StringSlice("protocol", "list of supported protocols").
+	WithShortName("p").
+	WithEnvVarName("PROTOCOLS").
+	WithPossibleValues([]string{"HTTP", "HTTPS", "FTP", "SSH", "SFTP"})
+```
+
+Complete example:
+
+```go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked",
+		"protocols", testParam.Value(),
+		"num-of-protos", len(testParam.Value()),
+		"is-set", testParam.IsSet(),
+	)
+
+	protocols, err := testParam.ValueOrAsk(ctx)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("data acquired", "protocols", protocols)
+
+	events.Stop()
+	return nil
+}
+
+var testParam = configparam.StringSlice("protocol", "list of supported protocols").
+	WithShortName("p").
+	WithEnvVarName("PROTOCOLS").
+	WithPossibleValues([]string{"HTTP", "HTTPS", "FTP", "SSH", "SFTP"})
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.AddConfigParams(testParam)
+	export.SetCommand(exportLogic)
+        cli.Execute()
+}
+```
+
+You can set values with flags or environment variables as before:
+
+```sh
+go run ./examples/stringslicestatic/main.go export --protocol HTTP --protocol HTTPS --protocol SSH
+```
+
+    INFO export command invoked protocols="[HTTP HTTPS SSH]" num-of-protos=3 is-set=true
+    INFO data acquired protocols="[HTTP HTTPS SSH]"
+
+```sh
+go run ./examples/stringslicestatic/main.go export -p HTTP -p SFTP -p FTP
+```
+
+    INFO export command invoked protocols="[HTTP SFTP FTP]" num-of-protos=3 is-set=true
+    INFO data acquired protocols="[HTTP SFTP FTP]"
+
+```sh
+PROTOCOLS="HTTP HTTPS FTP" go run ./examples/stringslicestatic/main.go export
+```
+
+    INFO export command invoked protocols="[HTTP HTTPS FTP]" num-of-protos=3 is-set=true
+    INFO data acquired protocols="[HTTP HTTPS FTP]"
+
+When you omit the parameter values, the CLI tool prompts for them interactively:
+
+![img](examples/stringslicestatic/example.gif "Prompting for StringSlice value")
