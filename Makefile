@@ -173,6 +173,71 @@ test-acceptance:  $(KIND) $(HELM3) build
      esac
 .PHONY: cobertura submodules fallthrough run crds.clean dev-debug dev-clean demo-cluster demo-install demo-clean demo-debug
 
+##@ Upgrade Tests
+
+##@ Upgrade Tests
+
+.PHONY: test-upgrade-compile
+test-upgrade-compile: ## Verify upgrade tests compile
+	@$(INFO) compiling upgrade tests
+	@cd test/upgrade && go test -c -tags=upgrade -o /dev/null
+	@$(OK) upgrade tests compile successfully
+
+.PHONY: test-upgrade
+test-upgrade: $(KIND) ## Run upgrade tests
+	@$(INFO) running upgrade tests from $(UPGRADE_TEST_FROM_TAG) to $(UPGRADE_TEST_TO_TAG)
+	@test -n "$(UPGRADE_TEST_FROM_TAG)" || { echo "❌ Set UPGRADE_TEST_FROM_TAG"; exit 1; }
+	@test -n "$(UPGRADE_TEST_TO_TAG)" || { echo "❌ Set UPGRADE_TEST_TO_TAG"; exit 1; }
+	@cd test/upgrade && go test -v -tags=upgrade -timeout=45m ./... 2>&1 | tee ../../test-upgrade-output.log
+	@echo "========== Upgrade Test Summary =========="
+	@grep -E "PASS|FAIL|ok " test-upgrade-output.log | tail -5
+	@case `tail -n 1 test-upgrade-output.log` in \
+		*FAIL*) echo "❌ Upgrade test failed"; exit 1 ;; \
+		*ok*) echo "✅ Upgrade tests passed"; $(OK) upgrade tests passed ;; \
+		*) echo "⚠️  Could not determine test result"; exit 1 ;; \
+	esac
+
+.PHONY: test-upgrade-clean
+test-upgrade-clean: $(KIND) ## Clean upgrade test artifacts
+	@$(INFO) cleaning upgrade test artifacts
+	@$(KIND) get clusters 2>/dev/null | grep e2e | xargs -r -n1 $(KIND) delete cluster --name || true
+	@rm -rf test/upgrade/logs/
+	@rm -f test-upgrade-output.log
+	@$(OK) cleanup complete
+
+.PHONY: test-upgrade-help
+test-upgrade-help: ## Show upgrade test usage examples
+	@$(INFO) ""
+	@$(INFO) "Upgrade Test Examples:"
+	@$(INFO) "======================"
+	@$(INFO) ""
+	@$(INFO) "  1. Test current code (main -> main):"
+	@$(INFO) "     export UPGRADE_TEST_FROM_TAG=main"
+	@$(INFO) "     export UPGRADE_TEST_TO_TAG=main"
+	@$(INFO) "     make test-upgrade"
+	@$(INFO) ""
+	@$(INFO) "  2. Test release upgrade (v0.3.2 -> v0.4.0):"
+	@$(INFO) "     export UPGRADE_TEST_FROM_TAG=v0.3.2"
+	@$(INFO) "     export UPGRADE_TEST_TO_TAG=v0.4.0"
+	@$(INFO) "     make test-upgrade"
+	@$(INFO) ""
+	@$(INFO) "  3. With custom CRs:"
+	@$(INFO) "     export UPGRADE_TEST_CRS_PATH=./crs-minimal"
+	@$(INFO) "     make test-upgrade"
+	@$(INFO) ""
+	@$(INFO) "  4. Clean up:"
+	@$(INFO) "     make test-upgrade-clean"
+	@$(INFO) ""
+	@$(INFO) "Required Environment Variables:"
+	@$(INFO) "  CF_EMAIL, CF_USERNAME, CF_PASSWORD, CF_ENDPOINT"
+	@$(INFO) "  UPGRADE_TEST_FROM_TAG, UPGRADE_TEST_TO_TAG"
+	@$(INFO) ""
+	@$(INFO) "Optional Environment Variables:"
+	@$(INFO) "  UPGRADE_TEST_CRS_PATH (default: ./crs)"
+	@$(INFO) "  UPGRADE_TEST_VERIFY_TIMEOUT (default: 30 minutes)"
+	@$(INFO) "  UPGRADE_TEST_WAIT_FOR_PAUSE (default: 1 minute)"
+	@$(INFO) ""
+	
 # ====================================================================================
 # Special Targets
 
@@ -182,6 +247,11 @@ Crossplane Targets:
     submodules            Update the submodules, such as the common build scripts.
     run                   Run crossplane locally, out-of-cluster. Useful for development.
 
+Upgrade Testing:
+    test-upgrade          Run upgrade tests (requires env vars)
+    test-upgrade-compile  Verify upgrade tests compile
+    test-upgrade-clean    Clean up upgrade test artifacts
+    test-upgrade-help     Show detailed upgrade test usage
 endef
 # The reason CROSSPLANE_MAKE_HELP is used instead of CROSSPLANE_HELP is because the crossplane
 # binary will try to use CROSSPLANE_HELP if it is set, and this is for something different.
