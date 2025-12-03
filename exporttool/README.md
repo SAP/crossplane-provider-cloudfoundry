@@ -28,12 +28,7 @@
 
 `xp-clifford` (Crossplane CLI Framework for Resource Data Extraction) is a Go module that facilitates the development of CLI tools for exporting definitions of external resources in the format of specific Crossplane provider managed resource definitions.
 
-TODO:
-
-> Maybe it makes sense to add a sentence to the introduction, mentioning that the purpose of the tool is to automate creation of resource definitions, that are to be imported into Crossplane as per general import procedure.
-> 
-> <https://docs.crossplane.io/v1.20/guides/import-existing-resources/>
-
+The resource definitions can then be imported into Crossplane using the [standard import procedure](https://docs.crossplane.io/v2.1/guides/import-existing-resources/). It is recommended to check the generated definitions for comments, before doing the import. See also [Exporting commented out resources](#org7d2844f).
 
 <a id="org71c0f42"></a>
 
@@ -684,7 +679,9 @@ The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 
 ## Widgets
 
-`xp-clifford` provides several CLI widgets to facility the interaction with the user.
+`xp-clifford` provides several CLI widgets to facilitate the interaction with the user. 
+
+Note that for the widgets to run, the CLI tool must be executed in an interactive terminal. This is not always the case by default, when running or debugging an application within an IDE (like GoLand) using a Run Configuration. In such cases, make sure to configure the Run Configuration appropriately. Specifically for [GoLand](https://www.jetbrains.com/help/go/run-debug-configuration.html) it can be done by selecting `Emulate terminal in output console`.
 
 
 <a id="orgf7058d2"></a>
