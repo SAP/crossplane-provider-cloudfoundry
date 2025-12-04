@@ -545,9 +545,8 @@ INFO export command invoked
     # don't deploy it, this is a test resource!
     #
     # ---
-    # Object:
-    #   password: secret
-    #   user: test-user-commented
+    # password: secret
+    # user: test-user-commented
     # ...
 
 #+end_example

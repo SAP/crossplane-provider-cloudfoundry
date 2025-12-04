@@ -1,28 +1,28 @@
-- [Introduction](#orgd4bf572)
-- [Examples](#orgf51e282)
-  - [The simplest CLI tool](#orgbeb1b24)
-  - [Exporting](#org20a8dbd)
-    - [Basic export subcommand](#org4c5ff2b)
-    - [Exporting a resource](#orgaa5fada)
-    - [Displaying warnings](#orge0d508b)
-    - [Exporting commented out resources](#org9b29a44)
+- [Introduction](#org75a1052)
+- [Examples](#org71c0f42)
+  - [The simplest CLI tool](#org3b75b79)
+  - [Exporting](#orgec688f7)
+    - [Basic export subcommand](#orgd980541)
+    - [Exporting a resource](#org296d7cc)
+    - [Displaying warnings](#org10f4319)
+    - [Exporting commented out resources](#org2d6ba61)
   - [Errors with attributes](#erratt-example)
-  - [Widgets](#org3c7478c)
-    - [TextInput widget](#org98aaaa2)
-    - [MultiInput widget](#org2ca0921)
-  - [Configuration parameters](#org32b7b82)
-    - [Global configuration parameters](#org7076483)
-      - [Verbose logging](#org3e737bf)
-    - [Configuration parameters of the export subcommand](#orgd974605)
-    - [Bool configuration parameter](#orga659d3b)
-    - [String configuration parameter](#orgfe6a580)
-    - [String slice configuration parameter](#org4935426)
-      - [Without setting possible values](#org149c91c)
-      - [With static possible values](#org6e08a81)
+  - [Widgets](#org17df391)
+    - [TextInput widget](#orgf7058d2)
+    - [MultiInput widget](#org7b9c1bb)
+  - [Configuration parameters](#orga7912c6)
+    - [Global configuration parameters](#org88afebc)
+      - [Verbose logging](#org6d468c5)
+    - [Configuration parameters of the export subcommand](#org0aae0f6)
+    - [Bool configuration parameter](#org6ccf472)
+    - [String configuration parameter](#org7605cb1)
+    - [String slice configuration parameter](#org2dcead0)
+      - [Without setting possible values](#org1555823)
+      - [With static possible values](#orgf2cf95f)
 
 
 
-<a id="orgd4bf572"></a>
+<a id="org75a1052"></a>
 
 # Introduction
 
@@ -35,14 +35,14 @@ TODO:
 > <https://docs.crossplane.io/v1.20/guides/import-existing-resources/>
 
 
-<a id="orgf51e282"></a>
+<a id="org71c0f42"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="orgbeb1b24"></a>
+<a id="org3b75b79"></a>
 
 ## The simplest CLI tool
 
@@ -132,12 +132,12 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="org20a8dbd"></a>
+<a id="orgec688f7"></a>
 
 ## Exporting
 
 
-<a id="org4c5ff2b"></a>
+<a id="orgd980541"></a>
 
 ### Basic export subcommand
 
@@ -213,7 +213,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="orgaa5fada"></a>
+<a id="org296d7cc"></a>
 
 ### Exporting a resource
 
@@ -320,7 +320,7 @@ cat output.yaml
     ...
 
 
-<a id="orge0d508b"></a>
+<a id="org10f4319"></a>
 
 ### Displaying warnings
 
@@ -433,7 +433,7 @@ cat output.yaml
     ...
 
 
-<a id="org9b29a44"></a>
+<a id="org2d6ba61"></a>
 
 ### Exporting commented out resources
 
@@ -542,9 +542,8 @@ INFO export command invoked
     # don't deploy it, this is a test resource!
     #
     # ---
-    # Object:
-    #   password: secret
-    #   user: test-user-commented
+    # password: secret
+    # user: test-user-commented
     # ...
 
 ```
@@ -681,14 +680,14 @@ The error message appears on the console with all attributes displayed.
 The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 
 
-<a id="org3c7478c"></a>
+<a id="org17df391"></a>
 
 ## Widgets
 
 `xp-clifford` provides several CLI widgets to facility the interaction with the user.
 
 
-<a id="org98aaaa2"></a>
+<a id="orgf7058d2"></a>
 
 ### TextInput widget
 
@@ -780,7 +779,7 @@ See the example in action:
 ![img](examples/textinput/example.gif "TextInput example")
 
 
-<a id="org2ca0921"></a>
+<a id="org7b9c1bb"></a>
 
 ### MultiInput widget
 
@@ -871,7 +870,7 @@ Running this example produces the following output:
 ![img](examples/multiinput/example.gif "MultiInput example")
 
 
-<a id="org32b7b82"></a>
+<a id="orga7912c6"></a>
 
 ## Configuration parameters
 
@@ -892,7 +891,7 @@ Currently, the following configuration parameter types are supported:
 All configuration parameters managed by `xp-clifford` implement the `configparam.ConfigParam` interface.
 
 
-<a id="org7076483"></a>
+<a id="org88afebc"></a>
 
 ### Global configuration parameters
 
@@ -903,7 +902,7 @@ Any CLI tool built using `xp-clifford` includes the following global flags:
 -   **`-h` or `--help`:** Print help message (bool)
 
 
-<a id="org3e737bf"></a>
+<a id="org6d468c5"></a>
 
 #### Verbose logging
 
@@ -961,7 +960,7 @@ go run ./examples/verbose/main.go export -v
     DEBU export command invoked
 
 
-<a id="orgd974605"></a>
+<a id="org0aae0f6"></a>
 
 ### Configuration parameters of the export subcommand
 
@@ -977,7 +976,7 @@ func AddConfigParams(param ...configparam.ConfigParam)
 ```
 
 
-<a id="orga659d3b"></a>
+<a id="org6ccf472"></a>
 
 ### Bool configuration parameter
 
@@ -1099,7 +1098,7 @@ CLIFFORD_TEST=1 go run ./examples/boolparam/main.go export
     INFO export command invoked test-value=true
 
 
-<a id="orgfe6a580"></a>
+<a id="org7605cb1"></a>
 
 ### String configuration parameter
 
@@ -1230,7 +1229,7 @@ When no value is provided, the `TextInput` widget prompts for it interactively:
 ![img](examples/stringparam/example.gif "Asking a string config parameter value")
 
 
-<a id="org4935426"></a>
+<a id="org2dcead0"></a>
 
 ### String slice configuration parameter
 
@@ -1256,7 +1255,7 @@ Use the `Value()` method to retrieve the parameter value. The `IsSet()` method r
 The `ValueOrAsk` method returns the value if set. Otherwise, it prompts for the value interactively using the `MultiInput` widget. Interactive prompting requires setting possible values with `WithPossibleValues` or `WithPossibleValuesFn`.
 
 
-<a id="org149c91c"></a>
+<a id="org1555823"></a>
 
 #### Without setting possible values
 
@@ -1362,7 +1361,7 @@ PROTOCOLS="HTTP HTTPS FTP" go run ./examples/stringslice/main.go export
     INFO export command invoked protocols="[HTTP HTTPS FTP]" num-of-protos=3 is-set=true
 
 
-<a id="org6e08a81"></a>
+<a id="orgf2cf95f"></a>
 
 #### With static possible values
 
