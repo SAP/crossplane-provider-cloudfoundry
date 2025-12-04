@@ -1237,7 +1237,7 @@ prompts for the value interactively using the =MultiInput=
 widget. Interactive prompting requires setting possible values with
 =WithPossibleValues= or =WithPossibleValuesFn=.
 
-**** Without setting possible values
+**** Without possible values
 
 The following example configures a /StringSlice/ parameter:
 
@@ -1438,10 +1438,140 @@ interactively:
 
 **** With dynamic possible values
 
-Sometimes, it is impossible to define the set of possible
-/StringSlice/ parameter values upfront, in build time. The value set
-may depend on a previous interactive selection of the user or on the
-result of an API request.
+Sometimes the set of possible /StringSlice/ parameter values cannot be
+defined at build time. The value set may depend on a previous
+interactive selection or the result of an API request.
 
-In such cases, we can set the possible values dynamically, using the
+In such cases, set the possible values dynamically using the
 =WithPossibleValuesFn= method.
+
+Consider a simple /Bool/ configuration parameter:
+
+#+name: configure-bool-secure
+#+begin_src go :eval never
+var secureParam = configparam.Bool("secure", "secure protocol").
+        WithShortName("s").
+        WithEnvVarName("SECURE")
+#+end_src
+
+Based on the value of =secureParam=, the =possibleProtocols= function
+suggests different protocol names:
+
+#+name: possibleProtocols
+#+begin_src go :eval never
+func possibleProtocols() ([]string, error) {
+	if secureParam.Value() {
+		return []string{"HTTPS", "SFTP", "SSH"}, nil
+	}
+	return []string{"FTP", "HTTP"}, nil
+}
+#+end_src
+
+The =protocolsParam= configuration parameter uses =possibleProtocols=
+when prompting the user with the =ValueOrAsk= method:
+
+#+name: configure-protocolsParam
+#+begin_src go :eval never
+var protocolsParam = configparam.StringSlice("protocol", "list of supported protocols").
+	WithShortName("p").
+	WithEnvVarName("PROTOCOLS").
+	WithPossibleValuesFn(possibleProtocols)
+#+end_src
+
+Complete example:
+
+#+begin_src go :noweb yes :tangle examples/stringslicedynamic/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked",
+	        "secure", secureParam.Value(),
+		"secure-is-set", secureParam.IsSet(),
+		"protocols", protocolsParam.Value(),
+		"num-of-protos", len(protocolsParam.Value()),
+		"protocols-is-set", protocolsParam.IsSet(),
+	)
+
+	protocols, err := protocolsParam.ValueOrAsk(ctx)
+	if err != nil {
+		return err
+	}
+
+	slog.Info("data acquired", "protocols", protocols)
+
+	events.Stop()
+	return nil
+}
+
+<<possibleProtocols>>
+
+<<configure-bool-secure>>
+
+<<configure-protocolsParam>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.AddConfigParams(secureParam, protocolsParam)
+	<<configure-exportlogic>>
+        cli.Execute()
+}
+#+end_src
+
+Both parameters appear in the help output:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/stringslicedynamic/main.go export --help
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Export test system resources and transform them into managed resources that the Crossplane provider can consume
+
+Usage:
+  test-exporter export [flags]
+
+Flags:
+  -h, --help               help for export
+  -k, --kind strings       Resource kinds to export
+  -o, --output string      redirect the YAML output to a file
+  -p, --protocol strings   list of supported protocols
+  -s, --secure             secure protocol
+
+Global Flags:
+  -c, --config string   Configuration file
+  -v, --verbose         Verbose output
+#+end_example
+
+Set the values using flags as usual:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/stringslicedynamic/main.go export -s --protocol HTTPS --protocol SFTP
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked secure=true secure-is-set=true protocols="[HTTPS SFTP]" num-of-protos=2 protocols-is-set=true
+: INFO data acquired protocols="[HTTPS SFTP]"
+
+When the /protocol/ configuration parameter is not set, the CLI
+prompts for its value interactively. The available options depend on
+the value of /secure/.
+
+If /secure/ is not set:
+
+#+caption: Prompting for StringSlice dynamically - secure is off
+[[file:examples/stringslicedynamic/example1.gif]]
+
+If /secure/ is set:
+
+#+caption: Prompting for StringSlice dynamically - secure is on
+[[file:examples/stringslicedynamic/example2.gif]]
