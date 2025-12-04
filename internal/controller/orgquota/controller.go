@@ -32,6 +32,7 @@ const (
 	errCreate            = "cannot create cloudfoundry OrgQuota"
 	errUpdate            = "cannot update cloudfoundry OrgQuota"
 	errDelete            = "cannot delete cloudfoundry OrgQuota"
+	errIDNotSet          = ".Status.AtProvider.ID is not set"
 )
 
 // externalConnecter specifies how the Reconciler should connect to
@@ -207,7 +208,7 @@ func (e *externalClient) Delete(ctx context.Context, res resource.Managed) (mana
 
 	// assert that ID is set
 	if managedOrgQuota.Status.AtProvider.ID == nil {
-		return managed.ExternalDelete{}, errors.New(".Status.AtProvider.ID is not set")
+		return managed.ExternalDelete{}, errors.Wrap(errors.New(errIDNotSet), errDelete)
 	}
 
 	_, err := e.cloudFoundryClient.Delete(ctx, *managedOrgQuota.Status.AtProvider.ID)
