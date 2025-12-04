@@ -119,6 +119,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	}, nil
 }
 
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
 // An external service observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
@@ -289,17 +295,17 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Delete attempts to delete the external resource.
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
-		return errors.New(errWrongCRType)
+		return managed.ExternalDelete{}, errors.New(errWrongCRType)
 	}
 	cr.SetConditions(xpv1.Deleting())
 
 	if err := c.serviceinstance.Delete(ctx, cr); err != nil {
-		return errors.New(errDelete)
+		return managed.ExternalDelete{}, errors.New(errDelete)
 	}
-	return nil
+	return managed.ExternalDelete{}, nil
 }
 
 // extractCredentialSpec returns the parameters or credentials from the spec
