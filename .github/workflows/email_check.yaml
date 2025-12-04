@@ -150,11 +150,14 @@ jobs:
 
           # Phone number regex patterns (multiple formats)
           # International format with + and optional spaces/dashes
-          PHONE_PATTERN_1='\+[0-9]{1,4}[ -]?[0-9]{1,4}[ -]?[0-9]{1,9}[ -]?[0-9]{1,9}'
-          # Format with parentheses for area code
-          PHONE_PATTERN_2='\([0-9]{3,5}\)[ -]?[0-9]{3,4}[ -]?[0-9]{3,4}'
+          # Format: +1 (XXX) XXX-XXXX or +1 XXX XXX XXXX (11+ digits with spaces/dashes)
+          PHONE_PATTERN_1='\+[0-9][ -]?\(?[0-9]{3}\)?[ -][0-9]{3}[ -][0-9]{4}'
+          # Format with parentheses for area code, 
+          # Format: (XXX) XXX-XXXX or (XXX) XXX XXXX (10 digits with spaces/dashes)
+          PHONE_PATTERN_2='\([0-9]{3}\)[ -][0-9]{3}[ -][0-9]{4}'
           # Simple format with dashes or spaces
-          PHONE_PATTERN_3='[0-9]{3,4}[ -][0-9]{3,4}[ -][0-9]{3,4}'
+          # Format: XXX-XXX-XXXX or XXX XXX XXXX (10 digits with spaces/dashes)
+          PHONE_PATTERN_3='[0-9]{3}[ -][0-9]{3}[ -][0-9]{4}'
           # Combined pattern
           PHONE_PATTERN="($PHONE_PATTERN_1)|($PHONE_PATTERN_2)|($PHONE_PATTERN_3)"
           echo "ℹ️ Using phone number patterns to detect various formats"
