@@ -1,43 +1,45 @@
-- [Introduction](#org75a1052)
-- [Examples](#org71c0f42)
-  - [The simplest CLI tool](#org3b75b79)
-  - [Exporting](#orgec688f7)
-    - [Basic export subcommand](#orgd980541)
-    - [Exporting a resource](#org296d7cc)
-    - [Displaying warnings](#org10f4319)
-    - [Exporting commented out resources](#org2d6ba61)
+- [Introduction](#org723a276)
+- [Examples](#orgbe4fc6d)
+  - [The simplest CLI tool](#org865f2f2)
+  - [Exporting](#orga520f5f)
+    - [Basic export subcommand](#org7b6d008)
+    - [Exporting a resource](#orgc17d334)
+    - [Displaying warnings](#org6a40c4d)
+    - [Exporting commented out resources](#commented-export)
   - [Errors with attributes](#erratt-example)
-  - [Widgets](#org17df391)
-    - [TextInput widget](#orgf7058d2)
-    - [MultiInput widget](#org7b9c1bb)
-  - [Configuration parameters](#orga7912c6)
-    - [Global configuration parameters](#org88afebc)
-      - [Verbose logging](#org6d468c5)
-    - [Configuration parameters of the export subcommand](#org0aae0f6)
-    - [Bool configuration parameter](#org6ccf472)
-    - [String configuration parameter](#org7605cb1)
-    - [String slice configuration parameter](#org2dcead0)
-      - [Without setting possible values](#org1555823)
-      - [With static possible values](#orgf2cf95f)
+  - [Widgets](#orga28f5a9)
+    - [TextInput widget](#org7a4e2d7)
+    - [MultiInput widget](#org94f73ce)
+  - [Configuration parameters](#org6880570)
+    - [Global configuration parameters](#org13f0c63)
+      - [Verbose logging](#orgc460d17)
+    - [Configuration parameters of the export subcommand](#orgaaebc5f)
+    - [Bool configuration parameter](#org691473a)
+    - [String configuration parameter](#org6a30802)
+    - [String slice configuration parameter](#org9e62fea)
+      - [Without setting possible values](#orgfa3854c)
+      - [With static possible values](#orgd338b68)
+      - [With dynamic possible values](#org75086c9)
 
 
 
-<a id="org75a1052"></a>
+<a id="org723a276"></a>
 
 # Introduction
 
 `xp-clifford` (Crossplane CLI Framework for Resource Data Extraction) is a Go module that facilitates the development of CLI tools for exporting definitions of external resources in the format of specific Crossplane provider managed resource definitions.
 
-The resource definitions can then be imported into Crossplane using the [standard import procedure](https://docs.crossplane.io/v2.1/guides/import-existing-resources/). It is recommended to check the generated definitions for comments, before doing the import. See also [Exporting commented out resources](#org7d2844f).
+The resource definitions can then be imported into Crossplane using the [standard import procedure](https://docs.crossplane.io/v2.1/guides/import-existing-resources/). It is recommended to check the generated definitions for comments, before doing the import. See also [Exporting commented out resources](#commented-export).
 
-<a id="org71c0f42"></a>
+
+<a id="orgbe4fc6d"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="org3b75b79"></a>
+<a id="org865f2f2"></a>
 
 ## The simplest CLI tool
 
@@ -127,12 +129,12 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="orgec688f7"></a>
+<a id="orga520f5f"></a>
 
 ## Exporting
 
 
-<a id="orgd980541"></a>
+<a id="org7b6d008"></a>
 
 ### Basic export subcommand
 
@@ -208,7 +210,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="org296d7cc"></a>
+<a id="orgc17d334"></a>
 
 ### Exporting a resource
 
@@ -315,7 +317,7 @@ cat output.yaml
     ...
 
 
-<a id="org10f4319"></a>
+<a id="org6a40c4d"></a>
 
 ### Displaying warnings
 
@@ -428,7 +430,7 @@ cat output.yaml
     ...
 
 
-<a id="org2d6ba61"></a>
+<a id="commented-export"></a>
 
 ### Exporting commented out resources
 
@@ -675,16 +677,16 @@ The error message appears on the console with all attributes displayed.
 The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 
 
-<a id="org17df391"></a>
+<a id="orga28f5a9"></a>
 
 ## Widgets
 
-`xp-clifford` provides several CLI widgets to facilitate the interaction with the user. 
+`xp-clifford` provides several CLI widgets to facilitate the interaction with the user.
 
 Note that for the widgets to run, the CLI tool must be executed in an interactive terminal. This is not always the case by default, when running or debugging an application within an IDE (like GoLand) using a Run Configuration. In such cases, make sure to configure the Run Configuration appropriately. Specifically for [GoLand](https://www.jetbrains.com/help/go/run-debug-configuration.html) it can be done by selecting `Emulate terminal in output console`.
 
 
-<a id="orgf7058d2"></a>
+<a id="org7a4e2d7"></a>
 
 ### TextInput widget
 
@@ -776,7 +778,7 @@ See the example in action:
 ![img](examples/textinput/example.gif "TextInput example")
 
 
-<a id="org7b9c1bb"></a>
+<a id="org94f73ce"></a>
 
 ### MultiInput widget
 
@@ -867,7 +869,7 @@ Running this example produces the following output:
 ![img](examples/multiinput/example.gif "MultiInput example")
 
 
-<a id="orga7912c6"></a>
+<a id="org6880570"></a>
 
 ## Configuration parameters
 
@@ -888,7 +890,7 @@ Currently, the following configuration parameter types are supported:
 All configuration parameters managed by `xp-clifford` implement the `configparam.ConfigParam` interface.
 
 
-<a id="org88afebc"></a>
+<a id="org13f0c63"></a>
 
 ### Global configuration parameters
 
@@ -899,7 +901,7 @@ Any CLI tool built using `xp-clifford` includes the following global flags:
 -   **`-h` or `--help`:** Print help message (bool)
 
 
-<a id="org6d468c5"></a>
+<a id="orgc460d17"></a>
 
 #### Verbose logging
 
@@ -957,7 +959,7 @@ go run ./examples/verbose/main.go export -v
     DEBU export command invoked
 
 
-<a id="org0aae0f6"></a>
+<a id="orgaaebc5f"></a>
 
 ### Configuration parameters of the export subcommand
 
@@ -973,7 +975,7 @@ func AddConfigParams(param ...configparam.ConfigParam)
 ```
 
 
-<a id="org6ccf472"></a>
+<a id="org691473a"></a>
 
 ### Bool configuration parameter
 
@@ -1095,7 +1097,7 @@ CLIFFORD_TEST=1 go run ./examples/boolparam/main.go export
     INFO export command invoked test-value=true
 
 
-<a id="org7605cb1"></a>
+<a id="org6a30802"></a>
 
 ### String configuration parameter
 
@@ -1226,7 +1228,7 @@ When no value is provided, the `TextInput` widget prompts for it interactively:
 ![img](examples/stringparam/example.gif "Asking a string config parameter value")
 
 
-<a id="org2dcead0"></a>
+<a id="org9e62fea"></a>
 
 ### String slice configuration parameter
 
@@ -1252,7 +1254,7 @@ Use the `Value()` method to retrieve the parameter value. The `IsSet()` method r
 The `ValueOrAsk` method returns the value if set. Otherwise, it prompts for the value interactively using the `MultiInput` widget. Interactive prompting requires setting possible values with `WithPossibleValues` or `WithPossibleValuesFn`.
 
 
-<a id="org1555823"></a>
+<a id="orgfa3854c"></a>
 
 #### Without setting possible values
 
@@ -1358,7 +1360,7 @@ PROTOCOLS="HTTP HTTPS FTP" go run ./examples/stringslice/main.go export
     INFO export command invoked protocols="[HTTP HTTPS FTP]" num-of-protos=3 is-set=true
 
 
-<a id="orgf2cf95f"></a>
+<a id="orgd338b68"></a>
 
 #### With static possible values
 
@@ -1445,3 +1447,12 @@ PROTOCOLS="HTTP HTTPS FTP" go run ./examples/stringslicestatic/main.go export
 When you omit the parameter values, the CLI tool prompts for them interactively:
 
 ![img](examples/stringslicestatic/example.gif "Prompting for StringSlice value")
+
+
+<a id="org75086c9"></a>
+
+#### With dynamic possible values
+
+Sometimes, it is impossible to define the set of possible *StringSlice* parameter values upfront, in build time. The value set may depend on a previous interactive selection of the user or on the result of an API request.
+
+In such cases, we can set the possible values dynamically, using the `WithPossibleValuesFn` method.
