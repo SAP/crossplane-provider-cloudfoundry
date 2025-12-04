@@ -2,6 +2,8 @@ module github.com/SAP/crossplane-provider-cloudfoundry
 
 go 1.24.0
 
+toolchain go1.24.5
+
 require (
 	github.com/cloudfoundry/go-cfclient/v3 v3.0.0-alpha.12
 	github.com/crossplane-contrib/xp-testing v1.9.0
