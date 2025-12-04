@@ -20,15 +20,10 @@ is a Go module that facilitates the development of CLI tools for
 exporting definitions of external resources in the format of specific
 Crossplane provider managed resource definitions.
 
-TODO:
-#+begin_quote
-Maybe it makes sense to add a sentence to the introduction, mentioning
-that the purpose of the tool is to automate creation of resource
-definitions, that are to be imported into Crossplane as per general
-import procedure.
-
-https://docs.crossplane.io/v1.20/guides/import-existing-resources/
-#+end_quote
+The resource definitions can then be imported into Crossplane using
+the [[https://docs.crossplane.io/v2.1/guides/import-existing-resources/][standard import procedure]]. It is recommended to check the
+generated definitions for comments, before doing the import. See also
+[[#commented-export][Exporting commented out resources]].
 
 * Examples
 
@@ -439,6 +434,9 @@ cat output.yaml
 : ...
 
 *** Exporting commented out resources
+:PROPERTIES:
+:CUSTOM_ID: commented-export
+:END:
 
 During the export process, problems may prevent generation of valid
 managed resource definitions, or the definitions produced may be
@@ -681,8 +679,15 @@ same manner.
 
 ** Widgets
 
-=xp-clifford= provides several CLI widgets to facility the interaction
-with the user.
+=xp-clifford= provides several CLI widgets to facilitate the
+interaction with the user.
+
+Note that for the widgets to run, the CLI tool must be executed in an
+interactive terminal. This is not always the case by default, when
+running or debugging an application within an IDE (like GoLand) using
+a Run Configuration. In such cases, make sure to configure the Run
+Configuration appropriately. Specifically for [[https://www.jetbrains.com/help/go/run-debug-configuration.html][GoLand]] it can be done by
+selecting =Emulate terminal in output console=.
 
 *** TextInput widget
 
@@ -1430,3 +1435,13 @@ interactively:
 
 #+caption: Prompting for StringSlice value
 [[file:examples/stringslicestatic/example.gif]]
+
+**** With dynamic possible values
+
+Sometimes, it is impossible to define the set of possible
+/StringSlice/ parameter values upfront, in build time. The value set
+may depend on a previous interactive selection of the user or on the
+result of an API request.
+
+In such cases, we can set the possible values dynamically, using the
+=WithPossibleValuesFn= method.
