@@ -12,10 +12,17 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
+func marshal(resource any) ([]byte, error) {
+	if commentedYAML, ok := resource.(*ResourceWithComment); ok {
+		return yaml.Marshal(commentedYAML.Object)
+	}
+	return yaml.Marshal(resource)
+}
+
 // Marshal returns the YAML representation of a Kubernetes resource,
 // indented and wrapped with "---" and "..." markers.
 func Marshal(resource any) (string, error) {
-	b, err := yaml.Marshal(resource)
+	b, err := marshal(resource)
 	if err != nil {
 		return "", err
 	}
@@ -25,7 +32,7 @@ func Marshal(resource any) (string, error) {
 // MarshalPretty returns a syntax-highlighted YAML string suitable for
 // terminal display.
 func MarshalPretty(resource any) (string, error) {
-	b, err := yaml.Marshal(resource)
+	b, err := marshal(resource)
 	if err != nil {
 		jsonBytes, err2 := json.Marshal(resource)
 		if err2 == nil {
