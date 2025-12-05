@@ -866,7 +866,13 @@ Any CLI tool built using =xp-clifford= includes the following global flags:
 - =-v= or =--verbose= :: Enable verbose logging (bool)
 - =-h= or =--help= :: Print help message (bool)
 
+The verbose logging is explained in [[#verbose][Verbose logging]]. The configuration
+file handling is elaborated in the [[#config-file][Configuration file]].
+
 **** Verbose logging
+:PROPERTIES:
+:CUSTOM_ID: verbose
+:END:
 
 Enable verbose logging with the =-v= or =--verbose= flag. When
 enabled, structured log messages at the /Debug/ level are also printed
@@ -1575,3 +1581,127 @@ If /secure/ is set:
 
 #+caption: Prompting for StringSlice dynamically - secure is on
 [[file:examples/stringslicedynamic/example2.gif]]
+
+*** Configuration file
+:PROPERTIES:
+:CUSTOM_ID: config-file
+:END:
+
+In addition to CLI flags and environment variables, a CLI tool built
+with =xp-clifford= can read configuration from a YAML file.
+
+You can specify the configuration file path using the =--config= /
+=-c= global flag.
+
+If you don't specify a configuration file, the CLI looks for one in
+these locations, in order:
+
+1. =$XDG_CONFIG_HOME/<config_file_name>=
+2. =$HOME/<config_file_name>=
+
+The =config_file_name= is =export-cli-config-<shortname>=, where
+=shortname= is the value of =cli.Configuration.ShortName=.
+
+The YAML file contains key-value pairs, where keys are configuration
+parameter names in lowercase.
+
+Here is a simple example CLI with three configuration parameters:
+
+#+begin_src go :noweb yes :tangle examples/configfile/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked",
+		"protocols", protocolParam.Value(),
+		"username", usernameParam.Value(),
+		"boolparam", boolParam.Value(),
+	)
+
+	events.Stop()
+	return nil
+}
+
+var protocolParam = configparam.StringSlice("protocol", "list of supported protocols").
+	WithShortName("p").
+	WithEnvVarName("PROTOCOLS")
+
+var usernameParam = configparam.String("username", "username used for authentication").
+	WithShortName("u").
+	WithEnvVarName("USERNAME")
+
+var boolParam = configparam.Bool("bool", "test bool parameter").
+	WithShortName("b").
+	WithEnvVarName("CLIFFORD_BOOL")
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.AddConfigParams(protocolParam, usernameParam, boolParam)
+	export.SetCommand(exportLogic)
+	cli.Execute()
+}
+#+end_src
+
+Flag-based configuration works as expected:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/configfile/main.go export -b --protocol HTTPS --protocol SFTP --username anonymous
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked protocols="[HTTPS SFTP]" username=anonymous boolparam=true
+
+Without CLI flags:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/configfile/main.go export
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked protocols=[] username="" boolparam=false
+
+Now let's create a configuration file:
+
+#+begin_src yaml :tangle examples/configfile/config
+protocol:
+  - HTTP
+  - FTP
+username: config-user
+bool: true
+#+end_src
+
+The CLI reads configuration parameter values from this file:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/configfile/main.go export --config ./examples/configfile/config
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked protocols="[HTTP FTP]" username=config-user boolparam=true
+
+Environment variables override values from the configuration file:
+
+#+begin_src sh :exports both :results output :eval no-export
+PROTOCOLS="FTP" go run ./examples/configfile/main.go export --config ./examples/configfile/config
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked protocols=[FTP] username=config-user boolparam=true
+
+CLI flags take the highest precedence and override everything else:
+
+#+begin_src sh :exports both :results output :eval no-export
+PROTOCOLS="FTP" go run ./examples/configfile/main.go export --config ./examples/configfile/config --protocol SSH -b=false
+#+end_src
+
+#+RESULTS:
+: INFO export command invoked protocols=[SSH] username=config-user boolparam=false
