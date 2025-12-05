@@ -1,29 +1,30 @@
-- [Introduction](#org3f67758)
-- [Examples](#orgc8efcff)
-  - [The simplest CLI tool](#org56fce6c)
-  - [Exporting](#org8d3e5fc)
-    - [Basic export subcommand](#org608d48e)
-    - [Exporting a resource](#org89948bd)
-    - [Displaying warnings](#org0943eaa)
+- [Introduction](#org3802a19)
+- [Examples](#org2f78715)
+  - [The simplest CLI tool](#org1db6611)
+  - [Exporting](#orgcfb8068)
+    - [Basic export subcommand](#org2f49ddd)
+    - [Exporting a resource](#org0833b9b)
+    - [Displaying warnings](#org48528d6)
     - [Exporting commented out resources](#commented-export)
   - [Errors with attributes](#erratt-example)
-  - [Widgets](#orgdd03260)
-    - [TextInput widget](#org92c16ab)
-    - [MultiInput widget](#org9771144)
-  - [Configuration parameters](#orgbce9fe6)
-    - [Global configuration parameters](#org39596eb)
-      - [Verbose logging](#org141338c)
-    - [Configuration parameters of the export subcommand](#org9132060)
-    - [Bool configuration parameter](#orge5cb05c)
-    - [String configuration parameter](#orgd447770)
-    - [String slice configuration parameter](#org792a89b)
-      - [Without possible values](#orgead3f8c)
-      - [With static possible values](#org25e038a)
-      - [With dynamic possible values](#orgc6d1035)
+  - [Widgets](#orgbe970ab)
+    - [TextInput widget](#org660e3ca)
+    - [MultiInput widget](#org2bf6668)
+  - [Configuration parameters](#org5e04a8a)
+    - [Global configuration parameters](#org3f9e8e8)
+      - [Verbose logging](#verbose)
+    - [Configuration parameters of the export subcommand](#orgf801c35)
+    - [Bool configuration parameter](#orgdd6d3bf)
+    - [String configuration parameter](#orgb88cef8)
+    - [String slice configuration parameter](#orgdeb4cbc)
+      - [Without possible values](#orgf7744a0)
+      - [With static possible values](#org51f9127)
+      - [With dynamic possible values](#orgebee486)
+    - [Configuration file](#config-file)
 
 
 
-<a id="org3f67758"></a>
+<a id="org3802a19"></a>
 
 # Introduction
 
@@ -32,14 +33,14 @@
 The resource definitions can then be imported into Crossplane using the [standard import procedure](https://docs.crossplane.io/v2.1/guides/import-existing-resources/). It is recommended to check the generated definitions for comments, before doing the import. See also [Exporting commented out resources](#commented-export).
 
 
-<a id="orgc8efcff"></a>
+<a id="org2f78715"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="org56fce6c"></a>
+<a id="org1db6611"></a>
 
 ## The simplest CLI tool
 
@@ -129,12 +130,12 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="org8d3e5fc"></a>
+<a id="orgcfb8068"></a>
 
 ## Exporting
 
 
-<a id="org608d48e"></a>
+<a id="org2f49ddd"></a>
 
 ### Basic export subcommand
 
@@ -210,7 +211,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="org89948bd"></a>
+<a id="org0833b9b"></a>
 
 ### Exporting a resource
 
@@ -317,7 +318,7 @@ cat output.yaml
     ...
 
 
-<a id="org0943eaa"></a>
+<a id="org48528d6"></a>
 
 ### Displaying warnings
 
@@ -677,7 +678,7 @@ The error message appears on the console with all attributes displayed.
 The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 
 
-<a id="orgdd03260"></a>
+<a id="orgbe970ab"></a>
 
 ## Widgets
 
@@ -686,7 +687,7 @@ The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 Note that for the widgets to run, the CLI tool must be executed in an interactive terminal. This is not always the case by default, when running or debugging an application within an IDE (like GoLand) using a Run Configuration. In such cases, make sure to configure the Run Configuration appropriately. Specifically for [GoLand](https://www.jetbrains.com/help/go/run-debug-configuration.html) it can be done by selecting `Emulate terminal in output console`.
 
 
-<a id="org92c16ab"></a>
+<a id="org660e3ca"></a>
 
 ### TextInput widget
 
@@ -778,7 +779,7 @@ See the example in action:
 ![img](examples/textinput/example.gif "TextInput example")
 
 
-<a id="org9771144"></a>
+<a id="org2bf6668"></a>
 
 ### MultiInput widget
 
@@ -869,7 +870,7 @@ Running this example produces the following output:
 ![img](examples/multiinput/example.gif "MultiInput example")
 
 
-<a id="orgbce9fe6"></a>
+<a id="org5e04a8a"></a>
 
 ## Configuration parameters
 
@@ -890,7 +891,7 @@ Currently, the following configuration parameter types are supported:
 All configuration parameters managed by `xp-clifford` implement the `configparam.ConfigParam` interface.
 
 
-<a id="org39596eb"></a>
+<a id="org3f9e8e8"></a>
 
 ### Global configuration parameters
 
@@ -900,8 +901,10 @@ Any CLI tool built using `xp-clifford` includes the following global flags:
 -   **`-v` or `--verbose`:** Enable verbose logging (bool)
 -   **`-h` or `--help`:** Print help message (bool)
 
+The verbose logging is explained in [Verbose logging](#verbose). The configuration file handling is elaborated in the [Configuration file](#config-file).
 
-<a id="org141338c"></a>
+
+<a id="verbose"></a>
 
 #### Verbose logging
 
@@ -959,7 +962,7 @@ go run ./examples/verbose/main.go export -v
     DEBU export command invoked
 
 
-<a id="org9132060"></a>
+<a id="orgf801c35"></a>
 
 ### Configuration parameters of the export subcommand
 
@@ -975,7 +978,7 @@ func AddConfigParams(param ...configparam.ConfigParam)
 ```
 
 
-<a id="orge5cb05c"></a>
+<a id="orgdd6d3bf"></a>
 
 ### Bool configuration parameter
 
@@ -1097,7 +1100,7 @@ CLIFFORD_TEST=1 go run ./examples/boolparam/main.go export
     INFO export command invoked test-value=true
 
 
-<a id="orgd447770"></a>
+<a id="orgb88cef8"></a>
 
 ### String configuration parameter
 
@@ -1228,7 +1231,7 @@ When no value is provided, the `TextInput` widget prompts for it interactively:
 ![img](examples/stringparam/example.gif "Asking a string config parameter value")
 
 
-<a id="org792a89b"></a>
+<a id="orgdeb4cbc"></a>
 
 ### String slice configuration parameter
 
@@ -1254,7 +1257,7 @@ Use the `Value()` method to retrieve the parameter value. The `IsSet()` method r
 The `ValueOrAsk` method returns the value if set. Otherwise, it prompts for the value interactively using the `MultiInput` widget. Interactive prompting requires setting possible values with `WithPossibleValues` or `WithPossibleValuesFn`.
 
 
-<a id="orgead3f8c"></a>
+<a id="orgf7744a0"></a>
 
 #### Without possible values
 
@@ -1360,7 +1363,7 @@ PROTOCOLS="HTTP HTTPS FTP" go run ./examples/stringslice/main.go export
     INFO export command invoked protocols="[HTTP HTTPS FTP]" num-of-protos=3 is-set=true
 
 
-<a id="org25e038a"></a>
+<a id="org51f9127"></a>
 
 #### With static possible values
 
@@ -1449,7 +1452,7 @@ When you omit the parameter values, the CLI tool prompts for them interactively:
 ![img](examples/stringslicestatic/example.gif "Prompting for StringSlice value")
 
 
-<a id="orgc6d1035"></a>
+<a id="orgebee486"></a>
 
 #### With dynamic possible values
 
@@ -1586,3 +1589,117 @@ If *secure* is not set:
 If *secure* is set:
 
 ![img](examples/stringslicedynamic/example2.gif "Prompting for StringSlice dynamically - secure is on")
+
+
+<a id="config-file"></a>
+
+### Configuration file
+
+In addition to CLI flags and environment variables, a CLI tool built with `xp-clifford` can read configuration from a YAML file.
+
+You can specify the configuration file path using the `--config` / `-c` global flag.
+
+If you don't specify a configuration file, the CLI looks for one in these locations, in order:
+
+1.  `$XDG_CONFIG_HOME/<config_file_name>`
+2.  `$HOME/<config_file_name>`
+
+The `config_file_name` is `export-cli-config-<shortname>`, where `shortname` is the value of `cli.Configuration.ShortName`.
+
+The YAML file contains key-value pairs, where keys are configuration parameter names in lowercase.
+
+Here is a simple example CLI with three configuration parameters:
+
+```go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func exportLogic(ctx context.Context, events export.EventHandler) error {
+	slog.Info("export command invoked",
+		"protocols", protocolParam.Value(),
+		"username", usernameParam.Value(),
+		"boolparam", boolParam.Value(),
+	)
+
+	events.Stop()
+	return nil
+}
+
+var protocolParam = configparam.StringSlice("protocol", "list of supported protocols").
+	WithShortName("p").
+	WithEnvVarName("PROTOCOLS")
+
+var usernameParam = configparam.String("username", "username used for authentication").
+	WithShortName("u").
+	WithEnvVarName("USERNAME")
+
+var boolParam = configparam.Bool("bool", "test bool parameter").
+	WithShortName("b").
+	WithEnvVarName("CLIFFORD_BOOL")
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+	export.AddConfigParams(protocolParam, usernameParam, boolParam)
+	export.SetCommand(exportLogic)
+	cli.Execute()
+}
+```
+
+Flag-based configuration works as expected:
+
+```sh
+go run ./examples/configfile/main.go export -b --protocol HTTPS --protocol SFTP --username anonymous
+```
+
+    INFO export command invoked protocols="[HTTPS SFTP]" username=anonymous boolparam=true
+
+Without CLI flags:
+
+```sh
+go run ./examples/configfile/main.go export
+```
+
+    INFO export command invoked protocols=[] username="" boolparam=false
+
+Now let's create a configuration file:
+
+```yaml
+protocol:
+  - HTTP
+  - FTP
+username: config-user
+bool: true
+```
+
+The CLI reads configuration parameter values from this file:
+
+```sh
+go run ./examples/configfile/main.go export --config ./examples/configfile/config
+```
+
+    INFO export command invoked protocols="[HTTP FTP]" username=config-user boolparam=true
+
+Environment variables override values from the configuration file:
+
+```sh
+PROTOCOLS="FTP" go run ./examples/configfile/main.go export --config ./examples/configfile/config
+```
+
+    INFO export command invoked protocols=[FTP] username=config-user boolparam=true
+
+CLI flags take the highest precedence and override everything else:
+
+```sh
+PROTOCOLS="FTP" go run ./examples/configfile/main.go export --config ./examples/configfile/config --protocol SSH -b=false
+```
+
+    INFO export command invoked protocols=[SSH] username=config-user boolparam=false
