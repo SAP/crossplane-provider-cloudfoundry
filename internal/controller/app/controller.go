@@ -227,23 +227,29 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Delete managed resource
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.App)
 	if !ok {
-		return errors.New(errWrongKind)
+		return managed.ExternalDelete{}, errors.New(errWrongKind)
 	}
 
 	guid := meta.GetExternalName(cr)
 	if _, err := uuid.Parse(guid); err != nil {
-		return errors.New(errDeleteResource + ": No valid GUID found for the App")
+		return managed.ExternalDelete{}, errors.New(errDeleteResource + ": No valid GUID found for the App")
 	}
 
 	cr.SetConditions(xpv1.Deleting())
 	err := c.client.Delete(ctx, guid)
 	if err != nil {
-		return errors.Wrap(err, errDeleteResource)
+		return managed.ExternalDelete{}, errors.Wrap(err, errDeleteResource)
 	}
 
+	return managed.ExternalDelete{}, nil
+}
+
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
 	return nil
 }
 

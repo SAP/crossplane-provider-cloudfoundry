@@ -108,6 +108,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	return &external{client: domain.NewClient(cf), kube: c.kube}, nil
 }
 
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
 // An external is a managed.ExternalConnecter that is using the CloudFoundry API to observe and modify resources.
 type external struct {
 	client domain.Client
@@ -203,23 +209,23 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Delete managed resource Domain
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.Domain)
 	if !ok {
-		return errors.New(errNotDomainKind)
+		return managed.ExternalDelete{}, errors.New(errNotDomainKind)
 	}
 	cr.SetConditions(xpv1.Deleting())
 
 	// assert that ID is set
 	if cr.Status.AtProvider.ID == nil {
-		return errors.New(errDelete)
+		return managed.ExternalDelete{}, errors.New(errDelete)
 	}
 
 	_, err := c.client.Delete(ctx, *cr.Status.AtProvider.ID)
 	if err != nil {
-		return errors.Wrap(err, errDelete)
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
-	return nil
+	return managed.ExternalDelete{}, nil
 }
 
 // initializer type implements the managed.Initializer interface
