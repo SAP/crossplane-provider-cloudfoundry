@@ -38,6 +38,22 @@ var _ = Describe("Testing Type", func() {
 				Expect(parsan.ParseAndSanitize("", t)).To(BeEmpty())
 			})
 		})
+		Context("with valid maxLength", func() {
+			It("can be parsed", func() {
+				t = parsan.Terminal("abcd").WithMaxLength(4)
+				Expect(parsan.ParseAndSanitize("abcd", t)).To(Equal([]string{"abcd"}))
+			})
+		})
+		Context("with invalid maxLength", func() {
+			It("panics", func() {
+				Expect(func() {
+					parsan.Terminal("abcd").WithMaxLength(3)
+				}).To(Panic())
+				Expect(func() {
+					parsan.Terminal("abcd").WithMaxLength(5)
+				}).To(Panic())
+			})
+		})
 	})
 	Describe("Range", func() {
 		var r parsan.Rule
@@ -62,6 +78,22 @@ var _ = Describe("Testing Type", func() {
 			})
 			It("cannot parse ''", func() {
 				Expect(parsan.ParseAndSanitize("", r)).To(BeEmpty())
+			})
+		})
+		Context("with valid maxLength", func() {
+			It("can be parsed", func() {
+				r = parsan.Range('a', 'z').WithMaxLength(1)
+				Expect(parsan.ParseAndSanitize("c", r)).To(Equal([]string{"c"}))
+			})
+		})
+		Context("with invalid maxLength", func() {
+			It("panics", func() {
+				Expect(func() {
+					parsan.Range('a', 'z').WithMaxLength(0)
+				}).To(Panic())
+				Expect(func() {
+					parsan.Range('a', 'z').WithMaxLength(2)
+				}).To(Panic())
 			})
 		})
 	})
@@ -166,6 +198,27 @@ var _ = Describe("Testing Type", func() {
 				Expect(parsan.ParseAndSanitize("", c)).To(BeEmpty())
 			})
 		})
+		Context("with valid MaxLength", func() {
+			BeforeEach(func() {
+				c = parsan.Concat(
+					parsan.Terminal("ab"),
+					parsan.Terminal("cd"),
+					parsan.Terminal("ef"),
+				)
+			})
+			It("can parse if MaxLength is large enough", func() {
+				c.WithMaxLength(6)
+				Expect(parsan.ParseAndSanitize("abcdef", c)).To(Equal([]string{"abcdef"}))
+			})
+			It("can parse if MaxLength is larger than enough", func() {
+				c.WithMaxLength(7)
+				Expect(parsan.ParseAndSanitize("abcdef", c)).To(Equal([]string{"abcdef"}))
+			})
+			It("cannot parse if MaxLength is too low", func() {
+				c.WithMaxLength(5)
+				Expect(parsan.ParseAndSanitize("abcdef", c)).To(BeEmpty())
+			})
+		})
 	})
 	Describe("Alternative", func() {
 		var a parsan.Rule
@@ -221,6 +274,33 @@ var _ = Describe("Testing Type", func() {
 				Expect(parsan.ParseAndSanitize("", a)).To(BeEmpty())
 			})
 		})
+		Context("a / ab / abc", func() {
+			BeforeEach(func() {
+				a = parsan.Alternative(
+					parsan.Terminal("a"),
+					parsan.Terminal("ab"),
+					parsan.Terminal("abc"),
+				)
+			})
+			Context("with MaxLength = 4", func() {
+				It("validates 'abc'", func() {
+					Expect(parsan.ParseAndSanitize("abc",
+						a.WithMaxLength(4))).To(Equal([]string{"abc"}))
+				})
+			})
+			Context("with MaxLength = 3", func() {
+				It("validates 'abc'", func() {
+					Expect(parsan.ParseAndSanitize("abc",
+						a.WithMaxLength(3))).To(Equal([]string{"abc"}))
+				})
+			})
+			Context("with MaxLength = 2", func() {
+				It("cannot parse", func() {
+					Expect(parsan.ParseAndSanitize("abc",
+						a.WithMaxLength(2))).To(Equal([]string{"ab"}))
+				})
+			})
+		})
 	})
 	Describe("Named", func() {
 		var n parsan.Rule
@@ -238,13 +318,13 @@ var _ = Describe("Testing Type", func() {
 				Expect(parsan.ParseAndSanitize("", n)).To(BeEmpty())
 			})
 			It("can parse 'a' when referring to its name", func() {
-				Expect(parsan.ParseAndSanitize("a", parsan.RefNamed("term-a"))).To(Equal([]string{"a"}))
+				Expect(parsan.ParseAndSanitize("a", parsan.Ref("term-a"))).To(Equal([]string{"a"}))
 			})
 			It("cannot parse 'a' when referring to a nonexisting name", func() {
-				Expect(parsan.ParseAndSanitize("a", parsan.RefNamed("nonexisting"))).To(BeEmpty())
+				Expect(parsan.ParseAndSanitize("a", parsan.Ref("nonexisting"))).To(BeEmpty())
 			})
 			It("cannot parse 'b' when referring to its name", func() {
-				Expect(parsan.ParseAndSanitize("b", parsan.RefNamed("term-b"))).To(BeEmpty())
+				Expect(parsan.ParseAndSanitize("b", parsan.Ref("term-b"))).To(BeEmpty())
 			})
 		})
 		Context("rec = Terminal('a') | Terminal('a') rec", func() {
@@ -254,7 +334,7 @@ var _ = Describe("Testing Type", func() {
 						parsan.Terminal("a"),
 						parsan.Concat(
 							parsan.Terminal("a"),
-							parsan.RefNamed("term-a"),
+							parsan.Ref("term-a"),
 						),
 					))
 			})
@@ -296,6 +376,18 @@ var _ = Describe("Testing Type", func() {
 			It("cannot parse 'aaaa'", func() {
 				Expect(parsan.ParseAndSanitize("aaaa", s)).To(BeEmpty())
 			})
+			Context("With MaxLength = 0", func() {
+				It("can parse ''", func() {
+					Expect(parsan.ParseAndSanitize("", s.WithMaxLength(0))).To(Equal([]string{""}))
+				})
+			})
+			Context("With MaxLength = 1", func() {
+				It("panics", func() {
+					Expect(func() {
+						s.WithMaxLength(1)
+					}).To(Panic())
+				})
+			})
 		})
 		Context("seq(1,1, Terminal(a))", func() {
 			BeforeEach(func() {
@@ -312,6 +404,18 @@ var _ = Describe("Testing Type", func() {
 			})
 			It("cannot parse 'aaaa'", func() {
 				Expect(parsan.ParseAndSanitize("aaaa", s)).To(BeEmpty())
+			})
+			Context("With MaxLength = 1", func() {
+				It("can parse 'a'", func() {
+					Expect(parsan.ParseAndSanitize("a", s.WithMaxLength(1))).To(Equal([]string{"a"}))
+				})
+			})
+			Context("With MaxLength = 2", func() {
+				It("panics", func() {
+					Expect(func() {
+						s.WithMaxLength(2)
+					}).To(Panic())
+				})
 			})
 		})
 		Context("seq(2,2, Terminal(a))", func() {
@@ -333,6 +437,28 @@ var _ = Describe("Testing Type", func() {
 			It("cannot parse 'aaaa'", func() {
 				Expect(parsan.ParseAndSanitize("aaaa", s)).To(BeEmpty())
 			})
+			Context("With MaxLength = 1", func() {
+				BeforeEach(func() {
+					s = s.WithMaxLength(1)
+				})
+				It("cannot parse 'a'", func() {
+					Expect(parsan.ParseAndSanitize("a", s)).To(BeEmpty())
+				})
+				It("cannot parse 'aa'", func() {
+					Expect(parsan.ParseAndSanitize("a", s)).To(BeEmpty())
+				})
+			})
+			Context("With MaxLength = 2", func() {
+				BeforeEach(func() {
+					s = s.WithMaxLength(2)
+				})
+				It("cannot parse 'a'", func() {
+					Expect(parsan.ParseAndSanitize("a", s)).To(BeEmpty())
+				})
+				It("can parse 'aa'", func() {
+					Expect(parsan.ParseAndSanitize("aa", s)).To(Equal([]string{"aa"}))
+				})
+			})
 		})
 		Context("seq(0,1, Terminal(a))", func() {
 			BeforeEach(func() {
@@ -352,6 +478,28 @@ var _ = Describe("Testing Type", func() {
 			})
 			It("cannot parse 'b'", func() {
 				Expect(parsan.ParseAndSanitize("b", s)).To(BeEmpty())
+			})
+			Context("With MaxLength = 0", func() {
+				BeforeEach(func() {
+					s = s.WithMaxLength(0)
+				})
+				It("can parse ''", func() {
+					Expect(parsan.ParseAndSanitize("", s)).To(Equal([]string{""}))
+				})
+				It("can parse 'a'", func() {
+					Expect(parsan.ParseAndSanitize("a", s)).To(Equal([]string{""}))
+				})
+			})
+			Context("With MaxLength = 1", func() {
+				BeforeEach(func() {
+					s = s.WithMaxLength(1)
+				})
+				It("can parse ''", func() {
+					Expect(parsan.ParseAndSanitize("", s)).To(Equal([]string{""}))
+				})
+				It("cannot parse 'a'", func() {
+					Expect(parsan.ParseAndSanitize("a", s)).To(Equal([]string{"a"}))
+				})
 			})
 		})
 		Context("seq(1,3, Terminal(a))", func() {
@@ -376,10 +524,32 @@ var _ = Describe("Testing Type", func() {
 			It("cannot parse 'b'", func() {
 				Expect(parsan.ParseAndSanitize("b", s)).To(BeEmpty())
 			})
+			Context("With MaxLength = 2", func() {
+				BeforeEach(func() {
+					s = s.WithMaxLength(2)
+				})
+				It("can parse 'aa'", func() {
+					Expect(parsan.ParseAndSanitize("aa", s)).To(Equal([]string{"aa"}))
+				})
+				It("can parse 'aaa'", func() {
+					Expect(parsan.ParseAndSanitize("aaa", s)).To(Equal([]string{"aa"}))
+				})
+			})
+			Context("With MaxLength = 3", func() {
+				BeforeEach(func() {
+					s = s.WithMaxLength(3)
+				})
+				It("can parse 'aa'", func() {
+					Expect(parsan.ParseAndSanitize("aa", s)).To(Equal([]string{"aa"}))
+				})
+				It("can parse 'aaa'", func() {
+					Expect(parsan.ParseAndSanitize("aaa", s)).To(Equal([]string{"aaa"}))
+				})
+			})
 		})
 		Context("seq(0, inf, Terminal(a))", func() {
 			BeforeEach(func() {
-				s = parsan.Seq(0, parsan.SeqInf, parsan.Terminal("a"))
+				s = parsan.Seq(0, parsan.Unlimited, parsan.Terminal("a"))
 			})
 			It("can parse ''", func() {
 				Expect(parsan.ParseAndSanitize("", s)).To(Equal([]string{""}))
@@ -399,10 +569,35 @@ var _ = Describe("Testing Type", func() {
 			It("cannot parse 'ab'", func() {
 				Expect(parsan.ParseAndSanitize("ab", s)).To(BeEmpty())
 			})
+			Context("With MaxLength = 2", func() {
+				BeforeEach(func() {
+					s = s.WithMaxLength(2)
+				})
+				It("can parse 'aa'", func() {
+					Expect(parsan.ParseAndSanitize("aa", s)).To(Equal([]string{"aa"}))
+				})
+				It("can parse 'aaa'", func() {
+					Expect(parsan.ParseAndSanitize("aaa", s)).To(Equal([]string{"aa"}))
+				})
+			})
+			Context("With MaxLength = 3", func() {
+				BeforeEach(func() {
+					s = s.WithMaxLength(3)
+				})
+				It("can parse 'aa'", func() {
+					Expect(parsan.ParseAndSanitize("aa", s)).To(Equal([]string{"aa"}))
+				})
+				It("can parse 'aaa'", func() {
+					Expect(parsan.ParseAndSanitize("aaa", s)).To(Equal([]string{"aaa"}))
+				})
+				It("can parse 'aaaa'", func() {
+					Expect(parsan.ParseAndSanitize("aaaa", s)).To(Equal([]string{"aaa"}))
+				})
+			})
 		})
 		Context("seq(1, inf, Terminal(a))", func() {
 			BeforeEach(func() {
-				s = parsan.Seq(1, parsan.SeqInf, parsan.Terminal("a"))
+				s = parsan.Seq(1, parsan.Unlimited, parsan.Terminal("a"))
 			})
 			It("cannot parse ''", func() {
 				Expect(parsan.ParseAndSanitize("", s)).To(BeEmpty())
@@ -425,7 +620,7 @@ var _ = Describe("Testing Type", func() {
 		})
 		Context("seq(3, inf, Terminal(a))", func() {
 			BeforeEach(func() {
-				s = parsan.Seq(3, parsan.SeqInf, parsan.Terminal("a"))
+				s = parsan.Seq(3, parsan.Unlimited, parsan.Terminal("a"))
 			})
 			It("cannot parse ''", func() {
 				Expect(parsan.ParseAndSanitize("", s)).To(BeEmpty())

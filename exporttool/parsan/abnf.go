@@ -11,157 +11,98 @@ import (
 )
 
 func init() {
-	closedCheckedChan = make(chan result)
-	close(closedCheckedChan)
+	emptyResultChan = make(chan parseResult)
+	close(emptyResultChan)
 }
 
-// closedCheckedChan is a pre-closed channel that returns immediately when read.
-// It is used to signal early termination in validation routines, particularly
-// when cycle detection determines that further processing would result in infinite recursion.
-var closedCheckedChan chan result
+// emptyResultChan is a pre-closed channel that signals immediate termination
+// of parsing. It is returned from match() when no valid parse results can exist,
+// such as when cycle detection identifies infinite recursion or when a
+// referenced rule does not exist in the global registry.
+var emptyResultChan chan parseResult
 
-// namedPathNode represents a single entry in the parsing call stack.
-// It captures both the rule name and the input string at that point,
-// enabling detection of recursive cycles where the same rule is invoked
-// with identical input, which would lead to infinite recursion.
-type namedPathNode struct {
-	ruleName string // The name of the rule being processed
-	input    string // The input string being validated at this point in the call stack
+// callStackEntry represents a single frame in the parsing call stack.
+// It captures the rule name and the exact input string being parsed at that point.
+// Two entries are considered equal if both the rule name and input match exactly,
+// which indicates a recursive cycle that would lead to infinite recursion.
+type callStackEntry struct {
+	ruleName string
+	input    string
 }
 
-// parseContext maintains the state during recursive parsing operations.
-// It tracks the call stack of named rules to detect and prevent infinite
-// recursion that could occur with self-referential grammar definitions.
-type parseContext struct {
-	namedPath []namedPathNode // Stack of named rules with their inputs, used for cycle detection
+// validationContext maintains state during recursive descent parsing.
+// It tracks the sequence of named rule invocations along with their inputs
+// to detect and terminate infinite recursion cycles. Each parsing branch
+// maintains its own independent context to correctly identify cycles
+// within that specific execution path.
+type validationContext struct {
+	namedPath []callStackEntry
 }
 
-// newParseContext creates and returns a new parseContext with an empty call stack.
-// This should be called at the beginning of each top-level validation operation.
-func newParseContext() *parseContext {
-	return &parseContext{
-		namedPath: []namedPathNode{},
+// newParseContext creates a fresh validation context for initiating a new
+// top-level parse operation. The returned context has an empty call stack.
+func newParseContext() *validationContext {
+	return &validationContext{
+		namedPath: []callStackEntry{},
 	}
 }
 
-// hasPathNode checks whether the given namedPathNode already exists in the current call stack.
-// Returns true if an identical combination of rule name and input string is found,
-// indicating that the parser has entered a recursive cycle and should terminate
-// to prevent infinite recursion.
-func (pc *parseContext) hasPathNode(node namedPathNode) bool {
-	return slices.ContainsFunc(pc.namedPath, func(np namedPathNode) bool {
+// hasVisited checks whether the given rule and input combination already
+// appears in the current call stack. Returns true if a matching entry exists,
+// indicating that continuing would cause infinite recursion since the parser
+// would process the same rule with the same input indefinitely.
+func (pc *validationContext) hasVisited(node callStackEntry) bool {
+	return slices.ContainsFunc(pc.namedPath, func(np callStackEntry) bool {
 		return np.input == node.input && np.ruleName == node.ruleName
 	})
 }
 
-// appendPathNode pushes a new namedPathNode onto the call stack.
-// This should be called when entering a named rule during validation
-// to enable subsequent cycle detection.
-func (pc *parseContext) appendPathNode(node namedPathNode) {
+// pushToStack appends a new entry to the call stack. This should be called
+// when entering a named rule to record the invocation for subsequent cycle
+// detection checks.
+func (pc *validationContext) pushToStack(node callStackEntry) {
 	pc.namedPath = append(pc.namedPath, node)
 }
 
-// clone creates and returns a deep copy of the parseContext.
-// This is necessary when exploring multiple parsing branches in parallel,
-// as each branch needs its own independent copy of the call stack
-// to correctly detect cycles within that specific branch.
-func (pc *parseContext) clone() *parseContext {
-	return &parseContext{
+// clone creates a deep copy of the validation context. This is necessary
+// when exploring multiple parsing branches in parallel, as each branch
+// requires its own independent call stack to correctly track cycles
+// within that specific execution path without interference from sibling branches.
+func (pc *validationContext) clone() *validationContext {
+	return &validationContext{
 		namedPath: slices.Clone(pc.namedPath),
 	}
 }
 
-// result represents a single parsing outcome containing the successfully
-// validated portion of the input and the remaining unparsed suffix.
-// Multiple results may be produced when a rule has ambiguous matches.
-type result struct {
-	sanitized string // The portion of input that was successfully validated and potentially transformed
-	toParse   string // The remaining input that has not yet been processed
+// parseResult encapsulates a single possible outcome from parsing.
+// Since grammars may be ambiguous, a single input can yield multiple
+// valid parse results, each representing a different interpretation
+// of the input string.
+type parseResult struct {
+	consumedText string // The portion of input that was successfully matched and potentially transformed
+	rest         string // The remaining unparsed suffix of the input
 }
 
-// RuleWithMaxLength is an optional interface that rules can implement to specify
-// a maximum allowed length for input strings.
+// ParseAndSanitize validates the input string against the given rule and
+// returns all valid interpretations as sanitized strings.
 //
-// When a rule implements this interface, ParseAndSanitize will:
-//   - Truncate input strings exceeding the maximum length before validation
-//   - Filter out any sanitized results that exceed the maximum length
+// The function performs the following steps:
+//  1. Truncates the input if the rule specifies a maximum length constraint
+//  2. Executes the rule's match function to collect all possible parse results
+//  3. Filters results to include only those that fully consume the input (empty rest)
+//  4. Deduplicates identical results
+//  5. Sorts results by length in descending order, with alphabetical ordering as tiebreaker
 //
-// Note: Length validation is applied only to the top-level rule passed to
-// ParseAndSanitize. Nested rules implementing this interface are not checked
-// for length constraints during recursive validation.
-type RuleWithMaxLength interface {
-	MaxLength() int
-}
-
-// ruleWithLengthConstraint is a decorator that wraps an existing Rule
-// and adds maximum length validation capability by implementing RuleWithMaxLength.
-// The underlying rule's validation logic is preserved through embedding.
-type ruleWithLengthConstraint struct {
-	Rule          // Embedded rule providing the core validation logic
-	maxLength int // Maximum allowed length
-}
-
-// Compile-time verification that ruleWithLengthConstraint satisfies RuleWithMaxLength
-var _ RuleWithMaxLength = ruleWithLengthConstraint{}
-
-// RuleWithLengthConstraint wraps an existing rule with a maximum length constraint.
-// The returned rule implements RuleWithMaxLength, causing ParseAndSanitize to:
-//   - Truncate input exceeding the specified length before validation
-//   - Exclude sanitized results that exceed the specified length
-//
-// Parameters:
-//   - rule: The base validation rule to wrap
-//   - length: The maximum allowed length
-//
-// Returns a new Rule that enforces both the original validation logic
-// and the specified length constraint.
-func RuleWithLengthConstraint(rule Rule, length int) Rule {
-	return ruleWithLengthConstraint{
-		Rule:      rule,
-		maxLength: length,
+// Returns an empty slice if no valid complete parse exists for the input.
+func ParseAndSanitize(input string, rule Rule) []string {
+	if mlen := rule.maxLength(); mlen != Unlimited && mlen < len(input) {
+		input = input[:mlen]
 	}
-}
-
-// MaxLength returns the maximum allowed length configured for this rule.
-// Implements the RuleWithMaxLength interface.
-func (r ruleWithLengthConstraint) MaxLength() int {
-	return r.maxLength
-}
-
-// ParseAndSanitize validates an input string against the provided rule and returns
-// all valid sanitized interpretations as a sorted slice of strings.
-//
-// The function performs the following operations:
-//  1. If the rule implements RuleWithMaxLength, truncates input to the maximum length
-//  2. Validates the input against the rule, collecting all possible interpretations
-//  3. Filters results to include only those that fully consume the input
-//  4. If length-constrained, excludes results exceeding the maximum length
-//  5. Deduplicates and sorts results by length (longest first), then alphabetically
-//
-// Parameters:
-//   - in: The input string to validate and sanitize
-//   - rule: The validation rule defining acceptable input patterns
-//
-// Returns a slice of unique sanitized strings sorted by descending length,
-// with alphabetical ordering as a tiebreaker. Returns an empty slice if
-// no valid interpretations exist.
-func ParseAndSanitize(in string, rule Rule) []string {
-	if mlRule, ok := rule.(RuleWithMaxLength); ok {
-		if len(in) > mlRule.MaxLength() {
-			in = in[:mlRule.MaxLength()]
-		}
-	}
-	checked := rule.validate(newParseContext(), in)
+	checked := rule.match(newParseContext(), input)
 	suggestions := map[string]struct{}{}
 	for ch := range checked {
-		if len(ch.toParse) == 0 {
-			if mlRule, ok := rule.(RuleWithMaxLength); ok {
-				if mlRule.MaxLength() < len(ch.sanitized) {
-
-					continue
-				}
-			}
-			suggestions[ch.sanitized] = struct{}{}
+		if len(ch.rest) == 0 {
+			suggestions[ch.consumedText] = struct{}{}
 		}
 	}
 	return slices.SortedStableFunc(
@@ -181,141 +122,157 @@ func ParseAndSanitize(in string, rule Rule) []string {
 	)
 }
 
-// Rule is the core interface that all validation rule types must implement.
-// Rules define patterns for validating and sanitizing input strings, and can
-// be composed together to create complex grammar definitions.
+// Rule defines the interface for all grammar rule types in the parser.
+// Rules are composable building blocks that can be combined to construct
+// complex grammars for input validation and sanitization.
 //
-// The validate method is internal to the package and performs the actual
-// validation logic, returning results through a channel to support streaming
-// of multiple possible interpretations.
+// The parser uses a recursive descent approach with backtracking, where
+// each rule can produce multiple possible parse results through a channel.
+// This design supports ambiguous grammars where multiple valid interpretations
+// may exist for a single input.
 //
-// Built-in rule types include:
-//   - Terminal: Matches exact string literals
-//   - Range: Matches single characters within a specified range
-//   - Concat: Matches sequences of rules in order
-//   - Alternative: Matches any one of several possible rules
-//   - Named/RefNamed: Enables recursive and forward-referenced rules
-//   - Seq: Matches repeated occurrences of a rule
-//   - Opt: Matches zero or one occurrence of a rule
+// Built-in rule implementations include:
+//   - Terminal: matches exact string literals
+//   - Range: matches single characters within Unicode code point bounds
+//   - Concat: matches a sequence of rules in order
+//   - Alternative: matches any one of several possible rules
+//   - Named/Ref: enables recursive grammars and forward references
+//   - Seq: matches repeated occurrences of a rule (with min/max bounds)
+//   - Opt: matches zero or one occurrence of a rule
 type Rule interface {
-	// validate performs validation of the input string against this rule.
-	// It returns a channel that yields all possible parsing results.
-	// The parseContext tracks the call stack for cycle detection.
-	validate(*parseContext, string) <-chan result
+	// match attempts to parse the input string according to this rule.
+	// It returns a channel that yields all possible parse results.
+	// The validation context is used to track recursive rule invocations
+	// and detect infinite cycles. The channel is closed when all
+	// possible results have been yielded.
+	match(*validationContext, string) <-chan parseResult
 
-	// WithSuggestionFunc attaches a SuggestionFunc to this rule.
-	// When the input fails validation, the suggestion function is invoked
-	// to generate alternative valid results that can be used for sanitization.
-	// Not all rule types support this method; unsupported types will panic.
+	// WithSuggestionFunc attaches a fallback suggestion generator that is
+	// invoked when the rule fails to match the input. Not all rule types
+	// support suggestions; calling this on an unsupported type will panic.
 	WithSuggestionFunc(SuggestionFunc) Rule
+
+	// WithMaxLength sets the maximum allowed length for matched content.
+	// Results exceeding this length will be truncated or filtered.
+	// Returns the modified rule for method chaining.
+	WithMaxLength(maxLength int) Rule
+
+	// maxLength returns the maximum length constraint for this rule,
+	// or Unlimited if no constraint is set.
+	maxLength() int
 }
 
-// terminal is a rule that matches an exact string literal.
-// It succeeds only when the input begins with the specified string,
-// consuming exactly that portion of the input.
+// terminal is a rule that matches an exact string literal at the beginning
+// of the input. It is the most basic building block for constructing grammars.
 type terminal struct {
-	s string // The exact string literal that must appear at the start of the input
+	text   string
+	maxLen int
 }
 
 var _ Rule = &terminal{}
 
-// Terminal creates a Rule that matches the exact string s at the beginning of the input.
-// The rule succeeds if and only if the input starts with s, consuming exactly
-// len(s) characters and leaving the remainder for subsequent rules.
-//
-// Example:
-//
-//	Terminal("hello") matches "hello world" producing sanitized="hello", remaining=" world"
-//
-// Note: WithSuggestionFunc is not supported for Terminal rules and will panic if called,
-// as the terminal string itself serves as the only valid suggestion.
+// Terminal creates a rule that matches the exact string s at the start of
+// the input. On successful match, it consumes exactly len(s) characters
+// and leaves the remainder for subsequent rules to process.
 func Terminal(s string) Rule {
 	return &terminal{
-		s: s,
+		text:   s,
+		maxLen: Unlimited,
 	}
 }
 
-// validate checks if the input begins with this terminal's string literal.
-// If matched, it yields a single result with the terminal string as sanitized output
-// and the remainder of the input as toParse. If not matched, yields no results.
-func (t *terminal) validate(ctx *parseContext, in string) <-chan result {
-	out := make(chan result)
+// match checks if the input begins with this terminal's text.
+// Yields exactly one result if the prefix matches, or no results otherwise.
+// The consumed text is the terminal string itself, and the rest is the
+// input with that prefix removed.
+func (t *terminal) match(vctx *validationContext, input string) <-chan parseResult {
+	out := make(chan parseResult)
 	go func() {
 		defer close(out)
-		if remaining, matches := strings.CutPrefix(in, t.s); matches {
-			out <- result{
-				sanitized: t.s,
-				toParse:   remaining,
+		if remaining, matches := strings.CutPrefix(input, t.text); matches {
+			out <- parseResult{
+				consumedText: t.text,
+				rest:         remaining,
 			}
 		}
 	}()
 	return out
 }
 
-// WithSuggestionFunc panics when called on a Terminal rule.
-// Terminal rules do not support suggestion functions because the terminal
-// string itself is the only valid match.
-func (t *terminal) WithSuggestionFunc(fn SuggestionFunc) Rule {
+// WithSuggestionFunc is not supported for Terminal rules because the literal
+// text is the only valid match. Calling this method will panic.
+func (t *terminal) WithSuggestionFunc(suggester SuggestionFunc) Rule {
 	panic("not implemented")
 }
 
-// rangeType is a rule that matches a single character within an inclusive range.
-// It succeeds when the first character of the input falls between start and end (inclusive),
-// consuming exactly one character.
+// WithMaxLength sets the maximum length constraint for this terminal.
+// Panics if the specified length does not equal the terminal's text length,
+// as a terminal can only match its exact string.
+func (t *terminal) WithMaxLength(maxLength int) Rule {
+	if len(t.text) != maxLength {
+		panic(fmt.Sprintf("maxLength (%d) of terminal rule (%s) mismatch",
+			maxLength,
+			t.text))
+	}
+	t.maxLen = maxLength
+	return t
+}
+
+// maxLength returns the maximum length constraint, or Unlimited if none is set.
+func (t *terminal) maxLength() int {
+	return t.maxLen
+}
+
+// rangeType is a rule that matches a single character if its Unicode code point
+// falls within the inclusive range [minChar, maxChar]. This enables matching
+// character classes like digits (0-9) or letters (a-z).
 type rangeType struct {
-	start     rune           // The lower bound of the valid character range (inclusive)
-	end       rune           // The upper bound of the valid character range (inclusive)
-	suggestFn SuggestionFunc // Optional function to generate suggestions when input doesn't match
+	minChar   rune
+	maxChar   rune
+	suggestFn SuggestionFunc
+	maxLen    int
 }
 
 var _ Rule = &rangeType{}
 
-// Range creates a Rule that matches a single character within the inclusive range [start, end].
-// The rule succeeds if the first character of the input is greater than or equal to start
-// and less than or equal to end, consuming exactly one character.
+// Range creates a rule that matches a single character whose Unicode code point
+// is between start and end, inclusive. If end is less than start, the range
+// is normalized to match only the start character.
 //
-// If end is less than start, end is automatically set equal to start, creating a rule
-// that matches only the single character start.
-//
-// Examples:
-//
-//	Range('a', 'z') matches any lowercase ASCII letter
-//	Range('0', '9') matches any ASCII digit
-//	Range('A', 'Z') matches any uppercase ASCII letter
-//
-// The rule can be configured with WithSuggestionFunc to provide alternative valid
-// characters when the input doesn't match the range.
+// Use WithSuggestionFunc to provide alternative suggestions when the input
+// character falls outside the valid range.
 func Range(start, end rune) Rule {
 	if end < start {
 		end = start
 	}
 	return &rangeType{
-		start: start,
-		end:   end,
+		minChar: start,
+		maxChar: end,
+		maxLen:  Unlimited,
 	}
 }
 
-// validate checks if the first character of the input falls within [start, end].
-// If matched, yields a result with that character as sanitized output.
-// If not matched and a suggestion function is configured, invokes it to generate
-// alternative valid results.
-func (r *rangeType) validate(ctx *parseContext, in string) <-chan result {
-	out := make(chan result)
+// match checks if the first character of input falls within the range.
+// If it does, yields a result consuming that single character.
+// If no match occurs and a suggestion function is configured, invokes
+// the suggestion function to generate alternative parse results.
+func (r *rangeType) match(vctx *validationContext, input string) <-chan parseResult {
+	out := make(chan parseResult)
 	suggested := false
 	go func() {
 		defer close(out)
-		if len(in) > 0 {
-			first := rune(in[0])
-			if first >= r.start && first <= r.end {
+		if len(input) > 0 {
+			first := rune(input[0])
+			if first >= r.minChar && first <= r.maxChar {
 				suggested = true
-				out <- result{
-					sanitized: string(first),
-					toParse:   in[1:],
+				out <- parseResult{
+					consumedText: string(first),
+					rest:         input[1:],
 				}
 			}
 		}
 		if !suggested && r.suggestFn != nil {
-			for _, checked := range r.suggestFn(in) {
+			for _, checked := range r.suggestFn(input) {
 				if checked != nil {
 					out <- *checked
 				}
@@ -325,44 +282,55 @@ func (r *rangeType) validate(ctx *parseContext, in string) <-chan result {
 	return out
 }
 
-// WithSuggestionFunc attaches a suggestion function to this Range rule.
-// The function will be called when input doesn't match the character range,
-// allowing generation of valid alternative characters for sanitization.
-// Returns the modified rule to enable method chaining.
-func (r *rangeType) WithSuggestionFunc(fn SuggestionFunc) Rule {
-	r.suggestFn = fn
+// WithSuggestionFunc attaches a fallback generator that is invoked when
+// the input character does not fall within the valid range. The suggestion
+// function can provide alternative valid characters or transformations.
+// Returns the modified rule for method chaining.
+func (r *rangeType) WithSuggestionFunc(suggester SuggestionFunc) Rule {
+	r.suggestFn = suggester
 	return r
 }
 
-// concat is a rule that matches a sequence of two rules in order.
-// It succeeds when the input can be split such that the first portion
-// matches type1 and the remaining portion matches type2.
-// Multiple rules are combined by nesting concat instances.
+// WithMaxLength sets the maximum length constraint. For Range rules,
+// this must be exactly 1 since the rule matches only a single character.
+// Panics if any other value is provided.
+func (r *rangeType) WithMaxLength(maxLength int) Rule {
+	if maxLength != 1 {
+		panic(fmt.Sprintf("invalid maxLength (%d) for range rule",
+			maxLength))
+	}
+	r.maxLen = maxLength
+	return r
+}
+
+// maxLength returns the maximum length constraint, or Unlimited if none is set.
+func (r *rangeType) maxLength() int {
+	return r.maxLen
+}
+
+// concat is a rule that matches two sub-rules in sequence. The first rule
+// must match some prefix of the input, then the second rule must match
+// some prefix of the remainder. Multiple rules are combined by nesting
+// concat instances.
 type concat struct {
-	type1 Rule // The first rule that must match the beginning of the input
-	type2 Rule // The second rule that must match after type1 consumes its portion
+	first  Rule
+	second Rule
+	maxLen int
 }
 
 var _ Rule = &concat{}
 
-// Concat creates a Rule that matches a sequence of rules in order.
-// The resulting rule succeeds when the input can be partitioned into
-// consecutive substrings, each matching the corresponding rule in sequence.
+// Concat creates a rule that matches multiple rules in sequential order.
+// The input is partitioned into consecutive segments, where each segment
+// matches the corresponding rule in order.
 //
-// Multiple rules are combined right-to-left internally: Concat(a, b, c)
-// creates a structure equivalent to Concat(a, Concat(b, c)).
+// The function handles special cases:
+//   - Zero arguments: returns a rule that matches only empty strings (nil concat)
+//   - One argument: returns that rule unchanged (no wrapping needed)
+//   - Multiple arguments: combines rules right-to-left into nested concat pairs
 //
-// Special cases:
-//   - Concat() with no arguments returns a rule matching only empty strings
-//   - Concat(rule) with one argument returns that rule unchanged
-//
-// Examples:
-//
-//	Concat(Range('0','9'), Range('a','z')) matches "5e" but not "AA" or "e5"
-//	Concat(Terminal("ab"), Terminal("cd")) matches "abcd"
-//
-// Note: WithSuggestionFunc is not supported for Concat rules and will panic.
-// To add suggestions, apply them to the individual component rules instead.
+// WithSuggestionFunc is not supported for Concat; apply suggestions to
+// the individual component rules instead.
 func Concat(rules ...Rule) Rule {
 	if len(rules) == 0 {
 		return (*concat)(nil)
@@ -373,104 +341,148 @@ func Concat(rules ...Rule) Rule {
 	var merged *concat
 	for len(rules) > 1 {
 		merged = &concat{
-			type1: rules[len(rules)-2],
-			type2: rules[len(rules)-1],
+			first:  rules[len(rules)-2],
+			second: rules[len(rules)-1],
+			maxLen: Unlimited,
 		}
 		rules = append(rules[:len(rules)-2], merged)
 	}
 	return merged
 }
 
-// validate matches the input against both constituent rules in sequence.
-// First, all possible matches from type1 are collected. Then, for each match,
-// type2 is applied to the remaining input. Results are yielded for each
-// successful combination, with sanitized output being the concatenation
-// of both rules' sanitized portions.
+// match first collects all possible results from the first rule, then
+// for each of those results, applies the second rule to the remaining input.
+// Yields all combinations where both rules successfully match in sequence.
 //
-// A nil concat (from Concat() with no arguments) matches empty input only.
-func (c *concat) validate(ctx *parseContext, in string) <-chan result {
-	out := make(chan result)
+// A nil concat (created by Concat() with no arguments) matches only the
+// empty string, yielding a single result with empty consumed text and
+// the entire input as the remainder.
+func (c *concat) match(vctx *validationContext, input string) <-chan parseResult {
+	out := make(chan parseResult)
 	go func() {
 		defer close(out)
 		if c != nil {
-			checkedResults := []result{}
-			for checked := range c.type1.validate(ctx.clone(), in) {
-				checkedResults = append(checkedResults, checked)
+			firstRuleResults := []parseResult{}
+			for checked := range c.first.match(vctx.clone(), input) {
+				if c.maxLen == Unlimited || len(checked.consumedText) <= c.maxLen {
+					firstRuleResults = append(firstRuleResults, checked)
+				} else {
+					firstRuleResults = append(firstRuleResults, parseResult{
+						consumedText: checked.consumedText[:c.maxLen],
+						rest:         checked.rest,
+					})
+				}
 			}
-			for _, checkedResult := range checkedResults {
-				for checked := range c.type2.validate(ctx.clone(), checkedResult.toParse) {
-					out <- result{
-						sanitized: checkedResult.sanitized + checked.sanitized,
-						toParse:   checked.toParse,
+			for _, firstRuleResult := range firstRuleResults {
+				for secondRuleResult := range c.second.match(vctx.clone(), firstRuleResult.rest) {
+					consumedText := firstRuleResult.consumedText + secondRuleResult.consumedText
+					if c.maxLen == Unlimited || len(firstRuleResult.consumedText)+len(secondRuleResult.consumedText) <= c.maxLen {
+						out <- parseResult{
+							consumedText: consumedText,
+							rest:         secondRuleResult.rest,
+						}
+					} else {
+						out <- parseResult{
+							consumedText: consumedText[:c.maxLen],
+							rest:         secondRuleResult.rest,
+						}
 					}
 				}
 			}
 		} else {
-			out <- result{
-				sanitized: "",
-				toParse:   in,
+			out <- parseResult{
+				consumedText: "",
+				rest:         input,
 			}
 		}
 	}()
 	return out
 }
 
-// WithSuggestionFunc panics when called on a Concat rule.
-// Concat rules do not directly support suggestion functions.
-// Apply suggestions to the individual component rules instead.
-func (c *concat) WithSuggestionFunc(fn SuggestionFunc) Rule {
+// WithSuggestionFunc is not supported for Concat rules because suggestions
+// should be applied to individual component rules. Calling this method will panic.
+func (c *concat) WithSuggestionFunc(suggester SuggestionFunc) Rule {
 	panic("not implemented")
 }
 
-// alternative is a rule that succeeds if any one of its constituent rules matches.
-// It attempts each rule in order and yields all successful matches,
-// enabling ambiguous grammars where multiple interpretations are valid.
+// WithMaxLength sets the maximum combined length for the concatenated match.
+// Results exceeding this length will be truncated. An empty concat (nil)
+// can only have a maxLength of 0. Panics on negative values or invalid
+// constraints for empty concat.
+func (c *concat) WithMaxLength(maxLength int) Rule {
+	if c == nil {
+		if maxLength != 0 {
+			panic("empty concat rule cannot have maxLength other than 0")
+		}
+		return c
+	}
+	if maxLength < 0 {
+		panic(fmt.Sprintf("invalid maxLength (%d) for concat rule",
+			maxLength))
+	}
+	c.maxLen = maxLength
+	return c
+}
+
+// maxLength returns the maximum length constraint for the concatenated result,
+// or Unlimited if none is set. A nil concat returns Unlimited.
+func (c *concat) maxLength() int {
+	if c == nil {
+		return Unlimited
+	}
+	return c.maxLen
+}
+
+// alternative is a rule that succeeds if any one of its constituent rules
+// matches the input. It collects results from all matching alternatives,
+// supporting ambiguous grammars where multiple interpretations are valid.
 type alternative struct {
-	types     []Rule         // The list of alternative rules, attempted in order
-	suggestFn SuggestionFunc // Optional function to generate suggestions when no alternatives match
+	options   []Rule
+	suggestFn SuggestionFunc
+	maxLen    int
 }
 
 var _ Rule = &alternative{}
 
-// Alternative creates a Rule that matches if any of the provided rules matches.
-// All matching alternatives are explored, and results from each successful
-// match are yielded, supporting ambiguous grammar interpretations.
+// Alternative creates a rule that matches if any of the provided rules match.
+// All matching alternatives are explored and their results are yielded,
+// enabling the parser to handle ambiguous grammars with multiple valid
+// interpretations of the same input.
 //
-// The rules are attempted in the order provided, though all matches are
-// collected regardless of order.
-//
-// Examples:
-//
-//	Alternative(Range('a','z'), Range('A','Z')) matches any ASCII letter
-//	Alternative(Terminal("cat"), Terminal("car")) matches either word
-//
-// The rule can be configured with WithSuggestionFunc to provide fallback
-// suggestions when none of the alternatives match.
+// Use WithSuggestionFunc to provide fallback suggestions when none of
+// the alternatives match.
 func Alternative(types ...Rule) Rule {
 	return &alternative{
-		types: types,
+		options: types,
+		maxLen:  Unlimited,
 	}
 }
 
-// validate attempts to match the input against each alternative rule.
-// Results from all successful matches are yielded. If no alternatives match
-// and a suggestion function is configured, it is invoked to generate
-// fallback results.
-func (a *alternative) validate(ctx *parseContext, in string) <-chan result {
-	out := make(chan result)
+// match attempts each alternative rule in order and yields results from
+// all successful matches. If no alternatives match and a suggestion function
+// is configured, invokes the suggestion function to generate fallback results.
+// Results exceeding the maximum length constraint are filtered out.
+//
+//gocyclo:ignore
+func (a *alternative) match(vctx *validationContext, input string) <-chan parseResult {
+	out := make(chan parseResult)
 	go func() {
 		defer close(out)
 		validated := false
-		for _, t := range a.types {
-			for checked := range t.validate(ctx.clone(), in) {
-				out <- checked
-				validated = true
+		for _, t := range a.options {
+			for checked := range t.match(vctx.clone(), input) {
+				if a.maxLen == Unlimited || len(checked.consumedText) <= a.maxLen {
+					out <- checked
+					validated = true
+				}
 			}
 		}
 		if a.suggestFn != nil && !validated {
-			for _, checked := range a.suggestFn(in) {
-				if checked != nil {
-					out <- *checked
+			for _, checked := range a.suggestFn(input) {
+				if a.maxLen == Unlimited || len(checked.consumedText) <= a.maxLen {
+					if checked != nil {
+						out <- *checked
+					}
 				}
 			}
 		}
@@ -478,168 +490,192 @@ func (a *alternative) validate(ctx *parseContext, in string) <-chan result {
 	return out
 }
 
-// WithSuggestionFunc attaches a suggestion function to this Alternative rule.
-// The function is called only when none of the alternative rules match,
-// providing fallback suggestions for sanitization.
-// Returns the modified rule to enable method chaining.
-func (a *alternative) WithSuggestionFunc(fn SuggestionFunc) Rule {
-	a.suggestFn = fn
+// WithSuggestionFunc attaches a fallback generator that is invoked when
+// none of the alternatives match the input. The suggestion function can
+// provide alternative valid interpretations or corrections.
+// Returns the modified rule for method chaining.
+func (a *alternative) WithSuggestionFunc(suggester SuggestionFunc) Rule {
+	a.suggestFn = suggester
 	return a
 }
 
-// namedTypes is the global registry mapping rule names to their implementations.
-// This enables Named and RefNamed to create forward references and recursive rules.
-// Access is protected by namedTypesLock for thread-safe concurrent operations.
+// WithMaxLength sets the maximum length constraint for matched content.
+// Alternative results exceeding this length will be filtered out.
+// Panics on negative values.
+func (a *alternative) WithMaxLength(maxLength int) Rule {
+	if maxLength < 0 {
+		panic(fmt.Sprintf("invalid maxLength (%d) for alternative rule",
+			maxLength))
+	}
+	a.maxLen = maxLength
+	return a
+}
+
+// maxLength returns the maximum length constraint, or Unlimited if none is set.
+func (a *alternative) maxLength() int {
+	return a.maxLen
+}
+
+// namedRules is the global registry that maps rule names to their implementations.
+// This enables forward references and recursive grammar definitions.
+// Access is protected by registryMutex for thread safety.
 var (
-	namedTypes     = map[string]Rule{}
-	namedTypesLock = sync.RWMutex{}
+	namedRules    = map[string]Rule{}
+	registryMutex = sync.RWMutex{}
 )
 
-// named is a rule that references another rule by name.
-// It enables lazy evaluation, forward references, and recursive grammar definitions
-// by deferring the lookup of the actual rule until validation time.
+// named is a lazy reference to a rule registered in the global registry.
+// It defers the actual rule lookup until match time, enabling forward
+// references (using a rule before it is defined) and recursive grammars
+// (a rule that directly or indirectly references itself).
 type named struct {
-	name string // The name of the referenced rule in the namedTypes registry
+	name string
 }
 
 var _ Rule = &named{}
 
-// Named registers a rule with the given name in the global registry and returns it.
-// The named rule can later be referenced using RefNamed, enabling:
-//   - Forward references: Reference a rule before it is defined
-//   - Recursive rules: A rule that references itself directly or indirectly
-//   - Rule reuse: Define a rule once and reference it multiple times
-//
-// Parameters:
-//   - name: A unique identifier for this rule in the global registry
-//   - rule: The validation rule to register
-//
-// Returns the provided rule unchanged, allowing inline usage.
-//
-// Example of a recursive rule for nested parentheses:
-//
-//	Named("parens", Alternative(
-//	    Terminal("()"),
-//	    Concat(Terminal("("), RefNamed("parens"), Terminal(")")),
-//	))
+// Named registers a rule in the global registry under the specified name
+// and returns the rule unchanged. This enables other rules to reference
+// this rule by name using Ref, supporting:
+//   - Forward references: use a rule before defining it in the source code
+//   - Recursive grammars: a rule that references itself directly or indirectly
+//   - Reusability: define a rule once and reference it from multiple places
 func Named(name string, rule Rule) Rule {
-	namedTypesLock.Lock()
-	defer namedTypesLock.Unlock()
-	namedTypes[name] = rule
+	registryMutex.Lock()
+	defer registryMutex.Unlock()
+	namedRules[name] = rule
 	return rule
 }
 
-// randomNamePrefix is the prefix used when generating automatic unique rule names.
-// Names starting with this prefix are reserved for internal use by GetRandomName.
-const randomNamePrefix = "___random_name_"
+// autoGeneratedNamePrefix is the prefix used for automatically generated
+// unique rule names. Names beginning with this prefix are reserved for
+// internal use by GenerateUniqueName and should not be used directly.
+const autoGeneratedNamePrefix = "___random_name_"
 
-// GetRandomName generates a unique name that is not currently registered in the global registry.
-// This is used internally by Seq to create anonymous recursive rules, and can be used
-// externally when a unique rule name is needed without manual coordination.
+// GenerateUniqueName creates a unique name that does not exist in the
+// global rule registry. This is used internally by Seq to create named
+// rules for unbounded repetition patterns.
 //
-// The function generates names with the format "___random_name_<number>" where the number
-// is derived from a cryptographically random starting point to minimize collisions.
-//
-// Panics if unable to find an unused name after 50,000 attempts, which would indicate
-// an extremely congested registry.
-func GetRandomName() string {
+// The function generates names by combining the reserved prefix with
+// a random offset plus an incrementing counter. It panics after 50,000
+// failed attempts, which would indicate severe registry congestion
+// (an unlikely scenario in normal usage).
+func GenerateUniqueName() string {
 	suffixBigNum, err := rand.Int(rand.Reader, big.NewInt(10000000000))
 	if err != nil {
 		panic(err)
 	}
 	suffixNum := suffixBigNum.Int64()
 	for i := range 50000 {
-		name := fmt.Sprintf("%s%d", randomNamePrefix, i+int(suffixNum))
-		if _, ok := namedTypes[name]; !ok {
+		name := fmt.Sprintf("%s%d", autoGeneratedNamePrefix, i+int(suffixNum))
+		if _, ok := namedRules[name]; !ok {
 			return name
 		}
 	}
 	panic("cannot get random name")
 }
 
-// RefNamed creates a lazy reference to a rule registered with Named.
-// The actual rule lookup is deferred until validation time, enabling:
-//   - Forward references: Reference a rule that will be defined later
-//   - Recursive rules: Reference the containing rule for self-recursion
-//   - Mutual recursion: Two or more rules that reference each other
+// Ref creates a lazy reference to a rule registered via Named.
+// The actual rule lookup is deferred until match time, which allows:
+//   - Forward references: reference a rule before it is registered
+//   - Recursive definitions: a rule can reference itself through a Ref
 //
-// The referenced rule must be registered via Named before or during validation.
-// If the named rule does not exist at validation time, the reference yields no results.
+// If the referenced rule is not registered when match is called,
+// the Ref yields no results (returns emptyResultChan).
 //
-// Note: WithSuggestionFunc is not supported for RefNamed rules and will panic.
-// Apply suggestions to the actual named rule instead.
-func RefNamed(name string) Rule {
+// WithSuggestionFunc is not supported for Ref; apply suggestions
+// to the target rule instead.
+func Ref(name string) Rule {
 	return &named{
 		name: name,
 	}
 }
 
-// validate looks up the named rule in the global registry and delegates validation to it.
-// Implements cycle detection by checking if this rule with the same input has already
-// been seen in the current call stack. If a cycle is detected, returns immediately
-// with no results to prevent infinite recursion.
-func (n *named) validate(ctx *parseContext, in string) <-chan result {
-	np := namedPathNode{
+// match looks up the referenced rule in the global registry and delegates
+// parsing to it. Before delegating, it checks for recursive cycles by
+// examining whether this rule with this exact input already appears in
+// the call stack. If a cycle is detected, it returns emptyResultChan
+// immediately to prevent infinite recursion.
+//
+// Returns emptyResultChan if the referenced rule is not registered.
+func (n *named) match(vctx *validationContext, input string) <-chan parseResult {
+	np := callStackEntry{
 		ruleName: n.name,
-		input:    in,
+		input:    input,
 	}
 
-	if ctx.hasPathNode(np) {
-		return closedCheckedChan
+	if vctx.hasVisited(np) {
+		return emptyResultChan
 	}
-	ctx.appendPathNode(np)
-	namedTypesLock.RLock()
-	defer namedTypesLock.RUnlock()
-	if t, ok := namedTypes[n.name]; ok {
-		return t.validate(ctx.clone(), in)
+	vctx.pushToStack(np)
+	registryMutex.RLock()
+	defer registryMutex.RUnlock()
+	if t, ok := namedRules[n.name]; ok {
+		return t.match(vctx.clone(), input)
 	}
-	return closedCheckedChan
+	return emptyResultChan
 }
 
-// WithSuggestionFunc panics when called on a RefNamed rule.
-// Named references do not directly support suggestion functions.
-// Apply suggestions to the actual named rule definition instead.
-func (n *named) WithSuggestionFunc(fn SuggestionFunc) Rule {
+// WithSuggestionFunc is not supported for Ref rules because suggestions
+// should be applied to the target rule being referenced. Calling this
+// method will panic.
+func (n *named) WithSuggestionFunc(suggester SuggestionFunc) Rule {
 	panic("not implemented")
 }
 
-// SeqInf is a sentinel value indicating infinite maximum repetitions in Seq rules.
-// Use this as the max parameter when there should be no upper limit on repetitions.
-const SeqInf = -1
+// WithMaxLength delegates the max length setting to the referenced rule.
+// Looks up the rule in the registry and calls WithMaxLength on it.
+// Returns nil if the referenced rule is not registered.
+func (n *named) WithMaxLength(maxLength int) Rule {
+	if rule, ok := namedRules[n.name]; ok {
+		return rule.WithMaxLength(maxLength)
+	}
+	return nil
+}
 
-// Seq creates a Rule that matches repeated consecutive occurrences of another rule.
-// The number of repetitions must fall within the specified [min, max] range (inclusive).
+// maxLength returns the max length constraint of the referenced rule,
+// or Unlimited if the rule is not registered.
+func (n *named) maxLength() int {
+	if rule, ok := namedRules[n.name]; ok {
+		return rule.maxLength()
+	}
+	return Unlimited
+}
+
+// Unlimited is a sentinel value indicating no upper bound on repetitions
+// or length constraints. Used with Seq for unbounded repetition and with
+// maxLength to indicate no length limit.
+const Unlimited = -1
+
+// Seq creates a rule that matches between min and max consecutive occurrences
+// of the given rule. This is the general-purpose repetition combinator.
 //
 // Parameters:
-//   - min: Minimum required repetitions (negative values treated as 0)
-//   - max: Maximum allowed repetitions (use SeqInf for unlimited, values < min are set to min)
-//   - rule: The rule to be repeated
+//   - min: minimum number of repetitions required (negative values are treated as 0)
+//   - max: maximum number of repetitions allowed (use Unlimited for no upper bound;
+//     values less than min are normalized to min)
+//   - rule: the rule to be repeated
 //
-// Behavior for different parameter combinations:
-//   - Seq(0, 0, rule): Matches only empty strings
-//   - Seq(1, 1, rule): Equivalent to rule itself
-//   - Seq(n, n, rule): Matches exactly n consecutive occurrences
-//   - Seq(0, n, rule): Matches 0 to n occurrences (optional up to n times)
-//   - Seq(n, SeqInf, rule): Matches n or more occurrences (no upper limit)
+// Implementation details:
+//   - For fixed counts (min == max): creates a simple concatenation of that many copies
+//   - For unbounded max: creates a recursive grammar using Named/Ref
+//   - For bounded ranges: creates an Alternative of all valid repetition counts
 //
-// Examples:
-//
-//	Seq(5, 5, Terminal("a"))     // Matches exactly "aaaaa"
-//	Seq(1, 3, Terminal("b"))     // Matches "b", "bb", or "bbb"
-//	Seq(0, 1, rule)              // Equivalent to Opt(rule)
-//	Seq(1, SeqInf, Terminal("c")) // Matches "c", "cc", "ccc", etc.
-//	Seq(0, SeqInf, rule)         // Matches any number of occurrences (Kleene star)
-//
-// Implementation note: Infinite repetitions (SeqInf) are implemented using
-// recursive named rules, which automatically handles cycle detection.
+// Common patterns:
+//   - Seq(0, 0, r): matches only empty string
+//   - Seq(1, 1, r): equivalent to just r
+//   - Seq(0, 1, r): equivalent to Opt(r), matches zero or one
+//   - Seq(2, 5, r): matches 2, 3, 4, or 5 consecutive occurrences
+//   - Seq(1, Unlimited, r): Kleene plus, matches one or more
+//   - Seq(0, Unlimited, r): Kleene star, matches zero or more
 func Seq(min, max int, rule Rule) Rule {
 	if min < 0 {
 		min = 0
 	}
-	if max < 0 && max != SeqInf {
-		max = SeqInf
+	if max < 0 && max != Unlimited {
+		max = Unlimited
 	}
-	if max != SeqInf && max < min {
+	if max != Unlimited && max < min {
 		max = min
 	}
 	if min == max {
@@ -648,15 +684,15 @@ func Seq(min, max int, rule Rule) Rule {
 		}
 		return Concat(slices.Repeat[[]Rule]([]Rule{rule}, min)...)
 	}
-	if max == SeqInf {
+	if max == Unlimited {
 		prefix := Seq(min, min, rule)
-		ruleName := GetRandomName()
+		ruleName := GenerateUniqueName()
 		suffix := Named(ruleName,
 			Alternative(
 				Concat(),
 				rule,
 				Concat(rule,
-					RefNamed(ruleName)),
+					Ref(ruleName)),
 			))
 		return Concat(prefix, suffix)
 	}
@@ -668,16 +704,12 @@ func Seq(min, max int, rule Rule) Rule {
 	return Alternative(types...)
 }
 
-// Opt creates a Rule that matches zero or one occurrence of the given rule.
-// This is equivalent to Seq(0, 1, rule) and represents optional content in a grammar.
+// Opt creates a rule that matches zero or one occurrence of the given rule.
+// This is a convenience function equivalent to Seq(0, 1, rule).
 //
-// Examples:
-//
-//	Opt(Terminal("-"))           // Matches "" or "-" (optional minus sign)
-//	Concat(Opt(Terminal("+")), Range('0','9')) // Optional plus before digit
-//
-// The rule succeeds with an empty match if the input doesn't match,
-// or with the full match if it does match.
+// The rule always succeeds: it yields an empty match (consuming nothing)
+// and, if the input matches the rule, also yields the full match. This
+// makes the wrapped rule optional in the grammar.
 func Opt(rule Rule) Rule {
 	return Seq(0, 1, rule)
 }

@@ -4,14 +4,14 @@ package parsan
 // It takes an input string and returns a slice of result pointers representing
 // alternative parsing interpretations. This type is typically passed to
 // WithSuggestionFunc methods on Rule types to customize suggestion behavior.
-type SuggestionFunc func(string) []*result
+type SuggestionFunc func(string) []*parseResult
 
 // UnlessSuggestionFunc creates a conditional SuggestionFunc that first attempts
 // to generate suggestions using unlessFn. If unlessFn returns no results,
 // it falls back to thenFn. This allows for prioritized suggestion strategies
 // where one approach is preferred but another serves as a fallback.
 func UnlessSuggestionFunc(unlessFn, thenFn SuggestionFunc) SuggestionFunc {
-	return func(in string) []*result {
+	return func(in string) []*parseResult {
 		results := unlessFn(in)
 		if len(results) == 0 && thenFn != nil {
 			return thenFn(in)
@@ -25,8 +25,8 @@ func UnlessSuggestionFunc(unlessFn, thenFn SuggestionFunc) SuggestionFunc {
 // and concatenates all their results into a single slice. This is useful for
 // aggregating suggestions from multiple independent sources.
 func MergeSuggestionFuncs(fns ...SuggestionFunc) SuggestionFunc {
-	return func(in string) []*result {
-		checked := make([]*result, 0)
+	return func(in string) []*parseResult {
+		checked := make([]*parseResult, 0)
 		for _, fn := range fns {
 			checked = append(checked, fn(in)...)
 		}
@@ -50,17 +50,17 @@ func SuggestConstRune(r rune) SuggestionFunc {
 // "X" with remainder "abc", and "X" with remainder "bc". Returns up to
 // 2*len(ss) results, with the replacement variant omitted for empty input.
 func PrependOrReplaceFirstRuneWithStrings(ss ...string) SuggestionFunc {
-	return func(in string) []*result {
-		checkeds := make([]*result, 0, 2*len(ss))
+	return func(in string) []*parseResult {
+		checkeds := make([]*parseResult, 0, 2*len(ss))
 		for _, s := range ss {
-			checkeds = append(checkeds, &result{
-				sanitized: s,
-				toParse:   in,
+			checkeds = append(checkeds, &parseResult{
+				consumedText: s,
+				rest:         in,
 			})
 			if len(in) > 0 {
-				checkeds = append(checkeds, &result{
-					sanitized: s,
-					toParse:   in[1:],
+				checkeds = append(checkeds, &parseResult{
+					consumedText: s,
+					rest:         in[1:],
 				})
 			}
 		}
@@ -74,7 +74,7 @@ func PrependOrReplaceFirstRuneWithStrings(ss ...string) SuggestionFunc {
 // remaining input (after the first byte) as the portion still to be parsed.
 // Returns nil if the input is empty, as there is no character to replace.
 func ReplaceFirstRuneWithStrings(ss ...string) SuggestionFunc {
-	return func(in string) []*result {
+	return func(in string) []*parseResult {
 		if len(in) == 0 {
 			return nil
 		}
@@ -82,11 +82,11 @@ func ReplaceFirstRuneWithStrings(ss ...string) SuggestionFunc {
 		if len(in) > 1 {
 			remaining = in[1:]
 		}
-		checkeds := make([]*result, len(ss))
+		checkeds := make([]*parseResult, len(ss))
 		for i, s := range ss {
-			checkeds[i] = &result{
-				sanitized: s,
-				toParse:   remaining,
+			checkeds[i] = &parseResult{
+				consumedText: s,
+				rest:         remaining,
 			}
 		}
 		return checkeds
