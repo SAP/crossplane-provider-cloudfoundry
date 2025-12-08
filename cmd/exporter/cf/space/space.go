@@ -43,7 +43,7 @@ func (r *res) GetGUID() string {
 }
 
 func (r *res) GetName() string {
-	names := parsan.ParseAndSanitize(r.Name, parsan.RFC1035Subdomain)
+	names := parsan.ParseAndSanitize(r.Name, parsan.RFC1035LowerSubdomain)
 	if len(names) == 0 {
 		r.AddComment(fmt.Sprintf("error sanitizing name: %s", r.Name))
 		return r.Name

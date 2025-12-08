@@ -45,7 +45,7 @@ func (r *res) GetName() string {
 	name := r.Name
 	names := parsan.ParseAndSanitize(
 		name,
-		parsan.RFC1035Subdomain,
+		parsan.RFC1035LowerSubdomain,
 	)
 	if len(names) == 0 {
 		r.AddComment(fmt.Sprintf("error sanitizing name: %s", name))
