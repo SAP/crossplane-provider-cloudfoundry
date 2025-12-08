@@ -82,7 +82,7 @@ func ExampleNamed() {
 			parsan.Terminal("a"),
 			parsan.Concat(
 				parsan.Terminal("a"),
-				parsan.RefNamed("rule"),
+				parsan.Ref("rule"),
 			),
 		),
 	)
