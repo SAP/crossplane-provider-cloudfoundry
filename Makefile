@@ -318,6 +318,9 @@ Upgrade Testing:
     test-upgrade-compile  Verify upgrade tests compile
     test-upgrade-clean    Clean up upgrade test artifacts
     test-upgrade-help     Show detailed upgrade test usage
+	test-upgrade-prepare-crs   Prepare CRs from FROM version (overwrites test/upgrade/crs/)
+	test-upgrade-with-version-crs  Run upgrade tests with FROM version CRs
+	test-upgrade-restore-crs  Restore test/upgrade/crs/ to current main version
 endef
 # The reason CROSSPLANE_MAKE_HELP is used instead of CROSSPLANE_HELP is because the crossplane
 # binary will try to use CROSSPLANE_HELP if it is set, and this is for something different.
