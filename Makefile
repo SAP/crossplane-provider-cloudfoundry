@@ -213,7 +213,7 @@ test-upgrade-prepare-crs: ## Prepare CRs from FROM version (overwrites test/upgr
 			$(OK) "Copied all CRs from test/upgrade/crs/"; \
 		else \
 			$(INFO) "⚠️  test/upgrade/crs/ not found, using hardcoded e2e paths"; \
-			git show $(UPGRADE_TEST_FROM_TAG):test/e2e/crs/orgspace/import.yaml > test/upgrade/crs/org.yaml 2>/dev/null || \
+			git show $(UPGRADE_TEST_FROM_TAG):test/e2e/crs/orgspace/import.yaml > test/upgrade/crs/import.yaml 2>/dev/null || \
 				{ echo "❌ Could not find org.yaml in $(UPGRADE_TEST_FROM_TAG)"; exit 1; }; \
 			git show $(UPGRADE_TEST_FROM_TAG):test/e2e/crs/orgspace/space.yaml > test/upgrade/crs/space.yaml 2>/dev/null || \
 				{ echo "❌ Could not find space.yaml in $(UPGRADE_TEST_FROM_TAG)"; exit 1; }; \

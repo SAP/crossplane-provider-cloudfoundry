@@ -124,6 +124,7 @@ func ApplySecretInCrossplaneNamespace(secretName string, data map[string][]byte)
 // Note: The ProviderConfig is named "default" which is the default name that
 // CloudFoundry managed resources will use if no specific providerConfigRef is set
 func CreateProviderConfigFn(namespace, cfEndpoint, secretName string) env.Func {
+	_ = namespace // Reserved for future use
 	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
 		// Register the CloudFoundry scheme so the client knows about ProviderConfig
 		err := cloudfoundryv1beta1.SchemeBuilder.AddToScheme(cfg.Client().Resources().GetScheme())
@@ -172,7 +173,10 @@ func DeleteResourcesFromDirsGracefully(ctx context.Context, cfg *envconf.Config,
 	for _, obj := range objects {
 		delErr := r.Delete(ctx, obj)
 		if delErr != nil && !kubeErrors.IsNotFound(delErr) {
-			return delErr
+			return fmt.Errorf("failed to delete resource %s/%s: %w",
+				obj.GetObjectKind().GroupVersionKind().Kind,
+				obj.GetName(),
+				delErr)
 		}
 	}
 
@@ -203,7 +207,7 @@ func GetObjectsToImport(ctx context.Context, cfg *envconf.Config, dirs []string)
 		)
 
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to decode resources from directory %s: %w", dir, err)
 		}
 	}
 

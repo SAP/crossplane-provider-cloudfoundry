@@ -138,14 +138,14 @@ Tests use YAML manifests from `test/e2e/crs/`. Currently tested resources:
 test/
 ├── upgrade/
 |   └── crs/                 # Test resource manifests
-│       └── space/
-│           └── space.yaml
+│       └── space.yaml
+│       └── org.yaml 
 │   ├── main_test.go          # Test environment setup
 │   ├── upgrade_test.go       # Actual upgrade test logic
 │   └── README.md            # This file
 ├── e2e/
 │   └── crs/                 # E2E resource manifests
-│       └── space/
+│       └── orgspace/
 │           └── space.yaml
 └── test_utils.go            # Helper functions
 ```
@@ -234,6 +234,20 @@ export UPGRADE_TEST_TO_TAG="main"  # Test unreleased code
 cd test/upgrade
 go test -v -tags=upgrade -timeout=45m ./...
 ```
+
+### ⚠️ Important: Update Organization Name
+
+Before running tests, edit `test/upgrade/crs/import.yaml` and change the organization name to one you have access to:
+
+```bash
+cf orgs  # List your available orgs
+```
+
+Then update `test/upgrade/crs/import.yaml`:
+```yaml
+forProvider:
+  name: your-org-name-here  # ← Change this
+```  
 
 ## Performance
 - TO FILL IN

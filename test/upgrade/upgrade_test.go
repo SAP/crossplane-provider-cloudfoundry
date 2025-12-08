@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"testing"
-	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/test"
 	upgrade "github.com/crossplane-contrib/xp-testing/pkg/upgrade"
@@ -39,10 +38,10 @@ func TestUpgradeProvider(t *testing.T) {
 		).
 		Assess(
 			"Verify Resources before upgrade",
-			upgrade.VerifyResources(upgradeTest.ResourceDirectories, time.Minute*30),
+			upgrade.VerifyResources(upgradeTest.ResourceDirectories, verifyTimeout),
 		).
 		Assess(
-			"Upgrade provider to"+toTag,
+			"Upgrade provider to "+toTag,
 			upgrade.UpgradeProvider(upgrade.UpgradeProviderOptions{
 				ClusterName: upgradeTest.ClusterName,
 				ProviderOptions: xpenvfuncs.InstallCrossplaneProviderOptions{
@@ -50,16 +49,16 @@ func TestUpgradeProvider(t *testing.T) {
 					Package: upgradeTest.ToProviderPackage,
 				},
 				ResourceDirectories: upgradeTest.ResourceDirectories,
-				WaitForPause:        time.Minute * 1,
+				WaitForPause:        waitForPause,
 			})).
 		Assess(
 			"Verify Resources after upgrade",
-			upgrade.VerifyResources(upgradeTest.ResourceDirectories, time.Minute*30),
+			upgrade.VerifyResources(upgradeTest.ResourceDirectories, verifyTimeout),
 		).
 		WithTeardown(
 			"Cleanup Resources after upgrade test",
 			func(ctx context.Context, t *testing.T, envConfig *envconf.Config) context.Context {
-				err := test.DeleteResourcesFromDirsGracefully(ctx, envConfig, upgradeTest.ResourceDirectories, wait.WithTimeout(time.Minute*30))
+				err := test.DeleteResourcesFromDirsGracefully(ctx, envConfig, upgradeTest.ResourceDirectories, wait.WithTimeout(verifyTimeout))
 				if err != nil {
 					t.Logf("Failed to delete resources during teardown: %v", err)
 				}
