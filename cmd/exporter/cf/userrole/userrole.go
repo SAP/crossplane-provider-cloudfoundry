@@ -53,7 +53,7 @@ func (r *Role) GetName() string {
 	name := fmt.Sprintf("%s --- %s", *r.User.Username, r.Role.Type)
 	names := parsan.ParseAndSanitize(
 		name,
-		parsan.RFC1035Subdomain,
+		parsan.RFC1035LowerSubdomain,
 	)
 	if len(names) == 0 {
 		r.AddComment(fmt.Sprintf("error sanitizing name: %s", name))

@@ -63,6 +63,40 @@ var _ = Describe("Basic", func() {
 			Expect(parsan.ParseAndSanitize("1", parsan.Letter(nil))).To(BeEmpty())
 		})
 	})
+	Describe("LowerLetter", func() {
+		It("doesn't match ''", func() {
+			Expect(parsan.ParseAndSanitize("", parsan.LowerLetter(nil))).To(BeEmpty())
+		})
+		It("doesn't match 'aA'", func() {
+			Expect(parsan.ParseAndSanitize("aA", parsan.LowerLetter(nil))).To(BeEmpty())
+		})
+		It("matches 'a'", func() {
+			Expect(parsan.ParseAndSanitize("a", parsan.LowerLetter(nil))).To(Equal([]string{"a"}))
+		})
+		It("matches 'c'", func() {
+			Expect(parsan.ParseAndSanitize("c", parsan.LowerLetter(nil))).To(Equal([]string{"c"}))
+		})
+		It("matches 'z'", func() {
+			Expect(parsan.ParseAndSanitize("z", parsan.LowerLetter(nil))).To(Equal([]string{"z"}))
+		})
+		It("suggests for 'A'", func() {
+			Expect(parsan.ParseAndSanitize("A", parsan.LowerLetter(nil))).To(Equal([]string{"a"}))
+		})
+		It("suggests for 'F'", func() {
+			Expect(parsan.ParseAndSanitize("F", parsan.LowerLetter(nil))).To(Equal([]string{"f"}))
+		})
+		It("suggests for 'Z'", func() {
+			Expect(parsan.ParseAndSanitize("Z", parsan.LowerLetter(nil))).To(Equal([]string{"z"}))
+		})
+		It("doesn't match '1'", func() {
+			Expect(parsan.ParseAndSanitize("1", parsan.LowerLetter(nil))).To(BeEmpty())
+		})
+		It("suggests for 1 with suggestFn'", func() {
+			Expect(parsan.ParseAndSanitize("1", parsan.LowerLetter(
+				parsan.SuggestConstRune('x')))).To(Equal([]string{"x"}))
+		})
+
+	})
 	Describe("LetDig", func() {
 		It("doesn't match ''", func() {
 			Expect(parsan.ParseAndSanitize("", parsan.LetDig(nil))).To(BeEmpty())

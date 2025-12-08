@@ -1,10 +1,17 @@
 package parsan
 
-// suggestConstRuneUnless returns a SuggestionFunc that suggests a constant rune
-// for the first character of the input string, unless that character matches
-// the exception rune. If the input is empty or the first character is the
-// exception, returns nil. Otherwise, returns a result with the suggested rune
-// and the remaining input after the first character.
+// suggestConstRuneUnless creates a SuggestionFunc that replaces invalid characters
+// with a constant rune, except when the character matches the exception.
+//
+// When the first character of the input equals the exception rune, no suggestion
+// is made (returns nil). Otherwise, the character is replaced with the suggested
+// rune and parsing continues with the remainder of the input.
+//
+// Parameters:
+//   - suggested: the rune to substitute for invalid characters
+//   - exception: a rune that should not be replaced (typically handled elsewhere)
+//
+// Returns nil if the input is empty or the first character is the exception.
 func suggestConstRuneUnless(suggested, exception rune) SuggestionFunc {
 	return func(in string) []*result {
 		if len(in) == 0 {
@@ -27,11 +34,19 @@ func suggestConstRuneUnless(suggested, exception rune) SuggestionFunc {
 	}
 }
 
-// suggestConstStringsIf returns a SuggestionFunc that suggests multiple constant
-// strings when the first character of the input matches the expected rune.
-// If the input is empty or the first character doesn't match expected, returns nil.
-// Otherwise, returns results for each suggested string with the remaining input
-// after the first character.
+// suggestConstStringsIf creates a SuggestionFunc that suggests multiple replacement
+// strings when a specific character is encountered.
+//
+// This is useful when an invalid character could be meaningfully replaced by
+// different alternatives. For example, "@" might be replaced with "-at-" or "-".
+//
+// Parameters:
+//   - suggested: a slice of possible replacement strings to try
+//   - expected: the character that triggers these suggestions
+//
+// Returns nil if the input is empty or the first character doesn't match expected.
+// Otherwise, returns one result per suggested string, allowing the parser to
+// explore multiple sanitization paths.
 func suggestConstStringsIf(suggested []string, expected rune) SuggestionFunc {
 	return func(in string) []*result {
 		if len(in) == 0 {
@@ -56,19 +71,23 @@ func suggestConstStringsIf(suggested []string, expected rune) SuggestionFunc {
 	}
 }
 
-// RFC1035Label returns a rule that validates according to the label
-// definition of RFC1035.
+// RFC1035Label creates a rule that validates and sanitizes DNS labels according
+// to RFC 1035 Section 2.3.1:
 //
 //	<label> ::= <letter> [ [ <ldh-str> ] <let-dig> ]
 //
-// If the first letter is invalid it is prepended or replaced with the
-// character 'x'.
+// A valid label must:
+//   - Start with a letter (a-z, A-Z)
+//   - End with a letter or digit (if more than one character)
+//   - Contain only letters, digits, or hyphens in the middle
 //
-// If the last letter is invalid, it is replaced with the character
-// 'x'.
+// Sanitization behavior:
+//   - Invalid first character: prepended or replaced with 'x'
+//   - Invalid last character: replaced with 'x'
+//   - Invalid middle characters: handled by the provided suggestFn
 //
-// If any interim characters are invalid, they are treated according
-// to the provided suggestFn parameter.
+// Parameters:
+//   - suggestFn: determines how to sanitize invalid characters in the middle of the label
 func RFC1035Label(suggestFn SuggestionFunc) Rule {
 	return Concat(
 		Letter(PrependOrReplaceFirstRuneWithStrings("x")),
@@ -79,23 +98,43 @@ func RFC1035Label(suggestFn SuggestionFunc) Rule {
 	)
 }
 
-// subdomainSuggestFn is a merged suggestion function that handles common
-// invalid characters in subdomain labels. It suggests "-at-" or "-" for
-// "@" characters, and suggests "-" for any character except ".".
+// RFC1035LowerLabel is identical to RFC1035Label but enforces lowercase letters.
+// This is useful for systems that require case-insensitive DNS label comparison
+// to be performed via exact string matching.
+func RFC1035LowerLabel(suggestFn SuggestionFunc) Rule {
+	return Concat(
+		LowerLetter(PrependOrReplaceFirstRuneWithStrings("x")),
+		Opt(Concat(
+			Opt(LowerLDHStr(suggestFn)),
+			LowerLetDig(ReplaceFirstRuneWithStrings("x"))),
+		),
+	)
+}
+
+// subdomainSuggestFn handles invalid characters within subdomain labels by
+// merging two suggestion strategies:
+//   - '@' characters are replaced with either "-at-" or "-" (providing alternatives)
+//   - All other invalid characters (except '.') are replaced with '-'
+//
+// The '.' character is excluded because it serves as the label separator
+// in subdomains and must be handled by the subdomain rule itself.
 var subdomainSuggestFn = MergeSuggestionFuncs(
 	suggestConstStringsIf([]string{"-at-", "-"}, '@'),
 	suggestConstRuneUnless('-', '.'),
 )
 
-// RFC1035Subdomain is a rule that validates according to the
-// subdomain definition of RFC1035.
+// RFC1035Subdomain validates and sanitizes DNS subdomains according to
+// RFC 1035 Section 2.3.1:
 //
 //	<subdomain> ::= <label> | <subdomain> "." <label>
 //
-// If the label contains an invalid interim character, the "-"
-// character is suggested. For the invalid "@" character, the "-at-"
-// string is also attempted. The rule enforces a maximum length
-// constraint of 63 characters.
+// A subdomain consists of one or more labels separated by dots, where each
+// label follows the RFC1035Label format. The total length is constrained
+// to 63 characters maximum.
+//
+// Sanitization behavior for invalid characters within labels:
+//   - '@' may be replaced with "-at-" or "-"
+//   - Other invalid characters are replaced with '-'
 var RFC1035Subdomain = RuleWithLengthConstraint(Named("rfc1035-subdomain",
 	Alternative(
 		RFC1035Label(subdomainSuggestFn),
@@ -103,6 +142,20 @@ var RFC1035Subdomain = RuleWithLengthConstraint(Named("rfc1035-subdomain",
 			RFC1035Label(subdomainSuggestFn),
 			Terminal("."),
 			RefNamed("rfc1035-subdomain"),
+		),
+	),
+), 63)
+
+// RFC1035LowerSubdomain is identical to RFC1035Subdomain but enforces lowercase
+// letters throughout. This ensures consistent case-normalized subdomain strings
+// suitable for case-insensitive comparisons via exact string matching.
+var RFC1035LowerSubdomain = RuleWithLengthConstraint(Named("rfc1035-lower-subdomain",
+	Alternative(
+		RFC1035LowerLabel(subdomainSuggestFn),
+		Concat(
+			RFC1035LowerLabel(subdomainSuggestFn),
+			Terminal("."),
+			RefNamed("rfc1035-lower-subdomain"),
 		),
 	),
 ), 63)
