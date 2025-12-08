@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 
-	cloudfoundryv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/crossplane-contrib/xp-testing/pkg/envvar"
 	"github.com/crossplane-contrib/xp-testing/pkg/logging"
 	"github.com/crossplane-contrib/xp-testing/pkg/resources"
@@ -25,6 +24,8 @@ import (
 	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/env"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
+
+	cloudfoundryv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 )
 
 const (
