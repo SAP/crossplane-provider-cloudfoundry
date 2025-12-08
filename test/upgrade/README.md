@@ -37,7 +37,7 @@ You need valid CloudFoundry credentials with appropriate permissions:
 
 ```bash
 # CloudFoundry credentials
-export CF_EMAIL="your-email@sap.com"
+export CF_EMAIL="your_email"
 export CF_USERNAME="your-cf-username"
 export CF_PASSWORD="your-cf-password"
 export CF_ENDPOINT="https://api.cf.eu12.hana.ondemand.com"
@@ -79,7 +79,7 @@ go test -v -tags=upgrade -timeout=60m ./...
 
 | Variable | Description | Example |
 |----------|-------------|---------|
-| `CF_EMAIL` | Email for CF authentication | `user@sap.com` |
+| `CF_EMAIL` | Email for CF authentication | `your_email` |
 | `CF_USERNAME` | CF username | `your-username` |
 | `CF_PASSWORD` | CF password | `your-password` |
 | `CF_ENDPOINT` | CF API endpoint URL | `https://api.cf.eu12.hana.ondemand.com` |
