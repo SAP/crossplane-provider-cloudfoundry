@@ -197,6 +197,49 @@ test-upgrade: $(KIND) ## Run upgrade tests
 		*) echo "⚠️  Could not determine test result"; exit 1 ;; \
 	esac
 
+.PHONY: test-upgrade-prepare-crs
+test-upgrade-prepare-crs: ## Prepare CRs from FROM version (overwrites test/upgrade/crs/)
+	@$(INFO) preparing CRs from $(UPGRADE_TEST_FROM_TAG)
+	@test -n "$(UPGRADE_TEST_FROM_TAG)" || { echo "❌ Set UPGRADE_TEST_FROM_TAG"; exit 1; }
+	@if [ "$(UPGRADE_TEST_FROM_TAG)" = "main" ]; then \
+		$(INFO) "Using current CRs from test/upgrade/crs/ (FROM_TAG is main)"; \
+	else \
+		$(INFO) "Checking out CRs from tag $(UPGRADE_TEST_FROM_TAG)"; \
+		rm -rf test/upgrade/crs/*; \
+		mkdir -p test/upgrade/crs; \
+		if git ls-tree -r $(UPGRADE_TEST_FROM_TAG) --name-only | grep -q "^test/upgrade/crs/"; then \
+			$(INFO) "✅ Found test/upgrade/crs/ in $(UPGRADE_TEST_FROM_TAG)"; \
+			git archive $(UPGRADE_TEST_FROM_TAG) test/upgrade/crs/ | tar -x --strip-components=2 -C test/upgrade/crs/; \
+			$(OK) "Copied all CRs from test/upgrade/crs/"; \
+		else \
+			$(INFO) "⚠️  test/upgrade/crs/ not found, using hardcoded e2e paths"; \
+			git show $(UPGRADE_TEST_FROM_TAG):test/e2e/crs/orgspace/import.yaml > test/upgrade/crs/org.yaml 2>/dev/null || \
+				{ echo "❌ Could not find org.yaml in $(UPGRADE_TEST_FROM_TAG)"; exit 1; }; \
+			git show $(UPGRADE_TEST_FROM_TAG):test/e2e/crs/orgspace/space.yaml > test/upgrade/crs/space.yaml 2>/dev/null || \
+				{ echo "❌ Could not find space.yaml in $(UPGRADE_TEST_FROM_TAG)"; exit 1; }; \
+			$(OK) "Copied e2e CRs to test/upgrade/crs/"; \
+		fi; \
+	fi
+
+.PHONY: test-upgrade-with-version-crs
+test-upgrade-with-version-crs: $(KIND) test-upgrade-prepare-crs ## Run upgrade tests with FROM version CRs
+	@$(INFO) running upgrade tests from $(UPGRADE_TEST_FROM_TAG) to $(UPGRADE_TEST_TO_TAG)
+	@test -n "$(UPGRADE_TEST_TO_TAG)" || { echo "❌ Set UPGRADE_TEST_TO_TAG"; exit 1; }
+	@cd test/upgrade && go test -v -tags=upgrade -timeout=45m ./... 2>&1 | tee ../../test-upgrade-output.log
+	@echo "========== Upgrade Test Summary =========="
+	@grep -E "PASS|FAIL|ok " test-upgrade-output.log | tail -5
+	@case `tail -n 1 test-upgrade-output.log` in \
+		*FAIL*) echo "❌ Upgrade test failed"; exit 1; ;; \
+		*ok*) echo "✅ Upgrade tests passed"; $(OK) upgrade tests passed; ;; \
+		*) echo "⚠️  Could not determine test result"; exit 1; ;; \
+	esac
+
+.PHONY: test-upgrade-restore-crs
+test-upgrade-restore-crs: ## Restore test/upgrade/crs/ to current main version
+	@$(INFO) restoring test/upgrade/crs/ to main
+	@git checkout test/upgrade/crs/
+	@$(OK) CRs restored
+
 .PHONY: test-upgrade-clean
 test-upgrade-clean: $(KIND) ## Clean upgrade test artifacts
 	@$(INFO) cleaning upgrade test artifacts
@@ -216,17 +259,28 @@ test-upgrade-help: ## Show upgrade test usage examples
 	@$(INFO) "     export UPGRADE_TEST_TO_TAG=main"
 	@$(INFO) "     make test-upgrade"
 	@$(INFO) ""
-	@$(INFO) "  2. Test release upgrade (v0.3.2 -> v0.4.0):"
+	@$(INFO) "  2. Test release upgrade with automatic CR checkout:"
+	@$(INFO) "     export UPGRADE_TEST_FROM_TAG=v0.3.2"
+	@$(INFO) "     export UPGRADE_TEST_TO_TAG=v0.4.0"
+	@$(INFO) "     make test-upgrade-with-version-crs"
+	@$(INFO) "     ⚠️  WARNING: This overwrites test/upgrade/crs/ with CRs from tag"
+	@$(INFO) "     After test completes, run: make test-upgrade-restore-crs"
+	@$(INFO) ""
+	@$(INFO) "  3. Manual upgrade test (no CR checkout):"
 	@$(INFO) "     export UPGRADE_TEST_FROM_TAG=v0.3.2"
 	@$(INFO) "     export UPGRADE_TEST_TO_TAG=v0.4.0"
 	@$(INFO) "     make test-upgrade"
+	@$(INFO) "     Note: Uses current test/upgrade/crs/ (may fail if incompatible)"
 	@$(INFO) ""
-	@$(INFO) "  3. With custom CRs:"
+	@$(INFO) "  4. With custom CRS path:"
 	@$(INFO) "     export UPGRADE_TEST_CRS_PATH=./crs-minimal"
 	@$(INFO) "     make test-upgrade"
 	@$(INFO) ""
-	@$(INFO) "  4. Clean up:"
+	@$(INFO) "  5. Clean up test artifacts:"
 	@$(INFO) "     make test-upgrade-clean"
+	@$(INFO) ""
+	@$(INFO) "  6. Restore CRs after version checkout:"
+	@$(INFO) "     make test-upgrade-restore-crs"
 	@$(INFO) ""
 	@$(INFO) "Required Environment Variables:"
 	@$(INFO) "  CF_EMAIL, CF_USERNAME, CF_PASSWORD, CF_ENDPOINT"
@@ -237,6 +291,18 @@ test-upgrade-help: ## Show upgrade test usage examples
 	@$(INFO) "  UPGRADE_TEST_VERIFY_TIMEOUT (default: 30 minutes)"
 	@$(INFO) "  UPGRADE_TEST_WAIT_FOR_PAUSE (default: 1 minute)"
 	@$(INFO) ""
+	@$(INFO) "How CRS Checkout Works (test-upgrade-with-version-crs):"
+	@$(INFO) "========================================================"
+	@$(INFO) "  1. If FROM_TAG is 'main': Uses current test/upgrade/crs/"
+	@$(INFO) "  2. If FROM_TAG has test/upgrade/crs/: Copies entire directory"
+	@$(INFO) "  3. Fallback: Uses test/e2e/crs/orgspace/"
+	@$(INFO) ""
+	@$(INFO) "⚠️  IMPORTANT NOTES:"
+	@$(INFO) "  - test-upgrade-with-version-crs OVERWRITES test/upgrade/crs/"
+	@$(INFO) "  - test-upgrade-restore-crs will to restore your files"
+	@$(INFO) "  - E2E CRs (fallback) may have complex dependencies - test might fail"
+	@$(INFO) ""
+
 	
 # ====================================================================================
 # Special Targets
