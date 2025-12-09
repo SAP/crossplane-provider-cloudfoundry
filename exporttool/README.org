@@ -1741,9 +1741,9 @@ The following rules are available for sanitization.
 
 The =RFC1035Subdomain= rule conforms to:
 
-#+begin_quote
+#+begin_src
 <subdomain> ::= <label> | <subdomain> "." <label>
-#+end_quote
+#+end_src
 
 A /subdomain/ is either a single /label/ or multiple /labels/
 separated by dots (e.g., /label/./label/./label/).
@@ -1762,12 +1762,12 @@ that are too long are trimmed.
 
 Examples:
 
-| input                | sanitized            |
-|----------------------+----------------------|
-| www.example.com      | www.example.com      |
-| Can you sanitize me? | Can-you-sanitize-mex |
-| 99Luftballons        | x99Luftballons       |
-| admin@example.com    | admin-at-example.com |
+| input                  | sanitized              |
+|------------------------+------------------------|
+| =www.example.com=      | =www.example.com=      |
+| =Can you sanitize me?= | =Can-you-sanitize-mex= |
+| =99Luftballons=        | =x99Luftballons=       |
+| =admin@example.com=    | =admin-at-example.com= |
 
 **** RFC1035LowerSubdomain
 
@@ -1775,24 +1775,24 @@ The =RFC1035LowerSubdomain= rule is a variation of =RFC1035Subdomain=
 that requires lowercase letters only. Uppercase letters are converted
 to lowercase:
 
-| input                | sanitized            |
-|----------------------+----------------------|
-| www.example.com      | www.example.com      |
-| Can you sanitize me? | can-you-sanitize-mex |
-| 99Luftballons        | x99luftballons       |
-| admin@example.com    | admin-at-example.com |
+| input                  | sanitized              |
+|------------------------+------------------------|
+| =www.example.com=      | =www.example.com=      |
+| =Can you sanitize me?= | =can-you-sanitize-mex= |
+| =99Luftballons=        | =x99luftballons=       |
+| =admin@example.com=    | =admin-at-example.com= |
 
 **** RFC1035SubdomainRelaxed
 
 The =RFC1035SubdomainRelaxed= rule is a variation of
 =RFC1035Subdomain= that allows /labels/ to start with digits:
 
-| input                | sanitized            |
-|----------------------+----------------------|
-| www.example.com      | www.example.com      |
-| Can you sanitize me? | Can-you-sanitize-mex |
-| 99Luftballons        | 99Luftballons        |
-| admin@example.com    | admin-at-example.com |
+| input                  | sanitized              |
+|------------------------+------------------------|
+| =www.example.com=      | =www.example.com=      |
+| =Can you sanitize me?= | =Can-you-sanitize-mex= |
+| =99Luftballons=        | =99Luftballons=        |
+| =admin@example.com=    | =admin-at-example.com= |
 
 **** RFC1035LowerSubdomainRelaxed
 
@@ -1801,12 +1801,12 @@ The =RFC1035LowerSubdomainRelaxed= rule combines
 characters are converted to lowercase, and /labels/ may start with
 digits:
 
-| input                | sanitized            |
-|----------------------+----------------------|
-| www.example.com      | www.example.com      |
-| Can you sanitize me? | can-you-sanitize-mex |
-| 99Luftballons        | 99luftballons        |
-| admin@example.com    | admin-at-example.com |
+| input                  | sanitized              |
+|------------------------+------------------------|
+| =www.example.com=      | =www.example.com=      |
+| =Can you sanitize me?= | =can-you-sanitize-mex= |
+| =99Luftballons=        | =99luftballons=        |
+| =admin@example.com=    | =admin-at-example.com= |
 
 * Footnotes
 
