@@ -1746,7 +1746,7 @@ The =RFC1035Subdomain= rule conforms to:
 #+end_src
 
 A /subdomain/ is either a single /label/ or multiple /labels/
-separated by dots (e.g., /label/./label/./label/).
+separated by dots (e.g., /label.label.label/).
 
 A /label/ is a string that:
 - starts with a letter (lowercase or uppercase),
