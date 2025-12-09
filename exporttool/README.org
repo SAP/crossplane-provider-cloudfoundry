@@ -1705,3 +1705,109 @@ PROTOCOLS="FTP" go run ./examples/configfile/main.go export --config ./examples/
 
 #+RESULTS:
 : INFO export command invoked protocols=[SSH] username=config-user boolparam=false
+
+** Parsing and sanitizing
+
+When creating Crossplane managed resource definitions, we frequently
+transform objects describing external resources into a different
+schema. Usually the values are preserved, but the data structure
+differs.
+
+Sometimes we cannot preserve values exactly because they must conform
+to certain rules.
+
+An example is the =metadata.name= field of Kubernetes
+resources[fn:1]. The Kubernetes documentation references various RFCs
+and extends those requirements with additional rules.
+
+The =parsan= package in =xp-clifford= provides functions that
+transform strings into formats satisfying different Kubernetes object
+name requirements. This process is called sanitization. The
+=ParseAndSanitize= function performs this action:
+
+#+begin_src go :eval never
+func ParseAndSanitize(input string, rule Rule) []string
+#+end_src
+
+The =ParseAndSanitize= function takes an /input/ string and a /rule/,
+then transforms the /input/ to conform to the /rule/. Since multiple
+valid sanitized solutions may exist, the function returns all of them.
+
+*** Sanitizer rules
+
+The following rules are available for sanitization.
+
+**** RFC1035Subdomain
+
+The =RFC1035Subdomain= rule conforms to:
+
+#+begin_quote
+<subdomain> ::= <label> | <subdomain> "." <label>
+#+end_quote
+
+A /subdomain/ is either a single /label/ or multiple /labels/
+separated by dots (e.g., /label/./label/./label/).
+
+A /label/ is a string that:
+- starts with a letter (lowercase or uppercase),
+- ends with a letter (lowercase or uppercase) or a digit,
+- contains only letters, digits, and =-= characters.
+
+A /label/ cannot exceed 63 characters. A /subdomain/ cannot exceed 253
+characters.
+
+During sanitization, invalid characters are replaced with =-= or
+=x=. The =@= symbol is replaced with =-at-=. Labels and subdomains
+that are too long are trimmed.
+
+Examples:
+
+| input                | sanitized            |
+|----------------------+----------------------|
+| www.example.com      | www.example.com      |
+| Can you sanitize me? | Can-you-sanitize-mex |
+| 99Luftballons        | x99Luftballons       |
+| admin@example.com    | admin-at-example.com |
+
+**** RFC1035LowerSubdomain
+
+The =RFC1035LowerSubdomain= rule is a variation of =RFC1035Subdomain=
+that requires lowercase letters only. Uppercase letters are converted
+to lowercase:
+
+| input                | sanitized            |
+|----------------------+----------------------|
+| www.example.com      | www.example.com      |
+| Can you sanitize me? | can-you-sanitize-mex |
+| 99Luftballons        | x99luftballons       |
+| admin@example.com    | admin-at-example.com |
+
+**** RFC1035SubdomainRelaxed
+
+The =RFC1035SubdomainRelaxed= rule is a variation of
+=RFC1035Subdomain= that allows /labels/ to start with digits:
+
+| input                | sanitized            |
+|----------------------+----------------------|
+| www.example.com      | www.example.com      |
+| Can you sanitize me? | Can-you-sanitize-mex |
+| 99Luftballons        | 99Luftballons        |
+| admin@example.com    | admin-at-example.com |
+
+**** RFC1035LowerSubdomainRelaxed
+
+The =RFC1035LowerSubdomainRelaxed= rule combines
+=RFC1035LowerSubdomain= and =RFC1035SubdomainRelaxed=. Uppercase
+characters are converted to lowercase, and /labels/ may start with
+digits:
+
+| input                | sanitized            |
+|----------------------+----------------------|
+| www.example.com      | www.example.com      |
+| Can you sanitize me? | can-you-sanitize-mex |
+| 99Luftballons        | 99luftballons        |
+| admin@example.com    | admin-at-example.com |
+
+* Footnotes
+
+[fn:1] [[https://kubernetes.io/docs/concepts/overview/working-with-objects/names/][Object Names and IDs - kubernetes.io]]

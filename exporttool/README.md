@@ -1,30 +1,36 @@
-- [Introduction](#org3802a19)
-- [Examples](#org2f78715)
-  - [The simplest CLI tool](#org1db6611)
-  - [Exporting](#orgcfb8068)
-    - [Basic export subcommand](#org2f49ddd)
-    - [Exporting a resource](#org0833b9b)
-    - [Displaying warnings](#org48528d6)
+- [Introduction](#org5e496f7)
+- [Examples](#org951a18d)
+  - [The simplest CLI tool](#org15a6542)
+  - [Exporting](#org6514a3e)
+    - [Basic export subcommand](#orgd1ac689)
+    - [Exporting a resource](#org716c76d)
+    - [Displaying warnings](#org0c028ba)
     - [Exporting commented out resources](#commented-export)
   - [Errors with attributes](#erratt-example)
-  - [Widgets](#orgbe970ab)
-    - [TextInput widget](#org660e3ca)
-    - [MultiInput widget](#org2bf6668)
-  - [Configuration parameters](#org5e04a8a)
-    - [Global configuration parameters](#org3f9e8e8)
+  - [Widgets](#orgb51fd22)
+    - [TextInput widget](#org8876149)
+    - [MultiInput widget](#orga942dec)
+  - [Configuration parameters](#org996445e)
+    - [Global configuration parameters](#orgbaaa2af)
       - [Verbose logging](#verbose)
-    - [Configuration parameters of the export subcommand](#orgf801c35)
-    - [Bool configuration parameter](#orgdd6d3bf)
-    - [String configuration parameter](#orgb88cef8)
-    - [String slice configuration parameter](#orgdeb4cbc)
-      - [Without possible values](#orgf7744a0)
-      - [With static possible values](#org51f9127)
-      - [With dynamic possible values](#orgebee486)
+    - [Configuration parameters of the export subcommand](#org0ebf2aa)
+    - [Bool configuration parameter](#org2139062)
+    - [String configuration parameter](#orgfac3d5b)
+    - [String slice configuration parameter](#orgfd67f35)
+      - [Without possible values](#org506ac65)
+      - [With static possible values](#orgc3863da)
+      - [With dynamic possible values](#orgd4baeba)
     - [Configuration file](#config-file)
+  - [Parsing and sanitizing](#orgc358bd5)
+    - [Sanitizer rules](#org50009f6)
+      - [RFC1035Subdomain](#org0460922)
+      - [RFC1035LowerSubdomain](#org8cf7fab)
+      - [RFC1035SubdomainRelaxed](#org2ee447c)
+      - [RFC1035LowerSubdomainRelaxed](#orgd6f79b2)
 
 
 
-<a id="org3802a19"></a>
+<a id="org5e496f7"></a>
 
 # Introduction
 
@@ -33,14 +39,14 @@
 The resource definitions can then be imported into Crossplane using the [standard import procedure](https://docs.crossplane.io/v2.1/guides/import-existing-resources/). It is recommended to check the generated definitions for comments, before doing the import. See also [Exporting commented out resources](#commented-export).
 
 
-<a id="org2f78715"></a>
+<a id="org951a18d"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="org1db6611"></a>
+<a id="org15a6542"></a>
 
 ## The simplest CLI tool
 
@@ -130,12 +136,12 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="orgcfb8068"></a>
+<a id="org6514a3e"></a>
 
 ## Exporting
 
 
-<a id="org2f49ddd"></a>
+<a id="orgd1ac689"></a>
 
 ### Basic export subcommand
 
@@ -211,7 +217,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="org0833b9b"></a>
+<a id="org716c76d"></a>
 
 ### Exporting a resource
 
@@ -318,7 +324,7 @@ cat output.yaml
     ...
 
 
-<a id="org48528d6"></a>
+<a id="org0c028ba"></a>
 
 ### Displaying warnings
 
@@ -678,7 +684,7 @@ The error message appears on the console with all attributes displayed.
 The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 
 
-<a id="orgbe970ab"></a>
+<a id="orgb51fd22"></a>
 
 ## Widgets
 
@@ -687,7 +693,7 @@ The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 Note that for the widgets to run, the CLI tool must be executed in an interactive terminal. This is not always the case by default, when running or debugging an application within an IDE (like GoLand) using a Run Configuration. In such cases, make sure to configure the Run Configuration appropriately. Specifically for [GoLand](https://www.jetbrains.com/help/go/run-debug-configuration.html) it can be done by selecting `Emulate terminal in output console`.
 
 
-<a id="org660e3ca"></a>
+<a id="org8876149"></a>
 
 ### TextInput widget
 
@@ -779,7 +785,7 @@ See the example in action:
 ![img](examples/textinput/example.gif "TextInput example")
 
 
-<a id="org2bf6668"></a>
+<a id="orga942dec"></a>
 
 ### MultiInput widget
 
@@ -870,7 +876,7 @@ Running this example produces the following output:
 ![img](examples/multiinput/example.gif "MultiInput example")
 
 
-<a id="org5e04a8a"></a>
+<a id="org996445e"></a>
 
 ## Configuration parameters
 
@@ -891,7 +897,7 @@ Currently, the following configuration parameter types are supported:
 All configuration parameters managed by `xp-clifford` implement the `configparam.ConfigParam` interface.
 
 
-<a id="org3f9e8e8"></a>
+<a id="orgbaaa2af"></a>
 
 ### Global configuration parameters
 
@@ -962,7 +968,7 @@ go run ./examples/verbose/main.go export -v
     DEBU export command invoked
 
 
-<a id="orgf801c35"></a>
+<a id="org0ebf2aa"></a>
 
 ### Configuration parameters of the export subcommand
 
@@ -978,7 +984,7 @@ func AddConfigParams(param ...configparam.ConfigParam)
 ```
 
 
-<a id="orgdd6d3bf"></a>
+<a id="org2139062"></a>
 
 ### Bool configuration parameter
 
@@ -1100,7 +1106,7 @@ CLIFFORD_TEST=1 go run ./examples/boolparam/main.go export
     INFO export command invoked test-value=true
 
 
-<a id="orgb88cef8"></a>
+<a id="orgfac3d5b"></a>
 
 ### String configuration parameter
 
@@ -1231,7 +1237,7 @@ When no value is provided, the `TextInput` widget prompts for it interactively:
 ![img](examples/stringparam/example.gif "Asking a string config parameter value")
 
 
-<a id="orgdeb4cbc"></a>
+<a id="orgfd67f35"></a>
 
 ### String slice configuration parameter
 
@@ -1257,7 +1263,7 @@ Use the `Value()` method to retrieve the parameter value. The `IsSet()` method r
 The `ValueOrAsk` method returns the value if set. Otherwise, it prompts for the value interactively using the `MultiInput` widget. Interactive prompting requires setting possible values with `WithPossibleValues` or `WithPossibleValuesFn`.
 
 
-<a id="orgf7744a0"></a>
+<a id="org506ac65"></a>
 
 #### Without possible values
 
@@ -1363,7 +1369,7 @@ PROTOCOLS="HTTP HTTPS FTP" go run ./examples/stringslice/main.go export
     INFO export command invoked protocols="[HTTP HTTPS FTP]" num-of-protos=3 is-set=true
 
 
-<a id="org51f9127"></a>
+<a id="orgc3863da"></a>
 
 #### With static possible values
 
@@ -1452,7 +1458,7 @@ When you omit the parameter values, the CLI tool prompts for them interactively:
 ![img](examples/stringslicestatic/example.gif "Prompting for StringSlice value")
 
 
-<a id="orgebee486"></a>
+<a id="orgd4baeba"></a>
 
 #### With dynamic possible values
 
@@ -1703,3 +1709,105 @@ PROTOCOLS="FTP" go run ./examples/configfile/main.go export --config ./examples/
 ```
 
     INFO export command invoked protocols=[SSH] username=config-user boolparam=false
+
+
+<a id="orgc358bd5"></a>
+
+## Parsing and sanitizing
+
+When creating Crossplane managed resource definitions, we frequently transform objects describing external resources into a different schema. Usually the values are preserved, but the data structure differs.
+
+Sometimes we cannot preserve values exactly because they must conform to certain rules.
+
+An example is the `metadata.name` field of Kubernetes resources<sup><a id="fnr.1" class="footref" href="#fn.1" role="doc-backlink">1</a></sup>. The Kubernetes documentation references various RFCs and extends those requirements with additional rules.
+
+The `parsan` package in `xp-clifford` provides functions that transform strings into formats satisfying different Kubernetes object name requirements. This process is called sanitization. The `ParseAndSanitize` function performs this action:
+
+```go
+func ParseAndSanitize(input string, rule Rule) []string
+```
+
+The `ParseAndSanitize` function takes an *input* string and a *rule*, then transforms the *input* to conform to the *rule*. Since multiple valid sanitized solutions may exist, the function returns all of them.
+
+
+<a id="org50009f6"></a>
+
+### Sanitizer rules
+
+The following rules are available for sanitization.
+
+
+<a id="org0460922"></a>
+
+#### RFC1035Subdomain
+
+The `RFC1035Subdomain` rule conforms to:
+
+> <subdomain> ::= <label> | <subdomain> "." <label>
+
+A *subdomain* is either a single *label* or multiple *labels* separated by dots (e.g., *label*./label/./label/).
+
+A *label* is a string that:
+
+-   starts with a letter (lowercase or uppercase),
+-   ends with a letter (lowercase or uppercase) or a digit,
+-   contains only letters, digits, and `-` characters.
+
+A *label* cannot exceed 63 characters. A *subdomain* cannot exceed 253 characters.
+
+During sanitization, invalid characters are replaced with `-` or `x`. The `@` symbol is replaced with `-at-`. Labels and subdomains that are too long are trimmed.
+
+Examples:
+
+| input                | sanitized            |
+|-------------------- |-------------------- |
+| www.example.com      | www.example.com      |
+| Can you sanitize me? | Can-you-sanitize-mex |
+| 99Luftballons        | x99Luftballons       |
+| admin@example.com    | admin-at-example.com |
+
+
+<a id="org8cf7fab"></a>
+
+#### RFC1035LowerSubdomain
+
+The `RFC1035LowerSubdomain` rule is a variation of `RFC1035Subdomain` that requires lowercase letters only. Uppercase letters are converted to lowercase:
+
+| input                | sanitized            |
+|-------------------- |-------------------- |
+| www.example.com      | www.example.com      |
+| Can you sanitize me? | can-you-sanitize-mex |
+| 99Luftballons        | x99luftballons       |
+| admin@example.com    | admin-at-example.com |
+
+
+<a id="org2ee447c"></a>
+
+#### RFC1035SubdomainRelaxed
+
+The `RFC1035SubdomainRelaxed` rule is a variation of `RFC1035Subdomain` that allows *labels* to start with digits:
+
+| input                | sanitized            |
+|-------------------- |-------------------- |
+| www.example.com      | www.example.com      |
+| Can you sanitize me? | Can-you-sanitize-mex |
+| 99Luftballons        | 99Luftballons        |
+| admin@example.com    | admin-at-example.com |
+
+
+<a id="orgd6f79b2"></a>
+
+#### RFC1035LowerSubdomainRelaxed
+
+The `RFC1035LowerSubdomainRelaxed` rule combines `RFC1035LowerSubdomain` and `RFC1035SubdomainRelaxed`. Uppercase characters are converted to lowercase, and *labels* may start with digits:
+
+| input                | sanitized            |
+|-------------------- |-------------------- |
+| www.example.com      | www.example.com      |
+| Can you sanitize me? | can-you-sanitize-mex |
+| 99Luftballons        | 99luftballons        |
+| admin@example.com    | admin-at-example.com |
+
+## Footnotes
+
+<sup><a id="fn.1" class="footnum" href="#fnr.1">1</a></sup> [Object Names and IDs - kubernetes.io](https://kubernetes.io/docs/concepts/overview/working-with-objects/names/)
