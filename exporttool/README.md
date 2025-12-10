@@ -1,36 +1,38 @@
-- [Introduction](#org3f20966)
-- [Examples](#orgef988a1)
-  - [The simplest CLI tool](#org59d9d9e)
-  - [Exporting](#org5f62483)
-    - [Basic export subcommand](#orgcf52abf)
-    - [Exporting a resource](#orgcf1fb7f)
-    - [Displaying warnings](#org0b98399)
+- [Introduction](#org9801038)
+- [Examples](#orgf2f98fb)
+  - [The simplest CLI tool](#org09fb30d)
+  - [Exporting](#org05c07ae)
+    - [Basic export subcommand](#orgc433513)
+    - [Exporting a resource](#org2754af5)
+    - [Displaying warnings](#org75c7cea)
     - [Exporting commented out resources](#commented-export)
   - [Errors with attributes](#erratt-example)
-  - [Widgets](#orgcc1aaee)
-    - [TextInput widget](#org869f0fa)
-    - [MultiInput widget](#orga49bcb3)
-  - [Configuration parameters](#orgb53c164)
-    - [Global configuration parameters](#org33ce39b)
+  - [Widgets](#org56c3522)
+    - [TextInput widget](#org86f2da7)
+    - [MultiInput widget](#org4377549)
+  - [Configuration parameters](#orge0ab908)
+    - [Global configuration parameters](#orgf27bd68)
       - [Verbose logging](#verbose)
-    - [Configuration parameters of the export subcommand](#orgcfca1c6)
-    - [Bool configuration parameter](#orga770885)
-    - [String configuration parameter](#orgdc31dcf)
-    - [String slice configuration parameter](#org0696541)
-      - [Without possible values](#org9e545cf)
-      - [With static possible values](#org4d4572b)
-      - [With dynamic possible values](#orgbb2b462)
+    - [Configuration parameters of the export subcommand](#orgb4b2bfa)
+    - [Bool configuration parameter](#orgabf5968)
+    - [String configuration parameter](#org96b4a88)
+    - [String slice configuration parameter](#org5c84f54)
+      - [Without possible values](#orgd03a6d1)
+      - [With static possible values](#org13715ea)
+      - [With dynamic possible values](#org6a82fca)
+    - [Subcommands](#org4c423ee)
+      - [Subcommand with configuration parameters](#orgc63e38b)
     - [Configuration file](#config-file)
-  - [Parsing and sanitizing](#orgb9d502f)
-    - [Sanitizer rules](#orgf4ed402)
-      - [RFC1035Subdomain](#org278e52b)
-      - [RFC1035LowerSubdomain](#org5335055)
-      - [RFC1035SubdomainRelaxed](#orge13d2d4)
-      - [RFC1035LowerSubdomainRelaxed](#org1c39ba4)
+  - [Parsing and sanitizing](#org3fec499)
+    - [Sanitizer rules](#orgbba56c8)
+      - [RFC1035Subdomain](#org2306e8d)
+      - [RFC1035LowerSubdomain](#orgb0b53eb)
+      - [RFC1035SubdomainRelaxed](#org84994b6)
+      - [RFC1035LowerSubdomainRelaxed](#org8d3130a)
 
 
 
-<a id="org3f20966"></a>
+<a id="org9801038"></a>
 
 # Introduction
 
@@ -39,14 +41,14 @@
 The resource definitions can then be imported into Crossplane using the [standard import procedure](https://docs.crossplane.io/v2.1/guides/import-existing-resources/). It is recommended to check the generated definitions for comments, before doing the import. See also [Exporting commented out resources](#commented-export).
 
 
-<a id="orgef988a1"></a>
+<a id="orgf2f98fb"></a>
 
 # Examples
 
 These examples demonstrate the basic features of `xp-clifford` and build progressively on one another.
 
 
-<a id="org59d9d9e"></a>
+<a id="org09fb30d"></a>
 
 ## The simplest CLI tool
 
@@ -136,12 +138,12 @@ go run ./examples/basic/main.go export
     ERRO export subcommand is not set
 
 
-<a id="org5f62483"></a>
+<a id="org05c07ae"></a>
 
 ## Exporting
 
 
-<a id="orgcf52abf"></a>
+<a id="orgc433513"></a>
 
 ### Basic export subcommand
 
@@ -217,7 +219,7 @@ go run ./examples/export/main.go export
     INFO export command invoked
 
 
-<a id="orgcf1fb7f"></a>
+<a id="org2754af5"></a>
 
 ### Exporting a resource
 
@@ -324,7 +326,7 @@ cat output.yaml
     ...
 
 
-<a id="org0b98399"></a>
+<a id="org75c7cea"></a>
 
 ### Displaying warnings
 
@@ -684,7 +686,7 @@ The error message appears on the console with all attributes displayed.
 The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 
 
-<a id="orgcc1aaee"></a>
+<a id="org56c3522"></a>
 
 ## Widgets
 
@@ -693,7 +695,7 @@ The `EventHandler.Warn` method handles `erratt.Error` values in the same manner.
 Note that for the widgets to run, the CLI tool must be executed in an interactive terminal. This is not always the case by default, when running or debugging an application within an IDE (like GoLand) using a Run Configuration. In such cases, make sure to configure the Run Configuration appropriately. Specifically for [GoLand](https://www.jetbrains.com/help/go/run-debug-configuration.html) it can be done by selecting `Emulate terminal in output console`.
 
 
-<a id="org869f0fa"></a>
+<a id="org86f2da7"></a>
 
 ### TextInput widget
 
@@ -785,7 +787,7 @@ See the example in action:
 ![img](examples/textinput/example.gif "TextInput example")
 
 
-<a id="orga49bcb3"></a>
+<a id="org4377549"></a>
 
 ### MultiInput widget
 
@@ -876,7 +878,7 @@ Running this example produces the following output:
 ![img](examples/multiinput/example.gif "MultiInput example")
 
 
-<a id="orgb53c164"></a>
+<a id="orge0ab908"></a>
 
 ## Configuration parameters
 
@@ -897,7 +899,7 @@ Currently, the following configuration parameter types are supported:
 All configuration parameters managed by `xp-clifford` implement the `configparam.ConfigParam` interface.
 
 
-<a id="org33ce39b"></a>
+<a id="orgf27bd68"></a>
 
 ### Global configuration parameters
 
@@ -968,7 +970,7 @@ go run ./examples/verbose/main.go export -v
     DEBU export command invoked
 
 
-<a id="orgcfca1c6"></a>
+<a id="orgb4b2bfa"></a>
 
 ### Configuration parameters of the export subcommand
 
@@ -984,7 +986,7 @@ func AddConfigParams(param ...configparam.ConfigParam)
 ```
 
 
-<a id="orga770885"></a>
+<a id="orgabf5968"></a>
 
 ### Bool configuration parameter
 
@@ -1106,7 +1108,7 @@ CLIFFORD_TEST=1 go run ./examples/boolparam/main.go export
     INFO export command invoked test-value=true
 
 
-<a id="orgdc31dcf"></a>
+<a id="org96b4a88"></a>
 
 ### String configuration parameter
 
@@ -1237,7 +1239,7 @@ When no value is provided, the `TextInput` widget prompts for it interactively:
 ![img](examples/stringparam/example.gif "Asking a string config parameter value")
 
 
-<a id="org0696541"></a>
+<a id="org5c84f54"></a>
 
 ### String slice configuration parameter
 
@@ -1263,7 +1265,7 @@ Use the `Value()` method to retrieve the parameter value. The `IsSet()` method r
 The `ValueOrAsk` method returns the value if set. Otherwise, it prompts for the value interactively using the `MultiInput` widget. Interactive prompting requires setting possible values with `WithPossibleValues` or `WithPossibleValuesFn`.
 
 
-<a id="org9e545cf"></a>
+<a id="orgd03a6d1"></a>
 
 #### Without possible values
 
@@ -1369,7 +1371,7 @@ PROTOCOLS="HTTP HTTPS FTP" go run ./examples/stringslice/main.go export
     INFO export command invoked protocols="[HTTP HTTPS FTP]" num-of-protos=3 is-set=true
 
 
-<a id="org4d4572b"></a>
+<a id="org13715ea"></a>
 
 #### With static possible values
 
@@ -1458,7 +1460,7 @@ When you omit the parameter values, the CLI tool prompts for them interactively:
 ![img](examples/stringslicestatic/example.gif "Prompting for StringSlice value")
 
 
-<a id="orgbb2b462"></a>
+<a id="org6a82fca"></a>
 
 #### With dynamic possible values
 
@@ -1597,6 +1599,257 @@ If *secure* is set:
 ![img](examples/stringslicedynamic/example2.gif "Prompting for StringSlice dynamically - secure is on")
 
 
+<a id="org4c423ee"></a>
+
+### Subcommands
+
+CLI tools created with `xp-clifford` include the mandatory `export` subcommand. You can also define additional subcommands by creating a value that implements the `cli.SubCommand` interface.
+
+You can implement your own type, or use the `cli.BasicSubCommand` type, which already implements the `cli.SubCommand` interface.
+
+The business logic executed when the subcommand is invoked must have the following function signature:
+
+```go
+func(context.Context) error
+```
+
+Let's consider the following logic function for an imaginary `login` subcommand:
+
+```go
+func login(_ context.Context) error {
+	slog.Info("login invoked")
+	return nil
+}
+```
+
+A `BasicSubcommand` value can be created for the `login` subcommand:
+
+```go
+var loginSubCommand = &cli.BasicSubCommand{
+	Name:         "login",
+	Short:        "Login demo subcommand",
+	Long:         "A subcommand demonstrating xp-clifford capabilities",
+	ConfigParams: []configparam.ConfigParam{},
+	Run:          login,
+}
+```
+
+A subcommand can be registered using the `cli.RegisterCommand` function:
+
+```go
+cli.RegisterSubCommand(loginSubCommand)
+```
+
+Complete example:
+
+```go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	_ "github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func login(_ context.Context) error {
+	slog.Info("login invoked")
+	return nil
+}
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+
+	var loginSubCommand = &cli.BasicSubCommand{
+		Name:         "login",
+		Short:        "Login demo subcommand",
+		Long:         "A subcommand demonstrating xp-clifford capabilities",
+		ConfigParams: []configparam.ConfigParam{},
+		Run:          login,
+	}
+
+	cli.RegisterSubCommand(loginSubCommand)
+
+	cli.Execute()
+}
+```
+
+The `login` subcommand appears when we run the CLI application with the `--help` flag:
+
+```sh
+go run ./examples/loginsubcommand/main.go --help
+```
+
+```
+test system exporting tool is a CLI tool for exporting existing resources as Crossplane managed resources
+
+Usage:
+  test-exporter [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  export      Export test system resources
+  help        Help about any command
+  login       Login demo subcommand
+
+Flags:
+  -c, --config string   Configuration file
+  -h, --help            help for test-exporter
+  -v, --verbose         Verbose output
+
+Use "test-exporter [command] --help" for more information about a command.
+```
+
+The `--help` flag also works for the new `login` subcommand:
+
+```sh
+go run ./examples/loginsubcommand/main.go login --help
+```
+
+```
+A subcommand demonstrating xp-clifford capabilities
+
+Usage:
+  test-exporter login [flags]
+
+Flags:
+  -h, --help   help for login
+
+Global Flags:
+  -c, --config string   Configuration file
+  -v, --verbose         Verbose output
+```
+
+We can also run the `login` subcommand:
+
+```sh
+go run ./examples/loginsubcommand/main.go login
+```
+
+    INFO login invoked
+
+
+<a id="orgc63e38b"></a>
+
+#### Subcommand with configuration parameters
+
+Custom subcommands can be extended with configuration parameters using the `GetConfigParams()` method of the `cli.SubCommand` interface, or by setting the `ConfigParams` field of a `BasicSubCommand` value.
+
+Let's update the `loginSubCommand` value:
+
+```go
+var loginSubCommand = &cli.BasicSubCommand{
+	Name:         "login",
+	Short:        "Login demo subcommand",
+	Long:         "A subcommand demonstrating xp-clifford capabilities",
+	ConfigParams: []configparam.ConfigParam{
+		testParam,
+	},
+	Run:          login,
+}
+```
+
+Here, `testParam` is defined as follows:
+
+```go
+var testParam = configparam.Bool("test", "test bool parameter").
+        WithShortName("t").
+        WithEnvVarName("CLIFFORD_TEST")
+```
+
+Let's extend the `login` function to print the value of `testParam`:
+
+```go
+func login(_ context.Context) error {
+	slog.Info("login invoked", "test", testParam.Value())
+	return nil
+}
+```
+
+Complete example:
+
+```go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	_ "github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+func login(_ context.Context) error {
+	slog.Info("login invoked", "test", testParam.Value())
+	return nil
+}
+
+var testParam = configparam.Bool("test", "test bool parameter").
+        WithShortName("t").
+        WithEnvVarName("CLIFFORD_TEST")
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+
+	var loginSubCommand = &cli.BasicSubCommand{
+		Name:         "login",
+		Short:        "Login demo subcommand",
+		Long:         "A subcommand demonstrating xp-clifford capabilities",
+		ConfigParams: []configparam.ConfigParam{
+			testParam,
+		},
+		Run:          login,
+	}
+
+	cli.RegisterSubCommand(loginSubCommand)
+
+	cli.Execute()
+}
+```
+
+The `--help` flag for the `login` subcommand now shows the `-t` / `--test` parameter:
+
+```sh
+go run ./examples/loginsubcommandparam/main.go login --help
+```
+
+```
+A subcommand demonstrating xp-clifford capabilities
+
+Usage:
+  test-exporter login [flags]
+
+Flags:
+  -h, --help   help for login
+  -t, --test   test bool parameter
+
+Global Flags:
+  -c, --config string   Configuration file
+  -v, --verbose         Verbose output
+```
+
+Let's invoke the `login` command:
+
+```sh
+go run ./examples/loginsubcommandparam/main.go login
+```
+
+    INFO login invoked test=false
+
+Let's see the configuration parameter in action:
+
+```sh
+go run ./examples/loginsubcommandparam/main.go login -t
+```
+
+    INFO login invoked test=true
+
+
 <a id="config-file"></a>
 
 ### Configuration file
@@ -1711,7 +1964,7 @@ PROTOCOLS="FTP" go run ./examples/configfile/main.go export --config ./examples/
     INFO export command invoked protocols=[SSH] username=config-user boolparam=false
 
 
-<a id="orgb9d502f"></a>
+<a id="org3fec499"></a>
 
 ## Parsing and sanitizing
 
@@ -1730,14 +1983,14 @@ func ParseAndSanitize(input string, rule Rule) []string
 The `ParseAndSanitize` function takes an *input* string and a *rule*, then transforms the *input* to conform to the *rule*. Since multiple valid sanitized solutions may exist, the function returns all of them.
 
 
-<a id="orgf4ed402"></a>
+<a id="orgbba56c8"></a>
 
 ### Sanitizer rules
 
 The following rules are available for sanitization.
 
 
-<a id="org278e52b"></a>
+<a id="org2306e8d"></a>
 
 #### RFC1035Subdomain
 
@@ -1769,7 +2022,7 @@ Examples:
 | `admin@example.com`    | `admin-at-example.com` |
 
 
-<a id="org5335055"></a>
+<a id="orgb0b53eb"></a>
 
 #### RFC1035LowerSubdomain
 
@@ -1783,7 +2036,7 @@ The `RFC1035LowerSubdomain` rule is a variation of `RFC1035Subdomain` that requi
 | `admin@example.com`    | `admin-at-example.com` |
 
 
-<a id="orge13d2d4"></a>
+<a id="org84994b6"></a>
 
 #### RFC1035SubdomainRelaxed
 
@@ -1797,7 +2050,7 @@ The `RFC1035SubdomainRelaxed` rule is a variation of `RFC1035Subdomain` that all
 | `admin@example.com`    | `admin-at-example.com` |
 
 
-<a id="org1c39ba4"></a>
+<a id="org8d3130a"></a>
 
 #### RFC1035LowerSubdomainRelaxed
 
