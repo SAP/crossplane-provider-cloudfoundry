@@ -1323,7 +1323,6 @@ go run ./examples/stringslice/main.go export
 #+RESULTS:
 : INFO export command invoked protocols=[] num-of-protos=0 is-set=false
 
-
 Set the value using the =--protocol= flag:
 
 #+begin_src sh :exports both :results output :eval no-export
@@ -1581,6 +1580,244 @@ If /secure/ is set:
 
 #+caption: Prompting for StringSlice dynamically - secure is on
 [[file:examples/stringslicedynamic/example2.gif]]
+
+*** Subcommands
+
+CLI tools created with =xp-clifford= include the mandatory =export=
+subcommand. You can also define additional subcommands by creating a
+value that implements the =cli.SubCommand= interface.
+
+You can implement your own type, or use the =cli.BasicSubCommand=
+type, which already implements the =cli.SubCommand= interface.
+
+The business logic executed when the subcommand is invoked must have
+the following function signature:
+
+#+begin_src go :eval never
+func(context.Context) error
+#+end_src
+
+Let's consider the following logic function for an imaginary =login= subcommand:
+
+#+name: login-subcommand
+#+begin_src go :eval never
+func login(_ context.Context) error {
+	slog.Info("login invoked")
+	return nil
+}
+#+end_src
+
+A =BasicSubcommand= value can be created for the =login= subcommand:
+
+#+name: login-basicsubcommand
+#+begin_src go :eval never
+var loginSubCommand = &cli.BasicSubCommand{
+	Name:         "login",
+	Short:        "Login demo subcommand",
+	Long:         "A subcommand demonstrating xp-clifford capabilities",
+	ConfigParams: []configparam.ConfigParam{},
+	Run:          login,
+}
+#+end_src
+
+A subcommand can be registered using the =cli.RegisterCommand= function:
+
+#+name: register-subcommand
+#+begin_src go :eval never
+cli.RegisterSubCommand(loginSubCommand)
+#+end_src
+
+Complete example:
+
+#+begin_src go :noweb yes :tangle examples/loginsubcommand/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	_ "github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+<<login-subcommand>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+
+	<<login-basicsubcommand>>
+
+	<<register-subcommand>>
+
+	cli.Execute()
+}
+#+end_src
+
+The =login= subcommand appears when we run the CLI application with
+the =--help= flag:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/loginsubcommand/main.go --help
+#+end_src
+
+#+RESULTS:
+#+begin_example
+test system exporting tool is a CLI tool for exporting existing resources as Crossplane managed resources
+
+Usage:
+  test-exporter [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  export      Export test system resources
+  help        Help about any command
+  login       Login demo subcommand
+
+Flags:
+  -c, --config string   Configuration file
+  -h, --help            help for test-exporter
+  -v, --verbose         Verbose output
+
+Use "test-exporter [command] --help" for more information about a command.
+#+end_example
+
+The =--help= flag also works for the new =login= subcommand:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/loginsubcommand/main.go login --help
+#+end_src
+
+#+RESULTS:
+#+begin_example
+A subcommand demonstrating xp-clifford capabilities
+
+Usage:
+  test-exporter login [flags]
+
+Flags:
+  -h, --help   help for login
+
+Global Flags:
+  -c, --config string   Configuration file
+  -v, --verbose         Verbose output
+#+end_example
+
+We can also run the =login= subcommand:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/loginsubcommand/main.go login
+#+end_src
+
+#+RESULTS:
+: INFO login invoked
+
+**** Subcommand with configuration parameters
+
+Custom subcommands can be extended with configuration parameters using
+the =GetConfigParams()= method of the =cli.SubCommand= interface, or
+by setting the =ConfigParams= field of a =BasicSubCommand= value.
+
+Let's update the =loginSubCommand= value:
+
+#+name: login-basicsubcommand-param
+#+begin_src go :eval never
+var loginSubCommand = &cli.BasicSubCommand{
+	Name:         "login",
+	Short:        "Login demo subcommand",
+	Long:         "A subcommand demonstrating xp-clifford capabilities",
+	ConfigParams: []configparam.ConfigParam{
+		testParam,
+	},
+	Run:          login,
+}
+#+end_src
+
+Here, =testParam= is defined as follows:
+#+begin_src go :noweb yes
+<<configure-bool-def>>
+#+end_src
+
+Let's extend the =login= function to print the value of =testParam=:
+
+#+name: login-subcommand-testparam
+#+begin_src go :eval never
+func login(_ context.Context) error {
+	slog.Info("login invoked", "test", testParam.Value())
+	return nil
+}
+#+end_src
+
+Complete example:
+
+#+begin_src go :noweb yes :tangle examples/loginsubcommandparam/main.go
+package main
+
+import (
+	"context"
+	"log/slog"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
+	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
+	_ "github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+)
+
+<<login-subcommand-testparam>>
+
+<<configure-bool-def>>
+
+func main() {
+	cli.Configuration.ShortName = "test"
+	cli.Configuration.ObservedSystem = "test system"
+
+	<<login-basicsubcommand-param>>
+
+	<<register-subcommand>>
+
+	cli.Execute()
+}
+#+end_src
+
+The =--help= flag for the =login= subcommand now shows the =-t= /
+=--test= parameter:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/loginsubcommandparam/main.go login --help
+#+end_src
+
+#+RESULTS:
+#+begin_example
+A subcommand demonstrating xp-clifford capabilities
+
+Usage:
+  test-exporter login [flags]
+
+Flags:
+  -h, --help   help for login
+  -t, --test   test bool parameter
+
+Global Flags:
+  -c, --config string   Configuration file
+  -v, --verbose         Verbose output
+#+end_example
+
+Let's invoke the =login= command:
+
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/loginsubcommandparam/main.go login
+#+end_src
+
+#+RESULTS:
+: INFO login invoked test=false
+
+Let's see the configuration parameter in action:
+#+begin_src sh :exports both :results output :eval no-export
+go run ./examples/loginsubcommandparam/main.go login -t
+#+end_src
+
+#+RESULTS:
+: INFO login invoked test=true
 
 *** Configuration file
 :PROPERTIES:
