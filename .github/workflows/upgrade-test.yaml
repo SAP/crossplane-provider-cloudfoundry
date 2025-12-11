@@ -11,70 +11,15 @@ on:
     inputs:
       source:
         description: "Source version"
-        required: false
+        required: true
         default: "v0.3.0"
       target:
         description: "Target version"
         required: false
 
 jobs:
-  build-from-version:
-    runs-on: ubuntu-latest
-    outputs:
-      from_version: ${{ steps.set-from-version.outputs.FROM_IMAGE_VERSION }}
-    steps:
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@f7ce87c1d6bead3e36075b2ce75da1f6cc28aaca # v3.9.0
-        with:
-          version: v0.15.1
-          install: true
-          
-      - name: Checkout code
-        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
-        with:
-          submodules: true
-          
-      - name: Fetch History
-        run: git fetch --prune --unshallow
-
-      - name: Set up Go
-        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-        with:
-          go-version: "1.23"
-
-      - name: Vendor Dependencies
-        run: make vendor vendor.check
-
-      - name: Set FROM Version
-        id: set-from-version
-        run: |
-          FROM_VERSION="v0.0.0-test-from-${{ github.sha }}"
-          echo "Building FROM version as $FROM_VERSION"
-          echo "FROM_IMAGE_VERSION=$FROM_VERSION" >> "$GITHUB_ENV"
-          echo "FROM_IMAGE_VERSION=$FROM_VERSION" >> "$GITHUB_OUTPUT"
-
-      - name: Build FROM Images
-        run: make build VERSION="${FROM_IMAGE_VERSION}"
-        env:
-          BUILD_ARGS: "--load"
-          DOCKER_REGISTRY: ${{ vars.REGISTRY_URL }}
-          BUILD_REGISTRY: ${{ vars.REGISTRY_URL }}
-
-      - name: Login to Container Registry
-        uses: docker/login-action@184bdaa0721073962dff0199f1fb9940f07167d1 # v3.5.0
-        with:
-          registry: ${{ vars.REGISTRY_URL }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-          
-      - name: Publish FROM Images
-        run: make publish BRANCH_NAME="${GITHUB_REF##*/}" VERSION="${FROM_IMAGE_VERSION}"
-        env:
-          DOCKER_REGISTRY: ${{ vars.REGISTRY_URL }}
-          BUILD_REGISTRY: ${{ vars.REGISTRY_URL }}
-
   # if the target is not set, we want to take the latest git commit of the branch and build the image with that.
-  build-to-version:
+  build-test-version:
     if: ${{ github.event.inputs.target == '' }}    
     outputs:
       target_version: ${{ steps.set-target-version.outputs.BUILD_IMAGE_VERSION }}
@@ -132,9 +77,11 @@ jobs:
         env:
           DOCKER_REGISTRY: ${{ vars.REGISTRY_URL }}
           BUILD_REGISTRY: ${{ vars.REGISTRY_URL }}
+
   upgrade-test:
-    needs: [build-from-version]
+    needs: [build-test-version]
     runs-on: ubuntu-latest
+    if: always() # would also run if build-test-version fails but we just fail too
     steps:
       - name: Checkout code
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
@@ -144,16 +91,24 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
-          go-version: "1.23"
+          go-version: "1.23"  # Match what's in Makefile GO_REQUIRED_VERSION
 
+      # if the target is not set, use the version built in the build-test-version job
+      # if triggered with source and target we just use these versions for the test
       - name: Set UPGRADE_TEST_FROM_TAG and UPGRADE_TEST_TO_TAG
         run: |
-          echo "UPGRADE_TEST_FROM_TAG=${{ needs.build-from-version.outputs.from_version }}" >> "$GITHUB_ENV"
-          echo "UPGRADE_TEST_TO_TAG=${{ needs.build-to-version.outputs.target_version }}" >> "$GITHUB_ENV"
+          echo "UPGRADE_TEST_FROM_TAG=${{ github.event.inputs.source }}" >> "$GITHUB_ENV"
+          if [ -z "${{ github.event.inputs.target }}" ]; then
+            echo "UPGRADE_TEST_TO_TAG=${{ needs.build-test-version.outputs.target_version }}" >> "$GITHUB_ENV"
+          else
+            echo "UPGRADE_TEST_TO_TAG=${{ github.event.inputs.target }}" >> "$GITHUB_ENV"
+          fi
 
       - name: Print upgrade test versions
         run: |
-          echo "Testing upgrade: $UPGRADE_TEST_FROM_TAG -> $UPGRADE_TEST_TO_TAG"
+          echo "UPGRADE_TEST_FROM_TAG is $UPGRADE_TEST_FROM_TAG"
+          echo "UPGRADE_TEST_TO_TAG is $UPGRADE_TEST_TO_TAG"
+
       - name: Run upgrade tests
         timeout-minutes: 60
         env:
@@ -161,7 +116,7 @@ jobs:
           CF_USERNAME: ${{ secrets.CF_USERNAME }}
           CF_PASSWORD: ${{ secrets.CF_PASSWORD }}
           CF_ENDPOINT: ${{ secrets.CF_ENDPOINT }}
-        run: make test-upgrade-with-version-crs
+        run: make test-upgrade  # TODO: update to make test-upgrade-with-version-crs
 
       - name: Upload test logs on failure
         if: failure()
@@ -176,57 +131,3 @@ jobs:
       - name: Clean up after upgrade tests
         if: always()
         run: make test-upgrade-clean
-
-  # upgrade-test:
-  #   needs: [build-test-version]
-  #   runs-on: ubuntu-latest
-  #   if: always() # would also run if build-test-version fails but we just fail too
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
-  #       with:
-  #         submodules: true
-          
-  #     - name: Set up Go
-  #       uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
-  #       with:
-  #         go-version: "1.23"  # Match what's in Makefile GO_REQUIRED_VERSION
-
-  #     # if the target is not set, use the version built in the build-test-version job
-  #     # if triggered with source and target we just use these versions for the test
-  #     - name: Set UPGRADE_TEST_FROM_TAG and UPGRADE_TEST_TO_TAG
-  #       run: |
-  #         echo "UPGRADE_TEST_FROM_TAG=${{ github.event.inputs.source }}" >> "$GITHUB_ENV"
-  #         if [ -z "${{ github.event.inputs.target }}" ]; then
-  #           echo "UPGRADE_TEST_TO_TAG=${{ needs.build-test-version.outputs.target_version }}" >> "$GITHUB_ENV"
-  #         else
-  #           echo "UPGRADE_TEST_TO_TAG=${{ github.event.inputs.target }}" >> "$GITHUB_ENV"
-  #         fi
-
-  #     - name: Print upgrade test versions
-  #       run: |
-  #         echo "UPGRADE_TEST_FROM_TAG is $UPGRADE_TEST_FROM_TAG"
-  #         echo "UPGRADE_TEST_TO_TAG is $UPGRADE_TEST_TO_TAG"
-
-  #     - name: Run upgrade tests
-  #       timeout-minutes: 60
-  #       env:
-  #         CF_EMAIL: ${{ secrets.CF_EMAIL }}
-  #         CF_USERNAME: ${{ secrets.CF_USERNAME }}
-  #         CF_PASSWORD: ${{ secrets.CF_PASSWORD }}
-  #         CF_ENDPOINT: ${{ secrets.CF_ENDPOINT }}
-  #       run: make test-upgrade-with-version-crs
-
-  #     - name: Upload test logs on failure
-  #       if: failure()
-  #       uses: actions/upload-artifact@v4
-  #       with:
-  #         name: upgrade-test-logs
-  #         path: |
-  #           test/upgrade/logs/
-  #           test-upgrade-output.log
-  #         retention-days: 7
-      
-  #     - name: Clean up after upgrade tests
-  #       if: always()
-  #       run: make test-upgrade-clean
