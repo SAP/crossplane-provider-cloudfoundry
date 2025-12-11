@@ -28,12 +28,12 @@ jobs:
         with:
           version: v0.15.1
           install: true
-
+          
       - name: Checkout code
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           submodules: true
-
+          
       - name: Fetch History
         run: git fetch --prune --unshallow
 
@@ -66,7 +66,7 @@ jobs:
           registry: ${{ vars.REGISTRY_URL }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-
+          
       - name: Publish FROM Images
         run: make publish BRANCH_NAME="${GITHUB_REF##*/}" VERSION="${FROM_IMAGE_VERSION}"
         env:
@@ -75,7 +75,7 @@ jobs:
 
   # if the target is not set, we want to take the latest git commit of the branch and build the image with that.
   build-to-version:
-    if: ${{ github.event.inputs.target == '' }}
+    if: ${{ github.event.inputs.target == '' }}    
     outputs:
       target_version: ${{ steps.set-target-version.outputs.BUILD_IMAGE_VERSION }}
     runs-on: ubuntu-latest
@@ -111,6 +111,7 @@ jobs:
         run: |
           echo "BUILD_IMAGE_VERSION is $BUILD_IMAGE_VERSION"
 
+
       - name: Build Images
         run: make build VERSION="${BUILD_IMAGE_VERSION}"
         env:
@@ -132,14 +133,14 @@ jobs:
           DOCKER_REGISTRY: ${{ vars.REGISTRY_URL }}
           BUILD_REGISTRY: ${{ vars.REGISTRY_URL }}
   upgrade-test:
-    needs: [build-from-version, build-to-version]
+    needs: [build-from-version]
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
           submodules: true
-
+          
       - name: Set up Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
@@ -171,7 +172,7 @@ jobs:
             test/upgrade/logs/
             test-upgrade-output.log
           retention-days: 7
-
+      
       - name: Clean up after upgrade tests
         if: always()
         run: make test-upgrade-clean
@@ -185,7 +186,7 @@ jobs:
   #       uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
   #       with:
   #         submodules: true
-
+          
   #     - name: Set up Go
   #       uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
   #       with:
@@ -225,7 +226,7 @@ jobs:
   #           test/upgrade/logs/
   #           test-upgrade-output.log
   #         retention-days: 7
-
+      
   #     - name: Clean up after upgrade tests
   #       if: always()
   #       run: make test-upgrade-clean
