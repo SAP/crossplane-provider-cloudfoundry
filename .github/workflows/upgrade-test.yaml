@@ -49,8 +49,8 @@ jobs:
         id: set-target-version
         run: |
           echo "setting version to v0.0.0-draft-${{ github.sha }}" 
-          echo "BUILD_IMAGE_VERSION=v0.0.0-draft-${{ github.sha }}" >> $GITHUB_ENV
-          echo "BUILD_IMAGE_VERSION=v0.0.0-draft-${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "BUILD_IMAGE_VERSION=v0.0.0-draft-${{ github.sha }}" >> "$GITHUB_ENV"
+          echo "BUILD_IMAGE_VERSION=v0.0.0-draft-${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Print Version Number
         run: |
@@ -58,7 +58,7 @@ jobs:
 
 
       - name: Build Images
-        run: make build VERSION=$BUILD_IMAGE_VERSION
+        run: make build VERSION="${BUILD_IMAGE_VERSION}"
         env:
           # We're using docker buildx, which doesn't actually load the images it
           # builds by default. Specifying --load does so.
@@ -73,7 +73,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish Artifacts to DockerHub
-        run: make publish BRANCH_NAME=${GITHUB_REF##*/} VERSION=$BUILD_IMAGE_VERSION
+        run: make publish BRANCH_NAME="${GITHUB_REF##*/}" VERSION="${BUILD_IMAGE_VERSION}"
         env:
           DOCKER_REGISTRY: ${{ vars.REGISTRY_URL }}
           BUILD_REGISTRY: ${{ vars.REGISTRY_URL }}
@@ -97,11 +97,11 @@ jobs:
       # if triggered with source and target we just use these versions for the test
       - name: Set UPGRADE_TEST_FROM_TAG and UPGRADE_TEST_TO_TAG
         run: |
-          echo "UPGRADE_TEST_FROM_TAG=${{ github.event.inputs.source }}" >> $GITHUB_ENV
+          echo "UPGRADE_TEST_FROM_TAG=${{ github.event.inputs.source }}" >> "$GITHUB_ENV"
           if [ -z "${{ github.event.inputs.target }}" ]; then
-            echo "UPGRADE_TEST_TO_TAG=${{ needs.build-test-version.outputs.target_version }}" >> $GITHUB_ENV
+            echo "UPGRADE_TEST_TO_TAG=${{ needs.build-test-version.outputs.target_version }}" >> "$GITHUB_ENV"
           else
-            echo "UPGRADE_TEST_TO_TAG=${{ github.event.inputs.target }}" >> $GITHUB_ENV
+            echo "UPGRADE_TEST_TO_TAG=${{ github.event.inputs.target }}" >> "$GITHUB_ENV"
           fi
 
       - name: Print upgrade test versions
@@ -127,3 +127,7 @@ jobs:
             test/upgrade/logs/
             test-upgrade-output.log
           retention-days: 7
+      
+      - name: Clean up after upgrade tests
+        if: always()
+        run: make test-upgrade-clean
