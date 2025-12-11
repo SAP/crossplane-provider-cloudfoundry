@@ -109,11 +109,21 @@ jobs:
           echo "UPGRADE_TEST_FROM_TAG is $UPGRADE_TEST_FROM_TAG"
           echo "UPGRADE_TEST_TO_TAG is $UPGRADE_TEST_TO_TAG"
       
+      - name: Debug CF_CREDENTIALS format
+        run: |
+          echo "Length: ${#CF_CREDS}"
+          echo "First 20 chars (masked): ${CF_CREDS:0:20}"
+          echo "Contains 'email'?: $(echo "$CF_CREDS" | grep -c 'email' || echo 0)"
+          echo "Contains '{'?: $(echo "$CF_CREDS" | grep -c '{' || echo 0)"
+          echo "Contains newlines?: $(echo "$CF_CREDS" | wc -l)"
+        env:
+          CF_CREDS: ${{ secrets.CF_CREDENTIALS }}
+      
       - name: Parse CF credentials
         run: |
-          echo "CF_EMAIL=$(echo '${{ secrets.CF_CREDENTIALS }}' | jq -r '.email')" >> "$GITHUB_ENV"
-          echo "CF_USERNAME=$(echo '${{ secrets.CF_CREDENTIALS }}' | jq -r '.username')" >> "$GITHUB_ENV"
-          echo "CF_PASSWORD=$(echo '${{ secrets.CF_CREDENTIALS }}' | jq -r '.password')" >> "$GITHUB_ENV"
+          echo "CF_EMAIL=$(echo '${{ secrets.CF_CREDENTIALS }}' | sed -n '1p')" >> "$GITHUB_ENV"
+          echo "CF_USERNAME=$(echo '${{ secrets.CF_CREDENTIALS }}' | sed -n '2p')" >> "$GITHUB_ENV"
+          echo "CF_PASSWORD=$(echo '${{ secrets.CF_CREDENTIALS }}' | sed -n '3p')" >> "$GITHUB_ENV"
           echo "CF_ENDPOINT=$(echo '${{ secrets.CF_ENVIRONMENT }}' | jq -r '.endpoint')" >> "$GITHUB_ENV"
 
 
