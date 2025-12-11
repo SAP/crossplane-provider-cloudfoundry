@@ -112,10 +112,10 @@ jobs:
       - name: Run upgrade tests
         timeout-minutes: 60
         env:
-          CF_EMAIL: ${{ secrets.CF_EMAIL }}
-          CF_USERNAME: ${{ secrets.CF_USERNAME }}
-          CF_PASSWORD: ${{ secrets.CF_PASSWORD }}
-          CF_ENDPOINT: ${{ secrets.CF_ENDPOINT }}
+          CF_EMAIL: ${{ secrets.CF_CREDENTIALS.email }}
+          CF_USERNAME: ${{ secrets.CF_CREDENTIALS.username }}
+          CF_PASSWORD: ${{ secrets.CF_CREDENTIALS.password }}
+          CF_ENDPOINT: ${{ variables.REGISTRY_URL }}
         run: make test-upgrade  # TODO: update to make test-upgrade-with-version-crs
 
       - name: Upload test logs on failure
