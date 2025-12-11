@@ -70,9 +70,22 @@ export UPGRADE_TEST_TO_TAG="v0.3.2"    # Version to upgrade TO
 ```
 
 ### 2. Run the Tests
+
+From the project root directory:
 ```bash
-cd test/upgrade
-go test -v -tags=upgrade -timeout=45m ./...
+# Basic usage - test upgrade between two released versions
+make test-upgrade
+```
+
+**Test your local changes:**
+```bash
+# Build local provider image first
+make build
+
+# Test upgrade FROM a release TO your local changes
+export UPGRADE_TEST_FROM_TAG="v0.3.2"
+export UPGRADE_TEST_TO_TAG="main"  # Uses your current code
+make test-upgrade
 ```
 
 ### 3. Customize (Optional)
