@@ -9,7 +9,7 @@ Upgrade tests verify that resources created with one version of the provider con
 ## Test Flow
 
 1. **Setup** - Create kind cluster with Crossplane and install provider (FROM version)
-2. **Import Resources** - Create test resources from YAML manifests
+2. **Import Resources** - Create test resources from YAML manifests stored in directory `test/upgrade/crs`
 3. **Verify Before Upgrade** - Ensure all resources are Ready
 4. **Upgrade** - Update provider to newer version (TO version)
 5. **Verify After Upgrade** - Confirm resources still work correctly
@@ -96,20 +96,20 @@ go test -v -tags=upgrade -timeout=60m ./...
 
 ## Test Resources
 
-Tests use YAML manifests from `test/e2e/crs/`. Currently tested resources:
+Tests use YAML manifests from `test/upgrade/crs/`. Currently tested resources:
 
 - **Space** - Lightweight resource for testing basic upgrade flow
 
 ### Adding New Test Resources
 
-1. Create a directory under `test/e2e/crs/`:
+1. Create a directory under `test/upgrade/crs/`:
    ```bash
-   mkdir -p test/e2e/crs/myresource
+   mkdir -p test/upgrade/crs/myresource
    ```
 
 2. Add YAML manifest(s):
    ```bash
-   cat > test/e2e/crs/myresource/myresource.yaml <<EOF
+   cat > test/upgrade/crs/myresource.yaml <<EOF
    apiVersion: cloudfoundry.crossplane.io/v1alpha1
    kind: MyResource
    metadata:
