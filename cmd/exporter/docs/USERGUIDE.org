@@ -1,0 +1,239 @@
+#+options: ':nil *:t -:t ::t <:t H:3 \n:nil ^:t arch:headline
+#+options: author:t broken-links:nil c:nil creator:nil
+#+options: d:(not "LOGBOOK") date:t e:t email:nil expand-links:t f:t
+#+options: inline:t num:t p:nil pri:nil prop:nil stat:t tags:t
+#+options: tasks:t tex:t timestamp:t title:t toc:t todo:t |:t
+#+title: USERGUIDE
+#+date: <2025-12-10 Wed>
+#+author:
+#+language: en
+#+select_tags: export
+#+exclude_tags: noexport
+#+creator: Emacs 30.2 (Org mode 9.7.27)
+#+cite_export:
+#+macro: cliname xpcf
+
+* Metadata :noexport:
+
+#+name: data
+| CLI name | xpcf |
+
+#+name: config
+#+begin_src elisp :var input="invalid" :var data=data()
+(cadr (seq-find (lambda (row)
+		  (string= input (car row)))
+		data '(nil, "invalid")))
+#+end_src
+
+* Shell session :noexport:
+
+#+name: alias-tmpl
+#+begin_example
+${cli_name}='go run -ldflags "-X main.ShortName=${cli_name}" ../exporter/'
+#+end_example
+
+#+name: alias-command
+#+begin_src sh :results output :var tmpl=alias-tmpl :var cli_name=config("CLI name")
+export cli_name
+echo "$tmpl" | envsubst
+#+end_src
+
+#+RESULTS: alias-command
+: xpcf='go run -ldflags "-X main.ShortName=xpcf" ../../exporter/'
+:
+
+#+name: set-alias
+#+begin_src bash :session exporter :noweb yes
+alias <<config("CLI name")>>='go run -ldflags "-X main.ShortName=<<config("CLI name")>>" ../'
+#+end_src
+
+#+RESULTS:
+
+* VHS :noexport:
+
+#+name: vhs-code-template
+#+begin_example
+Set Shell "bash"
+Set FontSize 16
+Set Width 1200
+Set Height 400
+
+Hide
+
+Type `alias ${cli_name}='go run -ldflags "-X main.ShortName=${cli_name}" ../../exporter/'` Enter
+Env XDG_CONFIG_HOME "/tmp"
+Type "clear" Enter
+
+Show
+
+${vhs_command}
+
+Sleep 5s
+#+end_example
+
+#+name: vhs_command
+#+begin_src sh :result output :var vhs_command="Type `# test command` Sleep 5s" :var cli_name=config("CLI name")
+export cli_name
+echo "$vhs_command" | envsubst
+#+end_src
+
+#+name: vhs-code
+#+begin_src sh :results output :var tmpl=vhs-code-template :var cli_name=config("CLI name") :var cmd_tmpl="${cli_name} --helppp"
+export cli_name
+export vhs_command=$(echo "$cmd_tmpl" | envsubst)
+echo "$tmpl" | envsubst
+#+end_src
+
+** Help flag
+
+#+name: help-flag
+#+begin_example
+Output vhs/qs-login.gif
+Type "${cli_name} --help"  Sleep 1500ms  Enter
+#+end_example
+
+#+begin_src sh :results output :var tapefile=vhs-code(cmd_tmpl=help-flag)
+echo $tapefile | vhs -
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Set Shell bash
+Set FontSize 16
+Set Width 1200
+Set Height 600
+Hide
+Type alias xpcf='go run -ldflags "-X main.ShortName=xpcf" ../../exporter/'
+Enter 1
+Type clear
+Enter 1
+Show
+Output .gif vhs/qs-login.gif
+Type xpcf --help
+Sleep 1500ms
+Enter 1
+Sleep 5s
+#+end_example
+
+** Login
+
+#+name: login
+#+begin_example
+Output vhs/login.gif
+Type "${cli_name} login"  Sleep 1500ms  Enter
+Sleep 2s
+Type "https://api.cf.system.com" Sleep 1500ms Enter
+Sleep 2s
+Type "technical-user-name" Sleep 1500ms Enter
+Sleep 2s
+Type "test-password-for-technical-user" Sleep 1500ms Enter
+#+end_example
+
+#+begin_src sh :results output :var tapefile=vhs-code(cmd_tmpl=login)
+echo $tapefile | vhs -
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Set Shell bash
+Set FontSize 16
+Set Width 1200
+Set Height 400
+Hide
+Type alias xpcf='go run -ldflags "-X main.ShortName=xpcf" ../../exporter/'
+Enter 1
+Env XDG_CONFIG_HOME /tmp
+Type clear
+Enter 1
+Show
+Output .gif vhs/login.gif
+Type xpcf login
+Sleep 1500ms
+Enter 1
+Sleep 2s
+Type https://api.cf.system.com
+Sleep 1500ms
+Enter 1
+Sleep 2s
+Type technical-user-name
+Sleep 1500ms
+Enter 1
+Sleep 2s
+Type test-password-for-technical-user
+Sleep 1500ms
+Enter 1
+Sleep 5s
+#+end_example
+
+* Introduction
+
+The call_config("CLI name") {{{results(=cf-export=)}}} tool observers
+/Cloud Foundry/ resources and export them as managed crossplane
+resources as defined by the Cloud Foundry Crossplane provider[fn:1].
+
+* TODO Installation
+:PROPERTIES:
+:CUSTOM_ID: installation
+:END:
+
+* Quick Start
+
+First, obtain a /Cloud Foundry/ technical user credentials, (username
+and password), and a /Cloud Foundry/ API endpoint.
+
+Then, install call_config("CLI name") following the instructions of
+[[#installation][Installation]].
+
+Let's check that the binary can be executed with =--help= flag.
+
+#+begin_src bash :results output :session exporter :noweb yes :exports both :var a=set-alias()
+<<config("CLI name")>> --help
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Cloud Foundry exporting tool is a CLI tool for exporting existing resources as Crossplane managed resources
+
+Usage:
+  xpcf [command]
+
+Available Commands:
+  completion  Generate the autocompletion script for the specified shell
+  export      Export Cloud Foundry resources
+  help        Help about any command
+  login       Logging in to Cloud Foundry cluster
+
+Flags:
+  -c, --config string   Configuration file
+  -h, --help            help for xpcf
+  -v, --verbose         Verbose output
+
+Use "xpcf [command] --help" for more information about a command.
+#+end_example
+
+Next, you can persist your /Cloud Foundry/ credentials using the
+=login= subcommand.
+
+#+caption: Login subcommand
+[[file:vhs/login.gif]]
+
+* Configuration
+
+This is {{{cliname}}}. Yes?
+
+
+* Commands Reference
+
+* Common Workflows
+
+* Troubleshooting
+
+* FAQ
+
+* Footnotes
+
+[fn:1] https://github.com/SAP/crossplane-provider-cloudfoundry/tree/feat/export-tool
+
+# Local Variables:
+# org-confirm-babel-evaluate: nil
+# End:

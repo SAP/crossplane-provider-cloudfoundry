@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/orgrole"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
@@ -12,8 +14,8 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
 )
 
-const (
-	shortName      = "cf"
+var (
+	ShortName      = "cf-exporter"
 	observedSystem = "Cloud Foundry"
 )
 
@@ -38,8 +40,19 @@ var (
 				WithEnvVarName("RESOLVE_REFERENCES")
 )
 
+type cliConfig struct {
+	cli.DefaultConfiguratorCLI
+}
+
+var _ cli.ConfiguratorCLI = cliConfig{}
+
+func (c cliConfig) CommandUse(*cli.ConfigSchema) string {
+	return fmt.Sprintf("%s [command] [flags...]", ShortName)
+}
+
 func main() {
-	cli.Configuration.ShortName = shortName
+	cli.Configuration.CLIConfiguration.ConfiguratorCLI = cliConfig{cli.DefaultConfiguratorCLI{}}
+	cli.Configuration.ShortName = ShortName
 	cli.Configuration.ObservedSystem = observedSystem
 	export.SetCommand(exportCmd)
 	export.AddConfigParams(
