@@ -67,6 +67,10 @@ Please note that when running multiple times you might want to delete the kind c
 kind delete cluster <cluster-name>
 ```
 
+### Upgrade Tests
+
+The provider comes with a set of upgrade tests that can be run locally. To learn more about it : [Upgrade Tests README](./test/upgrade/README.md). 
+
 #### Required Configuration
 In order for the tests to perform successfully some configuration need to be present as environment variables:
 
