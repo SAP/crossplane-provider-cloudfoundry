@@ -124,7 +124,8 @@ jobs:
           echo "CF_EMAIL=$(echo '${{ secrets.CF_CREDENTIALS }}' | sed -n '1p')" >> "$GITHUB_ENV"
           echo "CF_USERNAME=$(echo '${{ secrets.CF_CREDENTIALS }}' | sed -n '2p')" >> "$GITHUB_ENV"
           echo "CF_PASSWORD=$(echo '${{ secrets.CF_CREDENTIALS }}' | sed -n '3p')" >> "$GITHUB_ENV"
-          echo "CF_ENDPOINT=$(echo '${{ secrets.CF_ENVIRONMENT }}' | jq -r '.endpoint')" >> "$GITHUB_ENV"
+          echo "CF_ENDPOINT=${{ secrets.CF_ENVIRONMENT }}" >> "$GITHUB_ENV"
+
 
 
       - name: Run upgrade tests
