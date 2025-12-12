@@ -12,6 +12,7 @@ require (
 	github.com/docker/cli v27.1.1+incompatible
 	github.com/google/go-cmp v0.7.0
 	github.com/pkg/errors v0.9.1
+	github.com/vladimirvivien/gexe v0.5.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	k8s.io/api v0.34.1
 	k8s.io/apimachinery v0.34.1
@@ -43,7 +44,6 @@ require (
 	github.com/samber/lo v1.52.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
-	github.com/vladimirvivien/gexe v0.5.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	github.com/xhit/go-str2duration/v2 v2.1.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.1.0 // indirect

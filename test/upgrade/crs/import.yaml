@@ -1,0 +1,11 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  name: upgrade-test-org
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    # IMPORTANT: Change this to an org you have access to
+    # Run `cf orgs` to see available organizations
+    name: SAP Cloud Orchestration Canary_d071303-cf-test-lq49ydpj # ← TODO: Change this to an existing org name
