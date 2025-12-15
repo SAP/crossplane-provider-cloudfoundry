@@ -214,6 +214,10 @@ Configuration parameters can be set through multiple means:
 - environment variables
 - configuration file
 
+The precedence of these methods is as follows: values set in a
+configuration file are overridden by environment variables, and
+command line flags have the highest precedence.
+
 ** Command Line Flags
 
 A command line flag may have two forms: a long form (mandatory) and
@@ -281,6 +285,51 @@ repeating the flag:
 #+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
 <<config("CLI name")>> export --kind=space --kind=organization
 #+end_src
+
+** Environment Variables
+
+Certain configuration parameters can be set using environment
+variables.
+
+For a parameter of type /bool/, set the value of the environment
+variable to ="1"=:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
+VERBOSE=1 <<config("CLI name")>> export
+#+end_src
+
+If the configuration parameter is of type /list of strings/, separate
+the list elements with /space/ characters:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
+KIND="organization space" <<config("CLI name")>> export
+#+end_src
+
+** Configuration File
+
+Configuration parameter values can also be set using a configuration
+file. The configuration file uses YAML format and must contain a YAML
+object where each key is a configuration parameter.
+
+An example configuration file =example-config.yaml= is shown below:
+
+#+begin_src yaml :tangle example-config.yaml
+verbose: true
+kind:
+  - organization
+  - space
+#+end_src
+
+To use a configuration file, specify it with the =-c= or =--config=
+command line flag:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
+<<config("CLI name")>> export --config example-config.yaml
+#+end_src
+
+If no configuration file is specified, the tool searches for one ine
+the directories specified by =XDG_CONFIG_HOME= and =HOME=, in that
+order.
 
 * Commands Reference
 

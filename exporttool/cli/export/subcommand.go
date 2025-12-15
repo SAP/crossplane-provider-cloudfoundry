@@ -22,11 +22,13 @@ type exportSubCommand struct {
 
 var ResourceKindParam = configparam.StringSlice("exported kinds", "Resource kinds to export").
 	WithShortName("k").
-	WithFlagName("kind")
+	WithFlagName("kind").
+	WithEnvVarName("KIND")
 
 var OutputParam = configparam.String("output", "redirect the YAML output to a file").
 	WithShortName("o").
-	WithFlagName("output")
+	WithFlagName("output").
+	WithEnvVarName("OUTPUT")
 
 var (
 	_         cli.SubCommand = &exportSubCommand{}
