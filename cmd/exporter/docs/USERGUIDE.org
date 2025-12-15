@@ -11,7 +11,6 @@
 #+exclude_tags: noexport
 #+creator: Emacs 30.2 (Org mode 9.7.27)
 #+cite_export:
-#+macro: cliname xpcf
 
 * Metadata :noexport:
 
@@ -23,6 +22,11 @@
 (cadr (seq-find (lambda (row)
 		  (string= input (car row)))
 		data '(nil, "invalid")))
+#+end_src
+
+#+name: ansi-filter
+#+begin_src elisp :var data="test" :exports none :eval yes
+(ansi-color-filter-apply data)
 #+end_src
 
 * Shell session :noexport:
@@ -133,42 +137,10 @@ Type "test-password-for-technical-user" Sleep 1500ms Enter
 echo $tapefile | vhs -
 #+end_src
 
-#+RESULTS:
-#+begin_example
-Set Shell bash
-Set FontSize 16
-Set Width 1200
-Set Height 400
-Hide
-Type alias xpcf='go run -ldflags "-X main.ShortName=xpcf" ../../exporter/'
-Enter 1
-Env XDG_CONFIG_HOME /tmp
-Type clear
-Enter 1
-Show
-Output .gif vhs/login.gif
-Type xpcf login
-Sleep 1500ms
-Enter 1
-Sleep 2s
-Type https://api.cf.system.com
-Sleep 1500ms
-Enter 1
-Sleep 2s
-Type technical-user-name
-Sleep 1500ms
-Enter 1
-Sleep 2s
-Type test-password-for-technical-user
-Sleep 1500ms
-Enter 1
-Sleep 5s
-#+end_example
-
 * Introduction
 
-The call_config("CLI name") {{{results(=cf-export=)}}} tool observers
-/Cloud Foundry/ resources and export them as managed crossplane
+The call_config("CLI name") {{{results(=cf-export=)}}} tool observes
+/Cloud Foundry/ resources and exports them as managed Crossplane
 resources as defined by the Cloud Foundry Crossplane provider[fn:1].
 
 * TODO Installation
@@ -178,13 +150,13 @@ resources as defined by the Cloud Foundry Crossplane provider[fn:1].
 
 * Quick Start
 
-First, obtain a /Cloud Foundry/ technical user credentials, (username
-and password), and a /Cloud Foundry/ API endpoint.
+First, obtain /Cloud Foundry/ technical user credentials (username
+and password) and a /Cloud Foundry/ API endpoint.
 
-Then, install call_config("CLI name") following the instructions of
+Then, install call_config("CLI name") by following the instructions in
 [[#installation][Installation]].
 
-Let's check that the binary can be executed with =--help= flag.
+Let's verify that the binary can be executed using the =--help= flag.
 
 #+begin_src bash :results output :session exporter :noweb yes :exports both :var a=set-alias()
 <<config("CLI name")>> --help
@@ -217,10 +189,98 @@ Next, you can persist your /Cloud Foundry/ credentials using the
 #+caption: Login subcommand
 [[file:vhs/login.gif]]
 
+Now you can export all /Organizations/ using the following command:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*)
+<<config("CLI name")>> export --kind organization --org '.*'
+#+end_src
+
+Let's export all spaces:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*)
+<<config("CLI name")>> export --kind space --org '.*' --space '.*'
+#+end_src
+
 * Configuration
 
-This is {{{cliname}}}. Yes?
+The behaviour of the call_config("CLI name") tool can be modified by
+setting various configuration parameters. Some parameters are global
+and apply to all subcommands, while others are specific to certain
+subcommands.
 
+Configuration parameters can be set through multiple means:
+
+- command line flags
+- environment variables
+- configuration file
+
+** Command Line Flags
+
+A command line flag may have two forms: a long form (mandatory) and
+a short form (optional). Flags may require a value. For /bool/ type
+configuration parameters, the presence of the flag indicates a true
+value.
+
+The following examples demonstrate different usages of CLI flags.
+
+*** Setting a bool to /true/ using a short flag
+
+The global =verbose= configuration parameter can be set using the
+short flag =-v=.
+
+Example:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
+<<config("CLI name")>> export -v
+#+end_src
+
+*** Setting a bool to /true/ using a long flag
+
+The =verbose= parameter can also be set using the long flag =--verbose=:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
+<<config("CLI name")>> export --verbose
+#+end_src
+
+*** Setting a bool to /false/
+
+A /bool/ configuration parameter can be explicitly set to false using
+the following format:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
+<<config("CLI name")>> export --verbose=false
+#+end_src
+
+Or using the short flag:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
+<<config("CLI name")>> export -v=false
+#+end_src
+
+*** Setting a string value
+
+The =kind= configuration parameter of the =export= subcommand accepts
+string values. You can set it as follows:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
+<<config("CLI name")>> export --kind space
+#+end_src
+
+Alternatively, you can use the equal sign:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
+<<config("CLI name")>> export --kind=space
+#+end_src
+
+*** Setting multiple strings
+
+Some configuration parameters accept a list of strings. The =kind=
+parameter is one such example. You can specify multiple values by
+repeating the flag:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
+<<config("CLI name")>> export --kind=space --kind=organization
+#+end_src
 
 * Commands Reference
 
