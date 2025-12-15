@@ -1,21 +1,23 @@
-- [Introduction](#org4cb2f9a)
+- [Introduction](#org6dc8a15)
 - [Installation](#installation)
-- [Quick Start](#org2dd5abe)
-- [Configuration](#org595a70d)
-  - [Command Line Flags](#org07913ad)
-    - [Setting a bool to *true* using a short flag](#org9f5f169)
-    - [Setting a bool to *true* using a long flag](#org4b5e49d)
-    - [Setting a bool to *false*](#org99a82c1)
-    - [Setting a string value](#org2566c43)
-    - [Setting multiple strings](#orgcc1d20f)
-- [Commands Reference](#org83f96cf)
-- [Common Workflows](#orgf18055f)
-- [Troubleshooting](#org4fb4aa9)
-- [FAQ](#orgc37ea13)
+- [Quick Start](#orge909076)
+- [Configuration](#orge4c5aea)
+  - [Command Line Flags](#orgefa3d8d)
+    - [Setting a bool to *true* using a short flag](#org34e8950)
+    - [Setting a bool to *true* using a long flag](#org18e5fcc)
+    - [Setting a bool to *false*](#org06d745c)
+    - [Setting a string value](#orgd16478d)
+    - [Setting multiple strings](#org6368e7f)
+  - [Environment Variables](#org24285b9)
+  - [Configuration File](#orge3fd5f5)
+- [Commands Reference](#orgd7ce56c)
+- [Common Workflows](#orgb322215)
+- [Troubleshooting](#org997ec09)
+- [FAQ](#org320b874)
 
 
 
-<a id="org4cb2f9a"></a>
+<a id="org6dc8a15"></a>
 
 # Introduction
 
@@ -27,7 +29,7 @@ The `xpcf` tool observes *Cloud Foundry* resources and exports them as managed C
 # TODO Installation
 
 
-<a id="org2dd5abe"></a>
+<a id="orge909076"></a>
 
 # Quick Start
 
@@ -78,7 +80,7 @@ xpcf export --kind space --org '.*' --space '.*'
 ```
 
 
-<a id="org595a70d"></a>
+<a id="orge4c5aea"></a>
 
 # Configuration
 
@@ -90,8 +92,10 @@ Configuration parameters can be set through multiple means:
 -   environment variables
 -   configuration file
 
+The precedence of these methods is as follows: values set in a configuration file are overridden by environment variables, and command line flags have the highest precedence.
 
-<a id="org07913ad"></a>
+
+<a id="orgefa3d8d"></a>
 
 ## Command Line Flags
 
@@ -100,7 +104,7 @@ A command line flag may have two forms: a long form (mandatory) and a short form
 The following examples demonstrate different usages of CLI flags.
 
 
-<a id="org9f5f169"></a>
+<a id="org34e8950"></a>
 
 ### Setting a bool to *true* using a short flag
 
@@ -113,7 +117,7 @@ xpcf export -v
 ```
 
 
-<a id="org4b5e49d"></a>
+<a id="org18e5fcc"></a>
 
 ### Setting a bool to *true* using a long flag
 
@@ -124,7 +128,7 @@ xpcf export --verbose
 ```
 
 
-<a id="org99a82c1"></a>
+<a id="org06d745c"></a>
 
 ### Setting a bool to *false*
 
@@ -141,7 +145,7 @@ xpcf export -v=false
 ```
 
 
-<a id="org2566c43"></a>
+<a id="orgd16478d"></a>
 
 ### Setting a string value
 
@@ -158,7 +162,7 @@ xpcf export --kind=space
 ```
 
 
-<a id="orgcc1d20f"></a>
+<a id="org6368e7f"></a>
 
 ### Setting multiple strings
 
@@ -169,22 +173,65 @@ xpcf export --kind=space --kind=organization
 ```
 
 
-<a id="org83f96cf"></a>
+<a id="org24285b9"></a>
+
+## Environment Variables
+
+Certain configuration parameters can be set using environment variables.
+
+For a parameter of type *bool*, set the value of the environment variable to `"1"`:
+
+```bash
+VERBOSE=1 xpcf export
+```
+
+If the configuration parameter is of type *list of strings*, separate the list elements with *space* characters:
+
+```bash
+KIND="organization space" xpcf export
+```
+
+
+<a id="orge3fd5f5"></a>
+
+## Configuration File
+
+Configuration parameter values can also be set using a configuration file. The configuration file uses YAML format and must contain a YAML object where each key is a configuration parameter.
+
+An example configuration file `example-config.yaml` is shown below:
+
+```yaml
+verbose: true
+kind:
+  - organization
+  - space
+```
+
+To use a configuration file, specify it with the `-c` or `--config` command line flag:
+
+```bash
+xpcf export --config example-config.yaml
+```
+
+If no configuration file is specified, the tool searches for one ine the directories specified by `XDG_CONFIG_HOME` and `HOME`, in that order.
+
+
+<a id="orgd7ce56c"></a>
 
 # Commands Reference
 
 
-<a id="orgf18055f"></a>
+<a id="orgb322215"></a>
 
 # Common Workflows
 
 
-<a id="org4fb4aa9"></a>
+<a id="org997ec09"></a>
 
 # Troubleshooting
 
 
-<a id="orgc37ea13"></a>
+<a id="org320b874"></a>
 
 # FAQ
 
