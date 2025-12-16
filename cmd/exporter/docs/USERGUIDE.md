@@ -1,23 +1,26 @@
-- [Introduction](#org6dc8a15)
+- [Introduction](#org5f0f160)
 - [Installation](#installation)
-- [Quick Start](#orge909076)
-- [Configuration](#orge4c5aea)
-  - [Command Line Flags](#orgefa3d8d)
-    - [Setting a bool to *true* using a short flag](#org34e8950)
-    - [Setting a bool to *true* using a long flag](#org18e5fcc)
-    - [Setting a bool to *false*](#org06d745c)
-    - [Setting a string value](#orgd16478d)
-    - [Setting multiple strings](#org6368e7f)
-  - [Environment Variables](#org24285b9)
-  - [Configuration File](#orge3fd5f5)
-- [Commands Reference](#orgd7ce56c)
-- [Common Workflows](#orgb322215)
-- [Troubleshooting](#org997ec09)
-- [FAQ](#org320b874)
+- [Quick Start](#org1159066)
+- [Configuration](#orgd66cba6)
+  - [Command Line Flags](#orgedd2f3e)
+    - [Setting a bool to *true* using a short flag](#orga0bf688)
+    - [Setting a bool to *true* using a long flag](#org2c4d584)
+    - [Setting a bool to *false*](#orgad14c86)
+    - [Setting a string value](#org0a16a03)
+    - [Setting multiple strings](#orge114470)
+  - [Environment Variables](#orgbbc1d2e)
+  - [Configuration File](#orgfbe4071)
+- [Commands Reference](#org16abddb)
+  - [Global configuration parameters](#orgd2874ef)
+    - [Help](#orge6388f7)
+    - [Config](#org46f9a27)
+- [Common Workflows](#orgb328247)
+- [Troubleshooting](#orgf91befc)
+- [FAQ](#org99478a1)
 
 
 
-<a id="org6dc8a15"></a>
+<a id="org5f0f160"></a>
 
 # Introduction
 
@@ -29,7 +32,7 @@ The `xpcf` tool observes *Cloud Foundry* resources and exports them as managed C
 # TODO Installation
 
 
-<a id="orge909076"></a>
+<a id="org1159066"></a>
 
 # Quick Start
 
@@ -80,7 +83,7 @@ xpcf export --kind space --org '.*' --space '.*'
 ```
 
 
-<a id="orge4c5aea"></a>
+<a id="orgd66cba6"></a>
 
 # Configuration
 
@@ -95,7 +98,7 @@ Configuration parameters can be set through multiple means:
 The precedence of these methods is as follows: values set in a configuration file are overridden by environment variables, and command line flags have the highest precedence.
 
 
-<a id="orgefa3d8d"></a>
+<a id="orgedd2f3e"></a>
 
 ## Command Line Flags
 
@@ -104,7 +107,7 @@ A command line flag may have two forms: a long form (mandatory) and a short form
 The following examples demonstrate different usages of CLI flags.
 
 
-<a id="org34e8950"></a>
+<a id="orga0bf688"></a>
 
 ### Setting a bool to *true* using a short flag
 
@@ -117,7 +120,7 @@ xpcf export -v
 ```
 
 
-<a id="org18e5fcc"></a>
+<a id="org2c4d584"></a>
 
 ### Setting a bool to *true* using a long flag
 
@@ -128,7 +131,7 @@ xpcf export --verbose
 ```
 
 
-<a id="org06d745c"></a>
+<a id="orgad14c86"></a>
 
 ### Setting a bool to *false*
 
@@ -145,7 +148,7 @@ xpcf export -v=false
 ```
 
 
-<a id="orgd16478d"></a>
+<a id="org0a16a03"></a>
 
 ### Setting a string value
 
@@ -162,7 +165,7 @@ xpcf export --kind=space
 ```
 
 
-<a id="org6368e7f"></a>
+<a id="orge114470"></a>
 
 ### Setting multiple strings
 
@@ -173,7 +176,7 @@ xpcf export --kind=space --kind=organization
 ```
 
 
-<a id="org24285b9"></a>
+<a id="orgbbc1d2e"></a>
 
 ## Environment Variables
 
@@ -192,7 +195,7 @@ KIND="organization space" xpcf export
 ```
 
 
-<a id="orge3fd5f5"></a>
+<a id="orgfbe4071"></a>
 
 ## Configuration File
 
@@ -216,22 +219,66 @@ xpcf export --config example-config.yaml
 If no configuration file is specified, the tool searches for one ine the directories specified by `XDG_CONFIG_HOME` and `HOME`, in that order.
 
 
-<a id="orgd7ce56c"></a>
+<a id="org16abddb"></a>
 
 # Commands Reference
 
+The `xpcf` tool supports four subcommands:
 
-<a id="orgb322215"></a>
+-   `completion`
+-   `export`
+-   `help`
+-   `login`
+
+The `completion` subcommand generates autocompletion scripts for various shells:
+
+```bash
+xpcf completion --help
+```
+
+The `help` subcommand prints a generic help message about subcommands and global CLI flags.
+
+The `export` and `login` subcommands are detailed in the upcoming sections.
+
+
+<a id="orgd2874ef"></a>
+
+## Global configuration parameters
+
+The global configuration parameters are valid for each subcommand.
+
+
+<a id="orge6388f7"></a>
+
+### Help
+
+| CLI flag             | `-h` / `--help` |
+| Environment variable | -               |
+| Config file key      | -               |
+
+Each subcommand comes with a help configuration parameter. Help can be invoked with the `-h` or `--help` CLI flag:
+
+```bash
+xpcf login --help
+```
+
+
+<a id="org46f9a27"></a>
+
+### Config
+
+
+<a id="orgb328247"></a>
 
 # Common Workflows
 
 
-<a id="org997ec09"></a>
+<a id="orgf91befc"></a>
 
 # Troubleshooting
 
 
-<a id="org320b874"></a>
+<a id="org99478a1"></a>
 
 # FAQ
 

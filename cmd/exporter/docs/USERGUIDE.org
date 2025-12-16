@@ -333,6 +333,45 @@ order.
 
 * Commands Reference
 
+The call_config("CLI name") tool supports four subcommands:
+
+- =completion=
+- =export=
+- =help=
+- =login=
+
+The =completion= subcommand generates autocompletion scripts for
+various shells:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
+<<config("CLI name")>> completion --help
+#+end_src
+
+The =help= subcommand prints a generic help message about subcommands
+and global CLI flags.
+
+The =export= and =login= subcommands are detailed in the upcoming
+sections.
+
+** Global configuration parameters
+
+The global configuration parameters are valid for each subcommand.
+
+*** Help
+
+| CLI flag             | =-h= / =--help= |
+| Environment variable | -               |
+| Config file key      | -               |
+
+Each subcommand comes with a help configuration parameter. Help can be
+invoked with the =-h= or =--help= CLI flag:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval no-export
+<<config("CLI name")>> login --help
+#+end_src
+
+*** Config
+
 * Common Workflows
 
 * Troubleshooting
