@@ -359,6 +359,8 @@ The global configuration parameters are valid for each subcommand.
 
 *** Help
 
+| Configuration        | Value           |
+|----------------------+-----------------|
 | CLI flag             | =-h= / =--help= |
 | Environment variable | -               |
 | Config file key      | -               |
