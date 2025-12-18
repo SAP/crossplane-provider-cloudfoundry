@@ -40,17 +40,14 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
         with:
-          go-version: "1.21"
-
-      - name: Vendor Dependencies
-        run: make vendor vendor.check
+          go-version: "1.23"
 
       - name: Set up Version
         id: set-target-version
         run: |
           echo "setting version to v0.0.0-draft-${{ github.sha }}" 
-          echo "BUILD_IMAGE_VERSION=v0.0.0-draft-${{ github.sha }}" >> $GITHUB_ENV
-          echo "BUILD_IMAGE_VERSION=v0.0.0-draft-${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "BUILD_IMAGE_VERSION=v0.0.0-draft-${{ github.sha }}" >> "$GITHUB_ENV"
+          echo "BUILD_IMAGE_VERSION=v0.0.0-draft-${{ github.sha }}" >> "$GITHUB_OUTPUT"
 
       - name: Print Version Number
         run: |
@@ -58,7 +55,7 @@ jobs:
 
 
       - name: Build Images
-        run: make build VERSION=$BUILD_IMAGE_VERSION
+        run: make build VERSION="${BUILD_IMAGE_VERSION}"
         env:
           # We're using docker buildx, which doesn't actually load the images it
           # builds by default. Specifying --load does so.
@@ -73,7 +70,7 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish Artifacts to DockerHub
-        run: make publish BRANCH_NAME=${GITHUB_REF##*/} VERSION=$BUILD_IMAGE_VERSION
+        run: make publish BRANCH_NAME="${GITHUB_REF##*/}" VERSION="${BUILD_IMAGE_VERSION}"
         env:
           DOCKER_REGISTRY: ${{ vars.REGISTRY_URL }}
           BUILD_REGISTRY: ${{ vars.REGISTRY_URL }}
@@ -83,61 +80,61 @@ jobs:
     runs-on: ubuntu-latest
     if: always() # would also run if build-test-version fails but we just fail too
     steps:
+      - name: Checkout code
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          submodules: true
+          
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: "1.23"  # Match what's in Makefile GO_REQUIRED_VERSION
+
       # if the target is not set, use the version built in the build-test-version job
-      # if triggered with source and target we just use these to versions for the test
-      - name: Set TARGET_IMAGE_VERSION
+      # if triggered with source and target we just use these versions for the test
+      - name: Set UPGRADE_TEST_FROM_TAG and UPGRADE_TEST_TO_TAG
         run: |
+          echo "UPGRADE_TEST_FROM_TAG=${{ github.event.inputs.source }}" >> "$GITHUB_ENV"
           if [ -z "${{ github.event.inputs.target }}" ]; then
-            echo "TARGET_IMAGE_VERSION=${{ needs.build-test-version.outputs.target_version }}" >> $GITHUB_ENV
+            echo "UPGRADE_TEST_TO_TAG=${{ needs.build-test-version.outputs.target_version }}" >> "$GITHUB_ENV"
           else
-            echo "TARGET_IMAGE_VERSION=${{ github.event.inputs.target }}" >> $GITHUB_ENV
+            echo "UPGRADE_TEST_TO_TAG=${{ github.event.inputs.target }}" >> "$GITHUB_ENV"
           fi
 
-      - name: Print TARGET_IMAGE_VERSION
+      - name: Print upgrade test versions
         run: |
-          echo "TARGET_IMAGE_VERSION is $TARGET_IMAGE_VERSION"
-
-      - name: Clone provider-upgrade-test repo
+          echo "UPGRADE_TEST_FROM_TAG is $UPGRADE_TEST_FROM_TAG"
+          echo "UPGRADE_TEST_TO_TAG is $UPGRADE_TEST_TO_TAG"
+      
+      - name: Parse CF credentials
         run: |
-          git clone https://github.com/openmcp-project/provider-upgrade-test.git
-          echo "Repository provider-upgrade-test cloned successfully."
+          # Extract individual fields from JSON secret
+          echo "CF_EMAIL=$(echo '${{ secrets.CF_CREDENTIALS }}' | jq -r '.email')" >> "$GITHUB_ENV"
+          echo "CF_USERNAME=$(echo '${{ secrets.CF_CREDENTIALS }}' | jq -r '.username')" >> "$GITHUB_ENV"
+          echo "CF_PASSWORD=$(echo '${{ secrets.CF_CREDENTIALS }}' | jq -r '.password')" >> "$GITHUB_ENV"
+          echo "CF_ENDPOINT=${{ secrets.CF_ENVIRONMENT }}" >> "$GITHUB_ENV"
 
-      - name: Install CLI Tools
-        run: |
-          echo "Installing Kind..."
-          curl -Lo ./kind https://kind.sigs.k8s.io/dl/latest/kind-linux-amd64
-          chmod +x ./kind
-          sudo mv ./kind /usr/local/bin/kind
-
-          echo "Installing Kubectl..."
-          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-          chmod +x kubectl
-          sudo mv kubectl /usr/local/bin/
-
-          echo "Installing Chainsaw..."
-          curl -LO https://github.com/kyverno/chainsaw/releases/download/v0.2.12/chainsaw_linux_amd64.tar.gz && \
-          tar -xzvf chainsaw_linux_amd64.tar.gz && \
-          chmod +x chainsaw && \
-          sudo mv chainsaw /usr/local/bin/chainsaw && \
-          chainsaw version
-
-          echo "Installing sed..."
-          sudo apt-get update && sudo apt-get install -y sed
-
-          echo "Installing jq..."
-          sudo apt-get install -y jq
-
-          echo "Installing yq..."
-          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/bin/yq
-          sudo chmod +x /usr/bin/yq
-
-          echo "All tools installed successfully."
-      - name: Run upgrade test
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          cd provider-upgrade-test
-          echo "Running upgrade test..."
-          REGISTRY=ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry && ./provider-test.sh upgrade-test --source "${REGISTRY}:${{ github.event.inputs.source }}" --target ${REGISTRY}:${TARGET_IMAGE_VERSION} --provider provider-cloudfoundry 
+      - name: Run upgrade tests
+        timeout-minutes: 20
         env:
-          CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
-          CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
+          CF_EMAIL: ${{ env.CF_EMAIL }}
+          CF_USERNAME: ${{ env.CF_USERNAME }}
+          CF_PASSWORD: ${{ env.CF_PASSWORD }}
+          CF_ENDPOINT: ${{ env.CF_ENDPOINT }}
+          UPGRADE_TEST_FROM_TAG: ${{ env.UPGRADE_TEST_FROM_TAG }}
+          UPGRADE_TEST_TO_TAG: ${{ env.UPGRADE_TEST_TO_TAG }}
+        run: make test-upgrade  # TODO: update to make test-upgrade-with-version-crs
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-test-logs
+          path: |
+            test/upgrade/logs/
+            test-upgrade-output.log
+          retention-days: 7
+      
+      - name: Clean up after upgrade tests
+        if: always()
+        run: make test-upgrade-clean

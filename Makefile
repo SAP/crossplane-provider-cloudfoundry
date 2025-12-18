@@ -137,6 +137,8 @@ run: go.build
 
 # ====================================================================================
 # End to End Testing
+# ====================================================================================
+
 CROSSPLANE_NAMESPACE = upbound-system
 -include build/makelib/local.xpkg.mk
 -include build/makelib/controlplane.mk
@@ -173,9 +175,26 @@ test-acceptance:  $(KIND) $(HELM3) build
      esac
 .PHONY: cobertura submodules fallthrough run crds.clean dev-debug dev-clean demo-cluster demo-install demo-clean demo-debug
 
-##@ Upgrade Tests
+# ====================================================================================
+# Upgrade Tests
+# ====================================================================================
 
-##@ Upgrade Tests
+# If UPGRADE_TEST_CRS_TAG is not set, use UPGRADE_TEST_FROM_TAG as default
+UPGRADE_TEST_CRS_TAG ?= $(UPGRADE_TEST_FROM_TAG)
+
+.PHONY: check-upgrade-test-vars
+check-upgrade-test-vars: ## Verify required upgrade test environment variables
+	@test -n "$(UPGRADE_TEST_FROM_TAG)" || { echo "❌ Set UPGRADE_TEST_FROM_TAG"; exit 1; }
+	@test -n "$(UPGRADE_TEST_TO_TAG)" || { echo "❌ Set UPGRADE_TEST_TO_TAG"; exit 1; }
+	@$(OK) required upgrade test environment variables are set
+
+.PHONY: build-upgrade-test-images
+build-upgrade-test-images: ## Build local images if testing with 'local' tag
+	@if [ "$(UPGRADE_TEST_FROM_TAG)" = "local" ] || [ "$(UPGRADE_TEST_TO_TAG)" = "local" ]; then \
+		$(INFO) "Building local images (FROM_TAG or TO_TAG is 'local')"; \
+		$(MAKE) build; \
+		$(OK) "Built local images"; \
+	fi
 
 .PHONY: test-upgrade-compile
 test-upgrade-compile: ## Verify upgrade tests compile
@@ -184,10 +203,8 @@ test-upgrade-compile: ## Verify upgrade tests compile
 	@$(OK) upgrade tests compile successfully
 
 .PHONY: test-upgrade
-test-upgrade: $(KIND) ## Run upgrade tests
+test-upgrade: $(KIND) check-upgrade-test-vars build-upgrade-test-images ## Run upgrade tests
 	@$(INFO) running upgrade tests from $(UPGRADE_TEST_FROM_TAG) to $(UPGRADE_TEST_TO_TAG)
-	@test -n "$(UPGRADE_TEST_FROM_TAG)" || { echo "❌ Set UPGRADE_TEST_FROM_TAG"; exit 1; }
-	@test -n "$(UPGRADE_TEST_TO_TAG)" || { echo "❌ Set UPGRADE_TEST_TO_TAG"; exit 1; }
 	@cd test/upgrade && go test -v -tags=upgrade -timeout=45m ./... 2>&1 | tee ../../test-upgrade-output.log
 	@echo "========== Upgrade Test Summary =========="
 	@grep -E "PASS|FAIL|ok " test-upgrade-output.log | tail -5
@@ -198,33 +215,32 @@ test-upgrade: $(KIND) ## Run upgrade tests
 	esac
 
 .PHONY: test-upgrade-prepare-crs
-test-upgrade-prepare-crs: ## Prepare CRs from FROM version (overwrites test/upgrade/crs/)
-	@$(INFO) preparing CRs from $(UPGRADE_TEST_FROM_TAG)
-	@test -n "$(UPGRADE_TEST_FROM_TAG)" || { echo "❌ Set UPGRADE_TEST_FROM_TAG"; exit 1; }
-	@if [ "$(UPGRADE_TEST_FROM_TAG)" = "main" ]; then \
-		$(INFO) "Using current CRs from test/upgrade/crs/ (FROM_TAG is main)"; \
+test-upgrade-prepare-crs: ## Prepare CRs from CRS_TAG version
+	@$(INFO) preparing CRs from $(UPGRADE_TEST_CRS_TAG)
+	@test -n "$(UPGRADE_TEST_CRS_TAG)" || { echo "❌ Set UPGRADE_TEST_CRS_TAG or UPGRADE_TEST_FROM_TAG"; exit 1; }
+	@if [ "$(UPGRADE_TEST_CRS_TAG)" = "local" ]; then \
+		$(OK) "Using local CRs from test/upgrade/crs/ (CRS_TAG is 'local')"; \
 	else \
-		$(INFO) "Checking out CRs from tag $(UPGRADE_TEST_FROM_TAG)"; \
+		$(INFO) "Checking out CRs from tag $(UPGRADE_TEST_CRS_TAG)"; \
 		rm -rf test/upgrade/crs/*; \
 		mkdir -p test/upgrade/crs; \
-		if git ls-tree -r $(UPGRADE_TEST_FROM_TAG) --name-only | grep -q "^test/upgrade/crs/"; then \
-			$(INFO) "✅ Found test/upgrade/crs/ in $(UPGRADE_TEST_FROM_TAG)"; \
-			git archive $(UPGRADE_TEST_FROM_TAG) test/upgrade/crs/ | tar -x --strip-components=2 -C test/upgrade/crs/; \
+		if git ls-tree -r $(UPGRADE_TEST_CRS_TAG) --name-only | grep -q "^test/upgrade/crs/"; then \
+			$(INFO) "✅ Found test/upgrade/crs/ in $(UPGRADE_TEST_CRS_TAG)"; \
+			git archive $(UPGRADE_TEST_CRS_TAG) test/upgrade/crs/ | tar -x --strip-components=2 -C test/upgrade/crs/; \
 			$(OK) "Copied all CRs from test/upgrade/crs/"; \
 		else \
 			$(INFO) "⚠️  test/upgrade/crs/ not found, using hardcoded e2e paths"; \
-			git show $(UPGRADE_TEST_FROM_TAG):test/e2e/crs/orgspace/import.yaml > test/upgrade/crs/import.yaml 2>/dev/null || \
-				{ echo "❌ Could not find org.yaml in $(UPGRADE_TEST_FROM_TAG)"; exit 1; }; \
-			git show $(UPGRADE_TEST_FROM_TAG):test/e2e/crs/orgspace/space.yaml > test/upgrade/crs/space.yaml 2>/dev/null || \
-				{ echo "❌ Could not find space.yaml in $(UPGRADE_TEST_FROM_TAG)"; exit 1; }; \
+			git show $(UPGRADE_TEST_CRS_TAG):test/e2e/crs/orgspace/import.yaml > test/upgrade/crs/import.yaml 2>/dev/null || \
+				{ echo "❌ Could not find import.yaml in $(UPGRADE_TEST_CRS_TAG)"; exit 1; }; \
+			git show $(UPGRADE_TEST_CRS_TAG):test/e2e/crs/orgspace/space.yaml > test/upgrade/crs/space.yaml 2>/dev/null || \
+				{ echo "❌ Could not find space.yaml in $(UPGRADE_TEST_CRS_TAG)"; exit 1; }; \
 			$(OK) "Copied e2e CRs to test/upgrade/crs/"; \
 		fi; \
 	fi
 
 .PHONY: test-upgrade-with-version-crs
-test-upgrade-with-version-crs: $(KIND) test-upgrade-prepare-crs ## Run upgrade tests with FROM version CRs
+test-upgrade-with-version-crs: $(KIND) check-upgrade-test-vars build-upgrade-test-images test-upgrade-prepare-crs ## Run upgrade tests with FROM version CRs
 	@$(INFO) running upgrade tests from $(UPGRADE_TEST_FROM_TAG) to $(UPGRADE_TEST_TO_TAG)
-	@test -n "$(UPGRADE_TEST_TO_TAG)" || { echo "❌ Set UPGRADE_TEST_TO_TAG"; exit 1; }
 	@cd test/upgrade && go test -v -tags=upgrade -timeout=45m ./... 2>&1 | tee ../../test-upgrade-output.log
 	@echo "========== Upgrade Test Summary =========="
 	@grep -E "PASS|FAIL|ok " test-upgrade-output.log | tail -5
@@ -234,9 +250,16 @@ test-upgrade-with-version-crs: $(KIND) test-upgrade-prepare-crs ## Run upgrade t
 		*) echo "⚠️  Could not determine test result"; exit 1; ;; \
 	esac
 
+.PHONY: test-upgrade-debug
+test-upgrade-debug: $(KIND) check-upgrade-test-vars build-upgrade-test-images test-upgrade-prepare-crs ## Run upgrade tests with debugger
+	@$(INFO) running upgrade tests with debugger
+	@cd test/upgrade && dlv test -tags=upgrade . --listen=:2345 --headless=true --api-version=2 --build-flags="-tags=upgrade" -- -test.v -test.timeout 45m 2>&1 | tee ../../test-upgrade-output.log
+	@echo "========== Upgrade Test Summary =========="
+	@grep -E "PASS|FAIL|ok " test-upgrade-output.log | tail -5
+
 .PHONY: test-upgrade-restore-crs
 test-upgrade-restore-crs: ## Restore test/upgrade/crs/ to current main version
-	@$(INFO) restoring test/upgrade/crs/ to main
+	@$(INFO) restoring test/upgrade/crs/ 
 	@git checkout test/upgrade/crs/
 	@$(OK) CRs restored
 
@@ -254,17 +277,15 @@ test-upgrade-help: ## Show upgrade test usage examples
 	@$(INFO) "Upgrade Test Examples:"
 	@$(INFO) "======================"
 	@$(INFO) ""
-	@$(INFO) "  1. Test current code (main -> main):"
-	@$(INFO) "     export UPGRADE_TEST_FROM_TAG=main"
-	@$(INFO) "     export UPGRADE_TEST_TO_TAG=main"
-	@$(INFO) "     make test-upgrade"
-	@$(INFO) ""
-	@$(INFO) "  2. Test release upgrade with automatic CR checkout:"
+	@$(INFO) "  1. Test between two releases:"
 	@$(INFO) "     export UPGRADE_TEST_FROM_TAG=v0.3.2"
 	@$(INFO) "     export UPGRADE_TEST_TO_TAG=v0.4.0"
-	@$(INFO) "     make test-upgrade-with-version-crs"
-	@$(INFO) "     ⚠️  WARNING: This overwrites test/upgrade/crs/ with CRs from tag"
-	@$(INFO) "     After test completes, run: make test-upgrade-restore-crs"
+	@$(INFO) "     make test-upgrade"
+	@$(INFO) ""
+	@$(INFO) "  2. Test local changes (v0.3.2 -> your code):"
+	@$(INFO) "     export UPGRADE_TEST_FROM_TAG=v0.3.2"
+	@$(INFO) "     export UPGRADE_TEST_TO_TAG=local"
+	@$(INFO) "     make test-upgrade"
 	@$(INFO) ""
 	@$(INFO) "  3. Manual upgrade test (no CR checkout):"
 	@$(INFO) "     export UPGRADE_TEST_FROM_TAG=v0.3.2"
@@ -293,7 +314,7 @@ test-upgrade-help: ## Show upgrade test usage examples
 	@$(INFO) ""
 	@$(INFO) "How CRS Checkout Works (test-upgrade-with-version-crs):"
 	@$(INFO) "========================================================"
-	@$(INFO) "  1. If FROM_TAG is 'main': Uses current test/upgrade/crs/"
+	@$(INFO) "  1. If FROM_TAG is 'local': Uses current test/upgrade/crs/"
 	@$(INFO) "  2. If FROM_TAG has test/upgrade/crs/: Copies entire directory"
 	@$(INFO) "  3. Fallback: Uses test/e2e/crs/orgspace/"
 	@$(INFO) ""
@@ -314,13 +335,16 @@ Crossplane Targets:
     run                   Run crossplane locally, out-of-cluster. Useful for development.
 
 Upgrade Testing:
-    test-upgrade          Run upgrade tests (requires env vars)
-    test-upgrade-compile  Verify upgrade tests compile
-    test-upgrade-clean    Clean up upgrade test artifacts
-    test-upgrade-help     Show detailed upgrade test usage
-	test-upgrade-prepare-crs   Prepare CRs from FROM version (overwrites test/upgrade/crs/)
-	test-upgrade-with-version-crs  Run upgrade tests with FROM version CRs
-	test-upgrade-restore-crs  Restore test/upgrade/crs/ to current main version
+    test-upgrade                   Run upgrade tests (requires env vars)
+    test-upgrade-with-version-crs  Run upgrade tests with auto CR checkout
+    test-upgrade-compile           Verify upgrade tests compile
+    test-upgrade-debug             Run upgrade tests with debugger
+    test-upgrade-prepare-crs       Prepare CRs from CRS_TAG version
+    test-upgrade-restore-crs       Restore test/upgrade/crs/ to current version
+    test-upgrade-clean             Clean up upgrade test artifacts
+    test-upgrade-help              Show detailed upgrade test usage
+    check-upgrade-test-vars        Verify required environment variables
+    build-upgrade-test-images      Build local images if needed
 endef
 # The reason CROSSPLANE_MAKE_HELP is used instead of CROSSPLANE_HELP is because the crossplane
 # binary will try to use CROSSPLANE_HELP if it is set, and this is for something different.
