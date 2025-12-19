@@ -53,4 +53,10 @@ jobs:
         with:
           name: upgrade-test-logs
           path: |
-            test/upgra
+            test/upgrade/logs/
+            test-upgrade-output.log
+          retention-days: 7
+      
+      - name: Clean up after upgrade tests
+        if: always()
+        run: make test-upgrade-clean
