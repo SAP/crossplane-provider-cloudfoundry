@@ -62,7 +62,7 @@ IMAGES = $(BASE_NAME) $(BASE_NAME)-controller
 
 export UUT_CONFIG = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME)):$(VERSION)
 export UUT_CONTROLLER = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME))-controller:$(VERSION)
-export UUT_IMAGES = {"ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry":"$(UUT_CONFIG)","ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry-controller":"$(UUT_CONTROLLER)"}
+export UUT_IMAGES = {"crossplane/provider-cloudfoundry":"docker.io/$(UUT_CONFIG)","crossplane/provider-cloudfoundry-controller":"docker.io/$(UUT_CONTROLLER)"}
 export E2E_IMAGES = {"package":"$(UUT_CONFIG)","controller":"$(UUT_CONTROLLER)"}
 
 # NOTE(hasheddan): we ensure up is installed prior to running platform-specific

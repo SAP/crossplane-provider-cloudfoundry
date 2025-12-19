@@ -35,8 +35,8 @@ const (
 
 var (
 	UUT_IMAGES_KEY     = "UUT_IMAGES"
-	UUT_CONFIG_KEY     = "ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry"
-	UUT_CONTROLLER_KEY = "ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry-controller"
+	UUT_CONFIG_KEY     = "crossplane/provider-cloudfoundry"
+	UUT_CONTROLLER_KEY = "crossplane/provider-cloudfoundry-controller"
 )
 
 type mockList struct {

@@ -145,6 +145,11 @@ func SetupClusterWithCrossplane(namespace string) {
 		kindClusterName = clusterName
 		return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
 			klog.V(4).Infof("upgrade cluster %s has been created", clusterName)
+			// Load registry images into kind (xp-testing uses PackagePullPolicy: Never)
+			// Local images are already loaded by xp-testing automatically
+			if err := loadRegistryImagesIntoKind(clusterName, fromTag, toTag); err != nil {
+				return ctx, fmt.Errorf("failed to load registry images into kind: %w", err)
+			}
 			return ctx, nil
 		}
 	})
@@ -222,6 +227,55 @@ func pullImagesIfNeeded(fromTag, toTag, fromPackage, fromControllerPackage, toPa
 	} else {
 		klog.V(4).Infof("Skipping pull for TO=local (using locally built images)")
 	}
+}
+
+// loadRegistryImagesIntoKind loads pulled registry images into the kind cluster
+// xp-testing uses PackagePullPolicy: Never, so all images must be pre-loaded
+func loadRegistryImagesIntoKind(clusterName, fromTag, toTag string) error {
+	runner := gexe.New()
+
+	// Load FROM images if they're from a registry
+	if fromTag != localTagName {
+		klog.V(4).Infof("Loading FROM images into kind: %s", fromPackage)
+
+		if err := loadImageIntoKind(runner, clusterName, fromPackage); err != nil {
+			return err
+		}
+		if err := loadImageIntoKind(runner, clusterName, fromControllerPackage); err != nil {
+			return err
+		}
+
+		klog.V(4).Infof("Successfully loaded FROM images into kind")
+	}
+
+	// Load TO images if they're from a registry and different from FROM
+	if toTag != localTagName && toTag != fromTag {
+		klog.V(4).Infof("Loading TO images into kind: %s", toPackage)
+
+		if err := loadImageIntoKind(runner, clusterName, toPackage); err != nil {
+			return err
+		}
+		if err := loadImageIntoKind(runner, clusterName, toControllerPackage); err != nil {
+			return err
+		}
+
+		klog.V(4).Infof("Successfully loaded TO images into kind")
+	}
+
+	return nil
+}
+
+// loadImageIntoKind loads a single image into the kind cluster
+func loadImageIntoKind(runner *gexe.Echo, clusterName, image string) error {
+	cmd := fmt.Sprintf("kind load docker-image %s --name %s", image, clusterName)
+	p := runner.RunProc(cmd)
+
+	if p.Err() != nil {
+		return fmt.Errorf("failed to load %s into kind: %w: %s", image, p.Err(), p.Result())
+	}
+
+	klog.V(4).Infof("Loaded image %s into kind", image)
+	return nil
 }
 
 // getDeploymentRuntimeConfig creates a DeploymentRuntimeConfig with debug logging and faster sync
