@@ -115,7 +115,7 @@ go test -v -tags=upgrade -timeout=60m ./...
 | `CF_PASSWORD` | CF password | `your-password` |
 | `CF_ENDPOINT` | CF API endpoint URL | `https://api.cf.eu12.hana.ondemand.com` |
 | `UPGRADE_TEST_FROM_TAG` | Provider version to upgrade from | `v0.3.0` |
-| `UPGRADE_TEST_TO_TAG` | Provider version to upgrade to | `v0.3.2` or `main` |
+| `UPGRADE_TEST_TO_TAG` | Provider version to upgrade to | `v0.3.2` or `local` |
 
 ### Optional Variables (with defaults)
 
