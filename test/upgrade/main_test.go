@@ -119,11 +119,17 @@ func SetupClusterWithCrossplane(namespace string) {
 	fromControllerPackage := fmt.Sprintf("%s:%s", controllerPackageBasePath, fromTag)
 	toControllerPackage := fmt.Sprintf("%s:%s", controllerPackageBasePath, toTag)
 
-	// Pre-pull all images to avoid timeout during test
-	mustPullImage(fromPackage)
-	mustPullImage(toPackage)
-	mustPullImage(fromControllerPackage)
-	mustPullImage(toControllerPackage)
+	if fromTag != "local" {
+		mustPullImage(fromPackage)
+		mustPullImage(fromControllerPackage)
+		klog.V(4).Infof("Pulled FROM images: %s", fromTag)
+	}
+
+	if toTag != "local" {
+		mustPullImage(toPackage)
+		mustPullImage(toControllerPackage)
+		klog.V(4).Infof("Pulled TO images: %s", toTag)
+	}
 
 	// Configure provider deployment with debug logging and faster sync
 	deploymentRuntimeConfig := getDeploymentRuntimeConfig()
