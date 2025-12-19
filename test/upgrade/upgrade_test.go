@@ -6,6 +6,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/test"
 	upgrade "github.com/crossplane-contrib/xp-testing/pkg/upgrade"
@@ -19,7 +20,12 @@ import (
 func TestUpgradeProvider(t *testing.T) {
 	klog.V(2).Infof("Starting upgrade test from %s to %s", fromTag, toTag)
 	klog.V(2).Infof("Testing resources in directories: %v", resourceDirectories)
-
+	// Collect time metrics for upgrade tests
+	startTime := time.Now()
+	defer func() {
+		duration := time.Since(startTime)
+		klog.V(2).Infof("Upgrade test completed in %v", duration)
+	}()
 	upgradeTest := upgrade.UpgradeTest{
 		ProviderName:        providerName,
 		ClusterName:         kindClusterName,

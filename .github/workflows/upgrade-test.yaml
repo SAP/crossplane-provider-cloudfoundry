@@ -11,7 +11,7 @@ on:
         required: true
         default: "v0.3.2"
       to_version:
-        description: "Version to upgrade TO (e.g., v0.4.0 or 'local')"
+        description: "Version to upgrade TO (e.g., v0.3.3 or 'local')"
         required: true
         default: "local"
 
