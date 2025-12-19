@@ -49,12 +49,11 @@ const (
 	cfEndpointEnvVar = "CF_ENDPOINT"
 
 	// Environment variables - Optional with defaults
-	resourceDirectoryEnvVar = "UPGRADE_TEST_CRS_PATH"
-	verifyTimeoutEnvVar     = "UPGRADE_TEST_VERIFY_TIMEOUT"
-	waitForPauseEnvVar      = "UPGRADE_TEST_WAIT_FOR_PAUSE"
+	verifyTimeoutEnvVar = "UPGRADE_TEST_VERIFY_TIMEOUT"
+	waitForPauseEnvVar  = "UPGRADE_TEST_WAIT_FOR_PAUSE"
 
 	// Defaults for optional parameters
-	defaultResourceDirectory = "./crs"
+	defaultResourceDirectory = "./testdata/baseCrs"
 	defaultVerifyTimeout     = 30
 	defaultWaitForPause      = 1
 )
@@ -65,7 +64,7 @@ var (
 	resourceDirectories       []string
 	ignoreResourceDirectories = []string{
 		// Add any directories to ignore here, e.g.:
-		// "../e2e/crs/experimental",
+		// "./testdata/experimental",
 	}
 
 	// Default Values
@@ -105,9 +104,10 @@ func SetupClusterWithCrossplane(namespace string) {
 
 	// Load version tags for upgrade (FROM -> TO)
 	fromTag, toTag = loadPackageTags()
-	resourceDirectoryRoot = loadResourceDirectory()
 	verifyTimeout = loadVerifyTimeout()
 	waitForPause = loadWaitForPause()
+
+	resourceDirectoryRoot = defaultResourceDirectory
 
 	// Discover all resource directories
 	loadResourceDirectories()
@@ -258,18 +258,6 @@ func mustPullImage(image string) {
 	if p.Err() != nil {
 		panic(fmt.Errorf("docker pull %v failed: %w: %s", image, p.Err(), p.Result()))
 	}
-}
-
-// loadResourceDirectory loads the resource directory path from environment or uses default
-func loadResourceDirectory() string {
-	dir := os.Getenv(resourceDirectoryEnvVar)
-	if dir == "" {
-		dir = defaultResourceDirectory
-		klog.V(4).Infof("Using default resource directory: %s", dir)
-	} else {
-		klog.V(4).Infof("Using resource directory from %s: %s", resourceDirectoryEnvVar, dir)
-	}
-	return dir
 }
 
 // loadVerifyTimeout loads the verify timeout from environment or uses default
