@@ -196,9 +196,12 @@ check-upgrade-test-vars: ## Verify required upgrade test environment variables
 .PHONY: build-upgrade-test-images
 build-upgrade-test-images: ## Build local images if testing with 'local' tag
 	@if [ "$(UPGRADE_TEST_FROM_TAG)" = "local" ] || [ "$(UPGRADE_TEST_TO_TAG)" = "local" ]; then \
-		$(INFO) "Building local images (FROM_TAG or TO_TAG is 'local')"; \
-		$(MAKE) build; \
-		$(OK) "Built local images"; \
+		$(INFO) "Building local images for upgrade test"; \
+		$(MAKE) build VERSION=local; \
+		$(INFO) "Tagging images with full registry path"; \
+		docker tag $(BUILD_REGISTRY)/provider-$(BASE_NAME):local ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry:local || true; \
+		docker tag $(BUILD_REGISTRY)/provider-$(BASE_NAME)-controller:local ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry-controller:local || true; \
+		$(OK) "Built and tagged local images"; \
 	fi
 
 .PHONY: test-upgrade-compile
