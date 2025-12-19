@@ -46,7 +46,6 @@ KIND_NODE_IMAGE_TAG ?= v1.32.0
 
 # Setup Kubernetes tools
 
-KIND_VERSION = v0.22.0
 UP_VERSION = v0.31.0
 UP_CHANNEL = stable
 UPTEST_VERSION = v0.11.1
@@ -199,10 +198,13 @@ build-upgrade-test-images: ## Build local images if testing with 'local' tag
 		$(INFO) "Building local images for upgrade test"; \
 		$(MAKE) build VERSION=local; \
 		$(INFO) "Tagging images with full registry path"; \
-		docker tag $(BUILD_REGISTRY)/provider-$(BASE_NAME):local ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry:local || true; \
-		docker tag $(BUILD_REGISTRY)/provider-$(BASE_NAME)-controller:local ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry-controller:local || true; \
+		docker tag crossplane/provider-cloudfoundry:local \
+			ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry:local; \
+		docker tag crossplane/provider-cloudfoundry-controller:local \
+			ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry-controller:local; \
 		$(OK) "Built and tagged local images"; \
 	fi
+
 
 .PHONY: test-upgrade-compile
 test-upgrade-compile: ## Verify upgrade tests compile
