@@ -9,7 +9,7 @@ Upgrade tests verify that resources created with one version of the provider con
 ## Test Flow
 
 1. **Setup** - Create kind cluster with Crossplane and install provider (FROM version)
-2. **Import Resources** - Create test resources from YAML manifests stored in directory `test/upgrade/crs`
+2. **Import Resources** - Create test resources from YAML manifests stored in directory `test/upgrade/testdata/baseCrs`
 3. **Verify Before Upgrade** - Ensure all resources are Ready
 4. **Upgrade** - Update provider to newer version (TO version)
 5. **Verify After Upgrade** - Confirm resources still work correctly
@@ -43,7 +43,7 @@ Before running any tests, you **must** update the organization name to one you h
    cf orgs
 ```
 
-2. **Update the organization name** in `test/upgrade/crs/import.yaml`:
+2. **Update the organization name** in `test/upgrade/testdata/baseCrs/import.yaml`:
 ```yaml
    apiVersion: cloudfoundry.crossplane.io/v1alpha1
    kind: Organization
@@ -92,8 +92,6 @@ make test-upgrade
 
 Override defaults as needed:
 ```bash
-# Test with custom resource directory
-export UPGRADE_TEST_CRS_PATH="./crs"
 
 # Increase timeout for slow resources
 export UPGRADE_TEST_VERIFY_TIMEOUT="45"  # minutes
@@ -117,28 +115,27 @@ go test -v -tags=upgrade -timeout=60m ./...
 | `CF_PASSWORD` | CF password | `your-password` |
 | `CF_ENDPOINT` | CF API endpoint URL | `https://api.cf.eu12.hana.ondemand.com` |
 | `UPGRADE_TEST_FROM_TAG` | Provider version to upgrade from | `v0.3.0` |
-| `UPGRADE_TEST_TO_TAG` | Provider version to upgrade to | `v0.3.2` or `main` |
+| `UPGRADE_TEST_TO_TAG` | Provider version to upgrade to | `v0.3.2` or `local` |
 
 ### Optional Variables (with defaults)
 
 | Variable | Description | Default | Example |
 |----------|-------------|---------|---------|
-| `UPGRADE_TEST_CRS_PATH` | Path to test resources directory | `./crs` | `./crs-minimal` |
 | `UPGRADE_TEST_VERIFY_TIMEOUT` | Timeout for resource verification (minutes) | `30` | `45` |
 | `UPGRADE_TEST_WAIT_FOR_PAUSE` | Wait time after provider upgrade (minutes) | `1` | `2` |
 
 ## Test Resources
 
-Tests use YAML manifests from `test/upgrade/crs/`. Currently tested resources:
+Tests use YAML manifests from `test/upgrade/testdata/baseCrs/`. Currently tested resources:
 
 - **Organization** (import) - Uses `managementPolicies: [Observe]` to import existing org
 - **Space** - Lightweight resource for testing basic upgrade flow
 
 ### Adding New Test Resources
 
-1. Create your resource manifest in `test/upgrade/crs/`:
+1. Create your resource manifest in `test/upgrade/testdata/baseCrs/`:
 ```bash
-   cat > test/upgrade/crs/myresource.yaml <<EOF
+   cat > test/upgrade/testdata/baseCrs/myresource.yaml <<EOF
    apiVersion: cloudfoundry.crossplane.io/v1alpha1
    kind: MyResource
    metadata:
@@ -164,9 +161,11 @@ Tests use YAML manifests from `test/upgrade/crs/`. Currently tested resources:
 ```
 test/
 ├── upgrade/
-│   ├── crs/                  # Test resource manifests
-│   │   ├── import.yaml       # Organization (observe)
-│   │   └── space.yaml        # Space (create)
+|.  ├── crs/    
+│   ├── testdata/
+|   |   └── baseCrs/             # Test resource manifests
+|   |      ├── import.yaml       # Organization (observe)
+|   │      └── space.yaml        # Space (create)
 │   ├── main_test.go          # Test environment setup
 │   ├── upgrade_test.go       # Actual upgrade test logic
 │   └── README.md             # This file
@@ -194,7 +193,7 @@ const crossplaneVersion = "CHOSEN_VERSION"
 
 **Solution:** 
 1. Run `cf orgs` to see your available organizations
-2. Update `test/upgrade/crs/import.yaml` with a valid org name
+2. Update `test/upgrade/testdata/baseCrs/import.yaml` with a valid org name
 3. Ensure you have at least read access to the organization
 
 #### Error: "no non-test Go files"
