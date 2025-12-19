@@ -47,6 +47,7 @@ const (
 
 	// Environment variables
 	cfEndpointEnvVar = "CF_ENDPOINT"
+	uutImagesEnvVar  = "UUT_IMAGES"
 
 	// Environment variables - Optional with defaults
 	verifyTimeoutEnvVar = "UPGRADE_TEST_VERIFY_TIMEOUT"
@@ -56,6 +57,7 @@ const (
 	defaultResourceDirectory = "./testdata/baseCrs"
 	defaultVerifyTimeout     = 30
 	defaultWaitForPause      = 1
+	localTagName             = "local"
 )
 
 var (
@@ -74,10 +76,12 @@ var (
 )
 
 var (
-	fromTag     string
-	toTag       string
-	fromPackage string
-	toPackage   string
+	fromTag               string
+	toTag                 string
+	fromPackage           string
+	toPackage             string
+	fromControllerPackage string
+	toControllerPackage   string
 )
 
 // TestMain is the entry point for all upgrade tests
@@ -113,23 +117,11 @@ func SetupClusterWithCrossplane(namespace string) {
 	loadResourceDirectories()
 	klog.V(4).Infof("found resource directories: %s", resourceDirectories)
 
-	// Build full image paths
-	fromPackage = fmt.Sprintf("%s:%s", packageBasePath, fromTag)
-	toPackage = fmt.Sprintf("%s:%s", packageBasePath, toTag)
-	fromControllerPackage := fmt.Sprintf("%s:%s", controllerPackageBasePath, fromTag)
-	toControllerPackage := fmt.Sprintf("%s:%s", controllerPackageBasePath, toTag)
+	// Resolve image paths (handles both "local" and registry tags)
+	fromPackage, fromControllerPackage, toPackage, toControllerPackage = resolveImagePaths(fromTag, toTag)
 
-	if fromTag != "local" {
-		mustPullImage(fromPackage)
-		mustPullImage(fromControllerPackage)
-		klog.V(4).Infof("Pulled FROM images: %s", fromTag)
-	}
-
-	if toTag != "local" {
-		mustPullImage(toPackage)
-		mustPullImage(toControllerPackage)
-		klog.V(4).Infof("Pulled TO images: %s", toTag)
-	}
+	// Pull images from registry if needed (skip if local)
+	pullImagesIfNeeded(fromTag, toTag, fromPackage, fromControllerPackage, toPackage, toControllerPackage)
 
 	// Configure provider deployment with debug logging and faster sync
 	deploymentRuntimeConfig := getDeploymentRuntimeConfig()
@@ -165,6 +157,71 @@ func SetupClusterWithCrossplane(namespace string) {
 		testutil.ApplySecretInCrossplaneNamespace(cfSecretName, cfSecretData),
 		testutil.CreateProviderConfigFn(namespace, cfEndpoint, cfSecretName),
 	)
+}
+
+// resolveImagePaths determines the correct image paths for FROM and TO versions
+// based on whether they're using "local" builds or registry tags
+func resolveImagePaths(fromTag, toTag string) (fromPkg, fromCtrl, toPkg, toCtrl string) {
+	isLocalFromTag := fromTag == localTagName
+	isLocalToTag := toTag == localTagName
+
+	// Get local image paths if needed
+	var localProviderPackage, localControllerPackage string
+	if isLocalFromTag || isLocalToTag {
+		uutImages := os.Getenv(uutImagesEnvVar)
+		if uutImages == "" {
+			panic(fmt.Errorf("%s environment variable is required when FROM_TAG or TO_TAG is 'local'", uutImagesEnvVar))
+		}
+
+		localProviderPackage, localControllerPackage = testutil.GetImagesFromJsonOrPanic(uutImages)
+		klog.V(4).Infof("Loaded local images from %s", uutImagesEnvVar)
+	}
+
+	// Resolve FROM images
+	if isLocalFromTag {
+		fromPkg = localProviderPackage
+		fromCtrl = localControllerPackage
+		klog.V(4).Infof("Using local images for FROM: %s", fromPkg)
+	} else {
+		fromPkg = fmt.Sprintf("%s:%s", packageBasePath, fromTag)
+		fromCtrl = fmt.Sprintf("%s:%s", controllerPackageBasePath, fromTag)
+	}
+
+	// Resolve TO images
+	if isLocalToTag {
+		toPkg = localProviderPackage
+		toCtrl = localControllerPackage
+		klog.V(4).Infof("Using local images for TO: %s", toPkg)
+	} else {
+		toPkg = fmt.Sprintf("%s:%s", packageBasePath, toTag)
+		toCtrl = fmt.Sprintf("%s:%s", controllerPackageBasePath, toTag)
+	}
+
+	return fromPkg, fromCtrl, toPkg, toCtrl
+}
+
+// pullImagesIfNeeded pulls images from registry if they're not local builds
+// Local images are already built by the Makefile and don't need pulling
+func pullImagesIfNeeded(fromTag, toTag, fromPackage, fromControllerPackage, toPackage, toControllerPackage string) {
+	// Pull FROM images if not local
+	if fromTag != localTagName {
+		klog.V(4).Infof("Pulling FROM images: %s", fromTag)
+		mustPullImage(fromPackage)
+		mustPullImage(fromControllerPackage)
+		klog.V(4).Infof("Successfully pulled FROM images: %s", fromTag)
+	} else {
+		klog.V(4).Infof("Skipping pull for FROM=local (using locally built images)")
+	}
+
+	// Pull TO images if not local
+	if toTag != localTagName {
+		klog.V(4).Infof("Pulling TO images: %s", toTag)
+		mustPullImage(toPackage)
+		mustPullImage(toControllerPackage)
+		klog.V(4).Infof("Successfully pulled TO images: %s", toTag)
+	} else {
+		klog.V(4).Infof("Skipping pull for TO=local (using locally built images)")
+	}
 }
 
 // getDeploymentRuntimeConfig creates a DeploymentRuntimeConfig with debug logging and faster sync

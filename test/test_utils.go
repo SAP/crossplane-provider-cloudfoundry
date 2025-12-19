@@ -10,6 +10,7 @@ import (
 	"github.com/crossplane-contrib/xp-testing/pkg/logging"
 	"github.com/crossplane-contrib/xp-testing/pkg/resources"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/pkg/errors"
 	corev1 "k8s.io/api/core/v1"
 	kubeErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,6 +31,12 @@ import (
 
 const (
 	crossplaneSystemNamespace = "crossplane-system"
+)
+
+var (
+	UUT_IMAGES_KEY     = "UUT_IMAGES"
+	UUT_CONFIG_KEY     = "ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry"
+	UUT_CONTROLLER_KEY = "ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry-controller"
 )
 
 type mockList struct {
@@ -81,6 +88,22 @@ func GetCFCredentialsOrPanic() map[string][]byte {
 	return map[string][]byte{
 		"credentials": credsJSON,
 	}
+}
+
+func GetImagesFromJsonOrPanic(imagesJson string) (string, string) {
+
+	imageMap := map[string]string{}
+
+	err := json.Unmarshal([]byte(imagesJson), &imageMap)
+
+	if err != nil {
+		panic(errors.Wrap(err, "failed to unmarshal json from UUT_IMAGE"))
+	}
+
+	uutConfig := imageMap[UUT_CONFIG_KEY]
+	uutController := imageMap[UUT_CONTROLLER_KEY]
+
+	return uutConfig, uutController
 }
 
 // ApplySecretInCrossplaneNamespace creates a secret in the crossplane-system namespace

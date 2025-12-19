@@ -62,6 +62,7 @@ IMAGES = $(BASE_NAME) $(BASE_NAME)-controller
 
 export UUT_CONFIG = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME)):$(VERSION)
 export UUT_CONTROLLER = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME))-controller:$(VERSION)
+export UUT_IMAGES = {"ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry":"$(UUT_CONFIG)","ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry-controller":"$(UUT_CONTROLLER)"}
 export E2E_IMAGES = {"package":"$(UUT_CONFIG)","controller":"$(UUT_CONTROLLER)"}
 
 # NOTE(hasheddan): we ensure up is installed prior to running platform-specific
@@ -194,15 +195,10 @@ check-upgrade-test-vars: ## Verify required upgrade test environment variables
 
 .PHONY: build-upgrade-test-images
 build-upgrade-test-images: ## Build local images if testing with 'local' tag
-	@if [ "$(UPGRADE_TEST_FROM_TAG)" = "local" ] || [ "$(UPGRADE_TEST_TO_TAG)" = "local" ]; then \
-		$(INFO) "Building local images for upgrade test"; \
-		$(MAKE) build VERSION=local; \
-		$(INFO) "Tagging images with full registry path"; \
-		docker tag crossplane/provider-cloudfoundry:local \
-			ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry:local; \
-		docker tag crossplane/provider-cloudfoundry-controller:local \
-			ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry-controller:local; \
-		$(OK) "Built and tagged local images"; \
+	@if [ "$(UPGRADE_TEST_FROM_TAG)" == "local" ] || [ "$(UPGRADE_TEST_TO_TAG)" == "local" ]; then \
+		$(INFO) "Building local images (UPGRADE_TEST_FROM_TAG or UPGRADE_TEST_TO_TAG is \"local\")"; \
+		$(MAKE) build; \
+		$(OK) "Built local images: $(UUT_IMAGES)"; \
 	fi
 
 
