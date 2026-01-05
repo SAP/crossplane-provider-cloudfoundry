@@ -618,7 +618,7 @@ func TestDelete(t *testing.T) {
 				},
 				srbClient: tc.service(),
 			}
-			err := c.Delete(context.Background(), tc.args.mg)
+			_, err := c.Delete(context.Background(), tc.args.mg)
 
 			if tc.want.err != nil && err != nil {
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {

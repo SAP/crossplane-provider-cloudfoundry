@@ -125,6 +125,12 @@ type external struct {
 	job       job.Job
 }
 
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
 // Observe checks the current external state.
 func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
 	cr, ok := mg.(*v1alpha1.ServiceRouteBinding)
@@ -227,10 +233,10 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Deletes the external resource.
-func (e *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (e *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.ServiceRouteBinding)
 	if !ok {
-		return errors.New(errWrongCRType)
+		return managed.ExternalDelete{}, errors.New(errWrongCRType)
 	}
 
 	cr.SetConditions(xpv1.Deleting())
@@ -238,14 +244,14 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) error {
 	err := srb.Delete(ctx, e.srbClient, meta.GetExternalName(cr))
 
 	if isNotFoundError(err) {
-		return nil
+		return managed.ExternalDelete{}, nil
 	}
 	if err != nil && !errors.Is(err, cfclient.AsyncProcessTimeoutError) {
-		return fmt.Errorf(errDelete, err)
+		return managed.ExternalDelete{}, fmt.Errorf(errDelete, err)
 	} else if err != nil {
-		return fmt.Errorf(errDelete, err)
+		return managed.ExternalDelete{}, fmt.Errorf(errDelete, err)
 	}
-	return nil
+	return managed.ExternalDelete{}, nil
 }
 
 func handleObservationState(binding *cfresource.ServiceRouteBinding, cr *v1alpha1.ServiceRouteBinding) (managed.ExternalObservation, error) {
