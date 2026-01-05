@@ -41,7 +41,6 @@ func NewClient(cfv3 *client.Client) ServiceRouteBinding {
 func GetByID(ctx context.Context, srbClient ServiceRouteBinding, guid string, forProvider v1alpha1.ServiceRouteBindingParameters) (*cfresource.ServiceRouteBinding, error) {
 
 	if err := uuid.Validate(guid); err != nil {
-		// if not a valid UUID, return the err
 		return nil, err
 	}
 	// try to find by GUID
