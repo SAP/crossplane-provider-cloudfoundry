@@ -120,6 +120,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	return ext, nil
 }
 
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
 // ObservationStateHandler defines the interface for handling observation state
 type ObservationStateHandler interface {
 	HandleObservationState(serviceBinding *cfresource.ServiceCredentialBinding, ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error)
@@ -221,23 +227,23 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Delete a ServiceCredentialBinding resource.
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
 	if !ok {
-		return errors.New(errWrongCRType)
+		return managed.ExternalDelete{}, errors.New(errWrongCRType)
 	}
 	cr.SetConditions(xpv1.Deleting())
 
 	if err := c.keyRotator.DeleteRetiredKeys(ctx, cr); err != nil {
-		return fmt.Errorf(errDeleteRetiredKeys, err)
+		return managed.ExternalDelete{}, fmt.Errorf(errDeleteRetiredKeys, err)
 	}
 
 	err := scb.Delete(ctx, c.scbClient, cr.GetID())
 	if err != nil {
-		return fmt.Errorf(errDelete, err)
+		return managed.ExternalDelete{}, fmt.Errorf(errDelete, err)
 	}
 
-	return nil
+	return managed.ExternalDelete{}, nil
 }
 
 // extractParameters returns the parameters or credentials from the spec

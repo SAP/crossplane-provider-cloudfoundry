@@ -17,3 +17,6 @@ dev.env
 secrets.env
 *~
 /test/e2e/logs/
+test/upgrade/logs/
+test/upgrade/env.txt
+test/upgrade/upgrade.test

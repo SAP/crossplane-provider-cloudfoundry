@@ -109,6 +109,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	return &external{client: client}, nil
 }
 
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
 // An ExternalClient observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
@@ -201,10 +207,10 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}, nil
 }
 
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.OrgMembers)
 	if !ok {
-		return errors.New(errWrongKind)
+		return managed.ExternalDelete{}, errors.New(errWrongKind)
 	}
 	cr.SetConditions(xpv1.Deleting())
 
@@ -213,10 +219,10 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
 	// 		 e.g., organization_user role cannot be deleted if the user has role in some spaces in the same org.
 	err := c.client.DeleteOrgMembers(ctx, cr)
 	if err != nil {
-		return errors.Wrap(err, errDelete)
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 
 	// clear members
 	cr.Status.AtProvider.AssignedRoles = nil
-	return nil
+	return managed.ExternalDelete{}, nil
 }

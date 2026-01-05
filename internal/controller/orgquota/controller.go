@@ -32,6 +32,7 @@ const (
 	errCreate            = "cannot create cloudfoundry OrgQuota"
 	errUpdate            = "cannot update cloudfoundry OrgQuota"
 	errDelete            = "cannot delete cloudfoundry OrgQuota"
+	errIDNotSet          = ".Status.AtProvider.ID is not set"
 )
 
 // externalConnecter specifies how the Reconciler should connect to
@@ -91,6 +92,12 @@ func Setup(mgr ctrl.Manager, controllerOptions controller.Options) error {
 		WithOptions(controllerOptions.ForControllerRuntime()).
 		For(&v1alpha1.OrgQuota{}).
 		Complete(ratelimiter.NewReconciler(name, r, controllerOptions.GlobalRateLimiter))
+}
+
+// Disconnect implements the managed.ExternalClient interface
+func (c *externalClient) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
 }
 
 // externalClient manages the lifecycle of an external
@@ -192,22 +199,22 @@ func (e *externalClient) Update(ctx context.Context, res resource.Managed) (mana
 
 // Delete the external resource upon deletion of its associated Managed
 // resource. Called when the managed resource has been deleted.
-func (e *externalClient) Delete(ctx context.Context, res resource.Managed) error {
+func (e *externalClient) Delete(ctx context.Context, res resource.Managed) (managed.ExternalDelete, error) {
 	managedOrgQuota, ok := res.(*v1alpha1.OrgQuota)
 	if !ok {
-		return errors.New(errNotOrgQuota)
+		return managed.ExternalDelete{}, errors.New(errNotOrgQuota)
 	}
 	managedOrgQuota.SetConditions(xpv1.Deleting())
 
 	// assert that ID is set
 	if managedOrgQuota.Status.AtProvider.ID == nil {
-		return errors.Wrap(errors.New(".Status.AtProvider.ID is not set"), errDelete)
+		return managed.ExternalDelete{}, errors.Wrap(errors.New(errIDNotSet), errDelete)
 	}
 
 	_, err := e.cloudFoundryClient.Delete(ctx, *managedOrgQuota.Status.AtProvider.ID)
 	if err != nil {
-		return errors.Wrap(err, errDelete)
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 
-	return nil
+	return managed.ExternalDelete{}, nil
 }
