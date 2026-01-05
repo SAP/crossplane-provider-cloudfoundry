@@ -10,7 +10,6 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/mock"
 
-	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -499,7 +498,7 @@ func TestCreateToListOptions(t *testing.T) {
 	}
 }
 
-func TestGetByIDOrSearch(t *testing.T) {
+func TestGetByID(t *testing.T) {
 	type args struct {
 		ctx         context.Context
 		srbClient   ServiceRouteBinding
@@ -508,8 +507,9 @@ func TestGetByIDOrSearch(t *testing.T) {
 	}
 
 	type want struct {
-		binding *cfresource.ServiceRouteBinding
-		err     error
+		binding     *cfresource.ServiceRouteBinding
+		err         error
+		expectError bool
 	}
 
 	validGUID := "550e8400-e29b-41d4-a716-446655440000"
@@ -526,7 +526,7 @@ func TestGetByIDOrSearch(t *testing.T) {
 		args args
 		want want
 	}{
-		"GetByValidGUID": {
+		"GetByValidGUID_Success": {
 			args: args{
 				ctx:  context.Background(),
 				guid: validGUID,
@@ -538,11 +538,12 @@ func TestGetByIDOrSearch(t *testing.T) {
 				forProvider: v1alpha1.ServiceRouteBindingParameters{},
 			},
 			want: want{
-				binding: testBinding,
-				err:     nil,
+				binding:     testBinding,
+				err:         nil,
+				expectError: false,
 			},
 		},
-		"GetByGUIDError": {
+		"GetByValidGUID_Error": {
 			args: args{
 				ctx:  context.Background(),
 				guid: validGUID,
@@ -554,22 +555,16 @@ func TestGetByIDOrSearch(t *testing.T) {
 				forProvider: v1alpha1.ServiceRouteBindingParameters{},
 			},
 			want: want{
-				binding: nil,
-				err:     errBoom,
+				binding:     nil,
+				err:         errBoom,
+				expectError: true,
 			},
 		},
-		"SearchByRouteAndServiceInstance": {
+		"InvalidGUID_ReturnsError": {
 			args: args{
-				ctx:  context.Background(),
-				guid: invalidGUID,
-				srbClient: func() ServiceRouteBinding {
-					mockClient := &fake.MockServiceRouteBinding{}
-					mockClient.On("Single", mock.Anything, mock.MatchedBy(func(opts *cfclient.ServiceRouteBindingListOptions) bool {
-						return len(opts.RouteGUIDs.Values) == 1 && opts.RouteGUIDs.Values[0] == testRouteGUID &&
-							len(opts.ServiceInstanceGUIDs.Values) == 1 && opts.ServiceInstanceGUIDs.Values[0] == testServiceInstance
-					})).Return(testBinding, nil)
-					return mockClient
-				}(),
+				ctx:       context.Background(),
+				guid:      invalidGUID,
+				srbClient: &fake.MockServiceRouteBinding{},
 				forProvider: v1alpha1.ServiceRouteBindingParameters{
 					RouteReference: v1alpha1.RouteReference{
 						Route: testRouteGUID,
@@ -580,19 +575,16 @@ func TestGetByIDOrSearch(t *testing.T) {
 				},
 			},
 			want: want{
-				binding: testBinding,
-				err:     nil,
+				binding:     nil,
+				err:         nil,
+				expectError: true,
 			},
 		},
-		"SearchError": {
+		"EmptyGUID_ReturnsError": {
 			args: args{
-				ctx:  context.Background(),
-				guid: invalidGUID,
-				srbClient: func() ServiceRouteBinding {
-					mockClient := &fake.MockServiceRouteBinding{}
-					mockClient.On("Single", mock.Anything, mock.Anything).Return(nil, errBoom)
-					return mockClient
-				}(),
+				ctx:       context.Background(),
+				guid:      "",
+				srbClient: &fake.MockServiceRouteBinding{},
 				forProvider: v1alpha1.ServiceRouteBindingParameters{
 					RouteReference: v1alpha1.RouteReference{
 						Route: testRouteGUID,
@@ -603,28 +595,34 @@ func TestGetByIDOrSearch(t *testing.T) {
 				},
 			},
 			want: want{
-				binding: nil,
-				err:     errBoom,
+				binding:     nil,
+				err:         nil,
+				expectError: true,
 			},
 		},
 	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			binding, err := GetByIDOrSearch(tc.args.ctx, tc.args.srbClient, tc.args.guid, tc.args.forProvider)
+			binding, err := GetByID(tc.args.ctx, tc.args.srbClient, tc.args.guid, tc.args.forProvider)
 
-			if tc.want.err != nil {
+			if tc.want.expectError {
 				if err == nil {
-					t.Errorf("GetByIDOrSearch(...): expected error %v, got nil", tc.want.err)
-				} else if !errors.Is(err, tc.want.err) && err.Error() != tc.want.err.Error() {
-					t.Errorf("GetByIDOrSearch(...): expected error %v, got %v", tc.want.err, err)
+					t.Errorf("GetByID(...): expected an error, got nil")
+				}
+				if tc.want.err != nil && !errors.Is(err, tc.want.err) && err.Error() != tc.want.err.Error() {
+					t.Errorf("GetByID(...): expected error %v, got %v", tc.want.err, err)
 				}
 			} else {
 				if err != nil {
-					t.Errorf("GetByIDOrSearch(...): unexpected error: %v", err)
+					t.Errorf("GetByID(...): unexpected error: %v", err)
 				}
 				if diff := cmp.Diff(tc.want.binding, binding); diff != "" {
-					t.Errorf("GetByIDOrSearch(...): -want, +got:\n%s", diff)
+					t.Errorf("GetByID(...): -want, +got:\n%s", diff)
+				}
+				// Verify that the returned binding has the correct GUID
+				if binding != nil && binding.GUID != tc.args.guid {
+					t.Errorf("GetByID(...): expected binding with GUID %s, got %s", tc.args.guid, binding.GUID)
 				}
 			}
 		})

@@ -46,6 +46,7 @@ const (
 	errExtractParams            = "cannot extract specified parameters: %w"
 	errUnknownState             = "unknown last operation state for " + resourceType + " in " + externalSystem
 	errMissingRelationshipGUIDs = "missing relationship GUIDs (route=%q serviceInstance=%q)"
+	errNoBindingReturned        = "no binding returned after creation"
 	errParametersFromCF         = "cannot get parameters from " + resourceType + " in " + externalSystem + ": %w"
 )
 
@@ -132,14 +133,16 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}
 
 	guid := meta.GetExternalName(cr)
-	servicerouteBinding, err := srb.GetByIDOrSearch(ctx, e.srbClient, guid, cr.Spec.ForProvider)
+	// check if the external-name exists, if yes the user wants to import an existing resource
+	if guid == "" {
+		return managed.ExternalObservation{ResourceExists: false}, nil
+	}
+	servicerouteBinding, err := srb.GetByID(ctx, e.srbClient, guid, cr.Spec.ForProvider)
 	if isNotFoundError(err) {
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	} else if err != nil {
 		return managed.ExternalObservation{}, fmt.Errorf(errGet, err)
 	}
-	// maybe set external name if not exists/ is this a good practice?
-	// meta.SetExternalName(cr, binding.GUID)
 
 	// detect if their should be parameters / if its a user-provided service instance (Is their a better way to detect this?)
 	paramMap := &runtime.RawExtension{}
@@ -166,11 +169,6 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
 	}
 
-	// check if already exists
-	if existing := meta.GetExternalName(cr); existing != "" {
-		return managed.ExternalCreation{}, nil
-	}
-
 	routeGUID := cr.Spec.ForProvider.Route
 	serviceInstanceGUID := cr.Spec.ForProvider.ServiceInstance
 	if routeGUID == "" || serviceInstanceGUID == "" {
@@ -190,11 +188,11 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	binding, err := srb.Create(ctx, e.srbClient, cr.Spec.ForProvider, parameterFromSecret)
 	if err != nil {
 		return managed.ExternalCreation{}, fmt.Errorf(errCreate, err)
+	} else if binding == nil {
+		return managed.ExternalCreation{}, fmt.Errorf(errCreate, errors.New(errNoBindingReturned))
 	}
 
-	if binding != nil {
-		meta.SetExternalName(cr, binding.GUID)
-	}
+	meta.SetExternalName(cr, binding.GUID)
 	cr.SetConditions(xpv1.Creating())
 	return managed.ExternalCreation{}, nil
 }
@@ -237,12 +235,7 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) error {
 
 	cr.SetConditions(xpv1.Deleting())
 
-	guid := meta.GetExternalName(cr)
-	if guid == "" {
-		return nil
-	}
-
-	err := srb.Delete(ctx, e.srbClient, cr.Status.AtProvider.GUID)
+	err := srb.Delete(ctx, e.srbClient, meta.GetExternalName(cr))
 
 	if isNotFoundError(err) {
 		return nil
@@ -277,7 +270,6 @@ func handleObservationState(binding *cfresource.ServiceRouteBinding, cr *v1alpha
 		return managed.ExternalObservation{}, fmt.Errorf("%s: unknown failed operation type %q", errUnknownState, typ)
 	case v1alpha1.LastOperationSucceeded:
 		if typ == v1alpha1.LastOperationDelete {
-			cr.SetConditions(xpv1.Deleting())
 			return managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true}, nil
 		}
 		cr.SetConditions(xpv1.Available())

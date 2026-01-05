@@ -38,18 +38,14 @@ func NewClient(cfv3 *client.Client) ServiceRouteBinding {
 	}{cfv3.ServiceRouteBindings, cfv3.Jobs}
 }
 
-func GetByIDOrSearch(ctx context.Context, srbClient ServiceRouteBinding, guid string, forProvider v1alpha1.ServiceRouteBindingParameters) (*cfresource.ServiceRouteBinding, error) {
+func GetByID(ctx context.Context, srbClient ServiceRouteBinding, guid string, forProvider v1alpha1.ServiceRouteBindingParameters) (*cfresource.ServiceRouteBinding, error) {
 
-	if err := uuid.Validate(guid); err == nil {
-		// try to find by GUID
-		return srbClient.Get(ctx, guid)
-	} else {
-		// search by spec
-		opts := cfclient.NewServiceRouteBindingListOptions()
-		opts.RouteGUIDs.EqualTo(forProvider.Route)
-		opts.ServiceInstanceGUIDs.EqualTo(forProvider.ServiceInstance)
-		return srbClient.Single(ctx, opts)
+	if err := uuid.Validate(guid); err != nil {
+		// if not a valid UUID, return the err
+		return nil, err
 	}
+	// try to find by GUID
+	return srbClient.Get(ctx, guid)
 }
 
 func Create(ctx context.Context, srbClient ServiceRouteBinding, forProvider v1alpha1.ServiceRouteBindingParameters, parametersFromSecret runtime.RawExtension) (*resource.ServiceRouteBinding, error) {
