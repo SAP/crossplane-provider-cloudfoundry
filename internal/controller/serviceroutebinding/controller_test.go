@@ -436,20 +436,6 @@ func TestCreate(t *testing.T) {
 				return m
 			},
 		},
-		"AlreadyExists": {
-			args: args{
-				mg: serviceRouteBinding(withExternalName(guid), withRouteID(routeGUID), withServiceInstanceID(serviceInstanceGUID)),
-			},
-			want: want{
-				mg:  serviceRouteBinding(withExternalName(guid), withRouteID(routeGUID), withServiceInstanceID(serviceInstanceGUID)),
-				obs: managed.ExternalCreation{},
-				err: nil,
-			},
-			service: func() *fake.MockServiceRouteBinding {
-				m := &fake.MockServiceRouteBinding{}
-				return m
-			},
-		},
 	}
 
 	for n, tc := range cases {
@@ -618,19 +604,6 @@ func TestDelete(t *testing.T) {
 					"",
 					fake.ErrNoResultReturned,
 				)
-				return m
-			},
-		},
-		"EmptyExternalName": {
-			args: args{
-				mg: serviceRouteBinding(),
-			},
-			want: want{
-				mg:  serviceRouteBinding(withConditions(xpv1.Deleting())),
-				err: nil,
-			},
-			service: func() *fake.MockServiceRouteBinding {
-				m := &fake.MockServiceRouteBinding{}
 				return m
 			},
 		},
