@@ -6,14 +6,14 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
+	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/uuid"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
-	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
-	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	"k8s.io/apimachinery/pkg/runtime"
 )
 
 type serviceRouteBinding interface {

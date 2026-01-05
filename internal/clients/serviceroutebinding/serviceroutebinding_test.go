@@ -58,7 +58,7 @@ func TestNewCreateOption(t *testing.T) {
 			want: want{
 				opt: func() *cfresource.ServiceRouteBindingCreate {
 					opt := cfresource.NewServiceRouteBindingCreate(testRouteGUID, testServiceInstance)
-					opt.Parameters = (*json.RawMessage)(&testParams)
+					opt.Parameters = &testParams
 					return opt
 				}(),
 				err: nil,
@@ -79,7 +79,7 @@ func TestNewCreateOption(t *testing.T) {
 			want: want{
 				opt: func() *cfresource.ServiceRouteBindingCreate {
 					opt := cfresource.NewServiceRouteBindingCreate(testRouteGUID, testServiceInstance)
-					opt.Parameters = (*json.RawMessage)(&testParams)
+					opt.Parameters = &testParams
 					return opt
 				}(),
 				err: nil,
@@ -117,7 +117,7 @@ func TestNewCreateOption(t *testing.T) {
 			want: want{
 				opt: func() *cfresource.ServiceRouteBindingCreate {
 					opt := cfresource.NewServiceRouteBindingCreate(testRouteGUID, testServiceInstance)
-					opt.Parameters = (*json.RawMessage)(&testParams)
+					opt.Parameters = &testParams
 					return opt
 				}(),
 				err: nil,
