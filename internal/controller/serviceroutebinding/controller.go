@@ -261,19 +261,17 @@ func handleObservationState(binding *cfresource.ServiceRouteBinding, cr *v1alpha
 	switch state {
 	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
 		cr.SetConditions(xpv1.Unavailable().WithMessage(binding.LastOperation.Description))
-		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
+		return managed.ExternalObservation{
+			ResourceExists:   true,
+			ResourceUpToDate: true, // Do not update the resource while the last operation is in progress
+		}, nil
 	case v1alpha1.LastOperationFailed:
 		cr.SetConditions(xpv1.Unavailable().WithMessage(binding.LastOperation.Description))
-		if typ == v1alpha1.LastOperationCreate {
-			return managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: false}, nil
-		}
-		if typ == v1alpha1.LastOperationUpdate {
-			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false}, nil
-		}
-		if typ == v1alpha1.LastOperationDelete {
-			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
-		}
-		return managed.ExternalObservation{}, fmt.Errorf("%s: unknown failed operation type %q", errUnknownState, typ)
+		// Service Route Bindings do not support updates, only create and delete operations
+		return managed.ExternalObservation{
+			ResourceExists:   typ != v1alpha1.LastOperationCreate, // Retry create if creation failed
+			ResourceUpToDate: true,
+		}, nil
 	case v1alpha1.LastOperationSucceeded:
 		if typ == v1alpha1.LastOperationDelete {
 			return managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true}, nil
