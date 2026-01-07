@@ -21,6 +21,10 @@ import (
 // +kubebuilder:validation:XValidation:rule="!has(self.spec.forProvider.serviceInstanceRef) || !has(self.spec.forProvider.serviceInstanceSelector)",message="ServiceInstanceReference validation: serviceInstanceRef and serviceInstanceSelector are mutually exclusive"
 // +kubebuilder:validation:XValidation:rule="has(self.spec.forProvider.route) || has(self.spec.forProvider.routeRef) || has(self.spec.forProvider.routeSelector)",message="RouteReference validation: one of route, routeRef, or routeSelector must be set"
 // +kubebuilder:validation:XValidation:rule="!has(self.spec.forProvider.routeRef) || !has(self.spec.forProvider.routeSelector)",message="RouteReference validation: routeRef and routeSelector are mutually exclusive"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.forProvider.route) || !has(self.spec.forProvider.route) || oldSelf.spec.forProvider.route.size() == 0 || oldSelf.spec.forProvider.route == self.spec.forProvider.route",message="ServiceRouteBinding is immutable: route GUID cannot be changed once set"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.forProvider.serviceInstance) || !has(self.spec.forProvider.serviceInstance) || oldSelf.spec.forProvider.serviceInstance.size() == 0 || oldSelf.spec.forProvider.serviceInstance == self.spec.forProvider.serviceInstance",message="ServiceRouteBinding is immutable: serviceInstance GUID cannot be changed once set"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.forProvider.parameters) || !has(self.spec.forProvider.parameters) || oldSelf.spec.forProvider.parameters == self.spec.forProvider.parameters",message="ServiceRouteBinding is immutable: parameters cannot be changed once set"
+// +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.forProvider.paramsSecretRef) || !has(self.spec.forProvider.paramsSecretRef) || oldSelf.spec.forProvider.paramsSecretRef == self.spec.forProvider.paramsSecretRef",message="ServiceRouteBinding is immutable: paramsSecretRef cannot be changed once set"
 type ServiceRouteBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

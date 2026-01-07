@@ -596,6 +596,24 @@ spec:
         - message: 'RouteReference validation: routeRef and routeSelector are mutually
             exclusive'
           rule: '!has(self.spec.forProvider.routeRef) || !has(self.spec.forProvider.routeSelector)'
+        - message: 'ServiceRouteBinding is immutable: route GUID cannot be changed
+            once set'
+          rule: '!has(oldSelf.spec.forProvider.route) || !has(self.spec.forProvider.route)
+            || oldSelf.spec.forProvider.route.size() == 0 || oldSelf.spec.forProvider.route
+            == self.spec.forProvider.route'
+        - message: 'ServiceRouteBinding is immutable: serviceInstance GUID cannot
+            be changed once set'
+          rule: '!has(oldSelf.spec.forProvider.serviceInstance) || !has(self.spec.forProvider.serviceInstance)
+            || oldSelf.spec.forProvider.serviceInstance.size() == 0 || oldSelf.spec.forProvider.serviceInstance
+            == self.spec.forProvider.serviceInstance'
+        - message: 'ServiceRouteBinding is immutable: parameters cannot be changed
+            once set'
+          rule: '!has(oldSelf.spec.forProvider.parameters) || !has(self.spec.forProvider.parameters)
+            || oldSelf.spec.forProvider.parameters == self.spec.forProvider.parameters'
+        - message: 'ServiceRouteBinding is immutable: paramsSecretRef cannot be changed
+            once set'
+          rule: '!has(oldSelf.spec.forProvider.paramsSecretRef) || !has(self.spec.forProvider.paramsSecretRef)
+            || oldSelf.spec.forProvider.paramsSecretRef == self.spec.forProvider.paramsSecretRef'
     served: true
     storage: true
     subresources:

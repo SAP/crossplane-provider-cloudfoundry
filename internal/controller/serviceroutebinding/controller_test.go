@@ -266,7 +266,7 @@ func TestObserve(t *testing.T) {
 					withStatus(guid),
 					withConditions(xpv1.Unavailable()),
 				),
-				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: false},
+				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
 				err: nil,
 			},
 			service: func() *fake.MockServiceRouteBinding {
@@ -680,19 +680,7 @@ func TestHandleObservationState(t *testing.T) {
 				cr: serviceRouteBinding(),
 			},
 			want: want{
-				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: false},
-				err: nil,
-			},
-		},
-		"UpdateFailed": {
-			args: args{
-				binding: &fake.NewServiceRouteBinding().
-					SetLastOperation(v1alpha1.LastOperationUpdate, v1alpha1.LastOperationFailed).
-					ServiceRouteBinding,
-				cr: serviceRouteBinding(),
-			},
-			want: want{
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
 				err: nil,
 			},
 		},

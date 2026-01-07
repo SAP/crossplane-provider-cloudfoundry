@@ -254,6 +254,12 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	return managed.ExternalDelete{}, nil
 }
 
+// handleObservationState processes the LastOperation state of a Service Route Binding
+// and returns the appropriate ExternalObservation for Crossplane reconciliation.
+//
+// Note: Service Route Bindings are immutable after creation. Updates are prevented by CEL
+// validation rules at the Kubernetes API level (see serviceroutebinding_types.go).
+// ResourceUpToDate is always set to true since updates cannot occur.
 func handleObservationState(binding *cfresource.ServiceRouteBinding, cr *v1alpha1.ServiceRouteBinding) (managed.ExternalObservation, error) {
 	state := binding.LastOperation.State
 	typ := binding.LastOperation.Type
@@ -276,7 +282,7 @@ func handleObservationState(binding *cfresource.ServiceRouteBinding, cr *v1alpha
 		if typ == v1alpha1.LastOperationDelete {
 			return managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true}, nil
 		}
-		cr.SetConditions(xpv1.Available())
+		cr.SetConditions(xpv1.Available(), xpv1.ReconcileSuccess())
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
 	}
 
