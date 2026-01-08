@@ -1,28 +1,28 @@
-- [Introduction](#org4484a86)
+- [Introduction](#org389de7c)
 - [Installation](#installation)
-- [Quick Start](#org37d96a3)
-- [Configuration](#org29612d4)
-  - [Command Line Flags](#org2e15f12)
-    - [Setting a bool to *true* using a short flag](#org64b27f9)
-    - [Setting a bool to *true* using a long flag](#org65a0421)
-    - [Setting a bool to *false*](#orgaa7a261)
-    - [Setting a string value](#org2bdb4a1)
-    - [Setting multiple strings](#orge472d17)
-  - [Environment Variables](#org102940c)
+- [Quick Start](#orgbc082cd)
+- [Configuration](#org6e11cc4)
+  - [Command Line Flags](#org6d71a26)
+    - [Setting a bool to *true* using a short flag](#org3eedc86)
+    - [Setting a bool to *true* using a long flag](#org88901c4)
+    - [Setting a bool to *false*](#orgda49df4)
+    - [Setting a string value](#org696621b)
+    - [Setting multiple strings](#org616bff8)
+  - [Environment Variables](#orgc380820)
   - [Configuration File](#config-file)
-- [Commands Reference](#orgb20aeb6)
+- [Commands Reference](#org214ca1f)
   - [Global Configuration Parameters](#global-params)
-    - [Help](#org3d5d4c8)
-    - [Config](#orgeac677a)
-    - [Verbose](#org7f6e3a3)
-  - [Subcommands](#org7d35ac8)
+    - [Help](#orgfe7b7ae)
+    - [Config](#org6d0c610)
+    - [Verbose](#orgc43cf92)
+  - [Subcommands](#orgd7eb1cd)
     - [Login](#login)
-    - [Export](#orgde40ec1)
-      - [Authentication](#orge5d874c)
+    - [Export](#export)
+      - [Authentication](#org1382be4)
         - [API URL](#apiurl)
         - [Username](#username)
         - [Password](#password)
-      - [Configuration Parameters](#org03c423a)
+      - [Configuration Parameters](#org6f9b9d2)
         - [Use CF Login](#use-cf-login)
         - [Kind](#kind)
         - [Output](#output)
@@ -30,14 +30,15 @@
         - [Org](#org)
         - [Space](#space)
         - [ServiceInstance](#serviceinstance)
-- [Common Workflows](#orgae64f65)
-  - [Logging in using username and password](#org0922b56)
-- [Troubleshooting](#org0b426c0)
-- [FAQ](#org22e86a6)
+- [Common Workflows](#org8f92565)
+  - [Logging in using username and password](#login-workflows)
+  - [Logging in using the `cf login` command](#org3135c7b)
+- [Troubleshooting](#orge296a1b)
+- [FAQ](#org34a4900)
 
 
 
-<a id="org4484a86"></a>
+<a id="org389de7c"></a>
 
 # Introduction
 
@@ -49,7 +50,7 @@ The `xpcf` tool observes *Cloud Foundry* resources and exports them as managed C
 # TODO Installation
 
 
-<a id="org37d96a3"></a>
+<a id="orgbc082cd"></a>
 
 # Quick Start
 
@@ -100,7 +101,7 @@ xpcf export --kind space --org '.*' --space '.*'
 ```
 
 
-<a id="org29612d4"></a>
+<a id="org6e11cc4"></a>
 
 # Configuration
 
@@ -115,7 +116,7 @@ Configuration parameters can be set through multiple methods:
 The precedence of these methods is as follows: values set in a configuration file are overridden by environment variables, and command line flags have the highest precedence.
 
 
-<a id="org2e15f12"></a>
+<a id="org6d71a26"></a>
 
 ## Command Line Flags
 
@@ -124,7 +125,7 @@ A command line flag may have two forms: a long form (mandatory) and a short form
 The following examples demonstrate different usages of CLI flags.
 
 
-<a id="org64b27f9"></a>
+<a id="org3eedc86"></a>
 
 ### Setting a bool to *true* using a short flag
 
@@ -137,7 +138,7 @@ xpcf export -v
 ```
 
 
-<a id="org65a0421"></a>
+<a id="org88901c4"></a>
 
 ### Setting a bool to *true* using a long flag
 
@@ -148,7 +149,7 @@ xpcf export --verbose
 ```
 
 
-<a id="orgaa7a261"></a>
+<a id="orgda49df4"></a>
 
 ### Setting a bool to *false*
 
@@ -165,7 +166,7 @@ xpcf export -v=false
 ```
 
 
-<a id="org2bdb4a1"></a>
+<a id="org696621b"></a>
 
 ### Setting a string value
 
@@ -182,7 +183,7 @@ xpcf export --kind=space
 ```
 
 
-<a id="orge472d17"></a>
+<a id="org616bff8"></a>
 
 ### Setting multiple strings
 
@@ -193,7 +194,7 @@ xpcf export --kind=space --kind=organization
 ```
 
 
-<a id="org102940c"></a>
+<a id="orgc380820"></a>
 
 ## Environment Variables
 
@@ -236,7 +237,7 @@ xpcf export --config example-config.yaml
 If no configuration file is specified, the tool searches for one in the directories specified by `XDG_CONFIG_HOME` and `HOME`, in that order.
 
 
-<a id="orgb20aeb6"></a>
+<a id="org214ca1f"></a>
 
 # Commands Reference
 
@@ -265,7 +266,7 @@ The `export` and `login` subcommands are detailed in the following sections.
 The global configuration parameters apply to all subcommands.
 
 
-<a id="org3d5d4c8"></a>
+<a id="orgfe7b7ae"></a>
 
 ### Help
 
@@ -282,7 +283,7 @@ xpcf login --help
 ```
 
 
-<a id="orgeac677a"></a>
+<a id="org6d0c610"></a>
 
 ### Config
 
@@ -297,7 +298,7 @@ The `config` parameter specifies the path to the configuration file. The `export
 The `login` subcommand writes the credentials to the specified configuration file. For more details about using the configuration file, refer to the [Configuration File](#config-file) section.
 
 
-<a id="org7f6e3a3"></a>
+<a id="orgc43cf92"></a>
 
 ### Verbose
 
@@ -310,7 +311,7 @@ The `login` subcommand writes the credentials to the specified configuration fil
 When set, the `verbose` configuration parameter enables printing of *debug-level* messages. This can be helpful for troubleshooting.
 
 
-<a id="org7d35ac8"></a>
+<a id="orgd7eb1cd"></a>
 
 ## Subcommands
 
@@ -321,26 +322,10 @@ When set, the `verbose` configuration parameter enables printing of *debug-level
 
 The `login` subcommand saves the [API URL](#apiurl), [username](#username), and [password](#password) configuration values to the config file.
 
-You can set these values using either CLI flags or environment variables.
-
-Using CLI flags:
-
-```bash
-xpcf login --apiUrl 'https://test.cf.com' --username 'example-user' --password 'secret'
-```
-
-Using environment variables:
-
-```bash
-API_URL="https://test.cf.com" USERNAME="example-user" PASSWORD="secret" xpcf login
-```
-
-If any configuration value is not provided, you will be prompted to enter it:
-
-![img](vhs/login.gif "Login subcommand")
+For examples refer to [workflows chapter](#login-workflows).
 
 
-<a id="orgde40ec1"></a>
+<a id="export"></a>
 
 ### Export
 
@@ -352,7 +337,7 @@ The `export` subcommand exports the specified resources from a *Cloud Foundry* c
 4.  Prints the Crossplane managed resource definitions in YAML format to the screen or to a file.
 
 
-<a id="orge5d874c"></a>
+<a id="org1382be4"></a>
 
 #### Authentication
 
@@ -404,7 +389,7 @@ This configuration parameter specifies the username for authenticating with the 
 This configuration parameter specifies the password for authenticating with the *Cloud Foundry* API.
 
 
-<a id="org03c423a"></a>
+<a id="org6f9b9d2"></a>
 
 #### Configuration Parameters
 
@@ -514,22 +499,63 @@ When exporting *Space* resource kinds, the `space` parameter value specifies reg
 When exporting *ServiceInstance* resource kinds, the `serviceinstance` parameter value specifies regular expressions that the *ServiceInstance* names must match.
 
 
-<a id="orgae64f65"></a>
+<a id="org8f92565"></a>
 
 # Common Workflows
 
 
-<a id="org0922b56"></a>
+<a id="login-workflows"></a>
 
 ## Logging in using username and password
 
+The [export](#export) subcommand accepts the [API URL](#apiurl), [username](#username), and [password](#password) configuration parameters for authentication. If you prefer not to specify these parameters for each `export` invocation, you can store them in a [configuration file](#config-file).
 
-<a id="org0b426c0"></a>
+The [login](#login) subcommand simplifies this process.
+
+You can set configuration parameter values using either CLI flags or environment variables.
+
+Using CLI flags:
+
+```bash
+xpcf login --apiUrl 'https://test.cf.com' --username 'example-user' --password 'secret'
+```
+
+Using environment variables:
+
+```bash
+API_URL="https://test.cf.com" USERNAME="example-user" PASSWORD="secret" xpcf login
+```
+
+If any configuration value is missing, you will be prompted to enter it:
+
+![img](vhs/login.gif "Login subcommand")
+
+
+<a id="org3135c7b"></a>
+
+## Logging in using the `cf login` command
+
+You can also use the `cf login` command for authentication.
+
+For example:
+
+```bash
+cf login --sso
+```
+
+Then export resources using the [use-cf-login](#use-cf-login) configuration parameter:
+
+```bash
+xpcf export --use-cf-login
+```
+
+
+<a id="orge296a1b"></a>
 
 # Troubleshooting
 
 
-<a id="org22e86a6"></a>
+<a id="org34a4900"></a>
 
 # FAQ
 
