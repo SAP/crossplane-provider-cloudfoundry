@@ -1,4 +1,4 @@
-#+options: ':nil *:t -:t ::t <:t H:3 \n:nil ^:t arch:headline
+#+options: ':nil *:t -:t ::t <:t H:5 \n:nil ^:t arch:headline
 #+options: author:t broken-links:nil c:nil creator:nil
 #+options: d:(not "LOGBOOK") date:t e:t email:nil expand-links:t f:t
 #+options: inline:t num:t p:nil pri:nil prop:nil stat:t tags:t
@@ -208,7 +208,7 @@ setting various configuration parameters. Some parameters are global
 and apply to all subcommands, while others are specific to certain
 subcommands.
 
-Configuration parameters can be set through multiple means:
+Configuration parameters can be set through multiple methods:
 
 - command line flags
 - environment variables
@@ -220,8 +220,8 @@ command line flags have the highest precedence.
 
 ** Command Line Flags
 
-A command line flag may have two forms: a long form (mandatory) and
-a short form (optional). Flags may require a value. For /bool/ type
+A command line flag may have two forms: a long form (mandatory) and a
+short form (optional). Flags may require a value. For /bool/ type
 configuration parameters, the presence of the flag indicates a true
 value.
 
@@ -306,10 +306,13 @@ KIND="organization space" <<config("CLI name")>> export
 #+end_src
 
 ** Configuration File
+:PROPERTIES:
+:CUSTOM_ID: config-file
+:END:
 
 Configuration parameter values can also be set using a configuration
 file. The configuration file uses YAML format and must contain a YAML
-object where each key is a configuration parameter.
+object where each key corresponds to a configuration parameter.
 
 An example configuration file =example-config.yaml= is shown below:
 
@@ -327,7 +330,7 @@ command line flag:
 <<config("CLI name")>> export --config example-config.yaml
 #+end_src
 
-If no configuration file is specified, the tool searches for one ine
+If no configuration file is specified, the tool searches for one in
 the directories specified by =XDG_CONFIG_HOME= and =HOME=, in that
 order.
 
@@ -350,23 +353,26 @@ various shells:
 The =help= subcommand prints a generic help message about subcommands
 and global CLI flags.
 
-The =export= and =login= subcommands are detailed in the upcoming
+The =export= and =login= subcommands are detailed in the following
 sections.
 
-** Global configuration parameters
+** Global Configuration Parameters
+:PROPERTIES:
+:CUSTOM_ID: global-params
+:END:
 
-The global configuration parameters are valid for each subcommand.
+The global configuration parameters apply to all subcommands.
 
 *** Help
 
-| Configuration        | Value           |
+| Type                 | bool            |
 |----------------------+-----------------|
 | CLI flag             | =-h= / =--help= |
 | Environment variable | -               |
 | Config file key      | -               |
 
-Each subcommand comes with a help configuration parameter. Help can be
-invoked with the =-h= or =--help= CLI flag:
+Each subcommand provides a help option. Help can be invoked with the
+=-h= or =--help= CLI flag:
 
 #+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval no-export
 <<config("CLI name")>> login --help
@@ -374,7 +380,249 @@ invoked with the =-h= or =--help= CLI flag:
 
 *** Config
 
+| Type                 | string            |
+|----------------------+-------------------|
+| CLI flag             | =-c= / =--config= |
+| Environment variable | -                 |
+| Config file key      | -                 |
+
+The =config= parameter specifies the path to the configuration file.
+The =export= subcommand reads configuration parameter values from the
+specified file.
+
+The =login= subcommand writes the credentials to the specified
+configuration file. For more details about using the configuration
+file, refer to the [[#config-file][Configuration File]] section.
+
+*** Verbose
+
+| Type                 | bool               |
+|----------------------+--------------------|
+| CLI flag             | =-v= / =--verbose= |
+| Environment variable | -                  |
+| Config file key      | =verbose=          |
+
+When set, the =verbose= configuration parameter enables printing of
+/debug-level/ messages. This can be helpful for troubleshooting.
+
+** Subcommands
+*** Login
+:PROPERTIES:
+:CUSTOM_ID: login
+:END:
+
+The =login= subcommand persists the [[#apiurl][API URL]], [[#username][username]], and [[#password][password]]
+configuration parameter values in the config file.
+
+#+caption: Login subcommand
+[[file:vhs/login.gif]]
+
+*** Export
+
+The =export= subcommand exports the specified resources from a /Cloud
+Foundry/ cluster. The operation performs the following steps:
+
+1. Inspects the configured parameters. If the configuration parameters
+   are insufficient to perform the requested operation, the user is
+   prompted interactively to provide the missing values.
+2. Collects the resource configuration via the API.
+3. Converts the resource configuration according to the Crossplane
+   provider managed resource schemas.
+4. Prints the Crossplane managed resource definitions in YAML format
+   to the screen or to a file.
+
+**** Authentication
+
+There are various ways to configure the authentication parameters in
+call_config("CLI name").
+
+The simplest approach is to use the =cf= CLI tool's[fn:2] =login=
+subcommand[fn:3]. This creates a configuration file with the /Cloud
+Foundry/ API credentials, which can be reused by call_config("CLI name")
+through the [[#use-cf-login][=use-cf-login=]] configuration parameter. See
+[[#use-cf-login][use-cf-login]] for details.
+
+The [[#apiurl][API URL]], [[#username][username]], and [[#password][password]] for the /Cloud Foundry/ environment
+can also be specified using configuration parameters via CLI flags,
+environment variables, or the configuration file.
+
+The =login= subcommand can be used to update the configuration file
+with the [[#apiurl][API URL]], [[#username][username]], and [[#password][password]] values.
+
+***** API URL
+:PROPERTIES:
+:CUSTOM_ID: apiurl
+:END:
+
+| Type                 | string            |
+|----------------------+-------------------|
+| CLI flag             | =-a= / =--apiUrl= |
+| Environment variable | =API_URL=         |
+| Config file key      | =apiurl=          |
+
+This configuration parameter specifies the URL of the /Cloud Foundry/
+API.
+
+***** Username
+:PROPERTIES:
+:CUSTOM_ID: username
+:END:
+
+| Type                 | string              |
+|----------------------+---------------------|
+| CLI flag             | =-u= / =--username= |
+| Environment variable | =USERNAME=          |
+| Config file key      | =username=          |
+
+This configuration parameter specifies the username for authenticating
+with the /Cloud Foundry/ API.
+
+***** Password
+:PROPERTIES:
+:CUSTOM_ID: password
+:END:
+
+| Type                 | string              |
+|----------------------+---------------------|
+| CLI flag             | =-p= / =--password= |
+| Environment variable | =PASSWORD=          |
+| Config file key      | =password=          |
+
+This configuration parameter specifies the password for authenticating
+with the /Cloud Foundry/ API.
+
+
+**** Configuration Parameters
+
+The =export= subcommand can be configured using the [[#apiurl][API URL]], [[#username][username]],
+and [[#password][password]] configuration parameters. These parameters allow you to
+define the authentication details for the Cloud Foundry cluster from
+which resources are exported.
+
+Alternatively, it is more convenient to use the [[#login][login]] subcommand,
+which persists these parameters in the configuration file so you don't
+have to specify their values for each command.
+
+In addition to the [[#global-params][global configuration parameters]], the =export=
+subcommand also supports several subcommand-specific configuration
+parameters.
+
+***** Use CF Login
+:PROPERTIES:
+:CUSTOM_ID: use-cf-login
+:END:
+
+| Type                 | bool             |
+|----------------------+------------------|
+| CLI flag             | =--use-cf-login= |
+| Environment variable | =USE_CF_LOGIN=   |
+| Config file key      | =use-cf-login=   |
+
+
+When set, the configuration file generated by =cf login= is used for
+authentication.
+
+***** Kind
+:PROPERTIES:
+:CUSTOM_ID: kind
+:END:
+
+| Type                 | []string        |
+|----------------------+-----------------|
+| CLI flag             | =--kind= / =-k= |
+| Environment variable | =KIND=          |
+| Config file key      | =kind=          |
+
+Specifies the resource kinds to export. If not set, the user is
+prompted interactively.
+
+The possible values are:
+
+- =organization=
+- =orgrole=
+- =serviceinstance=
+- =space=
+- =spacerole=
+
+***** Output
+:PROPERTIES:
+:CUSTOM_ID: output
+:END:
+
+| Type                 | string            |
+|----------------------+-------------------|
+| CLI flag             | =--output= / =-o= |
+| Environment variable | =OUTPUT=          |
+| Config file key      | =output=          |
+
+The =output= parameter specifies a filename to redirect the exported
+YAML output to.
+
+***** Resolve References
+:PROPERTIES:
+:CUSTOM_ID: resolve-references
+:END:
+
+| Type                 | bool                          |
+|----------------------+-------------------------------|
+| CLI flag             | =--resolve-references= / =-r= |
+| Environment variable | =RESOLVE_REFERENCES=          |
+| Config file key      | =resolve-references=          |
+
+When the =resolve-references= parameter is set, cross-resource
+references are resolved. For example, instead of an =org= field with a
+GUID value, the =org.name= field is set when a resource refers to an
+=Organization= resource.
+
+***** Org
+:PROPERTIES:
+:CUSTOM_ID: org
+:END:
+
+| Type                 | []string       |
+|----------------------+----------------|
+| CLI flag             | =--org=        |
+| Environment variable | -              |
+| Config file key      | =organization= |
+
+When exporting /Organization/ resource kinds, the =org= parameter
+value specifies regular expressions that the /Organization/ names must
+match.
+
+***** Space
+:PROPERTIES:
+:CUSTOM_ID: space
+:END:
+
+| Type                 | []string  |
+|----------------------+-----------|
+| CLI flag             | =--space= |
+| Environment variable | -         |
+| Config file key      | =space=   |
+
+When exporting /Space/ resource kinds, the =space= parameter value
+specifies regular expressions that the /Space/ names must match.
+
+***** ServiceInstance
+:PROPERTIES:
+:CUSTOM_ID: serviceinstance
+:END:
+
+| Type                 | []string            |
+|----------------------+---------------------|
+| CLI flag             | =--serviceinstance= |
+| Environment variable | -                   |
+| Config file key      | =serviceinstance=   |
+
+When exporting /ServiceInstance/ resource kinds, the =serviceinstance=
+parameter value specifies regular expressions that the
+/ServiceInstance/ names must match.
+
+
+
 * Common Workflows
+
+** Logging in using username and password
 
 * Troubleshooting
 
@@ -383,6 +631,10 @@ invoked with the =-h= or =--help= CLI flag:
 * Footnotes
 
 [fn:1] https://github.com/SAP/crossplane-provider-cloudfoundry/tree/feat/export-tool
+
+[fn:2] https://docs.cloudfoundry.org/cf-cli/
+
+[fn:3] https://docs.cloudfoundry.org/cf-cli/getting-started.html#login
 
 # Local Variables:
 # org-confirm-babel-evaluate: nil

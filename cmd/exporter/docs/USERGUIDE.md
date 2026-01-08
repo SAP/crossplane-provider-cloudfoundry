@@ -1,26 +1,43 @@
-- [Introduction](#org026e14b)
+- [Introduction](#org4897921)
 - [Installation](#installation)
-- [Quick Start](#orgeb19510)
-- [Configuration](#org170c8f1)
-  - [Command Line Flags](#org6a1c4e3)
-    - [Setting a bool to *true* using a short flag](#orgf25aae7)
-    - [Setting a bool to *true* using a long flag](#org4f4d0e2)
-    - [Setting a bool to *false*](#org70fff88)
-    - [Setting a string value](#org67a8855)
-    - [Setting multiple strings](#orge32af47)
-  - [Environment Variables](#org4326320)
-  - [Configuration File](#org8572530)
-- [Commands Reference](#orge4956c1)
-  - [Global configuration parameters](#org47eca7a)
-    - [Help](#orgf4bf757)
-    - [Config](#org55b4d73)
-- [Common Workflows](#org3897ca8)
-- [Troubleshooting](#org8e2e6a0)
-- [FAQ](#orge58a718)
+- [Quick Start](#orgc609ec2)
+- [Configuration](#org21e4cf9)
+  - [Command Line Flags](#org8489a47)
+    - [Setting a bool to *true* using a short flag](#org0a6735b)
+    - [Setting a bool to *true* using a long flag](#orgcf13423)
+    - [Setting a bool to *false*](#org58d1ce6)
+    - [Setting a string value](#org1ea673d)
+    - [Setting multiple strings](#org27555bc)
+  - [Environment Variables](#orgb60fb30)
+  - [Configuration File](#config-file)
+- [Commands Reference](#org17e8f78)
+  - [Global Configuration Parameters](#global-params)
+    - [Help](#orgb9f9e10)
+    - [Config](#org3d37fd0)
+    - [Verbose](#org0fad431)
+  - [Subcommands](#org740a97e)
+    - [Login](#login)
+    - [Export](#orge00935e)
+      - [Authentication](#org357ab8b)
+        - [API URL](#apiurl)
+        - [Username](#username)
+        - [Password](#password)
+      - [Configuration Parameters](#org0067317)
+        - [Use CF Login](#use-cf-login)
+        - [Kind](#kind)
+        - [Output](#output)
+        - [Resolve References](#resolve-references)
+        - [Org](#org)
+        - [Space](#space)
+        - [ServiceInstance](#serviceinstance)
+- [Common Workflows](#orgc0b59a9)
+  - [Logging in using username and password](#orgce5243d)
+- [Troubleshooting](#org058b26f)
+- [FAQ](#orgfdcf311)
 
 
 
-<a id="org026e14b"></a>
+<a id="org4897921"></a>
 
 # Introduction
 
@@ -32,7 +49,7 @@ The `xpcf` tool observes *Cloud Foundry* resources and exports them as managed C
 # TODO Installation
 
 
-<a id="orgeb19510"></a>
+<a id="orgc609ec2"></a>
 
 # Quick Start
 
@@ -83,13 +100,13 @@ xpcf export --kind space --org '.*' --space '.*'
 ```
 
 
-<a id="org170c8f1"></a>
+<a id="org21e4cf9"></a>
 
 # Configuration
 
 The behaviour of the `xpcf` tool can be modified by setting various configuration parameters. Some parameters are global and apply to all subcommands, while others are specific to certain subcommands.
 
-Configuration parameters can be set through multiple means:
+Configuration parameters can be set through multiple methods:
 
 -   command line flags
 -   environment variables
@@ -98,7 +115,7 @@ Configuration parameters can be set through multiple means:
 The precedence of these methods is as follows: values set in a configuration file are overridden by environment variables, and command line flags have the highest precedence.
 
 
-<a id="org6a1c4e3"></a>
+<a id="org8489a47"></a>
 
 ## Command Line Flags
 
@@ -107,7 +124,7 @@ A command line flag may have two forms: a long form (mandatory) and a short form
 The following examples demonstrate different usages of CLI flags.
 
 
-<a id="orgf25aae7"></a>
+<a id="org0a6735b"></a>
 
 ### Setting a bool to *true* using a short flag
 
@@ -120,7 +137,7 @@ xpcf export -v
 ```
 
 
-<a id="org4f4d0e2"></a>
+<a id="orgcf13423"></a>
 
 ### Setting a bool to *true* using a long flag
 
@@ -131,7 +148,7 @@ xpcf export --verbose
 ```
 
 
-<a id="org70fff88"></a>
+<a id="org58d1ce6"></a>
 
 ### Setting a bool to *false*
 
@@ -148,7 +165,7 @@ xpcf export -v=false
 ```
 
 
-<a id="org67a8855"></a>
+<a id="org1ea673d"></a>
 
 ### Setting a string value
 
@@ -165,7 +182,7 @@ xpcf export --kind=space
 ```
 
 
-<a id="orge32af47"></a>
+<a id="org27555bc"></a>
 
 ### Setting multiple strings
 
@@ -176,7 +193,7 @@ xpcf export --kind=space --kind=organization
 ```
 
 
-<a id="org4326320"></a>
+<a id="orgb60fb30"></a>
 
 ## Environment Variables
 
@@ -195,11 +212,11 @@ KIND="organization space" xpcf export
 ```
 
 
-<a id="org8572530"></a>
+<a id="config-file"></a>
 
 ## Configuration File
 
-Configuration parameter values can also be set using a configuration file. The configuration file uses YAML format and must contain a YAML object where each key is a configuration parameter.
+Configuration parameter values can also be set using a configuration file. The configuration file uses YAML format and must contain a YAML object where each key corresponds to a configuration parameter.
 
 An example configuration file `example-config.yaml` is shown below:
 
@@ -216,10 +233,10 @@ To use a configuration file, specify it with the `-c` or `--config` command line
 xpcf export --config example-config.yaml
 ```
 
-If no configuration file is specified, the tool searches for one ine the directories specified by `XDG_CONFIG_HOME` and `HOME`, in that order.
+If no configuration file is specified, the tool searches for one in the directories specified by `XDG_CONFIG_HOME` and `HOME`, in that order.
 
 
-<a id="orge4956c1"></a>
+<a id="org17e8f78"></a>
 
 # Commands Reference
 
@@ -238,52 +255,272 @@ xpcf completion --help
 
 The `help` subcommand prints a generic help message about subcommands and global CLI flags.
 
-The `export` and `login` subcommands are detailed in the upcoming sections.
+The `export` and `login` subcommands are detailed in the following sections.
 
 
-<a id="org47eca7a"></a>
+<a id="global-params"></a>
 
-## Global configuration parameters
+## Global Configuration Parameters
 
-The global configuration parameters are valid for each subcommand.
+The global configuration parameters apply to all subcommands.
 
 
-<a id="orgf4bf757"></a>
+<a id="orgb9f9e10"></a>
 
 ### Help
 
-| Configuration        | Value           |
+| Type                 | bool            |
 |-------------------- |--------------- |
 | CLI flag             | `-h` / `--help` |
 | Environment variable | -               |
 | Config file key      | -               |
 
-Each subcommand comes with a help configuration parameter. Help can be invoked with the `-h` or `--help` CLI flag:
+Each subcommand provides a help option. Help can be invoked with the `-h` or `--help` CLI flag:
 
 ```bash
 xpcf login --help
 ```
 
 
-<a id="org55b4d73"></a>
+<a id="org3d37fd0"></a>
 
 ### Config
 
+| Type                 | string            |
+|-------------------- |----------------- |
+| CLI flag             | `-c` / `--config` |
+| Environment variable | -                 |
+| Config file key      | -                 |
 
-<a id="org3897ca8"></a>
+The `config` parameter specifies the path to the configuration file. The `export` subcommand reads configuration parameter values from the specified file.
+
+The `login` subcommand writes the credentials to the specified configuration file. For more details about using the configuration file, refer to the [Configuration File](#config-file) section.
+
+
+<a id="org0fad431"></a>
+
+### Verbose
+
+| Type                 | bool               |
+|-------------------- |------------------ |
+| CLI flag             | `-v` / `--verbose` |
+| Environment variable | -                  |
+| Config file key      | `verbose`          |
+
+When set, the `verbose` configuration parameter enables printing of *debug-level* messages. This can be helpful for troubleshooting.
+
+
+<a id="org740a97e"></a>
+
+## Subcommands
+
+
+<a id="login"></a>
+
+### Login
+
+The `login` subcommand persists the [API URL](#apiurl), [username](#username), and [password](#password) configuration parameter values in the config file.
+
+![img](vhs/login.gif "Login subcommand")
+
+
+<a id="orge00935e"></a>
+
+### Export
+
+The `export` subcommand exports the specified resources from a *Cloud Foundry* cluster. The operation performs the following steps:
+
+1.  Inspects the configured parameters. If the configuration parameters are insufficient to perform the requested operation, the user is prompted interactively to provide the missing values.
+2.  Collects the resource configuration via the API.
+3.  Converts the resource configuration according to the Crossplane provider managed resource schemas.
+4.  Prints the Crossplane managed resource definitions in YAML format to the screen or to a file.
+
+
+<a id="org357ab8b"></a>
+
+#### Authentication
+
+There are various ways to configure the authentication parameters in `xpcf`.
+
+The simplest approach is to use the `cf` CLI tool's<sup><a id="fnr.2" class="footref" href="#fn.2" role="doc-backlink">2</a></sup> `login` subcommand<sup><a id="fnr.3" class="footref" href="#fn.3" role="doc-backlink">3</a></sup>. This creates a configuration file with the *Cloud Foundry* API credentials, which can be reused by `xpcf` through the [`use-cf-login`](#use-cf-login) configuration parameter. See [use-cf-login](#use-cf-login) for details.
+
+The [API URL](#apiurl), [username](#username), and [password](#password) for the *Cloud Foundry* environment can also be specified using configuration parameters via CLI flags, environment variables, or the configuration file.
+
+The `login` subcommand can be used to update the configuration file with the [API URL](#apiurl), [username](#username), and [password](#password) values.
+
+
+<a id="apiurl"></a>
+
+##### API URL
+
+| Type                 | string            |
+|-------------------- |----------------- |
+| CLI flag             | `-a` / `--apiUrl` |
+| Environment variable | `API_URL`         |
+| Config file key      | `apiurl`          |
+
+This configuration parameter specifies the URL of the *Cloud Foundry* API.
+
+
+<a id="username"></a>
+
+##### Username
+
+| Type                 | string              |
+|-------------------- |------------------- |
+| CLI flag             | `-u` / `--username` |
+| Environment variable | `USERNAME`          |
+| Config file key      | `username`          |
+
+This configuration parameter specifies the username for authenticating with the *Cloud Foundry* API.
+
+
+<a id="password"></a>
+
+##### Password
+
+| Type                 | string              |
+|-------------------- |------------------- |
+| CLI flag             | `-p` / `--password` |
+| Environment variable | `PASSWORD`          |
+| Config file key      | `password`          |
+
+This configuration parameter specifies the password for authenticating with the *Cloud Foundry* API.
+
+
+<a id="org0067317"></a>
+
+#### Configuration Parameters
+
+The `export` subcommand can be configured using the [API URL](#apiurl), [username](#username), and [password](#password) configuration parameters. These parameters allow you to define the authentication details for the Cloud Foundry cluster from which resources are exported.
+
+Alternatively, it is more convenient to use the [login](#login) subcommand, which persists these parameters in the configuration file so you don't have to specify their values for each command.
+
+In addition to the [global configuration parameters](#global-params), the `export` subcommand also supports several subcommand-specific configuration parameters.
+
+
+<a id="use-cf-login"></a>
+
+##### Use CF Login
+
+| Type                 | bool             |
+|-------------------- |---------------- |
+| CLI flag             | `--use-cf-login` |
+| Environment variable | `USE_CF_LOGIN`   |
+| Config file key      | `use-cf-login`   |
+
+When set, the configuration file generated by `cf login` is used for authentication.
+
+
+<a id="kind"></a>
+
+##### Kind
+
+| Type                 | []string        |
+|-------------------- |--------------- |
+| CLI flag             | `--kind` / `-k` |
+| Environment variable | `KIND`          |
+| Config file key      | `kind`          |
+
+Specifies the resource kinds to export. If not set, the user is prompted interactively.
+
+The possible values are:
+
+-   `organization`
+-   `orgrole`
+-   `serviceinstance`
+-   `space`
+-   `spacerole`
+
+
+<a id="output"></a>
+
+##### Output
+
+| Type                 | string            |
+|-------------------- |----------------- |
+| CLI flag             | `--output` / `-o` |
+| Environment variable | `OUTPUT`          |
+| Config file key      | `output`          |
+
+The `output` parameter specifies a filename to redirect the exported YAML output to.
+
+
+<a id="resolve-references"></a>
+
+##### Resolve References
+
+| Type                 | bool                          |
+|-------------------- |----------------------------- |
+| CLI flag             | `--resolve-references` / `-r` |
+| Environment variable | `RESOLVE_REFERENCES`          |
+| Config file key      | `resolve-references`          |
+
+When the `resolve-references` parameter is set, cross-resource references are resolved. For example, instead of an `org` field with a GUID value, the `org.name` field is set when a resource refers to an `Organization` resource.
+
+
+<a id="org"></a>
+
+##### Org
+
+| Type                 | []string       |
+|-------------------- |-------------- |
+| CLI flag             | `--org`        |
+| Environment variable | -              |
+| Config file key      | `organization` |
+
+When exporting *Organization* resource kinds, the `org` parameter value specifies regular expressions that the *Organization* names must match.
+
+
+<a id="space"></a>
+
+##### Space
+
+| Type                 | []string  |
+|-------------------- |--------- |
+| CLI flag             | `--space` |
+| Environment variable | -         |
+| Config file key      | `space`   |
+
+When exporting *Space* resource kinds, the `space` parameter value specifies regular expressions that the *Space* names must match.
+
+
+<a id="serviceinstance"></a>
+
+##### ServiceInstance
+
+| Type                 | []string            |
+|-------------------- |------------------- |
+| CLI flag             | `--serviceinstance` |
+| Environment variable | -                   |
+| Config file key      | `serviceinstance`   |
+
+When exporting *ServiceInstance* resource kinds, the `serviceinstance` parameter value specifies regular expressions that the *ServiceInstance* names must match.
+
+
+<a id="orgc0b59a9"></a>
 
 # Common Workflows
 
 
-<a id="org8e2e6a0"></a>
+<a id="orgce5243d"></a>
+
+## Logging in using username and password
+
+
+<a id="org058b26f"></a>
 
 # Troubleshooting
 
 
-<a id="orge58a718"></a>
+<a id="orgfdcf311"></a>
 
 # FAQ
 
 ## Footnotes
 
 <sup><a id="fn.1" class="footnum" href="#fnr.1">1</a></sup> <https://github.com/SAP/crossplane-provider-cloudfoundry/tree/feat/export-tool>
+
+<sup><a id="fn.2" class="footnum" href="#fnr.2">2</a></sup> <https://docs.cloudfoundry.org/cf-cli/>
+
+<sup><a id="fn.3" class="footnum" href="#fnr.3">3</a></sup> <https://docs.cloudfoundry.org/cf-cli/getting-started.html#login>
