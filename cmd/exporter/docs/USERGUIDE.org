@@ -411,8 +411,25 @@ When set, the =verbose= configuration parameter enables printing of
 :CUSTOM_ID: login
 :END:
 
-The =login= subcommand persists the [[#apiurl][API URL]], [[#username][username]], and [[#password][password]]
-configuration parameter values in the config file.
+The =login= subcommand saves the [[#apiurl][API URL]], [[#username][username]], and [[#password][password]]
+configuration values to the config file.
+
+You can set these values using either CLI flags or environment variables.
+
+Using CLI flags:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
+<<config("CLI name")>> login --apiUrl 'https://test.cf.com' --username 'example-user' --password 'secret'
+#+end_src
+
+Using environment variables:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
+API_URL="https://test.cf.com" USERNAME="example-user" PASSWORD="secret" <<config("CLI name")>> login
+#+end_src
+
+If any configuration value is not provided, you will be prompted to
+enter it:
 
 #+caption: Login subcommand
 [[file:vhs/login.gif]]
