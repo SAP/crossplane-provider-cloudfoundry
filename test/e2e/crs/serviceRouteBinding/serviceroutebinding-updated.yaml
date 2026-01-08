@@ -14,7 +14,8 @@ spec:
       policy:
         resolve: Always
     labels:
-      environment: test
-      team: platform
+      environment: production
+      managed-by: crossplane
     annotations:
-      description: Initial metadata
+      description: Updated metadata for testing updates
+      contact: team@example.com

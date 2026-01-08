@@ -223,11 +223,21 @@ func resolveParametersSecret(ctx context.Context, kube k8s.Client, forProvider v
 
 // Updates the external resource.
 func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
-	_, ok := mg.(*v1alpha1.ServiceRouteBinding)
+	cr, ok := mg.(*v1alpha1.ServiceRouteBinding)
 	if !ok {
 		return managed.ExternalUpdate{}, fmt.Errorf("managed resource is not a ServiceRouteBinding")
 	}
-	// currently not implemented, since CF only support update of labels/annotations
+
+	guid := meta.GetExternalName(cr)
+	if guid == "" {
+		return managed.ExternalUpdate{}, nil
+	}
+
+	// Update metadata (labels and annotations) - only supported fields for ServiceRouteBindings
+	_, err := srb.Update(ctx, e.srbClient, guid, cr.Spec.ForProvider)
+	if err != nil {
+		return managed.ExternalUpdate{}, fmt.Errorf(errUpdate, err)
+	}
 
 	return managed.ExternalUpdate{}, nil
 }
@@ -257,9 +267,8 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 // handleObservationState processes the LastOperation state of a Service Route Binding
 // and returns the appropriate ExternalObservation for Crossplane reconciliation.
 //
-// Note: Service Route Bindings are immutable after creation. Updates are prevented by CEL
-// validation rules at the Kubernetes API level (see serviceroutebinding_types.go).
-// ResourceUpToDate is always set to true since updates cannot occur.
+// Note: Immutable fields (route, serviceInstance, parameters) are protected by CEL validation
+// at the API level. Only metadata (labels/annotations) can be updated.
 func handleObservationState(binding *cfresource.ServiceRouteBinding, cr *v1alpha1.ServiceRouteBinding) (managed.ExternalObservation, error) {
 	state := binding.LastOperation.State
 	typ := binding.LastOperation.Type
@@ -283,10 +292,62 @@ func handleObservationState(binding *cfresource.ServiceRouteBinding, cr *v1alpha
 			return managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true}, nil
 		}
 		cr.SetConditions(xpv1.Available(), xpv1.ReconcileSuccess())
-		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
+
+		// Check if metadata (labels/annotations) needs to be updated
+		upToDate := isMetadataUpToDate(cr.Spec.ForProvider, binding)
+
+		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
 	}
 
 	return managed.ExternalObservation{}, errors.New(errUnknownState)
+}
+
+// isMetadataUpToDate checks if labels and annotations match between desired state (spec) and actual state (CF).
+// Returns true if metadata is up-to-date, false if an update is needed.
+func isMetadataUpToDate(spec v1alpha1.ServiceRouteBindingParameters, binding *cfresource.ServiceRouteBinding) bool {
+	// If no metadata in CF resource, check if spec wants to set any
+	if binding.Metadata == nil {
+		return spec.Labels == nil && spec.Annotations == nil
+	}
+
+	if !metadataMapEqual(spec.Labels, binding.Metadata.Labels) {
+		return false
+	}
+
+	if !metadataMapEqual(spec.Annotations, binding.Metadata.Annotations) {
+		return false
+	}
+
+	return true
+}
+
+// metadataMapEqual compares two metadata maps (labels or annotations).
+func metadataMapEqual(desired, actual map[string]*string) bool {
+	// check if both are nil/empty
+	if len(desired) == 0 && len(actual) == 0 {
+		return true
+	}
+
+	if len(desired) != len(actual) {
+		return false
+	}
+
+	// Compare each key-value pair
+	for key, desiredVal := range desired {
+		actualVal, exists := actual[key]
+		if !exists {
+			return false
+		}
+
+		if (desiredVal == nil) != (actualVal == nil) {
+			return false
+		}
+		if desiredVal != nil && actualVal != nil && *desiredVal != *actualVal {
+			return false
+		}
+	}
+
+	return true
 }
 
 func isNotFoundError(err error) bool {

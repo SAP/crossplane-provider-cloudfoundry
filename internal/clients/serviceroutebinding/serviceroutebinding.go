@@ -82,8 +82,17 @@ func createToListOptions(create *cfresource.ServiceRouteBindingCreate) *client.S
 }
 
 func Update(ctx context.Context, srbClient ServiceRouteBinding, guid string, forProvider v1alpha1.ServiceRouteBindingParameters) (*resource.ServiceRouteBinding, error) {
-	// currently not implemented, since CF only support update of labels/annotations for ServiceRouteBinding
-	return srbClient.Update(ctx, guid, &cfresource.ServiceRouteBindingUpdate{})
+	update := &cfresource.ServiceRouteBindingUpdate{}
+
+	// ServiceRouteBindings only support updating metadata (labels and annotations)
+	if forProvider.Labels != nil || forProvider.Annotations != nil {
+		update.Metadata = &cfresource.Metadata{
+			Labels:      forProvider.Labels,
+			Annotations: forProvider.Annotations,
+		}
+	}
+
+	return srbClient.Update(ctx, guid, update)
 }
 
 func Delete(ctx context.Context, srbClient ServiceRouteBinding, guid string) error {
