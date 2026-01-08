@@ -31,6 +31,11 @@ var (
 	routeServiceURL     = "https://route-service.example.com"
 )
 
+// Helper function to create string pointers
+func toStringPointer(s string) *string {
+	return &s
+}
+
 type modifier func(*v1alpha1.ServiceRouteBinding)
 
 func withExternalName(name string) modifier {
@@ -63,6 +68,18 @@ func withStatus(guid string) modifier {
 
 	return func(r *v1alpha1.ServiceRouteBinding) {
 		r.Status.AtProvider = o
+	}
+}
+
+func withLabels(labels map[string]*string) modifier {
+	return func(r *v1alpha1.ServiceRouteBinding) {
+		r.Spec.ForProvider.Labels = labels
+	}
+}
+
+func withAnnotations(annotations map[string]*string) modifier {
+	return func(r *v1alpha1.ServiceRouteBinding) {
+		r.Spec.ForProvider.Annotations = annotations
 	}
 }
 
@@ -484,15 +501,37 @@ func TestUpdate(t *testing.T) {
 	}{
 		"Successful": {
 			args: args{
-				mg: serviceRouteBinding(withServiceInstanceID(serviceInstanceGUID), withExternalName(guid)),
+				mg: serviceRouteBinding(
+					withServiceInstanceID(serviceInstanceGUID),
+					withExternalName(guid),
+					withLabels(map[string]*string{"env": toStringPointer("prod")}),
+				),
 			},
 			want: want{
-				mg:  serviceRouteBinding(withServiceInstanceID(serviceInstanceGUID), withExternalName(guid)),
+				mg: serviceRouteBinding(
+					withServiceInstanceID(serviceInstanceGUID),
+					withExternalName(guid),
+					withLabels(map[string]*string{"env": toStringPointer("prod")}),
+				),
 				obs: managed.ExternalUpdate{},
 				err: nil,
 			},
 			service: func() *fake.MockServiceRouteBinding {
 				m := &fake.MockServiceRouteBinding{}
+				updated := &fake.NewServiceRouteBinding().
+					SetGUID(guid).
+					SetRouteRef(routeGUID).
+					SetServiceInstanceRef(serviceInstanceGUID).
+					SetLabels(map[string]*string{
+						"env": toStringPointer("prod"),
+					}).
+					ServiceRouteBinding
+				m.On("Update", mock.Anything, guid, mock.MatchedBy(func(update *cfresource.ServiceRouteBindingUpdate) bool {
+					return update.Metadata != nil &&
+						update.Metadata.Labels != nil &&
+						update.Metadata.Labels["env"] != nil &&
+						*update.Metadata.Labels["env"] == "prod"
+				})).Return(updated, nil)
 				return m
 			},
 		},
@@ -507,6 +546,42 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceRouteBinding {
 				m := &fake.MockServiceRouteBinding{}
+				return m
+			},
+		},
+		"UpdateWithAnnotations": {
+			args: args{
+				mg: serviceRouteBinding(
+					withServiceInstanceID(serviceInstanceGUID),
+					withExternalName(guid),
+					withAnnotations(map[string]*string{"description": toStringPointer("test binding")}),
+				),
+			},
+			want: want{
+				mg: serviceRouteBinding(
+					withServiceInstanceID(serviceInstanceGUID),
+					withExternalName(guid),
+					withAnnotations(map[string]*string{"description": toStringPointer("test binding")}),
+				),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceRouteBinding {
+				m := &fake.MockServiceRouteBinding{}
+				updated := &fake.NewServiceRouteBinding().
+					SetGUID(guid).
+					SetRouteRef(routeGUID).
+					SetServiceInstanceRef(serviceInstanceGUID).
+					SetAnnotations(map[string]*string{
+						"description": toStringPointer("test binding"),
+					}).
+					ServiceRouteBinding
+				m.On("Update", mock.Anything, guid, mock.MatchedBy(func(update *cfresource.ServiceRouteBindingUpdate) bool {
+					return update.Metadata != nil &&
+						update.Metadata.Annotations != nil &&
+						update.Metadata.Annotations["description"] != nil &&
+						*update.Metadata.Annotations["description"] == "test binding"
+				})).Return(updated, nil)
 				return m
 			},
 		},
@@ -788,6 +863,301 @@ func TestIsNotFoundError(t *testing.T) {
 			got := isNotFoundError(tc.err)
 			if diff := cmp.Diff(tc.want, got); diff != "" {
 				t.Errorf("isNotFoundError(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIsMetadataUpToDate(t *testing.T) {
+	cases := map[string]struct {
+		spec     v1alpha1.ServiceRouteBindingParameters
+		binding  *cfresource.ServiceRouteBinding
+		expected bool
+	}{
+		"BothNil": {
+			spec:     v1alpha1.ServiceRouteBindingParameters{},
+			binding:  &cfresource.ServiceRouteBinding{},
+			expected: true,
+		},
+		"BothEmpty": {
+			spec: v1alpha1.ServiceRouteBindingParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{},
+			},
+			binding: &cfresource.ServiceRouteBinding{
+				Metadata: &cfresource.Metadata{},
+			},
+			expected: true,
+		},
+		"MatchingLabels": {
+			spec: v1alpha1.ServiceRouteBindingParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{
+						"env":  toStringPointer("prod"),
+						"team": toStringPointer("platform"),
+					},
+				},
+			},
+			binding: &cfresource.ServiceRouteBinding{
+				Metadata: &cfresource.Metadata{
+					Labels: map[string]*string{
+						"env":  toStringPointer("prod"),
+						"team": toStringPointer("platform"),
+					},
+				},
+			},
+			expected: true,
+		},
+		"MatchingAnnotations": {
+			spec: v1alpha1.ServiceRouteBindingParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{
+						"description": toStringPointer("test binding"),
+					},
+				},
+			},
+			binding: &cfresource.ServiceRouteBinding{
+				Metadata: &cfresource.Metadata{
+					Annotations: map[string]*string{
+						"description": toStringPointer("test binding"),
+					},
+				},
+			},
+			expected: true,
+		},
+		"MatchingBoth": {
+			spec: v1alpha1.ServiceRouteBindingParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{
+						"env": toStringPointer("prod"),
+					},
+					Annotations: map[string]*string{
+						"description": toStringPointer("test"),
+					},
+				},
+			},
+			binding: &cfresource.ServiceRouteBinding{
+				Metadata: &cfresource.Metadata{
+					Labels: map[string]*string{
+						"env": toStringPointer("prod"),
+					},
+					Annotations: map[string]*string{
+						"description": toStringPointer("test"),
+					},
+				},
+			},
+			expected: true,
+		},
+		"DifferentLabels": {
+			spec: v1alpha1.ServiceRouteBindingParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{
+						"env": toStringPointer("prod"),
+					},
+				},
+			},
+			binding: &cfresource.ServiceRouteBinding{
+				Metadata: &cfresource.Metadata{
+					Labels: map[string]*string{
+						"env": toStringPointer("dev"),
+					},
+				},
+			},
+			expected: false,
+		},
+		"DifferentAnnotations": {
+			spec: v1alpha1.ServiceRouteBindingParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{
+						"description": toStringPointer("old"),
+					},
+				},
+			},
+			binding: &cfresource.ServiceRouteBinding{
+				Metadata: &cfresource.Metadata{
+					Annotations: map[string]*string{
+						"description": toStringPointer("new"),
+					},
+				},
+			},
+			expected: false,
+		},
+		"MissingLabelInActual": {
+			spec: v1alpha1.ServiceRouteBindingParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{
+						"env":  toStringPointer("prod"),
+						"team": toStringPointer("platform"),
+					},
+				},
+			},
+			binding: &cfresource.ServiceRouteBinding{
+				Metadata: &cfresource.Metadata{
+					Labels: map[string]*string{
+						"env": toStringPointer("prod"),
+					},
+				},
+			},
+			expected: false,
+		},
+		"ExtraLabelInActual": {
+			spec: v1alpha1.ServiceRouteBindingParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{
+						"env": toStringPointer("prod"),
+					},
+				},
+			},
+			binding: &cfresource.ServiceRouteBinding{
+				Metadata: &cfresource.Metadata{
+					Labels: map[string]*string{
+						"env":  toStringPointer("prod"),
+						"team": toStringPointer("platform"),
+					},
+				},
+			},
+			expected: false,
+		},
+		"SpecWithoutMetadataBindingHasLabels": {
+			spec: v1alpha1.ServiceRouteBindingParameters{},
+			binding: &cfresource.ServiceRouteBinding{
+				Metadata: &cfresource.Metadata{
+					Labels: map[string]*string{
+						"env": toStringPointer("prod"),
+					},
+				},
+			},
+			expected: false,
+		},
+		"SpecHasLabelsBindingHasNoMetadata": {
+			spec: v1alpha1.ServiceRouteBindingParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{
+						"env": toStringPointer("prod"),
+					},
+				},
+			},
+			binding: &cfresource.ServiceRouteBinding{
+				Metadata: nil,
+			},
+			expected: false,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			result := isMetadataUpToDate(tc.spec, tc.binding)
+			if diff := cmp.Diff(tc.expected, result); diff != "" {
+				t.Errorf("isMetadataUpToDate(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestMetadataMapEqual(t *testing.T) {
+	cases := map[string]struct {
+		desired  map[string]*string
+		actual   map[string]*string
+		expected bool
+	}{
+		"BothNil": {
+			desired:  nil,
+			actual:   nil,
+			expected: true,
+		},
+		"BothEmpty": {
+			desired:  map[string]*string{},
+			actual:   map[string]*string{},
+			expected: true,
+		},
+		"Equal": {
+			desired: map[string]*string{
+				"key1": toStringPointer("value1"),
+				"key2": toStringPointer("value2"),
+			},
+			actual: map[string]*string{
+				"key1": toStringPointer("value1"),
+				"key2": toStringPointer("value2"),
+			},
+			expected: true,
+		},
+		"DifferentValues": {
+			desired: map[string]*string{
+				"key1": toStringPointer("value1"),
+			},
+			actual: map[string]*string{
+				"key1": toStringPointer("value2"),
+			},
+			expected: false,
+		},
+		"DifferentLengths": {
+			desired: map[string]*string{
+				"key1": toStringPointer("value1"),
+			},
+			actual: map[string]*string{
+				"key1": toStringPointer("value1"),
+				"key2": toStringPointer("value2"),
+			},
+			expected: false,
+		},
+		"MissingKeyInActual": {
+			desired: map[string]*string{
+				"key1": toStringPointer("value1"),
+				"key2": toStringPointer("value2"),
+			},
+			actual: map[string]*string{
+				"key1": toStringPointer("value1"),
+			},
+			expected: false,
+		},
+		"NilDesiredEmptyActual": {
+			desired:  nil,
+			actual:   map[string]*string{},
+			expected: true,
+		},
+		"EmptyDesiredNilActual": {
+			desired:  map[string]*string{},
+			actual:   nil,
+			expected: true,
+		},
+		"NilDesiredNonEmptyActual": {
+			desired: nil,
+			actual: map[string]*string{
+				"key1": toStringPointer("value1"),
+			},
+			expected: false,
+		},
+		"NonEmptyDesiredNilActual": {
+			desired: map[string]*string{
+				"key1": toStringPointer("value1"),
+			},
+			actual:   nil,
+			expected: false,
+		},
+		"NilPointerValues": {
+			desired: map[string]*string{
+				"key1": nil,
+			},
+			actual: map[string]*string{
+				"key1": nil,
+			},
+			expected: true,
+		},
+		"MismatchedNilPointers": {
+			desired: map[string]*string{
+				"key1": toStringPointer("value1"),
+			},
+			actual: map[string]*string{
+				"key1": nil,
+			},
+			expected: false,
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			result := metadataMapEqual(tc.desired, tc.actual)
+			if diff := cmp.Diff(tc.expected, result); diff != "" {
+				t.Errorf("metadataMapEqual(...): -want, +got:\n%s", diff)
 			}
 		})
 	}

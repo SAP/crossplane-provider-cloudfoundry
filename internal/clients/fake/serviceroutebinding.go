@@ -129,3 +129,21 @@ func (s *ServiceRouteBinding) SetLastOperation(op, state string) *ServiceRouteBi
 	}
 	return s
 }
+
+// SetLabels assigns ServiceRouteBinding Labels
+func (s *ServiceRouteBinding) SetLabels(labels map[string]*string) *ServiceRouteBinding {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Labels = labels
+	return s
+}
+
+// SetAnnotations assigns ServiceRouteBinding Annotations
+func (s *ServiceRouteBinding) SetAnnotations(annotations map[string]*string) *ServiceRouteBinding {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Annotations = annotations
+	return s
+}
