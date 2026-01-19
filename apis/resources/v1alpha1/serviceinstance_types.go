@@ -118,7 +118,6 @@ type SecretKeySelector struct {
 	Key string `json:"key,omitempty"`
 }
 
-
 type ServiceInstanceObservation struct {
 	// (String) The GUID of the service instance.
 	ID *string `json:"id,omitempty"`
@@ -282,6 +281,14 @@ func (r *ServiceInstance) GetCloudFoundryName() string {
 		return ""
 	}
 	return *r.Spec.ForProvider.Name
+}
+
+// GetID implements Referenceable interface (used by resources.ExternalID extractor)
+func (r *ServiceInstance) GetID() string {
+	if r.Status.AtProvider.ID == nil {
+		return ""
+	}
+	return *r.Status.AtProvider.ID
 }
 
 // GetSpaceRef returns the reference to the space
