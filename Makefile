@@ -1,8 +1,8 @@
 # ====================================================================================
 # Setup Project
 BASE_NAME := cloudfoundry
-PROJECT_NAME := crossplane-provider-$(BASE_NAME)
-PROJECT_REPO := github.com/SAP/$(PROJECT_NAME)
+PROJECT_NAME := provider-$(BASE_NAME)
+PROJECT_REPO := github.com/SAP/crossplane-$(PROJECT_NAME)
 
 
 PLATFORMS ?= linux_amd64 linux_arm64
@@ -40,12 +40,7 @@ GO111MODULE = on
 GOLANGCILINT_VERSION ?= 1.64.5
 -include build/makelib/golang.mk
 
-# kind-related versions
-KIND_VERSION ?= v0.26.0
-KIND_NODE_IMAGE_TAG ?= v1.32.0
-
 # Setup Kubernetes tools
-
 KIND_VERSION = v0.22.0
 UP_VERSION = v0.31.0
 UP_CHANNEL = stable
@@ -54,16 +49,10 @@ UPTEST_VERSION = v0.11.1
 
 # ====================================================================================
 # Setup Images
-DOCKER_REGISTRY ?= crossplane
-IMAGES = $(BASE_NAME) $(BASE_NAME)-controller
-
--include build/makelib/image.mk
+IMAGES = provider-cloudfoundry
+-include build/makelib/imagelight.mk
 
 
-
-export UUT_CONFIG = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME)):$(VERSION)
-export UUT_CONTROLLER = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME))-controller:$(VERSION)
-export E2E_IMAGES = {"package":"$(UUT_CONFIG)","controller":"$(UUT_CONTROLLER)"}
 
 # NOTE(hasheddan): we ensure up is installed prior to running platform-specific
 # build steps in parallel to avoid encountering an installation race condition.
@@ -84,7 +73,19 @@ fallthrough: submodules
 	@make
 
 # ====================================================================================
-# Targets
+# Setup XPKG
+
+# XPKG_REG_ORGS ?= xpkg.upbound.io/crossplane-contrib index.docker.io/crossplanecontrib
+# NOTE(hasheddan): skip promoting on xpkg.upbound.io as channel tags are
+# inferred.
+# XPKG_REG_ORGS_NO_PROMOTE ?= xpkg.upbound.io/crossplane-contrib
+XPKGS ?= provider-cloudfoundry
+XPKG_REG_ORGS ?= ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane
+-include build/makelib/xpkg.mk
+
+# NOTE(hasheddan): we force image building to happen prior to xpkg build so that
+# we ensure image is present in daemon.
+xpkg.build.crossplane-provider-cloudfoundry: do.build.images
 
 # NOTE: the build submodule currently overrides XDG_CACHE_HOME in order to
 # force the Helm 3 to use the .work/helm directory. This causes Go on Linux
@@ -94,6 +95,9 @@ fallthrough: submodules
 # its location in CI so that we cache between builds.
 go.cachedir:
 	@go env GOCACHE
+
+# ====================================================================================
+# Targets
 
 # Generate a coverage report for cobertura applying exclusions on
 # - generated file
@@ -139,6 +143,7 @@ run: go.build
 # End to End Testing
 CROSSPLANE_NAMESPACE = upbound-system
 -include build/makelib/local.xpkg.mk
+CROSSPLANE_ARGS = '--enable-usages'
 -include build/makelib/controlplane.mk
 
 uptest: $(UPTEST) $(KUBECTL) $(KUTTL)
@@ -156,21 +161,22 @@ e2e: local-deploy uptest
 
 # Updated End to End Testing following BTP Provider
 
+export E2E_REUSE_CLUSTER = $(KIND_CLUSTER_NAME)
+export E2E_CLUSTER_NAME = $(KIND_CLUSTER_NAME)
+
 .PHONY: test-acceptance
-test-acceptance:  $(KIND) $(HELM3) build
+test-acceptance: local-deploy $(KUBECTL)
+	@echo "Creating crossplane-system namespace"
+	@$(KUBECTL) create namespace crossplane-system
 	@$(INFO) running integration tests
 	@$(INFO) Skipping long running tests
-	@echo UUT_CONFIG=$$UUT_CONFIG
-	@echo UUT_CONTROLLER=$$UUT_CONTROLLER
-	@$(INFO) ${E2E_IMAGES}
-	@echo "E2E_IMAGES=$$E2E_IMAGES"
 	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -run '$(testFilter)' 2>&1 | tee test-output.log
 	@echo "===========Test Summary==========="
 	@grep -E "PASS|FAIL" test-output.log
 	@case `tail -n 1 test-output.log` in \
-     		*FAIL*) echo "❌ Error: Test failed"; exit 1 ;; \
-     		*) echo "✅ All tests passed"; $(OK) integration tests passed ;; \
-     esac
+		*FAIL*) echo "❌ Error: Test failed"; exit 1 ;; \
+		*) echo "✅ All tests passed"; $(OK) integration tests passed ;; \
+	esac
 .PHONY: cobertura submodules fallthrough run crds.clean dev-debug dev-clean demo-cluster demo-install demo-clean demo-debug
 
 ##@ Upgrade Tests
@@ -332,14 +338,3 @@ crossplane.help:
 help-special: crossplane.help
 
 .PHONY: crossplane.help help-special
-
-PUBLISH_IMAGES ?= crossplane/provider-cloudfoundry crossplane/provider-cloudfoundry-controller
-
-.PHONY: publish
-publish:
-	@$(INFO) "Publishing images $(PUBLISH_IMAGES) to $(DOCKER_REGISTRY)"
-	@for image in $(PUBLISH_IMAGES); do \
-		echo "Publishing image $(DOCKER_REGISTRY)/$${image}:$(VERSION)"; \
-		docker push $(DOCKER_REGISTRY)/$${image}:$(VERSION); \
-	done
-	@$(OK) "Publishing images $(PUBLISH_IMAGES) to $(DOCKER_REGISTRY)"
