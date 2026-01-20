@@ -726,11 +726,12 @@ To export /Organization/ resources, configure the following:
   ([[#username][username]], [[#password][password]], [[#apiurl][apiurl]])
 - The resource kind to export, which should be set to =organization=
   ([[#kind][kind]])
-- The name(s) of the organization(s) to export ([[#org][org]])
+- A regular expression matching the name(s) of the organization(s)
+  to export ([[#org][org]])
 
 In this example, the export tool retrieves the =username=, =password=, and
-=apiurl= parameters from the configuration file, since they were set using the
-[[#cf-login][cf login]] command.
+=apiurl= parameters from the configuration file, as they were set using the
+[[#login-workflows][login]] command.
 
 The =kind= configuration parameter is set using a CLI flag.
 
@@ -738,6 +739,35 @@ The /Organization/ names are selected interactively.
 
 #+caption: Exporting interactively selected Organization resources
 [[file:vhs/cf-export-orgs-interactive.gif]]
+
+** Exporting all /Spaces/ from all /Organizations/
+
+This example demonstrates non-interactive export of all /Spaces/ from
+all /Organizations/. Configure the following:
+
+- The credentials and API URL of the Cloud Foundry cluster
+  ([[#username][username]], [[#password][password]], [[#apiurl][apiurl]])
+- The resource kind to export, which should be set to =space=
+  ([[#kind][kind]])
+- A regular expression matching the name(s) of the organization(s)
+  to include ([[#org][org]])
+- A regular expression matching the name(s) of the space(s) to
+  include ([[#space][space]])
+
+In this example, the export tool retrieves the =username=, =password=, and
+=apiurl= parameters from the configuration file, as they were set using the
+[[#login-workflows][login]] command.
+
+The =kind=, =org=, and =space= configuration parameters are set using
+CLI flags.
+
+The regular expression =.*= matches all names.
+
+The following command exports the required resources:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*)
+<<config("CLI name")>> export --kind space --org '.*' --space '.*'
+#+end_src
 
 * Troubleshooting
 
