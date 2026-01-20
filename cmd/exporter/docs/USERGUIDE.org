@@ -60,7 +60,7 @@ alias <<config("CLI name")>>='go run -ldflags "-X main.ShortName=<<config("CLI n
 Set Shell "bash"
 Set FontSize 16
 Set Width 1200
-Set Height 400
+Set Height ${vhs_height}
 
 Hide
 
@@ -76,14 +76,16 @@ Sleep 5s
 #+end_example
 
 #+name: vhs_command
-#+begin_src sh :result output :var vhs_command="Type `# test command` Sleep 5s" :var cli_name=config("CLI name")
+#+begin_src sh :result output :var vhs_command="Type `# test command` Sleep 5s" :var cli_name=config("CLI name") :var vhs_height=400
 export cli_name
+export vhs_name
 echo "$vhs_command" | envsubst
 #+end_src
 
 #+name: vhs-code
-#+begin_src sh :results output :var tmpl=vhs-code-template :var cli_name=config("CLI name") :var cmd_tmpl="${cli_name} --helppp"
+#+begin_src sh :results output :var tmpl=vhs-code-template :var cli_name=config("CLI name") :var cmd_tmpl="${cli_name} --helppp" :var vhs_height=400
 export cli_name
+export vhs_height
 export vhs_command=$(echo "$cmd_tmpl" | envsubst)
 echo "$tmpl" | envsubst
 #+end_src
@@ -136,6 +138,52 @@ Type "test-password-for-technical-user" Sleep 1500ms Enter
 #+begin_src sh :results output :var tapefile=vhs-code(cmd_tmpl=login)
 echo $tapefile | vhs -
 #+end_src
+
+** Export orgs interactively
+
+#+name: cf-export-orgs-interactive
+#+begin_example
+Output vhs/cf-export-orgs-interactive.gif
+Type "${cli_name} export --kind organization"  Sleep 1500ms  Enter
+Sleep 2s
+Down
+Sleep 1s
+Space
+Sleep 1s
+Enter
+Sleep 5s
+#+end_example
+
+#+begin_src sh :results output :var tapefile=vhs-code(cmd_tmpl=cf-export-orgs-interactive,vhs_height=600)
+echo $tapefile | vhs -
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Set Shell bash
+Set FontSize 16
+Set Width 1200
+Set Height 600
+Hide
+Type alias xpcf='go run -ldflags "-X main.ShortName=xpcf" ../../exporter/'
+Enter 1
+Env XDG_CONFIG_HOME /tmp
+Type clear
+Enter 1
+Show
+Output .gif vhs/cf-export-orgs-interactive.gif
+Type xpcf export --kind organization
+Sleep 1500ms
+Enter 1
+Sleep 2s
+Down 1
+Sleep 1s
+Space 1
+Sleep 1s
+Enter 1
+Sleep 5s
+Sleep 5s
+#+end_example
 
 * Introduction
 
@@ -654,6 +702,9 @@ it:
 [[file:vhs/login.gif]]
 
 ** Logging in using the =cf login= command
+:PROPERTIES:
+:CUSTOM_ID: cf-login
+:END:
 
 You can also use the =cf login= command for authentication.
 
@@ -666,6 +717,28 @@ Then export resources using the [[#use-cf-login][use-cf-login]] configuration pa
 #+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*) :eval never
 <<config("CLI name")>> export --use-cf-login
 #+end_src
+
+** Exporting interactively selected /Organization/ resources
+
+To export /Organization/ resources, configure the following:
+
+- The credentials and API URL of the Cloud Foundry cluster
+  ([[#username][username]], [[#password][password]], [[#apiurl][apiurl]])
+- The resource kind to export, which should be set to =organization=
+  ([[#kind][kind]])
+- The name(s) of the organization(s) to export ([[#org][org]])
+
+In this example, the export tool retrieves the =username=, =password=, and
+=apiurl= parameters from the configuration file, since they were set using the
+[[#cf-login][cf login]] command.
+
+The =kind= configuration parameter is set using a CLI flag.
+
+The /Organization/ names are selected interactively.
+
+#+caption: Exporting interactively selected Organization resources
+[[file:vhs/cf-export-orgs-interactive.gif]]
+
 * Troubleshooting
 
 * FAQ
