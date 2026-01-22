@@ -47,16 +47,17 @@ const (
 
 	// Environment variables
 	cfEndpointEnvVar = "CF_ENDPOINT"
+	uutImagesEnvVar  = "UUT_IMAGES"
 
 	// Environment variables - Optional with defaults
-	resourceDirectoryEnvVar = "UPGRADE_TEST_CRS_PATH"
-	verifyTimeoutEnvVar     = "UPGRADE_TEST_VERIFY_TIMEOUT"
-	waitForPauseEnvVar      = "UPGRADE_TEST_WAIT_FOR_PAUSE"
+	verifyTimeoutEnvVar = "UPGRADE_TEST_VERIFY_TIMEOUT"
+	waitForPauseEnvVar  = "UPGRADE_TEST_WAIT_FOR_PAUSE"
 
 	// Defaults for optional parameters
-	defaultResourceDirectory = "./crs"
+	defaultResourceDirectory = "./testdata/baseCrs"
 	defaultVerifyTimeout     = 30
 	defaultWaitForPause      = 1
+	localTagName             = "local"
 )
 
 var (
@@ -65,7 +66,7 @@ var (
 	resourceDirectories       []string
 	ignoreResourceDirectories = []string{
 		// Add any directories to ignore here, e.g.:
-		// "../e2e/crs/experimental",
+		// "./testdata/experimental",
 	}
 
 	// Default Values
@@ -75,10 +76,12 @@ var (
 )
 
 var (
-	fromTag     string
-	toTag       string
-	fromPackage string
-	toPackage   string
+	fromTag               string
+	toTag                 string
+	fromPackage           string
+	toPackage             string
+	fromControllerPackage string
+	toControllerPackage   string
 )
 
 // TestMain is the entry point for all upgrade tests
@@ -105,25 +108,20 @@ func SetupClusterWithCrossplane(namespace string) {
 
 	// Load version tags for upgrade (FROM -> TO)
 	fromTag, toTag = loadPackageTags()
-	resourceDirectoryRoot = loadResourceDirectory()
 	verifyTimeout = loadVerifyTimeout()
 	waitForPause = loadWaitForPause()
+
+	resourceDirectoryRoot = defaultResourceDirectory
 
 	// Discover all resource directories
 	loadResourceDirectories()
 	klog.V(4).Infof("found resource directories: %s", resourceDirectories)
 
-	// Build full image paths
-	fromPackage = fmt.Sprintf("%s:%s", packageBasePath, fromTag)
-	toPackage = fmt.Sprintf("%s:%s", packageBasePath, toTag)
-	fromControllerPackage := fmt.Sprintf("%s:%s", controllerPackageBasePath, fromTag)
-	toControllerPackage := fmt.Sprintf("%s:%s", controllerPackageBasePath, toTag)
+	// Resolve image paths (handles both "local" and registry tags)
+	fromPackage, fromControllerPackage, toPackage, toControllerPackage = resolveImagePaths(fromTag, toTag)
 
-	// Pre-pull all images to avoid timeout during test
-	mustPullImage(fromPackage)
-	mustPullImage(toPackage)
-	mustPullImage(fromControllerPackage)
-	mustPullImage(toControllerPackage)
+	// Pull images from registry if needed (skip if local)
+	pullImagesIfNeeded(fromTag, toTag, fromPackage, fromControllerPackage, toPackage, toControllerPackage)
 
 	// Configure provider deployment with debug logging and faster sync
 	deploymentRuntimeConfig := getDeploymentRuntimeConfig()
@@ -147,6 +145,11 @@ func SetupClusterWithCrossplane(namespace string) {
 		kindClusterName = clusterName
 		return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
 			klog.V(4).Infof("upgrade cluster %s has been created", clusterName)
+			// Load registry images into kind (xp-testing uses PackagePullPolicy: Never)
+			// Local images are already loaded by xp-testing automatically
+			if err := loadRegistryImagesIntoKind(clusterName, fromTag, toTag); err != nil {
+				return ctx, fmt.Errorf("failed to load registry images into kind: %w", err)
+			}
 			return ctx, nil
 		}
 	})
@@ -159,6 +162,120 @@ func SetupClusterWithCrossplane(namespace string) {
 		testutil.ApplySecretInCrossplaneNamespace(cfSecretName, cfSecretData),
 		testutil.CreateProviderConfigFn(namespace, cfEndpoint, cfSecretName),
 	)
+}
+
+// resolveImagePaths determines the correct image paths for FROM and TO versions
+// based on whether they're using "local" builds or registry tags
+func resolveImagePaths(fromTag, toTag string) (fromPkg, fromCtrl, toPkg, toCtrl string) {
+	isLocalFromTag := fromTag == localTagName
+	isLocalToTag := toTag == localTagName
+
+	// Get local image paths if needed
+	var localProviderPackage, localControllerPackage string
+	if isLocalFromTag || isLocalToTag {
+		uutImages := os.Getenv(uutImagesEnvVar)
+		if uutImages == "" {
+			panic(fmt.Errorf("%s environment variable is required when FROM_TAG or TO_TAG is 'local'", uutImagesEnvVar))
+		}
+
+		localProviderPackage, localControllerPackage = testutil.GetImagesFromJsonOrPanic(uutImages)
+		klog.V(4).Infof("Loaded local images from %s", uutImagesEnvVar)
+	}
+
+	// Resolve FROM images
+	if isLocalFromTag {
+		fromPkg = localProviderPackage
+		fromCtrl = localControllerPackage
+		klog.V(4).Infof("Using local images for FROM: %s", fromPkg)
+	} else {
+		fromPkg = fmt.Sprintf("%s:%s", packageBasePath, fromTag)
+		fromCtrl = fmt.Sprintf("%s:%s", controllerPackageBasePath, fromTag)
+	}
+
+	// Resolve TO images
+	if isLocalToTag {
+		toPkg = localProviderPackage
+		toCtrl = localControllerPackage
+		klog.V(4).Infof("Using local images for TO: %s", toPkg)
+	} else {
+		toPkg = fmt.Sprintf("%s:%s", packageBasePath, toTag)
+		toCtrl = fmt.Sprintf("%s:%s", controllerPackageBasePath, toTag)
+	}
+
+	return fromPkg, fromCtrl, toPkg, toCtrl
+}
+
+// pullImagesIfNeeded pulls images from registry if they're not local builds
+// Local images are already built by the Makefile and don't need pulling
+func pullImagesIfNeeded(fromTag, toTag, fromPackage, fromControllerPackage, toPackage, toControllerPackage string) {
+	// Pull FROM images if not local
+	if fromTag != localTagName {
+		klog.V(4).Infof("Pulling FROM images: %s", fromTag)
+		mustPullImage(fromPackage)
+		mustPullImage(fromControllerPackage)
+		klog.V(4).Infof("Successfully pulled FROM images: %s", fromTag)
+	} else {
+		klog.V(4).Infof("Skipping pull for FROM=local (using locally built images)")
+	}
+
+	// Pull TO images if not local
+	if toTag != localTagName {
+		klog.V(4).Infof("Pulling TO images: %s", toTag)
+		mustPullImage(toPackage)
+		mustPullImage(toControllerPackage)
+		klog.V(4).Infof("Successfully pulled TO images: %s", toTag)
+	} else {
+		klog.V(4).Infof("Skipping pull for TO=local (using locally built images)")
+	}
+}
+
+// loadRegistryImagesIntoKind loads pulled registry images into the kind cluster
+// xp-testing uses PackagePullPolicy: Never, so all images must be pre-loaded
+func loadRegistryImagesIntoKind(clusterName, fromTag, toTag string) error {
+	runner := gexe.New()
+
+	// Load FROM images if they're from a registry
+	if fromTag != localTagName {
+		klog.V(4).Infof("Loading FROM images into kind: %s", fromPackage)
+
+		if err := loadImageIntoKind(runner, clusterName, fromPackage); err != nil {
+			return err
+		}
+		if err := loadImageIntoKind(runner, clusterName, fromControllerPackage); err != nil {
+			return err
+		}
+
+		klog.V(4).Infof("Successfully loaded FROM images into kind")
+	}
+
+	// Load TO images if they're from a registry and different from FROM
+	if toTag != localTagName && toTag != fromTag {
+		klog.V(4).Infof("Loading TO images into kind: %s", toPackage)
+
+		if err := loadImageIntoKind(runner, clusterName, toPackage); err != nil {
+			return err
+		}
+		if err := loadImageIntoKind(runner, clusterName, toControllerPackage); err != nil {
+			return err
+		}
+
+		klog.V(4).Infof("Successfully loaded TO images into kind")
+	}
+
+	return nil
+}
+
+// loadImageIntoKind loads a single image into the kind cluster
+func loadImageIntoKind(runner *gexe.Echo, clusterName, image string) error {
+	cmd := fmt.Sprintf("kind load docker-image %s --name %s", image, clusterName)
+	p := runner.RunProc(cmd)
+
+	if p.Err() != nil {
+		return fmt.Errorf("failed to load %s into kind: %w: %s", image, p.Err(), p.Result())
+	}
+
+	klog.V(4).Infof("Loaded image %s into kind", image)
+	return nil
 }
 
 // getDeploymentRuntimeConfig creates a DeploymentRuntimeConfig with debug logging and faster sync
@@ -258,18 +375,6 @@ func mustPullImage(image string) {
 	if p.Err() != nil {
 		panic(fmt.Errorf("docker pull %v failed: %w: %s", image, p.Err(), p.Result()))
 	}
-}
-
-// loadResourceDirectory loads the resource directory path from environment or uses default
-func loadResourceDirectory() string {
-	dir := os.Getenv(resourceDirectoryEnvVar)
-	if dir == "" {
-		dir = defaultResourceDirectory
-		klog.V(4).Infof("Using default resource directory: %s", dir)
-	} else {
-		klog.V(4).Infof("Using resource directory from %s: %s", resourceDirectoryEnvVar, dir)
-	}
-	return dir
 }
 
 // loadVerifyTimeout loads the verify timeout from environment or uses default
