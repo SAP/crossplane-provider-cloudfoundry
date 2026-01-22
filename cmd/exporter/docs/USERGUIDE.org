@@ -2,7 +2,7 @@
 #+options: author:t broken-links:nil c:nil creator:nil
 #+options: d:(not "LOGBOOK") date:t e:t email:nil expand-links:t f:t
 #+options: inline:t num:t p:nil pri:nil prop:nil stat:t tags:t
-#+options: tasks:t tex:t timestamp:t title:t toc:t todo:t |:t
+#+options: tasks:t tex:t timestamp:t title:t toc:nil todo:t |:t
 #+title: USERGUIDE
 #+date: <2025-12-10 Wed>
 #+author:
@@ -726,7 +726,7 @@ To export /Organization/ resources, configure the following:
   ([[#username][username]], [[#password][password]], [[#apiurl][apiurl]])
 - The resource kind to export, which should be set to =organization=
   ([[#kind][kind]])
-- A regular expression matching the name(s) of the organization(s)
+- A regular expression matching the organization name(s)
   to export ([[#org][org]])
 
 In this example, the export tool retrieves the =username=, =password=, and
@@ -749,9 +749,9 @@ all /Organizations/. Configure the following:
   ([[#username][username]], [[#password][password]], [[#apiurl][apiurl]])
 - The resource kind to export, which should be set to =space=
   ([[#kind][kind]])
-- A regular expression matching the name(s) of the organization(s)
+- A regular expression matching the organization name(s)
   to include ([[#org][org]])
-- A regular expression matching the name(s) of the space(s) to
+- A regular expression matching the space name(s) to
   include ([[#space][space]])
 
 In this example, the export tool retrieves the =username=, =password=, and
@@ -767,6 +767,42 @@ The following command exports the required resources:
 
 #+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*)
 <<config("CLI name")>> export --kind space --org '.*' --space '.*'
+#+end_src
+
+** Exporting /ServiceInstances/ using /Space/ name regex filters
+
+This example shows how to export all /ServiceInstance/ resources from
+spaces containing the word /test/. It also demonstrates how to resolve
+references so that they are exported by name rather than by GUID.
+
+Configure the following:
+
+- The credentials and API URL of the Cloud Foundry cluster
+  ([[#username][username]], [[#password][password]], [[#apiurl][apiurl]])
+- The resource kind to export, which should be set to =serviceinstance=
+  ([[#kind][kind]])
+- A regular expression matching the organization name(s)
+  to include ([[#org][org]])
+- A regular expression matching the space name(s) to
+  include ([[#space][space]])
+- A regular expression matching the service instance name(s) to
+  include ([[#serviceinstance][serviceinstance]])
+- The resolve references setting ([[#resolve-references][resolve-references]])
+
+In this example, the export tool retrieves the =username=, =password=, and
+=apiurl= parameters from the configuration file, as they were set using the
+[[#login-workflows][login]] command.
+
+The =kind=, =org=, =space=, =serviceinstance=, and
+=resolve-references= configuration parameters are set using CLI flags.
+
+The regular expression =.*= matches all names. The regular expression
+=.*test.*= matches names containing the string /test/.
+
+The following command exports the required resources:
+
+#+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*)
+<<config("CLI name")>> export --kind serviceinstance --org '.*' --space '.*test.*' --serviceinstance '.*' -r
 #+end_src
 
 * Troubleshooting
