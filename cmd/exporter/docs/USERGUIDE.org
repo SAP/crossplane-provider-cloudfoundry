@@ -185,6 +185,74 @@ Sleep 5s
 Sleep 5s
 #+end_example
 
+** Export serviceinstances interactively
+
+#+name: cf-export-sis-interactive
+#+begin_example
+Output vhs/cf-export-sis-interactive.gif
+Type "${cli_name} export --kind serviceinstance --resolve-references --output test-serviceinstance.yaml"  Sleep 1500ms  Enter
+Sleep 2s
+Space
+Sleep 1s
+Enter
+Sleep 2s
+Down@250ms 5
+Sleep 1s
+Space Sleep 2s
+Enter Sleep 1s
+Type "/test" Sleep 1s Enter
+Sleep 2s
+Down@250ms 6
+Space Sleep 2s
+Enter
+Sleep 5s
+#+end_example
+
+#+begin_src sh :results output :var tapefile=vhs-code(cmd_tmpl=cf-export-sis-interactive,vhs_height=600)
+echo $tapefile | vhs -
+#+end_src
+
+#+RESULTS:
+#+begin_example
+Set Shell bash
+Set FontSize 16
+Set Width 1200
+Set Height 600
+Hide
+Type alias xpcf='go run -ldflags "-X main.ShortName=xpcf" ../../exporter/'
+Enter 1
+Env XDG_CONFIG_HOME /tmp
+Type clear
+Enter 1
+Show
+Output .gif vhs/cf-export-sis-interactive.gif
+Type xpcf export --kind serviceinstance --resolve-references --output test-serviceinstance.yaml
+Sleep 1500ms
+Enter 1
+Sleep 2s
+Space 1
+Sleep 1s
+Enter 1
+Sleep 2s
+Down 250ms 5
+Sleep 1s
+Space 1
+Sleep 2s
+Enter 1
+Sleep 1s
+Type /test
+Sleep 1s
+Enter 1
+Sleep 2s
+Down 250ms 6
+Space 1
+Sleep 2s
+Enter 1
+Sleep 5s
+Sleep 5s
+#+end_example
+
+
 * Introduction
 
 The call_config("CLI name") {{{results(=cf-export=)}}} tool observes
@@ -773,24 +841,24 @@ The following command exports the required resources:
 
 This example shows how to export all /ServiceInstance/ resources from
 spaces containing the word /test/. It also demonstrates how to resolve
-references so that they are exported by name rather than by GUID.
+references so they are exported by name rather than by GUID.
 
 Configure the following:
 
 - The credentials and API URL of the Cloud Foundry cluster
   ([[#username][username]], [[#password][password]], [[#apiurl][apiurl]])
-- The resource kind to export, which should be set to =serviceinstance=
+- The resource kind to export, set to =serviceinstance=
   ([[#kind][kind]])
-- A regular expression matching the organization name(s)
+- A regular expression matching the organization names
   to include ([[#org][org]])
-- A regular expression matching the space name(s) to
+- A regular expression matching the space names to
   include ([[#space][space]])
-- A regular expression matching the service instance name(s) to
+- A regular expression matching the service instance names to
   include ([[#serviceinstance][serviceinstance]])
 - The resolve references setting ([[#resolve-references][resolve-references]])
 
 In this example, the export tool retrieves the =username=, =password=, and
-=apiurl= parameters from the configuration file, as they were set using the
+=apiurl= parameters from the configuration file, as set by the
 [[#login-workflows][login]] command.
 
 The =kind=, =org=, =space=, =serviceinstance=, and
@@ -804,6 +872,39 @@ The following command exports the required resources:
 #+begin_src bash :results output :session exporter :noweb yes :var a=set-alias() :post ansi-filter(data=*this*)
 <<config("CLI name")>> export --kind serviceinstance --org '.*' --space '.*test.*' --serviceinstance '.*' -r
 #+end_src
+
+** Exporting a /ServiceInstance/ interactively to a file
+
+This example shows how to interactively export a specific /ServiceInstance/
+resource to a file. You specify the /Organization/ and /Space/ names
+interactively, then select the ServiceInstance to export.
+
+Configure the following:
+- The credentials and API URL of the Cloud Foundry cluster
+  ([[#username][username]], [[#password][password]], [[#apiurl][apiurl]])
+- The resource kind to export, set to =serviceinstance=
+  ([[#kind][kind]])
+- A regular expression matching the organization names
+  to include ([[#org][org]])
+- A regular expression matching the space names to
+  include ([[#space][space]])
+- A regular expression matching the service instance names to
+  include ([[#serviceinstance][serviceinstance]])
+- The resolve references setting ([[#resolve-references][resolve-references]])
+- The output filename setting ([[#output][output]])
+
+In this example, the export tool retrieves the =username=, =password=, and
+=apiurl= parameters from the configuration file, as set by the
+[[#login-workflows][login]] command.
+
+The =kind=, =resolve-references=, and =output= configuration
+parameters are set using CLI flags.
+
+The =org=, =space=, and =serviceinstance= parameter values are
+entered interactively.
+
+#+caption: Exporting an interactively selected ServiceInstance resource
+[[file:vhs/cf-export-sis-interactive.gif]]
 
 * Troubleshooting
 

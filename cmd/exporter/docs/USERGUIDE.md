@@ -360,6 +360,8 @@ The possible values are:
 -   `spacerole`
 
 
+<a id="output"></a>
+
 ##### Output
 
 | Type                 | string            |
@@ -511,18 +513,18 @@ xpcf export --kind space --org '.*' --space '.*'
 
 ## Exporting *ServiceInstances* using *Space* name regex filters
 
-This example shows how to export all *ServiceInstance* resources from spaces containing the word *test*. It also demonstrates how to resolve references so that they are exported by name rather than by GUID.
+This example shows how to export all *ServiceInstance* resources from spaces containing the word *test*. It also demonstrates how to resolve references so they are exported by name rather than by GUID.
 
 Configure the following:
 
 -   The credentials and API URL of the Cloud Foundry cluster ([username](#username), [password](#password), [apiurl](#apiurl))
--   The resource kind to export, which should be set to `serviceinstance` ([kind](#kind))
--   A regular expression matching the organization name(s) to include ([org](#org))
--   A regular expression matching the space name(s) to include ([space](#space))
--   A regular expression matching the service instance name(s) to include ([serviceinstance](#serviceinstance))
+-   The resource kind to export, set to `serviceinstance` ([kind](#kind))
+-   A regular expression matching the organization names to include ([org](#org))
+-   A regular expression matching the space names to include ([space](#space))
+-   A regular expression matching the service instance names to include ([serviceinstance](#serviceinstance))
 -   The resolve references setting ([resolve-references](#resolve-references))
 
-In this example, the export tool retrieves the `username`, `password`, and `apiurl` parameters from the configuration file, as they were set using the [login](#login-workflows) command.
+In this example, the export tool retrieves the `username`, `password`, and `apiurl` parameters from the configuration file, as set by the [login](#login-workflows) command.
 
 The `kind`, `org`, `space`, `serviceinstance`, and `resolve-references` configuration parameters are set using CLI flags.
 
@@ -533,6 +535,29 @@ The following command exports the required resources:
 ```bash
 xpcf export --kind serviceinstance --org '.*' --space '.*test.*' --serviceinstance '.*' -r
 ```
+
+
+## Exporting a *ServiceInstance* interactively to a file
+
+This example shows how to interactively export a specific *ServiceInstance* resource to a file. You specify the *Organization* and *Space* names interactively, then select the ServiceInstance to export.
+
+Configure the following:
+
+-   The credentials and API URL of the Cloud Foundry cluster ([username](#username), [password](#password), [apiurl](#apiurl))
+-   The resource kind to export, set to `serviceinstance` ([kind](#kind))
+-   A regular expression matching the organization names to include ([org](#org))
+-   A regular expression matching the space names to include ([space](#space))
+-   A regular expression matching the service instance names to include ([serviceinstance](#serviceinstance))
+-   The resolve references setting ([resolve-references](#resolve-references))
+-   The output filename setting ([output](#output))
+
+In this example, the export tool retrieves the `username`, `password`, and `apiurl` parameters from the configuration file, as set by the [login](#login-workflows) command.
+
+The `kind`, `resolve-references`, and `output` configuration parameters are set using CLI flags.
+
+The `org`, `space`, and `serviceinstance` parameter values are entered interactively.
+
+![img](vhs/cf-export-sis-interactive.gif "Exporting an interactively selected ServiceInstance resource")
 
 
 # Troubleshooting
