@@ -6,14 +6,14 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/config"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
+
 	"github.com/SAP/xp-clifford/cli/export"
 	"github.com/SAP/xp-clifford/erratt"
-
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 )
 
 func exportCmd(ctx context.Context, evHandler export.EventHandler) error {
-	cfConfig, err := config.Get(ctx, useCfLoginMethod, apiUrlParam, usernameParam, passwordParam)
+	cfConfig, err := config.Get(ctx, useCfLoginMethod, apiURLParam, usernameParam, passwordParam)
 	if err != nil {
 		return err
 	}

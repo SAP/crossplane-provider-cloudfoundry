@@ -9,6 +9,7 @@ import (
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/serviceinstance"
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/spacerole"
+
 	"github.com/SAP/xp-clifford/cli"
 	"github.com/SAP/xp-clifford/cli/configparam"
 	"github.com/SAP/xp-clifford/cli/export"
@@ -20,7 +21,7 @@ var (
 )
 
 var (
-	apiUrlParam = configparam.String("apiUrl", "URL of the Cloud Foundry API").
+	apiURLParam = configparam.String("apiUrl", "URL of the Cloud Foundry API").
 			WithShortName("a").
 			WithFlagName("apiUrl").
 			WithEnvVarName("API_URL").
@@ -56,7 +57,7 @@ func main() {
 	cli.Configuration.ObservedSystem = observedSystem
 	export.SetCommand(exportCmd)
 	export.AddConfigParams(
-		apiUrlParam,
+		apiURLParam,
 		usernameParam,
 		passwordParam,
 		useCfLoginMethod,

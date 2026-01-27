@@ -61,6 +61,7 @@ func NewOrgRoleListOptions(spec v1alpha1.OrgRoleParameters) (*cfv3.RoleListOptio
 	opts := cfv3.NewRoleListOptions()
 
 	if spec.Org == nil {
+		// nolint:staticcheck
 		return nil, errors.New(ErrOrgNotSpecified)
 	}
 	opts.OrganizationGUIDs.EqualTo(*spec.Org)

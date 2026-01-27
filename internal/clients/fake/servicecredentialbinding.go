@@ -81,7 +81,7 @@ func NewServiceCredentialBindingDetails(t string) *resource.ServiceCredentialBin
 	return r
 }
 
-// NewServiceInstance generate a new ServiceCredentialBinding
+// NewServiceCredentialBinding generate a new ServiceCredentialBinding
 func NewServiceCredentialBinding(t string) *ServiceCredentialBinding {
 	r := &ServiceCredentialBinding{}
 	r.Type = t

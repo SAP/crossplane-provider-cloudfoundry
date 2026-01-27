@@ -10,7 +10,7 @@ import (
 )
 
 func login(ctx context.Context) error {
-	apiUrl, err := apiUrlParam.ValueOrAsk(ctx)
+	apiURL, err := apiURLParam.ValueOrAsk(ctx)
 	if err != nil {
 		return erratt.New("Cannot get API URL parameter").With("subcommand", "login")
 	}
@@ -24,7 +24,7 @@ func login(ctx context.Context) error {
 	}
 
 	cfg := cli.ConfigFileSettings{}
-	cfg.Set(apiUrlParam.FlagName, apiUrl)
+	cfg.Set(apiURLParam.FlagName, apiURL)
 	cfg.Set(usernameParam.FlagName, username)
 	cfg.Set(passwordParam.FlagName, password)
 	return cfg.StoreConfig(cli.ConfigFileParam.Value())
@@ -36,7 +36,7 @@ var loginSubCommand = &cli.BasicSubCommand{
 	Long:             fmt.Sprintf("Logging in to %s cluster", observedSystem),
 	IgnoreConfigFile: true,
 	ConfigParams: configparam.ParamList{
-		apiUrlParam,
+		apiURLParam,
 		usernameParam,
 		passwordParam,
 	},

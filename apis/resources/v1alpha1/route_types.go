@@ -159,7 +159,7 @@ func (r *Route) GetCloudFoundryName() string {
 	return ""
 }
 
-// implement DomainScoped interface
+// GetDomainRef implements DomainScoped interface
 func (r *Route) GetDomainRef() *DomainReference {
 	return &r.Spec.ForProvider.DomainReference
 }

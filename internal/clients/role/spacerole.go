@@ -5,13 +5,12 @@ import (
 	"errors"
 	"time"
 
-	"k8s.io/utils/ptr"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	"k8s.io/utils/ptr"
 )
 
 const ErrSpaceNotSpecified = "Space is not specified"
@@ -62,6 +61,7 @@ func findSpaceRole(ctx context.Context, client Role, spec v1alpha1.SpaceRolePara
 // newSpaceRoleListOptions returns a list options for the given SpaceRoleParameters
 func newSpaceRoleListOptions(spec v1alpha1.SpaceRoleParameters) (*cfv3.RoleListOptions, error) {
 	if spec.Space == nil {
+		// nolint:staticcheck
 		return nil, errors.New(ErrSpaceNotSpecified)
 	}
 
@@ -70,6 +70,7 @@ func newSpaceRoleListOptions(spec v1alpha1.SpaceRoleParameters) (*cfv3.RoleListO
 
 	// Space (guid) is required
 	if spec.Space == nil {
+		// nolint:staticcheck
 		return nil, errors.New(ErrSpaceNotSpecified)
 	}
 	opts.SpaceGUIDs.EqualTo(*spec.Space)

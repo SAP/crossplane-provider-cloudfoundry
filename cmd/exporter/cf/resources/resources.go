@@ -33,7 +33,7 @@ func RegisterKind(kind Kind) {
 	kinds[kind.KindName()] = kind
 }
 
-// ConfigParams() function returns the configuration parameters of all
+// ConfigParams function returns the configuration parameters of all
 // registered resource kinds.
 func ConfigParams() []configparam.ConfigParam {
 	result := make([]configparam.ConfigParam, 0, len(kinds))

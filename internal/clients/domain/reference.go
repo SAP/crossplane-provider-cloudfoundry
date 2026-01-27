@@ -15,7 +15,7 @@ type DomainScoped interface {
 	GetDomainRef() *v1alpha1.DomainReference
 }
 
-// / Initialize implements the Initializer interface
+// ResolveByName implements the Initializer interface
 func ResolveByName(ctx context.Context, clientFn clients.ClientFn, mg resource.Managed) error {
 	cr, ok := mg.(DomainScoped)
 	if !ok {

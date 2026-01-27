@@ -27,7 +27,7 @@ func NewClient(cf *client.Client) OrgQuota {
 	return cf.OrganizationQuotas
 }
 
-// GenerateCreate generates the OrgazationQuotaCreateOrUpdate from
+// GenerateCreateOrUpdate generates the OrgazationQuotaCreateOrUpdate from
 // OrgQuotaParameters. The float64 fields of spec with negative or nil
 // values indicate unset values.
 //

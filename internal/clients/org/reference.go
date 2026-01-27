@@ -15,7 +15,7 @@ type OrgScoped interface {
 	GetOrgRef() *v1alpha1.OrgReference
 }
 
-// / Initialize implements the Initializer interface
+// ResolveByName implements the Initializer interface
 // It assumes that orgName is set
 func ResolveByName(ctx context.Context, clientFn clients.ClientFn, mg resource.Managed) error {
 	cr, ok := mg.(OrgScoped)

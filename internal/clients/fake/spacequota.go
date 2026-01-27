@@ -69,7 +69,7 @@ func (s *SpaceQuota) SetGUID(guid string) *SpaceQuota {
 	return s
 }
 
-// SetRelationships assigns Space relationships
+// SetOrgGUID assigns Space relationships
 func (s *SpaceQuota) SetOrgGUID(guid string) *SpaceQuota {
 	s.Relationships = resource.SpaceQuotaRelationships{
 		Organization: &resource.ToOneRelationship{

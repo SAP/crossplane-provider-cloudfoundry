@@ -6,7 +6,7 @@ import (
 	"slices"
 )
 
-type CacheWithGUID[T ResourceWithGuid] interface {
+type CacheWithGUID[T ResourceWithGUID] interface {
 	GetByGUID(guid string) T
 	GetGUIDs() []string
 	Len() int
@@ -14,13 +14,13 @@ type CacheWithGUID[T ResourceWithGuid] interface {
 	AllByGUIDs() iter.Seq2[string, T]
 }
 
-type cacheWithGUID[T ResourceWithGuid] struct {
+type cacheWithGUID[T ResourceWithGUID] struct {
 	guidIndex map[string]T
 }
 
-var _ CacheWithGUID[dummyResourceWithGuid] = &cacheWithGUID[dummyResourceWithGuid]{}
+var _ CacheWithGUID[dummyResourceWithGUID] = &cacheWithGUID[dummyResourceWithGUID]{}
 
-func NewWithGUID[T ResourceWithGuid]() CacheWithGUID[T] {
+func NewWithGUID[T ResourceWithGUID]() CacheWithGUID[T] {
 	return &cacheWithGUID[T]{
 		guidIndex: make(map[string]T),
 	}

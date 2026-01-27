@@ -119,15 +119,15 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errNotOrgKind)
 	}
 
-	external_name := meta.GetExternalName(cr)
+	externalName := meta.GetExternalName(cr)
 
 	name := cr.Spec.ForProvider.Name
 	// if name is not set, use the external name for backward compatibility
 	if name == "" {
-		name = external_name
+		name = externalName
 	}
 
-	o, err := org.GetByIDOrName(ctx, c.client, external_name, name)
+	o, err := org.GetByIDOrName(ctx, c.client, externalName, name)
 
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
@@ -140,7 +140,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	org.LateInitialize(&cr.Spec.ForProvider, o)
 
 	// set the external name to the GUID
-	if external_name != o.GUID {
+	if externalName != o.GUID {
 		meta.SetExternalName(cr, o.GUID)
 		if err := c.kube.Update(ctx, cr); err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, errGet)

@@ -276,7 +276,7 @@ type external struct {
 }
 
 // Observe generates observation for a space
-func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
+func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
 	cr, ok := mg.(*v1alpha1.SpaceQuota)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
@@ -286,7 +286,7 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, nil
 	}
 
-	resp, err := e.client.Get(ctx, meta.GetExternalName(cr))
+	resp, err := c.client.Get(ctx, meta.GetExternalName(cr))
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
@@ -300,7 +300,7 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	upToDate := true
 	if !meta.WasDeleted(cr) { // There is no need to run isUpToDate if the resource is deleted
-		upToDate, err = e.isUpToDate(ctx, cr, resp)
+		upToDate, err = c.isUpToDate(ctx, cr, resp)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, "isUpToDate check failed")
 		}
