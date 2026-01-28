@@ -197,7 +197,7 @@ func TestUpdateObservation(t *testing.T) {
 					Resource: v1alpha1.Resource{
 						GUID: testGUID,
 					},
-					RouteServiceUrl: testRouteServiceURL,
+					RouteServiceURL: testRouteServiceURL,
 					Route:           testRouteGUID,
 					ServiceInstance: testServiceInstance,
 					LastOperation: &v1alpha1.LastOperation{
@@ -244,7 +244,7 @@ func TestUpdateObservation(t *testing.T) {
 					Resource: v1alpha1.Resource{
 						GUID: testGUID,
 					},
-					RouteServiceUrl: testRouteServiceURL,
+					RouteServiceURL: testRouteServiceURL,
 					Route:           testRouteGUID,
 					ServiceInstance: testServiceInstance,
 					LastOperation: &v1alpha1.LastOperation{
@@ -274,9 +274,9 @@ func TestUpdateObservation(t *testing.T) {
 				t.Errorf("UpdateObservation(...): LastOperation.State mismatch, want %s, got %s",
 					tc.want.observation.LastOperation.State, observation.LastOperation.State)
 			}
-			if observation.RouteServiceUrl != tc.want.observation.RouteServiceUrl {
+			if observation.RouteServiceURL != tc.want.observation.RouteServiceURL {
 				t.Errorf("UpdateObservation(...): RouteServiceUrl mismatch, want %s, got %s",
-					tc.want.observation.RouteServiceUrl, observation.RouteServiceUrl)
+					tc.want.observation.RouteServiceURL, observation.RouteServiceURL)
 			}
 			if observation.Route != tc.want.observation.Route {
 				t.Errorf("UpdateObservation(...): Route GUID mismatch, want %s, got %s",

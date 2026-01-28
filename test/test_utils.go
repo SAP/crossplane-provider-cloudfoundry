@@ -34,9 +34,9 @@ const (
 )
 
 var (
-	UUT_IMAGES_KEY     = "UUT_IMAGES"
-	UUT_CONFIG_KEY     = "crossplane/provider-cloudfoundry"
-	UUT_CONTROLLER_KEY = "crossplane/provider-cloudfoundry-controller"
+	UutImagesKey     = "UUT_IMAGES"
+	UutConfigKey     = "crossplane/provider-cloudfoundry"
+	UutControllerKey = "crossplane/provider-cloudfoundry-controller"
 )
 
 type mockList struct {
@@ -90,18 +90,18 @@ func GetCFCredentialsOrPanic() map[string][]byte {
 	}
 }
 
-func GetImagesFromJsonOrPanic(imagesJson string) (string, string) {
+func GetImagesFromJSONOrPanic(imagesJSON string) (string, string) {
 
 	imageMap := map[string]string{}
 
-	err := json.Unmarshal([]byte(imagesJson), &imageMap)
+	err := json.Unmarshal([]byte(imagesJSON), &imageMap)
 
 	if err != nil {
 		panic(errors.Wrap(err, "failed to unmarshal json from UUT_IMAGE"))
 	}
 
-	uutConfig := imageMap[UUT_CONFIG_KEY]
-	uutController := imageMap[UUT_CONTROLLER_KEY]
+	uutConfig := imageMap[UutConfigKey]
+	uutController := imageMap[UutControllerKey]
 
 	return uutConfig, uutController
 }

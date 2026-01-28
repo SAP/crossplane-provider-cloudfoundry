@@ -6,9 +6,7 @@ import (
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/runtime"
 
@@ -38,7 +36,7 @@ func NewClient(cfv3 *client.Client) ServiceRouteBinding {
 	}{cfv3.ServiceRouteBindings, cfv3.Jobs}
 }
 
-func GetByID(ctx context.Context, srbClient ServiceRouteBinding, guid string, forProvider v1alpha1.ServiceRouteBindingParameters) (*cfresource.ServiceRouteBinding, error) {
+func GetByID(ctx context.Context, srbClient ServiceRouteBinding, guid string, forProvider v1alpha1.ServiceRouteBindingParameters) (*resource.ServiceRouteBinding, error) {
 
 	if err := uuid.Validate(guid); err != nil {
 		return nil, err
@@ -63,8 +61,8 @@ func Create(ctx context.Context, srbClient ServiceRouteBinding, forProvider v1al
 	return srbClient.Single(ctx, createToListOptions(opt))
 }
 
-func newCreateOption(forProvider v1alpha1.ServiceRouteBindingParameters, parametersFromSecret runtime.RawExtension) *cfresource.ServiceRouteBindingCreate {
-	creationPayload := cfresource.NewServiceRouteBindingCreate(forProvider.Route, forProvider.ServiceInstance)
+func newCreateOption(forProvider v1alpha1.ServiceRouteBindingParameters, parametersFromSecret runtime.RawExtension) *resource.ServiceRouteBindingCreate {
+	creationPayload := resource.NewServiceRouteBindingCreate(forProvider.Route, forProvider.ServiceInstance)
 
 	if forProvider.Parameters.Raw != nil {
 		creationPayload.Parameters = (*json.RawMessage)(&forProvider.Parameters.Raw)
@@ -74,19 +72,19 @@ func newCreateOption(forProvider v1alpha1.ServiceRouteBindingParameters, paramet
 	return creationPayload
 }
 
-func createToListOptions(create *cfresource.ServiceRouteBindingCreate) *client.ServiceRouteBindingListOptions {
-	opts := cfclient.NewServiceRouteBindingListOptions()
+func createToListOptions(create *resource.ServiceRouteBindingCreate) *client.ServiceRouteBindingListOptions {
+	opts := client.NewServiceRouteBindingListOptions()
 	opts.RouteGUIDs.EqualTo(create.Relationships.Route.Data.GUID)
 	opts.ServiceInstanceGUIDs.EqualTo(create.Relationships.ServiceInstance.Data.GUID)
 	return opts
 }
 
 func Update(ctx context.Context, srbClient ServiceRouteBinding, guid string, forProvider v1alpha1.ServiceRouteBindingParameters) (*resource.ServiceRouteBinding, error) {
-	update := &cfresource.ServiceRouteBindingUpdate{}
+	update := &resource.ServiceRouteBindingUpdate{}
 
 	// ServiceRouteBindings only support updating metadata (labels and annotations)
 	if forProvider.Labels != nil || forProvider.Annotations != nil {
-		update.Metadata = &cfresource.Metadata{
+		update.Metadata = &resource.Metadata{
 			Labels:      forProvider.Labels,
 			Annotations: forProvider.Annotations,
 		}
@@ -133,7 +131,7 @@ func UpdateObservation(observation *v1alpha1.ServiceRouteBindingObservation, r *
 	if r.Relationships.Route.Data != nil {
 		observation.Route = r.Relationships.Route.Data.GUID
 	}
-	observation.RouteServiceUrl = r.RouteServiceURL
+	observation.RouteServiceURL = r.RouteServiceURL
 
 	if externalParameters != nil {
 		observation.Parameters = *externalParameters
@@ -141,7 +139,7 @@ func UpdateObservation(observation *v1alpha1.ServiceRouteBindingObservation, r *
 }
 
 // builds links map from CF links
-func buildLinks(cfLinks cfresource.Links) v1alpha1.Links {
+func buildLinks(cfLinks resource.Links) v1alpha1.Links {
 	if cfLinks == nil {
 		return v1alpha1.Links{}
 	}
