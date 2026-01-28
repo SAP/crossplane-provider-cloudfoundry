@@ -24,7 +24,6 @@ type ServiceCredentialBindingObservation struct {
 // +kubebuilder:validation:XValidation:rule="!(has(self.type) && self.type == 'app') || !has(self.rotation)",message="rotation cannot be enabled when type is app"
 // +kubebuilder:validation:XValidation:rule="!(has(self.type) && self.type == 'key') || has(self.name)",message="name is required when type is key"
 // +kubebuilder:validation:XValidation:rule="!(has(self.type) && self.type == 'app') || has(self.app) || has(self.appRef) || has(self.appSelector)",message="app, appRef, or appSelector is required when type is app"
-
 type ServiceCredentialBindingParameters struct {
 	// (String) The type of the service credential binding in Cloud Foundry. Either "key" or "app".
 	// +kubebuilder:validation:Required
@@ -92,7 +91,6 @@ type ServiceCredentialBindingSpec struct {
 }
 
 // +kubebuilder:validation:XValidation:rule="!has(self.ttl) || (has(self.frequency) && duration(self.ttl) >= duration(self.frequency))",message="ttl must be greater than or equal to frequency"
-
 type RotationParameters struct {
 	// Frequency defines how often the active key should be rotated.
 	// +kubebuilder:validation:Required
@@ -152,7 +150,7 @@ func init() {
 	SchemeBuilder.Register(&ServiceCredentialBinding{}, &ServiceCredentialBindingList{})
 }
 
-// GetID implements Referenceable interface
+// Implements Referenceable interface
 func (s *ServiceCredentialBinding) GetID() string {
 	return s.Status.AtProvider.GUID
 }

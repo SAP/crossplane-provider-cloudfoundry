@@ -95,7 +95,7 @@ func Setup(mgr ctrl.Manager, controllerOptions controller.Options) error {
 }
 
 // Disconnect implements the managed.ExternalClient interface
-func (e *externalClient) Disconnect(ctx context.Context) error {
+func (c *externalClient) Disconnect(ctx context.Context) error {
 	// No cleanup needed for Cloud Foundry client
 	return nil
 }
@@ -118,14 +118,14 @@ func (e *externalClient) Observe(ctx context.Context, res resource.Managed) (man
 		return managed.ExternalObservation{}, errors.New(errNotOrgQuota)
 	}
 
-	externalName := meta.GetExternalName(managedOrgQuota)
+	external_name := meta.GetExternalName(managedOrgQuota)
 	// If external name is not set, use metadata.name as default
-	if externalName == "" {
-		externalName = managedOrgQuota.GetName()
+	if external_name == "" {
+		external_name = managedOrgQuota.GetName()
 	}
 
 	// get by external name
-	externalOrgQuota, err := e.cloudFoundryClient.Get(ctx, externalName)
+	externalOrgQuota, err := e.cloudFoundryClient.Get(ctx, external_name)
 
 	// not found or error
 	if err != nil {

@@ -102,7 +102,6 @@ func (c *Client) Delete(ctx context.Context, guid string) error {
 func FormatListOption(forProvider v1alpha1.RouteParameters) (*client.RouteListOptions, error) {
 
 	if forProvider.Space == nil || forProvider.Domain == nil {
-		// nolint:staticcheck
 		return nil, fmt.Errorf("Space and Domain are required")
 	}
 	opts := client.NewRouteListOptions()
@@ -127,7 +126,6 @@ func FormatListOption(forProvider v1alpha1.RouteParameters) (*client.RouteListOp
 // FormatCreateOption generates the RouteCreate from the forProvider spec
 func FormatCreateOption(forProvider v1alpha1.RouteParameters) (*resource.RouteCreate, error) {
 	if forProvider.Space == nil || forProvider.Domain == nil {
-		// nolint:staticcheck
 		return nil, fmt.Errorf("Space and Domain are required")
 	}
 

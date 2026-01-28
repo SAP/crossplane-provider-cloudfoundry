@@ -9,6 +9,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 )
 
 type AppObservation struct {
@@ -106,7 +107,7 @@ type DockerConfiguration struct {
 
 	// (Attributes) Defines login credentials for private docker repositories
 	// +kubebuilder:validation:Optional
-	Credentials *v1.SecretReference `json:"credentialsSecretRef,omitempty"`
+	Credentials *xpv1.SecretReference `json:"credentialsSecretRef,omitempty"`
 }
 
 // RouteConfiguration defines the route for the application
@@ -283,7 +284,6 @@ type AppList struct {
 }
 
 // Repository type metadata.
-// nolint:staticcheck
 var (
 	App_Kind             = "App"
 	App_GroupKind        = schema.GroupKind{Group: CRDGroup, Kind: App_Kind}.String()
@@ -295,12 +295,12 @@ func init() {
 	SchemeBuilder.Register(&App{}, &AppList{})
 }
 
-// GetID implements Referenceable interface
+// implement Referenceable interface
 func (s *App) GetID() string {
 	return s.Status.AtProvider.GUID
 }
 
-// GetSpaceRef implements SpaceScoped interface
+// implement SpaceScoped interface
 func (s *App) GetSpaceRef() *SpaceReference {
 	return &s.Spec.ForProvider.SpaceReference
 }

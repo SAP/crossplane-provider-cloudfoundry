@@ -126,7 +126,7 @@ type external struct {
 }
 
 // Disconnect implements the managed.ExternalClient interface
-func (e *external) Disconnect(ctx context.Context) error {
+func (c *external) Disconnect(ctx context.Context) error {
 	// No cleanup needed for Cloud Foundry client
 	return nil
 }

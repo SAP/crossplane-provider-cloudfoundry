@@ -21,7 +21,7 @@ var (
 )
 
 var (
-	apiURLParam = configparam.String("apiUrl", "URL of the Cloud Foundry API").
+	apiUrlParam = configparam.String("apiUrl", "URL of the Cloud Foundry API").
 			WithShortName("a").
 			WithFlagName("apiUrl").
 			WithEnvVarName("API_URL").
@@ -57,7 +57,7 @@ func main() {
 	cli.Configuration.ObservedSystem = observedSystem
 	export.SetCommand(exportCmd)
 	export.AddConfigParams(
-		apiURLParam,
+		apiUrlParam,
 		usernameParam,
 		passwordParam,
 		useCfLoginMethod,

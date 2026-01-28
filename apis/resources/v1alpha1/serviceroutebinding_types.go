@@ -25,7 +25,6 @@ import (
 // +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.forProvider.serviceInstance) || !has(self.spec.forProvider.serviceInstance) || oldSelf.spec.forProvider.serviceInstance.size() == 0 || oldSelf.spec.forProvider.serviceInstance == self.spec.forProvider.serviceInstance",message="ServiceRouteBinding is immutable: serviceInstance GUID cannot be changed once set"
 // +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.forProvider.parameters) || !has(self.spec.forProvider.parameters) || oldSelf.spec.forProvider.parameters == self.spec.forProvider.parameters",message="ServiceRouteBinding is immutable: parameters cannot be changed once set"
 // +kubebuilder:validation:XValidation:rule="!has(oldSelf.spec.forProvider.paramsSecretRef) || !has(self.spec.forProvider.paramsSecretRef) || oldSelf.spec.forProvider.paramsSecretRef == self.spec.forProvider.paramsSecretRef",message="ServiceRouteBinding is immutable: paramsSecretRef cannot be changed once set"
-
 type ServiceRouteBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -33,8 +32,8 @@ type ServiceRouteBinding struct {
 	Status            ServiceRouteBindingStatus `json:"status,omitempty"`
 }
 
-// ServiceRouteBindingList contains a list of ServiceRouteBindings
 // +kubebuilder:object:root=true
+// ServiceRouteBindingList contains a list of ServiceRouteBindings
 type ServiceRouteBindingList struct {
 	metav1.TypeMeta `json:",inline"`
 	metav1.ListMeta `json:"metadata,omitempty"`
@@ -61,7 +60,7 @@ type ServiceRouteBindingObservation struct {
 	Resource `json:",inline"`
 
 	// (String) The URL of the route service if one is associated with the service route binding.
-	RouteServiceURL string `json:"routeServiceUrl"`
+	RouteServiceUrl string `json:"routeServiceUrl"`
 
 	LastOperation *LastOperation `json:"lastOperation,omitempty"`
 
@@ -105,7 +104,7 @@ type Link struct {
 	Method *string `json:"method,omitempty"`
 }
 
-// Links ontains the links related to the ServiceRouteBinding, ServiceInstance, Parameter and Route
+// Contains the links related to the ServiceRouteBinding, ServiceInstance, Parameter and Route
 type Links map[string]Link
 
 // ServiceRouteBindingSpec defines the desired state of ServiceRouteBinding
@@ -121,7 +120,6 @@ type ServiceRouteBindingStatus struct {
 }
 
 // Repository type metadata for registration.
-// nolint:staticcheck
 var (
 	ServiceRouteBinding_Kind             = "ServiceRouteBinding"
 	ServiceRouteBinding_GroupKind        = schema.GroupKind{Group: CRDGroup, Kind: ServiceRouteBinding_Kind}.String()

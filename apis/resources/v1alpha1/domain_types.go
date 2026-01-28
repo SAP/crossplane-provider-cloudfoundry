@@ -128,7 +128,6 @@ type DomainList struct {
 }
 
 // Repository type metadata.
-// nolint:staticcheck
 var (
 	Domain_Kind             = "Domain"
 	Domain_GroupKind        = schema.GroupKind{Group: CRDGroup, Kind: Domain_Kind}.String()

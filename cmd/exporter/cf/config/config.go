@@ -9,12 +9,12 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 )
 
-func Get(ctx context.Context, useCfLoginMethod *configparam.BoolParam, apiURLParam, usernameParam, passwordParam *configparam.StringParam) (*config.Config, error) {
+func Get(ctx context.Context, useCfLoginMethod *configparam.BoolParam, apiUrlParam, usernameParam, passwordParam *configparam.StringParam) (*config.Config, error) {
 	if useCfLoginMethod.Value() {
 		slog.Debug("log in to CF using the CF login method")
 		return config.NewFromCFHome()
 	} else {
-		apiURL, err := apiURLParam.ValueOrAsk(ctx)
+		apiUrl, err := apiUrlParam.ValueOrAsk(ctx)
 		if err != nil {
 			return nil, err
 		}
@@ -26,7 +26,7 @@ func Get(ctx context.Context, useCfLoginMethod *configparam.BoolParam, apiURLPar
 		if err != nil {
 			return nil, err
 		}
-		slog.Debug("log in to CF using credentials", "url", apiURL, "username", username)
-		return config.New(apiURL, config.UserPassword(username, password))
+		slog.Debug("log in to CF using credentials", "url", apiUrl, "username", username)
+		return config.New(apiUrl, config.UserPassword(username, password))
 	}
 }

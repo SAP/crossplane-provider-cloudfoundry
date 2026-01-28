@@ -22,7 +22,7 @@ var (
 	errBoom = errors.New("boom")
 	name    = "my-space"
 	guid    = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
-	orgGUID = "3d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
+	orgGuid = "3d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 )
 
 type modifier func(*v1alpha1.Space)
@@ -194,11 +194,11 @@ func TestObserve(t *testing.T) {
 		},
 		"Should adopt and update external-name": {
 			args: args{
-				mg: fakeSpace(withName("existing-space"), withOrg(orgGUID)),
+				mg: fakeSpace(withName("existing-space"), withOrg(orgGuid)),
 			},
 			want: want{
 				mg: fakeSpace(withName("existing-space"),
-					withExternalName(guid), withAllowSSH(false), withOrg(orgGUID),
+					withExternalName(guid), withAllowSSH(false), withOrg(orgGuid),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
@@ -208,7 +208,7 @@ func TestObserve(t *testing.T) {
 				f := &fake.MockFeature{}
 
 				m.On("Single").Return(
-					&fake.NewSpace().SetName("existing-space").SetGUID(guid).SetRelationships(orgGUID).Space,
+					&fake.NewSpace().SetName("existing-space").SetGUID(guid).SetRelationships(orgGuid).Space,
 					nil,
 				)
 				f.On("IsSSHEnabled").Return(
@@ -223,7 +223,7 @@ func TestObserve(t *testing.T) {
 		"Successful": {
 			args: args{
 				mg: fakeSpace(
-					withExternalName(guid), withName(name), withOrg(orgGUID),
+					withExternalName(guid), withName(name), withOrg(orgGuid),
 				),
 			},
 			want: want{
@@ -231,7 +231,7 @@ func TestObserve(t *testing.T) {
 					withExternalName(guid),
 					withName(name),
 					withAllowSSH(false),
-					withOrg(orgGUID),
+					withOrg(orgGuid),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
 				err: nil,
@@ -241,7 +241,7 @@ func TestObserve(t *testing.T) {
 				f := &fake.MockFeature{}
 
 				m.On("Get", guid).Return(
-					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGUID).Space,
+					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).Space,
 					nil,
 				)
 
@@ -616,7 +616,7 @@ func TestInitialize(t *testing.T) {
 		"SuccessfulWithOrgGUID": {
 			args: args{
 				mg: fakeSpace(
-					withExternalName(guid), withName(name), withOrg(orgGUID),
+					withExternalName(guid), withName(name), withOrg(orgGuid),
 				),
 			},
 			want: want{
@@ -624,7 +624,7 @@ func TestInitialize(t *testing.T) {
 					withExternalName(guid),
 					withName(name),
 					withAllowSSH(false),
-					withOrg(orgGUID),
+					withOrg(orgGuid),
 				),
 				err: nil,
 			},

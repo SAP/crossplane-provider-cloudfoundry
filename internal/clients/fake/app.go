@@ -25,7 +25,7 @@ func (m *MockApp) Single(ctx context.Context, opt *client.AppListOptions) (*reso
 	return args.Get(0).(*resource.App), args.Error(1)
 }
 
-// Create mocks App.Create
+// CreateManaged mocks App.Create
 func (m *MockApp) Create(ctx context.Context, opt *resource.AppCreate) (*resource.App, error) {
 	args := m.Called()
 	return args.Get(0).(*resource.App), args.Error(1)

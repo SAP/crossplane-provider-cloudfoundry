@@ -4,15 +4,15 @@ import (
 	"github.com/SAP/xp-clifford/yaml"
 )
 
-type ResourceWithGUID interface {
+type ResourceWithGuid interface {
 	GetGUID() string
 }
 
-type dummyResourceWithGUID struct{}
+type dummyResourceWithGuid struct{}
 
-var _ ResourceWithGUID = dummyResourceWithGUID{}
+var _ ResourceWithGuid = dummyResourceWithGuid{}
 
-func (r dummyResourceWithGUID) GetGUID() string {
+func (r dummyResourceWithGuid) GetGUID() string {
 	return "dummyGUID"
 }
 
@@ -29,13 +29,13 @@ func (r dummyResourceWithName) GetName() string {
 }
 
 type ResourceWithGUIDAndName interface {
-	ResourceWithGUID
+	ResourceWithGuid
 	ResourceWithName
 	yaml.CommentedYAML
 }
 
 type dummyResourceWithGUIDAndName struct {
-	dummyResourceWithGUID
+	dummyResourceWithGuid
 	dummyResourceWithName
 	*yaml.ResourceWithComment
 }

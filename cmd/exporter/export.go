@@ -13,7 +13,7 @@ import (
 )
 
 func exportCmd(ctx context.Context, evHandler export.EventHandler) error {
-	cfConfig, err := config.Get(ctx, useCfLoginMethod, apiURLParam, usernameParam, passwordParam)
+	cfConfig, err := config.Get(ctx, useCfLoginMethod, apiUrlParam, usernameParam, passwordParam)
 	if err != nil {
 		return err
 	}

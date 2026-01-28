@@ -35,7 +35,7 @@ type SCBKeyRotator struct {
 	SCBClient ServiceCredentialBinding
 }
 
-func (c *SCBKeyRotator) RetireBinding(cr *v1alpha1.ServiceCredentialBinding, serviceBinding *cfresource.ServiceCredentialBinding) bool {
+func (r *SCBKeyRotator) RetireBinding(cr *v1alpha1.ServiceCredentialBinding, serviceBinding *cfresource.ServiceCredentialBinding) bool {
 	forceRotation := false
 	if cr.ObjectMeta.Annotations != nil {
 		_, forceRotation = cr.ObjectMeta.Annotations[ForceRotationKey]
@@ -63,7 +63,7 @@ func (c *SCBKeyRotator) RetireBinding(cr *v1alpha1.ServiceCredentialBinding, ser
 	return false
 }
 
-func (c *SCBKeyRotator) HasExpiredKeys(cr *v1alpha1.ServiceCredentialBinding) bool {
+func (r *SCBKeyRotator) HasExpiredKeys(cr *v1alpha1.ServiceCredentialBinding) bool {
 	if cr.Status.AtProvider.RetiredKeys == nil || cr.Spec.ForProvider.Rotation == nil ||
 		cr.Spec.ForProvider.Rotation.TTL == nil {
 		return false
