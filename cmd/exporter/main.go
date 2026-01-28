@@ -9,9 +9,10 @@ import (
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/serviceinstance"
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/spacerole"
-	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli"
-	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
-	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+
+	"github.com/SAP/xp-clifford/cli"
+	"github.com/SAP/xp-clifford/cli/configparam"
+	"github.com/SAP/xp-clifford/cli/export"
 )
 
 var (

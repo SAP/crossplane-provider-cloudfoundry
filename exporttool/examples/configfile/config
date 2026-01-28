@@ -1,5 +1,0 @@
-protocol:
-  - HTTP
-  - FTP
-username: config-user
-bool: true

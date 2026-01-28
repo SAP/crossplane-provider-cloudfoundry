@@ -5,8 +5,8 @@ import (
 	"maps"
 	"slices"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/configparam"
-	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/cli/export"
+	"github.com/SAP/xp-clifford/cli/configparam"
+	"github.com/SAP/xp-clifford/cli/export"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 )
@@ -33,7 +33,7 @@ func RegisterKind(kind Kind) {
 	kinds[kind.KindName()] = kind
 }
 
-// ConfigParams() function returns the configuration parameters of all
+// ConfigParams function returns the configuration parameters of all
 // registered resource kinds.
 func ConfigParams() []configparam.ConfigParam {
 	result := make([]configparam.ConfigParam, 0, len(kinds))

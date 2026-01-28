@@ -8,10 +8,10 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
-	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/erratt"
-	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/parsan"
-	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/yaml"
 
+	"github.com/SAP/xp-clifford/erratt"
+	"github.com/SAP/xp-clifford/parsan"
+	"github.com/SAP/xp-clifford/yaml"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 )

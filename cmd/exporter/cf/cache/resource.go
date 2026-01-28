@@ -1,7 +1,7 @@
 package cache
 
 import (
-	"github.com/SAP/crossplane-provider-cloudfoundry/exporttool/yaml"
+	"github.com/SAP/xp-clifford/yaml"
 )
 
 type ResourceWithGuid interface {
