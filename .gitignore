@@ -20,5 +20,3 @@ secrets.env
 test/upgrade/logs/
 test/upgrade/env.txt
 test/upgrade/upgrade.test
-/internal/exporttool/examples/configparams/config.yaml
-/internal/exporttool/examples/exportresource/output.yaml
