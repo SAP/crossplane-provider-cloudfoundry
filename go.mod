@@ -3,7 +3,7 @@ module github.com/SAP/crossplane-provider-cloudfoundry
 go 1.24.10
 
 require (
-	github.com/SAP/xp-clifford v0.0.0-20260130084859-e2612ffad248
+	github.com/SAP/xp-clifford v0.0.0-20260130102515-0e8ae8f5859b
 	github.com/cloudfoundry/go-cfclient/v3 v3.0.0-alpha.12
 	github.com/crossplane-contrib/xp-testing v1.9.0
 	github.com/crossplane/crossplane-runtime v1.20.0

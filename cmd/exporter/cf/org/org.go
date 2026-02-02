@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/guidname"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
 
 	"github.com/SAP/xp-clifford/cli/configparam"
 	"github.com/SAP/xp-clifford/cli/export"
 	"github.com/SAP/xp-clifford/erratt"
+	"github.com/SAP/xp-clifford/mkcontainer"
 	"github.com/SAP/xp-clifford/parsan"
 	"github.com/SAP/xp-clifford/yaml"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	c     cache.CacheWithGUIDAndName[*res]
+	c     mkcontainer.Container
 	param = configparam.StringSlice("organization", "Filter for Cloud Foundry organizations").
 		WithFlagName("org")
 )
@@ -36,6 +36,11 @@ type res struct {
 	*resource.Organization
 	*yaml.ResourceWithComment
 }
+
+var (
+	_ mkcontainer.ItemWithGUID = &res{}
+	_ mkcontainer.ItemWithName = &res{}
+)
 
 func (r *res) GetGUID() string {
 	return r.GUID
@@ -67,17 +72,17 @@ func (o org) Export(ctx context.Context, cfClient *client.Client, evHandler expo
 	if err != nil {
 		return err
 	}
-	if orgs.Len() == 0 {
+	if orgs.IsEmpty() {
 		evHandler.Warn(erratt.New("no orgs found", "orgs", param.Value()))
 	} else {
 		for _, org := range orgs.AllByGUIDs() {
-			evHandler.Resource(convertOrgResource(org))
+			evHandler.Resource(convertOrgResource(org.(*res)))
 		}
 	}
 	return nil
 }
 
-func Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndName[*res], error) {
+func Get(ctx context.Context, cfClient *client.Client) (mkcontainer.Container, error) {
 	if c != nil {
 		return c, nil
 	}
@@ -103,8 +108,8 @@ func Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndNa
 	if err != nil {
 		return nil, err
 	}
-	c = cache.NewWithGUIDAndName[*res]()
-	c.StoreWithGUIDAndName(orgs...)
+	c = mkcontainer.New()
+	c.Store(orgs...)
 	slog.Debug("orgs collected", "orgs", c.GetNames())
 	return c, nil
 }
@@ -122,7 +127,7 @@ func ResolveReference(ctx context.Context, cfClient *client.Client, orgRef *v1al
 		return erratt.New("space reference not found", "GUID", *orgRef.Org)
 	}
 	orgRef.OrgRef = &v1.Reference{
-		Name: org.Name,
+		Name: org.(mkcontainer.ItemWithName).GetName(),
 	}
 	orgRef.Org = nil
 	return nil
@@ -136,13 +141,13 @@ func getAllNamesFn(ctx context.Context, cfClient *client.Client) func() ([]strin
 		}
 		names := make([]string, len(resources))
 		for i, res := range resources {
-			names[i] = guidname.NewName(res.GUID, res.Name).String()
+			names[i] = guidname.NewName(res).String()
 		}
 		return names, nil
 	}
 }
 
-func getAll(ctx context.Context, cfClient *client.Client, orgNames []string) ([]*res, error) {
+func getAll(ctx context.Context, cfClient *client.Client, orgNames []string) ([]mkcontainer.Item, error) {
 	var nameRxs []*regexp.Regexp
 
 	if len(orgNames) > 0 {
@@ -163,7 +168,7 @@ func getAll(ctx context.Context, cfClient *client.Client, orgNames []string) ([]
 		return nil, err
 	}
 
-	var results []*res
+	var results []mkcontainer.Item
 	for _, org := range orgs {
 		for _, nameRx := range nameRxs {
 			if nameRx.MatchString(org.Name) {

@@ -7,7 +7,6 @@ import (
 	"regexp"
 	"time"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/guidname"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
@@ -16,6 +15,7 @@ import (
 	"github.com/SAP/xp-clifford/cli/configparam"
 	"github.com/SAP/xp-clifford/cli/export"
 	"github.com/SAP/xp-clifford/erratt"
+	"github.com/SAP/xp-clifford/mkcontainer"
 	"github.com/SAP/xp-clifford/parsan"
 	"github.com/SAP/xp-clifford/yaml"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	c     cache.CacheWithGUIDAndName[*res]
+	c     mkcontainer.Container
 	param = configparam.StringSlice("serviceinstance", "Filter for Cloud Foundry service instances").
 		WithFlagName("serviceinstance")
 )
@@ -72,20 +72,20 @@ func (si serviceinstance) Export(ctx context.Context, cfClient *client.Client, e
 	if err != nil {
 		return err
 	}
-	if serviceInstances.Len() == 0 {
+	if serviceInstances.IsEmpty() {
 		evHandler.Warn(erratt.New("no serviceinstance found", "serviceinstances", param.Value()))
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 	for _, sInstance := range serviceInstances.AllByGUIDs() {
-		slog.Debug("exporting serviceinstance", "name", sInstance.ServiceInstance.Name)
-		evHandler.Resource(convertServiceInstanceResource(ctx, cfClient, sInstance, evHandler, resolveReferences))
+		slog.Debug("exporting serviceinstance", "name", sInstance.(*res).ServiceInstance.Name)
+		evHandler.Resource(convertServiceInstanceResource(ctx, cfClient, sInstance.(*res), evHandler, resolveReferences))
 	}
 	return nil
 }
 
-func Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndName[*res], error) {
+func Get(ctx context.Context, cfClient *client.Client) (mkcontainer.Container, error) {
 	if c != nil {
 		return c, nil
 	}
@@ -127,8 +127,8 @@ func Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndNa
 	if err != nil {
 		return nil, err
 	}
-	c = cache.NewWithGUIDAndName[*res]()
-	c.StoreWithGUIDAndName(serviceInstances...)
+	c = mkcontainer.New()
+	c.Store(serviceInstances...)
 	slog.Debug("serviceinstances collected", "serviceinstances", c.GetNames())
 	return c, nil
 }
@@ -141,13 +141,13 @@ func getAllNamesFn(ctx context.Context, cfClient *client.Client, orgGuids, space
 		}
 		names := make([]string, len(resources))
 		for i, res := range resources {
-			names[i] = guidname.NewName(res.GUID, res.Name).String()
+			names[i] = guidname.NewName(res).String()
 		}
 		return names, nil
 	}
 }
 
-func getAll(ctx context.Context, cfClient *client.Client, orgGuids, spaceGuids, serviceInstanceNames []string) ([]*res, error) {
+func getAll(ctx context.Context, cfClient *client.Client, orgGuids, spaceGuids, serviceInstanceNames []string) ([]mkcontainer.Item, error) {
 	var nameRxs []*regexp.Regexp
 
 	if len(serviceInstanceNames) > 0 {
@@ -175,7 +175,7 @@ func getAll(ctx context.Context, cfClient *client.Client, orgGuids, spaceGuids, 
 		return nil, err
 	}
 
-	var results []*res
+	var results []mkcontainer.Item
 	for _, serviceInstance := range serviceInstances {
 		for _, nameRx := range nameRxs {
 			if nameRx.MatchString(serviceInstance.Name) {
