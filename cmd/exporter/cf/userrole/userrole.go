@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
 
 	"github.com/SAP/xp-clifford/erratt"
+	"github.com/SAP/xp-clifford/mkcontainer"
 	"github.com/SAP/xp-clifford/parsan"
 	"github.com/SAP/xp-clifford/yaml"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -17,8 +17,8 @@ import (
 )
 
 var (
-	roleCache cache.CacheWithGUIDAndName[*Role]
-	userCache cache.CacheWithGUIDAndName[*user]
+	roleCache mkcontainer.Container
+	userCache mkcontainer.Container
 )
 
 const defaultUserName = "undefined username"
@@ -27,6 +27,11 @@ type user struct {
 	*resource.User
 	*yaml.ResourceWithComment
 }
+
+var (
+	_ mkcontainer.ItemWithGUID = &user{}
+	_ mkcontainer.ItemWithName = &user{}
+)
 
 func (u *user) GetGUID() string {
 	return u.GUID
@@ -44,6 +49,11 @@ type Role struct {
 	*resource.User
 	*yaml.ResourceWithComment
 }
+
+var (
+	_ mkcontainer.ItemWithGUID = &Role{}
+	_ mkcontainer.ItemWithName = &Role{}
+)
 
 func (r *Role) GetGUID() string {
 	return r.Role.GUID
@@ -63,7 +73,7 @@ func (r *Role) GetName() string {
 	return name
 }
 
-func GetOrgRoles(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndName[*Role], cache.CacheWithGUID[*user], error) {
+func GetOrgRoles(ctx context.Context, cfClient *client.Client) (mkcontainer.Container, mkcontainer.Container, error) {
 	if userCache != nil || roleCache != nil {
 		return roleCache, userCache, nil
 	}
@@ -79,14 +89,14 @@ func GetOrgRoles(ctx context.Context, cfClient *client.Client) (cache.CacheWithG
 	if err != nil {
 		return nil, nil, erratt.Errorf("cannot get roles and users: %w", err)
 	}
-	roleCache = cache.NewWithGUIDAndName[*Role]()
-	roleCache.StoreWithGUIDAndName(roles...)
-	userCache = cache.NewWithGUIDAndName[*user]()
-	userCache.StoreWithGUIDAndName(users...)
+	roleCache = mkcontainer.New()
+	userCache = mkcontainer.New()
+	roleCache.Store(roles...)
+	userCache.Store(users...)
 	return roleCache, userCache, nil
 }
 
-func GetSpaceRoles(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndName[*Role], cache.CacheWithGUID[*user], error) {
+func GetSpaceRoles(ctx context.Context, cfClient *client.Client) (mkcontainer.Container, mkcontainer.Container, error) {
 	if userCache != nil || roleCache != nil {
 		return roleCache, userCache, nil
 	}
@@ -108,14 +118,14 @@ func GetSpaceRoles(ctx context.Context, cfClient *client.Client) (cache.CacheWit
 	if err != nil {
 		return nil, nil, erratt.Errorf("cannot get roles and users: %w", err)
 	}
-	roleCache = cache.NewWithGUIDAndName[*Role]()
-	roleCache.StoreWithGUIDAndName(roles...)
-	userCache = cache.NewWithGUIDAndName[*user]()
-	userCache.StoreWithGUIDAndName(users...)
+	roleCache = mkcontainer.New()
+	userCache = mkcontainer.New()
+	roleCache.Store(roles...)
+	userCache.Store(users...)
 	return roleCache, userCache, nil
 }
 
-func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spaceGuids []string) ([]*Role, []*user, error) {
+func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spaceGuids []string) ([]mkcontainer.Item, []mkcontainer.Item, error) {
 	listOptions := client.NewRoleListOptions()
 	listOptions.OrganizationGUIDs.EqualTo(orgGuids...)
 	listOptions.SpaceGUIDs.EqualTo(spaceGuids...)
@@ -124,8 +134,8 @@ func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spa
 		return nil, nil, err
 	}
 
-	roleResults := make([]*Role, len(roles))
-	userResults := make([]*user, len(users))
+	roleResults := make([]mkcontainer.Item, len(roles))
+	userResults := make([]mkcontainer.Item, len(users))
 	userGUIDMap := map[string]*resource.User{}
 
 	for i, u := range users {

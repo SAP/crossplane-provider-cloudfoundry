@@ -37,11 +37,11 @@ func (om orgRole) Export(ctx context.Context, cfClient *client.Client, evHandler
 	if err != nil {
 		return err
 	}
-	if orgRoles.Len() == 0 {
+	if orgRoles.IsEmpty() {
 		evHandler.Warn(erratt.New("no orgrole found"))
 	} else {
 		for _, orgRole := range orgRoles.AllByGUIDs() {
-			evHandler.Resource(convertOrgRoleResource(ctx, cfClient, orgRole, evHandler, resolveReferences))
+			evHandler.Resource(convertOrgRoleResource(ctx, cfClient, orgRole.(*userrole.Role), evHandler, resolveReferences))
 		}
 	}
 	return nil

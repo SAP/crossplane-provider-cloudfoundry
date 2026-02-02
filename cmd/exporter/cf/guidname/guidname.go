@@ -5,6 +5,7 @@ import (
 	"regexp"
 
 	"github.com/SAP/xp-clifford/erratt"
+	"github.com/SAP/xp-clifford/mkcontainer"
 )
 
 type Name struct {
@@ -12,11 +13,16 @@ type Name struct {
 	GUID string
 }
 
-func NewName(guid, name string) *Name {
-	return &Name{
-		Name: name,
-		GUID: guid,
+func NewName(obj mkcontainer.Item) *Name {
+	n := &Name{}
+
+	if o, ok := obj.(mkcontainer.ItemWithGUID); ok {
+		n.GUID = o.GetGUID()
 	}
+	if o, ok := obj.(mkcontainer.ItemWithName); ok {
+		n.Name = o.GetName()
+	}
+	return n
 }
 
 func (n *Name) String() string {

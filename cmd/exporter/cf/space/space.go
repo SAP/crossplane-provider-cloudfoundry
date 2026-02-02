@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/cache"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/guidname"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
@@ -16,6 +15,7 @@ import (
 	"github.com/SAP/xp-clifford/cli/configparam"
 	"github.com/SAP/xp-clifford/cli/export"
 	"github.com/SAP/xp-clifford/erratt"
+	"github.com/SAP/xp-clifford/mkcontainer"
 	"github.com/SAP/xp-clifford/parsan"
 	"github.com/SAP/xp-clifford/yaml"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	c     cache.CacheWithGUIDAndName[*res]
+	c     mkcontainer.Container
 	param = configparam.StringSlice("space", "Filter for Cloud Foundry spaces").
 		WithFlagName("space")
 )
@@ -67,17 +67,17 @@ func (s space) Export(ctx context.Context, cfClient *client.Client, evHandler ex
 	if err != nil {
 		return err
 	}
-	if spaces.Len() == 0 {
+	if spaces.IsEmpty() {
 		evHandler.Warn(erratt.New("no space found", "spaces", param.Value()))
 	} else {
 		for _, space := range spaces.AllByGUIDs() {
-			evHandler.Resource(convertSpaceResource(ctx, cfClient, space, evHandler, resolveReferences))
+			evHandler.Resource(convertSpaceResource(ctx, cfClient, space.(*res), evHandler, resolveReferences))
 		}
 	}
 	return nil
 }
 
-func Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndName[*res], error) {
+func Get(ctx context.Context, cfClient *client.Client) (mkcontainer.Container, error) {
 	if c != nil {
 		return c, nil
 	}
@@ -107,8 +107,8 @@ func Get(ctx context.Context, cfClient *client.Client) (cache.CacheWithGUIDAndNa
 	if err != nil {
 		return nil, erratt.Errorf("cannot get spaces: %w", err)
 	}
-	c = cache.NewWithGUIDAndName[*res]()
-	c.StoreWithGUIDAndName(spaces...)
+	c = mkcontainer.New()
+	c.Store(spaces...)
 	slog.Debug("spaces collected", "spaces", c.GetNames())
 	return c, nil
 }
@@ -126,7 +126,7 @@ func ResolveReference(ctx context.Context, cfClient *client.Client, spaceRef *v1
 		return erratt.New("space reference not found", "GUID", *spaceRef.Space)
 	}
 	spaceRef.SpaceRef = &v1.Reference{
-		Name: space.Name,
+		Name: space.(mkcontainer.ItemWithName).GetName(),
 	}
 	spaceRef.Space = nil
 	return nil
@@ -140,13 +140,13 @@ func getAllNamesFn(ctx context.Context, cfClient *client.Client, orgGuids []stri
 		}
 		names := make([]string, len(resources))
 		for i, res := range resources {
-			names[i] = guidname.NewName(res.GUID, res.Name).String()
+			names[i] = guidname.NewName(res).String()
 		}
 		return names, nil
 	}
 }
 
-func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spaceNames []string) ([]*res, error) {
+func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spaceNames []string) ([]mkcontainer.Item, error) {
 	var nameRxs []*regexp.Regexp
 
 	if len(spaceNames) > 0 {
@@ -172,7 +172,7 @@ func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spa
 		return nil, err
 	}
 
-	var results []*res
+	var results []mkcontainer.Item
 	for _, space := range spaces {
 		for _, nameRx := range nameRxs {
 			if nameRx.MatchString(space.Name) {
