@@ -8,8 +8,8 @@ github.com/Masterminds/semver/v3 v3.4.0 h1:Zog+i5UMtVoCU8oKka5P7i9q9HgrJeGzI9SA1
 github.com/Masterminds/semver/v3 v3.4.0/go.mod h1:4V+yj/TJE1HU9XfppCwVMZq3I84lprf4nC11bSS5beM=
 github.com/Microsoft/go-winio v0.6.1 h1:9/kr64B9VUZrLm5YYwbGtUJnMgqWVOdUAXu6Migciow=
 github.com/Microsoft/go-winio v0.6.1/go.mod h1:LRdKpFKfdobln8UmuiYcKPot9D2v6svN5+sAH+4kjUM=
-github.com/SAP/xp-clifford v0.0.0-20260130102515-0e8ae8f5859b h1:KiCQIECQ7XgQtNsCc8e+0pVJRcNDP8FrUPZ7lwzKsXs=
-github.com/SAP/xp-clifford v0.0.0-20260130102515-0e8ae8f5859b/go.mod h1:Lqf+X8dX0Teg4Y9CJvsEpRYQn1B1KOfAA6HXU6dUOgg=
+github.com/SAP/xp-clifford v0.0.0-20260202115841-f2ef82b7144e h1:RXvWGonwppAxSMUpVQYQegKM3UtuDGx6XJxxOa8SCgA=
+github.com/SAP/xp-clifford v0.0.0-20260202115841-f2ef82b7144e/go.mod h1:Lqf+X8dX0Teg4Y9CJvsEpRYQn1B1KOfAA6HXU6dUOgg=
 github.com/alecthomas/assert/v2 v2.7.0 h1:QtqSACNS3tF7oasA8CU6A6sXZSBDqnm7RfpLl9bZqbE=
 github.com/alecthomas/assert/v2 v2.7.0/go.mod h1:Bze95FyfUr7x34QZrjL+XP+0qgp/zg8yS+TtBj1WA3k=
 github.com/alecthomas/chroma/v2 v2.14.0 h1:R3+wzpnUArGcQz7fCETQBzO5n9IMNi13iIs46aU4V9E=
