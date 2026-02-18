@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"regexp"
-	"testing"
 
 	"github.com/crossplane-contrib/xp-testing/pkg/envvar"
 	"github.com/crossplane-contrib/xp-testing/pkg/logging"
@@ -246,50 +245,13 @@ func resClient(cfg *envconf.Config) *res.Resources {
 	return r
 }
 
-// CustomAssessmentFunc is a function that performs custom validation
-// before or after a provider upgrade
-type CustomAssessmentFunc func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context
+// LoadUpgradePackages resolves provider packages for upgrade tests.
+// Returns: fromProviderPackage, toProviderPackage
+func LoadUpgradePackages(fromTag, toTag string, fromPackage, toPackage string) (string, string) {
+	// If using "local" tag, use the provided packages directly
+	// Otherwise construct from tag
+	fromProviderPackage := fromPackage
+	toProviderPackage := toPackage
 
-// CustomUpgradeTest encapsulates configuration for custom upgrade tests
-type CustomUpgradeTest struct {
-	name                  string
-	fromVersion           string
-	toVersion             string
-	resourceDirectories   []string
-	preUpgradeAssessment  map[string]CustomAssessmentFunc
-	postUpgradeAssessment map[string]CustomAssessmentFunc
-}
-
-// NewCustomUpgradeTest creates a new CustomUpgradeTest builder
-func NewCustomUpgradeTest(name, fromVersion, toVersion string) *CustomUpgradeTest {
-	return &CustomUpgradeTest{
-		name:                  name,
-		preUpgradeAssessment:  make(map[string]CustomAssessmentFunc),
-		postUpgradeAssessment: make(map[string]CustomAssessmentFunc),
-	}
-}
-
-func (c *CustomUpgradeTest) WithResourceDirectories(dirs []string) *CustomUpgradeTest {
-	c.resourceDirectories = dirs
-	return c
-}
-
-func (c *CustomUpgradeTest) ToVersion(version string) *CustomUpgradeTest {
-	c.toVersion = version
-	return c
-}
-
-func (c *CustomUpgradeTest) FromVersion(version string) *CustomUpgradeTest {
-	c.fromVersion = version
-	return c
-}
-
-func (c *CustomUpgradeTest) PreUpgradeAssessment(name string, fn CustomAssessmentFunc) *CustomUpgradeTest {
-	c.preUpgradeAssessment[name] = fn
-	return c
-}
-
-func (c *CustomUpgradeTest) PostUpgradeAssessment(name string, fn CustomAssessmentFunc) *CustomUpgradeTest {
-	c.postUpgradeAssessment[name] = fn
-	return c
+	return fromProviderPackage, toProviderPackage
 }

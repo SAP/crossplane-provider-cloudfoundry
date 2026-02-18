@@ -6,29 +6,29 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/cloudfoundry/v1alpha1"
+	v1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/test"
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 )
 
 var (
-	// Format should match what you use in main_test.go (fromPackage/toPackage)
-	fromCustomTag = "0.3.0" // Reuse from main_test.go
-	toCustomTag   = "0.3.1" // Reuse from main_test.go
-
 	customResourceDirectories = []string{
-		"./testdata/customCRs/externalNames",
+		"./testdata/customCRs/spaceExternalName",
 	}
 )
 
 func Test_Space_External_Name(t *testing.T) {
 	const spaceName = "upgrade-test-space"
 
-	upgradeTest := test.NewCustomUpgradeTest("space-external-name-test", fromCustomTag, toCustomTag).
+	fromTag, toTag := loadTags()
+
+	upgradeTest := NewCustomUpgradeTest("space-external-name-test").
+		FromVersion(fromTag).
+		ToVersion(toTag).
 		WithResourceDirectories(customResourceDirectories).
-		PreUpgradeAssessment(
-			"verify external name before upgrade",
+		WithCustomPreUpgradeAssessment(
+			"Verify external name before upgrade",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 				space := &v1alpha1.Space{}
 				r := cfg.Client().Resources()
@@ -38,7 +38,6 @@ func Test_Space_External_Name(t *testing.T) {
 					t.Fatalf("Failed to get Space resource: %v", err)
 				}
 
-				// Get the external name annotation
 				annotations := space.GetAnnotations()
 				externalName, exists := annotations["crossplane.io/external-name"]
 				if !exists {
@@ -47,17 +46,15 @@ func Test_Space_External_Name(t *testing.T) {
 
 				klog.V(4).Infof("Pre-upgrade external name: %s", externalName)
 
-				// Verify external name matches UUID format
 				if !test.UUIDRegex.MatchString(externalName) {
 					t.Fatalf("External name '%s' does not match expected UUID format", externalName)
 				}
 
-				// Store the external name in context for post-upgrade verification
 				return context.WithValue(ctx, "preUpgradeExternalName", externalName)
 			},
 		).
-		PostUpgradeAssessment(
-			"verify external name after upgrade",
+		WithCustomPostUpgradeAssessment(
+			"Verify external name after upgrade",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 				space := &v1alpha1.Space{}
 				r := cfg.Client().Resources()
@@ -67,7 +64,6 @@ func Test_Space_External_Name(t *testing.T) {
 					t.Fatalf("Failed to get Space resource: %v", err)
 				}
 
-				// Get the external name annotation
 				annotations := space.GetAnnotations()
 				externalName, exists := annotations["crossplane.io/external-name"]
 				if !exists {
@@ -76,12 +72,10 @@ func Test_Space_External_Name(t *testing.T) {
 
 				klog.V(4).Infof("Post-upgrade external name: %s", externalName)
 
-				// Verify external name matches UUID format
 				if !test.UUIDRegex.MatchString(externalName) {
 					t.Fatalf("External name '%s' does not match expected UUID format after upgrade", externalName)
 				}
 
-				// Verify external name hasn't changed during upgrade
 				preUpgradeExternalName, ok := ctx.Value("preUpgradeExternalName").(string)
 				if !ok {
 					t.Fatal("Failed to retrieve pre-upgrade external name from context")
@@ -97,5 +91,10 @@ func Test_Space_External_Name(t *testing.T) {
 			},
 		)
 
-	upgradeTest.Run(t)
+	testenv.Test(t, upgradeTest.Feature())
+}
+
+func loadTags() (string, string) {
+	// Reuse from upgrade_test.go or define here
+	return fromTag, toTag
 }
