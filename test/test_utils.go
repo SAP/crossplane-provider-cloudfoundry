@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 	"testing"
 
 	"github.com/crossplane-contrib/xp-testing/pkg/envvar"
@@ -38,6 +39,7 @@ var (
 	UUT_IMAGES_KEY     = "UUT_IMAGES"
 	UUT_CONFIG_KEY     = "crossplane/provider-cloudfoundry"
 	UUT_CONTROLLER_KEY = "crossplane/provider-cloudfoundry-controller"
+	UUIDRegex          = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 )
 
 type mockList struct {
