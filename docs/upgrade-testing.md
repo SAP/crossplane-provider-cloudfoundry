@@ -204,7 +204,7 @@ Custom tests use YAML manifests from `test/upgrade/testdata/customCRs/{testName}
 
 #### Current Custom Tests
 
-**Test_Space_External_Name** (`testdata/customCRs/spaceExternalName/`)
+**Test_Space_External_Name** (`testdata/customCRs/externalNames/`)
 - Validates Space external-name follows UUID format
 - Verifies external-name doesn't change during upgrade
 - Tests external-name ADR compliance
@@ -300,8 +300,9 @@ test/
 │   │   │   ├── import.yaml               # Organization (observe)
 │   │   │   └── space.yaml                # Space (create)
 │   │   └── customCRs/                    # Custom upgrade test resources
-│   │       └── spaceExternalName/        # External-name validation test
+│   │       └── externalNames/            # External-name validation test
 │   │           └── space.yaml
+|   |           └── import.yaml           
 │   ├── main_test.go                      # Test environment setup
 │   ├── upgrade_test.go                   # Base upgrade test logic
 │   ├── base_upgrade_test.go              # Custom upgrade test framework
