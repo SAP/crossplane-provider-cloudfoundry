@@ -14,7 +14,6 @@ import (
 	"time"
 
 	testutil "github.com/SAP/crossplane-provider-cloudfoundry/test"
-	"github.com/crossplane-contrib/xp-testing/pkg/envvar"
 	"github.com/crossplane-contrib/xp-testing/pkg/images"
 	"github.com/crossplane-contrib/xp-testing/pkg/setup"
 	"github.com/crossplane-contrib/xp-testing/pkg/vendored"
@@ -104,7 +103,6 @@ func SetupClusterWithCrossplane(namespace string) {
 
 	// Get CloudFoundry credentials from environment
 	cfSecretData := testutil.GetCFCredentialsOrPanic()
-	cfEndpoint := envvar.GetOrPanic(cfEndpointEnvVar)
 
 	// Load version tags for upgrade (FROM -> TO)
 	fromTag, toTag = loadPackageTags()
@@ -160,7 +158,6 @@ func SetupClusterWithCrossplane(namespace string) {
 	// Setup CloudFoundry credentials and ProviderConfig
 	testenv.Setup(
 		testutil.ApplySecretInCrossplaneNamespace(cfSecretName, cfSecretData),
-		testutil.CreateProviderConfigFn(namespace, cfEndpoint, cfSecretName),
 	)
 }
 

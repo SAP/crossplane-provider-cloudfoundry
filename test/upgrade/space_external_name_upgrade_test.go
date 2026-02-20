@@ -40,7 +40,6 @@ func Test_Space_External_Name(t *testing.T) {
 				}
 
 				space := &v1alpha1.Space{}
-				r = cfg.Client().Resources()
 
 				err = r.Get(ctx, spaceName, cfg.Namespace(), space)
 				if err != nil {
