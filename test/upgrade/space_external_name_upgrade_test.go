@@ -9,19 +9,18 @@ import (
 	v1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/test"
 	"k8s.io/klog/v2"
+	res "sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 )
 
 var (
 	customResourceDirectories = []string{
-		"./testdata/customCRs/externalNames",
+		"./testdata/customCrs/externalNames",
 	}
 )
 
 func Test_Space_External_Name(t *testing.T) {
 	const spaceName = "upgrade-test-space"
-
-	fromTag, toTag := loadTags()
 
 	upgradeTest := NewCustomUpgradeTest("space-external-name-test").
 		FromVersion(fromTag).
@@ -30,10 +29,20 @@ func Test_Space_External_Name(t *testing.T) {
 		WithCustomPreUpgradeAssessment(
 			"Verify external name before upgrade",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-				space := &v1alpha1.Space{}
-				r := cfg.Client().Resources()
+				r, err := res.New(cfg.Client().RESTConfig())
+				if err != nil {
+					t.Fatalf("Failed to create resource client: %v", err)
+				}
 
-				err := r.Get(ctx, spaceName, cfg.Namespace(), space)
+				err = v1alpha1.SchemeBuilder.AddToScheme(r.GetScheme())
+				if err != nil {
+					t.Fatalf("Failed to add CloudFoundry scheme: %v", err)
+				}
+
+				space := &v1alpha1.Space{}
+				r = cfg.Client().Resources()
+
+				err = r.Get(ctx, spaceName, cfg.Namespace(), space)
 				if err != nil {
 					t.Fatalf("Failed to get Space resource: %v", err)
 				}

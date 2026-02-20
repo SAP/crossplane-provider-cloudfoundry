@@ -279,12 +279,12 @@ func loadPackages(fromTag, toTag string) (string, string) {
 // Helper to get ProviderConfig setup function
 func getProviderConfigSetupFunc() func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 	return func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-		cfEndpoint := os.Getenv(cfEndpointEnvVar) // ← Move inside
+		cfEndpoint := os.Getenv(cfEndpointEnvVar)
 		if cfEndpoint == "" {
 			t.Fatalf("CF_ENDPOINT environment variable is required")
 		}
 
-		err := test.CreateProviderConfig(ctx, cfg, cfg.Namespace(), cfEndpoint, cfSecretName) // ← Use cfg.Namespace() here
+		err := test.CreateProviderConfig(ctx, cfg, cfg.Namespace(), cfEndpoint, cfSecretName)
 		if err != nil {
 			t.Fatalf("failed to create ProviderConfig: %v", err)
 		}
