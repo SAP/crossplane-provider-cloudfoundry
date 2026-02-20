@@ -1,5 +1,15 @@
 //go:build upgrade
 
+//
+// This file (space_external_name_upgrade_test.go) contains Test_Space_External_Name,
+// which validates that Space resources maintain proper external-name formatting
+// during provider upgrades. Specifically, it verifies:
+//   - External-name annotation exists and follows UUID format
+//   - External-name value remains unchanged after provider upgrade
+//
+// This test demonstrates the use of CustomUpgradeTestBuilder for creating
+// specialized upgrade tests with custom pre/post-upgrade validation logic.
+
 package upgrade
 
 import (

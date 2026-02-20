@@ -1,5 +1,17 @@
 //go:build upgrade
 
+//
+// This file (main_test.go) contains TestMain and cluster setup logic for all upgrade tests.
+// It performs the following initialization:
+//   - Creates a kind cluster with Crossplane and the CloudFoundry provider
+//   - Configures the provider with DeploymentRuntimeConfig for debug logging
+//   - Handles both "local" (development) and registry (release) provider images
+//   - Sets up CloudFoundry credentials as a Kubernetes secret
+//   - Discovers and loads test resources from testdata directories
+//
+// The setup happens once before all tests run, ensuring consistent test environment
+// across both baseline and custom upgrade tests.
+
 package upgrade
 
 import (
