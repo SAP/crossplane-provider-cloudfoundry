@@ -3,79 +3,33 @@
 package upgrade
 
 import (
-	"context"
-	"fmt"
 	"testing"
-	"time"
-
-	"github.com/SAP/crossplane-provider-cloudfoundry/test"
-	upgrade "github.com/crossplane-contrib/xp-testing/pkg/upgrade"
-	"github.com/crossplane-contrib/xp-testing/pkg/xpenvfuncs"
-	"k8s.io/klog/v2"
-	"sigs.k8s.io/e2e-framework/klient/wait"
-	"sigs.k8s.io/e2e-framework/pkg/envconf"
-	"sigs.k8s.io/e2e-framework/pkg/features"
 )
 
+// TestUpgradeProvider is the baseline upgrade test that verifies the provider can be
+// successfully upgraded from one version to another while maintaining resource health.
+//
+// This test demonstrates the use of the CustomUpgradeTestBuilder framework with
+// default baseline behavior. The test flow is:
+//  1. Install provider at the "from" version
+//  2. Import test resources from baseline directories
+//  3. Verify all resources are healthy
+//  4. Upgrade provider to the "to" version
+//  5. Verify all resources remain healthy after upgrade
+//  6. Clean up resources and provider
 func TestUpgradeProvider(t *testing.T) {
-	klog.V(2).Infof("Starting upgrade test from %s to %s", fromTag, toTag)
-	klog.V(2).Infof("Testing resources in directories: %v", resourceDirectories)
-	// Collect time metrics for upgrade tests
-	startTime := time.Now()
-	defer func() {
-		duration := time.Since(startTime)
-		klog.V(2).Infof("Upgrade test completed in %v", duration)
-	}()
-	upgradeTest := upgrade.UpgradeTest{
-		ProviderName:        providerName,
-		ClusterName:         kindClusterName,
-		FromProviderPackage: fromPackage,
-		ToProviderPackage:   toPackage,
-		ResourceDirectories: resourceDirectories,
-	}
-	upgradeFeature := features.New(fmt.Sprintf("Upgrade %s from %s to %s", providerName, fromTag, toTag)).
-		WithSetup(
-			"Install provider with version "+fromTag,
-			upgrade.ApplyProvider(upgradeTest.ClusterName, upgradeTest.FromProviderInstallOptions()),
-		).
-		WithSetup(
-			"Import Resources for upgrade test",
-			upgrade.ImportResources(upgradeTest.ResourceDirectories),
-		).
-		Assess(
-			"Verify Resources before upgrade",
-			upgrade.VerifyResources(upgradeTest.ResourceDirectories, verifyTimeout),
-		).
-		Assess(
-			"Upgrade provider to "+toTag,
-			upgrade.UpgradeProvider(upgrade.UpgradeProviderOptions{
-				ClusterName: upgradeTest.ClusterName,
-				ProviderOptions: xpenvfuncs.InstallCrossplaneProviderOptions{
-					Name:    providerName,
-					Package: upgradeTest.ToProviderPackage,
-				},
-				ResourceDirectories: upgradeTest.ResourceDirectories,
-				WaitForPause:        waitForPause,
-			})).
-		Assess(
-			"Verify Resources after upgrade",
-			upgrade.VerifyResources(upgradeTest.ResourceDirectories, verifyTimeout),
-		).
-		WithTeardown(
-			"Cleanup Resources after upgrade test",
-			func(ctx context.Context, t *testing.T, envConfig *envconf.Config) context.Context {
-				err := test.DeleteResourcesFromDirsGracefully(ctx, envConfig, upgradeTest.ResourceDirectories, wait.WithTimeout(verifyTimeout))
-				if err != nil {
-					t.Logf("Failed to delete resources during teardown: %v", err)
-				}
-				return ctx
-			},
-		).
-		WithTeardown(
-			"Delete Provider",
-			upgrade.DeleteProvider(upgradeTest.ProviderName),
-		)
+	fromTag, toTag := loadTags()
 
-	testenv.Test(t, upgradeFeature.Feature())
+	upgradeTest := NewCustomUpgradeTest("baseline-upgrade-test").
+		FromVersion(fromTag).
+		ToVersion(toTag).
+		WithResourceDirectories(resourceDirectories)
 
+	testenv.Test(t, upgradeTest.Feature())
+}
+
+// loadTags is a helper function to load FROM and TO tags for tests
+// This allows custom tests to reuse the same version configuration
+func loadTags() (string, string) {
+	return fromTag, toTag
 }

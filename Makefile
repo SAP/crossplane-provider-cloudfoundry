@@ -65,6 +65,17 @@ export UUT_CONTROLLER = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJ
 export UUT_IMAGES = {"crossplane/provider-cloudfoundry":"docker.io/$(UUT_CONFIG)","crossplane/provider-cloudfoundry-controller":"docker.io/$(UUT_CONTROLLER)"}
 export E2E_IMAGES = {"package":"$(UUT_CONFIG)","controller":"$(UUT_CONTROLLER)"}
 
+# Import upgrade test environment variables from shell
+export UPGRADE_TEST_FROM_TAG
+export UPGRADE_TEST_TO_TAG
+export UPGRADE_TEST_VERIFY_TIMEOUT
+export UPGRADE_TEST_WAIT_FOR_PAUSE
+export CF_EMAIL
+export CF_USERNAME
+export CF_PASSWORD
+export CF_ENDPOINT
+
+
 # NOTE(hasheddan): we ensure up is installed prior to running platform-specific
 # build steps in parallel to avoid encountering an installation race condition.
 build.init: $(UP)
@@ -193,6 +204,7 @@ UPGRADE_TEST_FILTER ?= .
 
 .PHONY: check-upgrade-test-vars
 check-upgrade-test-vars: ## Verify required upgrade test environment variables
+	@$(INFO) Checking required environment variables for upgrade tests are present 
 	@test -n "$(UPGRADE_TEST_FROM_TAG)" || { echo "❌ Set UPGRADE_TEST_FROM_TAG"; exit 1; }
 	@test -n "$(UPGRADE_TEST_TO_TAG)" || { echo "❌ Set UPGRADE_TEST_TO_TAG"; exit 1; }
 	@$(OK) required upgrade test environment variables are set
@@ -290,7 +302,7 @@ test-upgrade-prepare-crs: ## Prepare CRs from CRS_TAG version
 			$(OK) "Copied e2e CRs to $(UPGRADE_TEST_CRS_DIR)/"; \
 		fi; \
 	fi
-	
+
 # ====================================================================================
 # Upgrade Tests with Version-Specific CRs
 # ====================================================================================

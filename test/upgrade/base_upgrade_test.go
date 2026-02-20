@@ -5,12 +5,18 @@ package upgrade
 import (
 	"context"
 	"fmt"
+	"os"
 	"testing"
 	"time"
 
+	// ← Add this
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/test"
 	"github.com/crossplane-contrib/xp-testing/pkg/upgrade"
 	"github.com/crossplane-contrib/xp-testing/pkg/xpenvfuncs"
+	kubeErrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	res "sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
@@ -193,6 +199,10 @@ func (b *CustomUpgradeTestBuilder) Feature() features.Feature {
 			upgrade.ApplyProvider(upgradeTest.ClusterName, upgradeTest.FromProviderInstallOptions()),
 		).
 		WithSetup(
+			"Apply ProviderConfig",
+			getProviderConfigSetupFunc(),
+		).
+		WithSetup(
 			"Import resources from directories",
 			upgrade.ImportResources(upgradeTest.ResourceDirectories),
 		)
@@ -249,6 +259,9 @@ func (b *CustomUpgradeTestBuilder) Feature() features.Feature {
 			return ctx
 		},
 	).WithTeardown(
+		"Delete ProviderConfig",
+		getProviderConfigTeardownFunc(),
+	).WithTeardown(
 		"Delete provider",
 		upgrade.DeleteProvider(upgradeTest.ProviderName),
 	)
@@ -261,4 +274,53 @@ func loadPackages(fromTag, toTag string) (string, string) {
 		fromTag, toTag,
 		fromPackage, toPackage,
 	)
+}
+
+// Helper to get ProviderConfig setup function
+func getProviderConfigSetupFunc() func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+	return func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+		cfEndpoint := os.Getenv(cfEndpointEnvVar) // ← Move inside
+		if cfEndpoint == "" {
+			t.Fatalf("CF_ENDPOINT environment variable is required")
+		}
+
+		err := test.CreateProviderConfig(ctx, cfg, cfg.Namespace(), cfEndpoint, cfSecretName) // ← Use cfg.Namespace() here
+		if err != nil {
+			t.Fatalf("failed to create ProviderConfig: %v", err)
+		}
+		return ctx
+	}
+}
+
+// Helper to get ProviderConfig teardown function
+func getProviderConfigTeardownFunc() func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+	return func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+		// Delete ProviderConfig
+		r, err := res.New(cfg.Client().RESTConfig())
+		if err != nil {
+			t.Logf("failed to create resources client: %v", err)
+			return ctx
+		}
+
+		err = v1beta1.SchemeBuilder.AddToScheme(r.GetScheme()) // ← Changed from metaApi
+		if err != nil {
+			t.Logf("failed to add scheme: %v", err)
+			return ctx
+		}
+
+		// Create the ProviderConfig object to delete
+		// (just need name, rest doesn't matter for deletion)
+		obj := &v1beta1.ProviderConfig{ // ← Changed from cloudfoundryv1beta1
+			ObjectMeta: metav1.ObjectMeta{
+				Name: "default",
+			},
+		}
+
+		err = r.Delete(ctx, obj)
+		if err != nil && !kubeErrors.IsNotFound(err) {
+			t.Logf("failed to delete ProviderConfig: %v", err)
+		}
+
+		return ctx
+	}
 }

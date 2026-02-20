@@ -14,7 +14,7 @@ import (
 
 var (
 	customResourceDirectories = []string{
-		"./testdata/customCRs/spaceExternalName",
+		"./testdata/customCRs/externalNames",
 	}
 )
 
@@ -92,9 +92,4 @@ func Test_Space_External_Name(t *testing.T) {
 		)
 
 	testenv.Test(t, upgradeTest.Feature())
-}
-
-func loadTags() (string, string) {
-	// Reuse from upgrade_test.go or define here
-	return fromTag, toTag
 }

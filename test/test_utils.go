@@ -255,3 +255,60 @@ func LoadUpgradePackages(fromTag, toTag string, fromPackage, toPackage string) (
 
 	return fromProviderPackage, toProviderPackage
 }
+
+// CreateProviderConfig contains the core logic for creating or updating a ProviderConfig.
+// Returns an error if the operation fails.
+func CreateProviderConfig(
+	ctx context.Context,
+	cfg *envconf.Config,
+	namespace string,
+	cfEndpoint string,
+	secretName string,
+) error {
+	r, err := res.New(cfg.Client().RESTConfig())
+	if err != nil {
+		return fmt.Errorf("failed to create resources client: %w", err)
+	}
+
+	err = cloudfoundryv1beta1.SchemeBuilder.AddToScheme(r.GetScheme())
+	if err != nil {
+		return fmt.Errorf("failed to add CloudFoundry scheme: %w", err)
+	}
+
+	providerConfig := &cloudfoundryv1beta1.ProviderConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+		},
+		Spec: cloudfoundryv1beta1.ProviderConfigSpec{
+			APIEndpoint: &cfEndpoint,
+			Credentials: cloudfoundryv1beta1.ProviderCredentials{
+				Source: "Secret",
+				CommonCredentialSelectors: xpv1.CommonCredentialSelectors{
+					SecretRef: &xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      secretName,
+							Namespace: crossplaneSystemNamespace,
+						},
+						Key: "credentials",
+					},
+				},
+			},
+		},
+	}
+
+	err = r.Create(ctx, providerConfig)
+	if kubeErrors.IsAlreadyExists(err) {
+		// If already exists, fetch the current object first to get resourceVersion
+		existing := &cloudfoundryv1beta1.ProviderConfig{}
+		if getErr := r.Get(ctx, "default", "", existing); getErr != nil {
+			return fmt.Errorf("failed to get existing ProviderConfig: %w", getErr)
+		}
+
+		// Update the spec on the existing object
+		existing.Spec = providerConfig.Spec
+		// Now update with the correct resourceVersion
+		return r.Update(ctx, existing)
+	}
+
+	return err
+}
