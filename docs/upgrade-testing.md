@@ -86,6 +86,17 @@ spec:
 ```
 
 ### 1. Set Environment Variables
+
+#### Option A: Use the provided template 
+Copy the example environment file and fill in your credentials:
+
+```bash
+cp test/upgrade/.env.example test/upgrade/.env
+# Edit .env with your actual credentials
+source test/upgrade/.env
+```
+
+Option B: Export variables directly
 ```bash
 # CloudFoundry credentials
 export CF_EMAIL="your_email"
@@ -97,6 +108,8 @@ export CF_ENDPOINT="https://api.cf.eu12.hana.ondemand.com"
 export UPGRADE_TEST_FROM_TAG="v0.3.0"  # Version to upgrade FROM
 export UPGRADE_TEST_TO_TAG="v0.3.2"    # Version to upgrade TO
 ```
+
+⚠️ Security Note: Never commit the .env file! It's already in .gitignore to prevent accidental commits of credentials.
 
 ### 2. Run the Tests
 
