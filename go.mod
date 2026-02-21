@@ -1,8 +1,8 @@
 module github.com/SAP/crossplane-provider-cloudfoundry
 
-go 1.25.0
+go 1.26
 
-toolchain go1.25.6
+toolchain go1.26.0
 
 require (
 	github.com/SAP/xp-clifford v0.0.0-20260202115841-f2ef82b7144e
