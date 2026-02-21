@@ -1,3 +1,4 @@
+version: "2"
 run:
   timeout: 2m
 
@@ -84,8 +85,6 @@ linters:
     - goconst
     - gocritic
     - gocyclo
-    - gofmt  # We enable this as well as goimports for its simplify mode.
-    - goimports
     - gosimple
     - govet
     - misspell
