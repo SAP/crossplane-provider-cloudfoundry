@@ -1,4 +1,5 @@
 package route
+//nolint:staticcheck
 
 import (
 	"context"

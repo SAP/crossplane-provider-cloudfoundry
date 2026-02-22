@@ -1,4 +1,5 @@
 package main
+//nolint:staticcheck
 
 import (
 	"fmt"

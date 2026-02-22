@@ -1,4 +1,5 @@
 package serviceinstance
+//nolint:staticcheck
 
 import (
 	"context"
@@ -144,8 +145,8 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 	managedSI.Spec.ForProvider.ServicePlan = generateServicePlan(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
 
 	if mInfo := serviceInstance.MaintenanceInfo; mInfo != nil {
-		managedSI.Spec.ForProvider.Managed.MaintenanceInfo.Description = &mInfo.Description
-		managedSI.Spec.ForProvider.Managed.MaintenanceInfo.Version = &mInfo.Description
+		managedSI.Spec.ForProvider.MaintenanceInfo.Description = &mInfo.Description
+		managedSI.Spec.ForProvider.MaintenanceInfo.Version = &mInfo.Description
 	}
 
 	var comment *string

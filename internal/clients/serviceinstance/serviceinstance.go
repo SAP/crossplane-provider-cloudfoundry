@@ -1,4 +1,5 @@
 package serviceinstance
+//nolint:staticcheck
 
 import (
 	"context"

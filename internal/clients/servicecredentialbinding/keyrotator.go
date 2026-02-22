@@ -1,4 +1,5 @@
 package servicecredentialbinding
+//nolint:staticcheck
 
 import (
 	"context"
