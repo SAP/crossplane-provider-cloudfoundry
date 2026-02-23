@@ -86,7 +86,7 @@ func withDriftDetection(d bool) modifier {
 func withDeletionTimestamp() modifier {
 	return func(r *v1alpha1.ServiceInstance) {
 		ts := metav1.Now()
-		r.ObjectMeta.DeletionTimestamp = &ts
+		r.DeletionTimestamp = &ts
 	}
 }
 

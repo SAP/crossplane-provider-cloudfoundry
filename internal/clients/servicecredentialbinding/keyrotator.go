@@ -1,5 +1,4 @@
 package servicecredentialbinding
-//nolint:staticcheck
 
 import (
 	"context"
@@ -38,8 +37,8 @@ type SCBKeyRotator struct {
 
 func (r *SCBKeyRotator) RetireBinding(cr *v1alpha1.ServiceCredentialBinding, serviceBinding *cfresource.ServiceCredentialBinding) bool {
 	forceRotation := false
-	if cr.ObjectMeta.Annotations != nil {
-		_, forceRotation = cr.ObjectMeta.Annotations[ForceRotationKey]
+	if cr.Annotations != nil {
+		_, forceRotation = cr.Annotations[ForceRotationKey]
 	}
 
 	rotationDue := cr.Spec.ForProvider.Rotation != nil && cr.Spec.ForProvider.Rotation.Frequency != nil &&

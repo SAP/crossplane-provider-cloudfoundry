@@ -1,5 +1,4 @@
 package main
-//nolint:staticcheck
 
 import (
 	"fmt"
@@ -53,7 +52,7 @@ func (c cliConfig) CommandUse(*cli.ConfigSchema) string {
 }
 
 func main() {
-	cli.Configuration.CLIConfiguration.ConfiguratorCLI = cliConfig{cli.DefaultConfiguratorCLI{}}
+	cli.Configuration.ConfiguratorCLI = cliConfig{cli.DefaultConfiguratorCLI{}}
 	cli.Configuration.ShortName = ShortName
 	cli.Configuration.ObservedSystem = observedSystem
 	export.SetCommand(exportCmd)

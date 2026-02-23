@@ -1,5 +1,4 @@
 package route
-//nolint:staticcheck
 
 import (
 	"context"
@@ -38,13 +37,13 @@ func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, forProvider v1a
 	var r *resource.Route
 	var err error
 	if clients.IsValidGUID(guid) {
-		r, err = c.Route.Get(ctx, guid)
+		r, err = c.Get(ctx, guid)
 	} else {
 		opts, e := FormatListOption(forProvider)
 		if e != nil {
 			return nil, e
 		}
-		r, err = c.Route.Single(ctx, opts)
+		r, err = c.Single(ctx, opts)
 	}
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
@@ -103,7 +102,7 @@ func (c *Client) Delete(ctx context.Context, guid string) error {
 func FormatListOption(forProvider v1alpha1.RouteParameters) (*client.RouteListOptions, error) {
 
 	if forProvider.Space == nil || forProvider.Domain == nil {
-		return nil, fmt.Errorf("Space and Domain are required")
+		return nil, fmt.Errorf("space and domain are required")
 	}
 	opts := client.NewRouteListOptions()
 	opts.SpaceGUIDs = client.Filter{Values: []string{*forProvider.Space}}
@@ -127,7 +126,7 @@ func FormatListOption(forProvider v1alpha1.RouteParameters) (*client.RouteListOp
 // FormatCreateOption generates the RouteCreate from the forProvider spec
 func FormatCreateOption(forProvider v1alpha1.RouteParameters) (*resource.RouteCreate, error) {
 	if forProvider.Space == nil || forProvider.Domain == nil {
-		return nil, fmt.Errorf("Space and Domain are required")
+		return nil, fmt.Errorf("space and domain are required")
 	}
 
 	opts := resource.NewRouteCreate(*forProvider.Domain, *forProvider.Space)

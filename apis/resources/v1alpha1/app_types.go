@@ -9,7 +9,6 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 )
 
 type AppObservation struct {
@@ -107,7 +106,7 @@ type DockerConfiguration struct {
 
 	// (Attributes) Defines login credentials for private docker repositories
 	// +kubebuilder:validation:Optional
-	Credentials *xpv1.SecretReference `json:"credentialsSecretRef,omitempty"`
+	Credentials *v1.SecretReference `json:"credentialsSecretRef,omitempty"`
 }
 
 // RouteConfiguration defines the route for the application

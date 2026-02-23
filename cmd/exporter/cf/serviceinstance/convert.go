@@ -1,5 +1,4 @@
 package serviceinstance
-//nolint:staticcheck
 
 import (
 	"context"
@@ -150,11 +149,11 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 	}
 
 	var comment *string
-	managedSI.Spec.ForProvider.Managed.Parameters, comment = generateParams(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
+	managedSI.Spec.ForProvider.Parameters, comment = generateParams(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
 	if comment != nil {
 		serviceInstanceWithComment.AddComment(*comment)
 	}
-	managedSI.Spec.ForProvider.UserProvided.Credentials = generateCreds(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
+	managedSI.Spec.ForProvider.Credentials = generateCreds(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
 
 	managedSI.Spec.ForProvider.SpaceReference = v1alpha1.SpaceReference{
 		Space: &serviceInstance.Relationships.Space.Data.GUID,
