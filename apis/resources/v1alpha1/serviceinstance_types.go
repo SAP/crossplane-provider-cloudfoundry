@@ -28,11 +28,9 @@ const (
 
 type ServiceInstanceParameters struct {
 	// (String) The name of the service instance
-	// +kubebuilder:validation:Required
 	Name *string `json:"name,omitempty" tf:"name,omitempty"`
 
 	// (String) Type of the service instance. Either managed or user-provided. Default is managed.
-	// +required
 	// +kubebuilder:default=managed
 	Type ServiceInstanceType `json:"type"`
 
@@ -245,6 +243,13 @@ type ServiceInstanceStatus struct {
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.name)",message="name is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.type)",message="type is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || !(has(self.spec.forProvider.type) && self.spec.forProvider.type == 'managed') || has(self.spec.forProvider.servicePlan)",message="servicePlan is required when type is managed"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || !(has(self.spec.forProvider.type) && self.spec.forProvider.type == 'managed') || !has(self.spec.forProvider.servicePlan) || (has(self.spec.forProvider.servicePlan.id) && !has(self.spec.forProvider.servicePlan.offering) && !has(self.spec.forProvider.servicePlan.plan)) || (!has(self.spec.forProvider.servicePlan.id) && has(self.spec.forProvider.servicePlan.offering) && has(self.spec.forProvider.servicePlan.plan))",message="either id or offering and plan must be set on servicePlan"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || !(has(self.spec.forProvider.type) && self.spec.forProvider.type == 'user-provided') || (has(self.spec.forProvider.credentials) || has(self.spec.forProvider.jsonCredentials) || has(self.spec.forProvider.credentialsSecretRef))",message="CredentialsReference is required: exactly one of credentials, jsonCredentials or credentialsSecretRef must be set if type is user-provided"
+// +kubebuilder:validation:XValidation:rule="!(has(self.spec.forProvider.type) && self.spec.forProvider.type == 'user-provided') || [has(self.spec.forProvider.credentials), has(self.spec.forProvider.jsonCredentials), has(self.spec.forProvider.credentialsSecretRef)].filter(x, x).size() <= 1",message="CredentialsReference validation: only one of credentials, jsonCredentials, or credentialsSecretRef can be set"
+// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.parameters), has(self.spec.forProvider.jsonParams), has(self.spec.forProvider.paramsSecretRef )].filter(x, x).size() <= 1",message="ParamsReference validation: only one of parameters, jsonParams, or paramsSecretRef  can be set"
 // +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName) || has(self.spec.forProvider.spaceRef) || has(self.spec.forProvider.spaceSelector))",message="SpaceReference is required: exactly one of spaceName, spaceRef, or spaceSelector must be set"
 // +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.spaceName), has(self.spec.forProvider.spaceRef), has(self.spec.forProvider.spaceSelector)].filter(x, x).size() <= 1",message="SpaceReference validation: only one of spaceName, spaceRef, or spaceSelector can be set"
 type ServiceInstance struct {

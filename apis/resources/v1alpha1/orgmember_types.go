@@ -13,7 +13,7 @@ type OrgMembersParameters struct {
 	OrgReference `json:",inline"`
 
 	// (String) Org role type to assign to members; see valid role types https://v3-apidocs.cloudfoundry.org/version/3.127.0/index.html#valid-role-types
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Enum=User;Auditor;Manager;BillingManager;Users;Auditors;Managers;BillingManagers
 	RoleType string `json:"roleType"`
 }
@@ -38,6 +38,10 @@ type OrgMembersStatus struct {
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.roleType)",message="roleType is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.orgName) || has(self.spec.forProvider.orgRef) || has(self.spec.forProvider.orgSelector))",message="OrgReference is required: exactly one of orgName, orgRef, or orgSelector must be set"
+// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.orgName), has(self.spec.forProvider.orgRef), has(self.spec.forProvider.orgSelector)].filter(x, x).size() <= 1",message="OrgReference validation: only one of orgName, orgRef, or orgSelector can be set"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.members) && self.spec.forProvider.members.size() >= 1)",message="Members validation: at least one member must be set"
 type OrgMembers struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

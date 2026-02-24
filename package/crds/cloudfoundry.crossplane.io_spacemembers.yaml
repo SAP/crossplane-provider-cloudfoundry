@@ -210,9 +210,6 @@ spec:
                             type: string
                         type: object
                     type: object
-                required:
-                - members
-                - roleType
                 type: object
               managementPolicies:
                 default:
@@ -452,6 +449,8 @@ spec:
         - spec
         type: object
         x-kubernetes-validations:
+        - message: roleType is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.roleType)
         - message: 'SpaceReference is required: exactly one of spaceName, spaceRef,
             or spaceSelector must be set'
           rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName)
@@ -460,6 +459,9 @@ spec:
             spaceSelector can be set'
           rule: '[has(self.spec.forProvider.spaceName), has(self.spec.forProvider.spaceRef),
             has(self.spec.forProvider.spaceSelector)].filter(x, x).size() <= 1'
+        - message: 'Members validation: at least one member must be set'
+          rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.members)
+            && self.spec.forProvider.members.size() >= 1)
     served: true
     storage: true
     subresources:
