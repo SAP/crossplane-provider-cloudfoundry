@@ -657,11 +657,6 @@ spec:
             || (has(self.spec.forProvider.servicePlan.id) && !has(self.spec.forProvider.servicePlan.offering)
             && !has(self.spec.forProvider.servicePlan.plan)) || (!has(self.spec.forProvider.servicePlan.id)
             && has(self.spec.forProvider.servicePlan.offering) && has(self.spec.forProvider.servicePlan.plan))
-        - message: 'CredentialsReference is required: exactly one of credentials,
-            jsonCredentials or credentialsSecretRef must be set if type is user-provided'
-          rule: self.spec.managementPolicies == ['Observe'] || !(has(self.spec.forProvider.type)
-            && self.spec.forProvider.type == 'user-provided') || (has(self.spec.forProvider.credentials)
-            || has(self.spec.forProvider.jsonCredentials) || has(self.spec.forProvider.credentialsSecretRef))
         - message: 'CredentialsReference validation: only one of credentials, jsonCredentials,
             or credentialsSecretRef can be set'
           rule: '!(has(self.spec.forProvider.type) && self.spec.forProvider.type ==
