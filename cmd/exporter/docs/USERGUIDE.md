@@ -7,6 +7,19 @@ The `xpcf` tool observes *Cloud Foundry* resources and exports them as managed C
 
 # TODO Installation
 
+## Nix users
+
+Nix users can easily execute the `xpcf` tool using the following command:
+
+```bash
+nix run github:SAP/crossplane-provider-cloudfoundry/<version>#xpcf -- <flags>
+```
+
+To get the *help* for version v0.3.4, execute
+
+```bash
+nix run github:SAP/crossplane-provider-cloudfoundry/v0.3.4#xpcf -- --help
+```
 
 # Quick Start
 
