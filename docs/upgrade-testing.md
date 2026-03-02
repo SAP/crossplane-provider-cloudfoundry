@@ -195,10 +195,9 @@ Base tests use YAML manifests from `test/upgrade/testdata/baseCrs/`. Currently t
 - **SpaceQuota**
 - **SpaceRole**
 
-### Test Base Resource Dependencies
-**SpaceRole:** A space role can only be assigned to a user if the user is also a member of the imported parent organization.
-
-  🠊 Assign a user to the organization by either creating a SpaceMembers/SpaceRole resource or by using the BTP Cockpit
+#### Test Base Resource Dependencies
+- **SpaceRole:** A space role can only be assigned to a user if the user is also a member of the space's organization.\
+🠊 Assign a user to the space's organization by either creating a SpaceMembers/SpaceRole resource or by using the BTP Cockpit
 
 #### Adding New Base Test Resources
 
@@ -319,17 +318,14 @@ test/
 │   ├── testdata/
 │   │   ├── baseCrs/                      # Base upgrade test resources
 │   │   │   ├── import.yaml               # Organization (observe)
-│   │   │   └── space.yaml                # Space (create)
+│   │   │   ├── space.yaml                # Space (create)
+|   │   │   ├── domain.yaml
+|   │   │   ├── space_quota.yaml
+|   │   │   └── space_role.yaml
 │   │   └── customCRs/                    # Custom upgrade test resources
 │   │       └── externalNames/            # External-name validation test
-│   │           └── space.yaml
+│   │           ├── space.yaml
 |   |           └── import.yaml
-|   |       └── domain                    # Domain   
-|   │           └── domain.yaml
-|   |       └── spaceQuota                # SpaceQuota  
-|   │           └── space_quota.yaml
-|   |       └── spaceRole                 # SpaceRole  
-|   │           └── space_role.yaml
 │   ├── main_test.go                      # Test environment setup
 │   ├── upgrade_test.go                   # Base upgrade test logic
 │   ├── base_upgrade_test.go              # Custom upgrade test framework
