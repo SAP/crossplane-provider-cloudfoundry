@@ -13,3 +13,7 @@ jobs:
         uses: DeterminateSystems/flake-checker-action@main
         with:
           check-outdated: false
+      - uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # version v31.9.0
+      - name: Check flake
+        run: |
+          nix flake check
