@@ -16,6 +16,15 @@
           homepage = "https://github.com/SAP/crossplane-provider-cloudfoundry";
           license = lib.licenses.asl20;
         };
+        src = lib: with lib; fileset.toSource {
+          root = ./.;
+          fileset = fileset.unions [
+            (fileset.fromSource (sources.sourceFilesBySuffices ./. [".go"]))
+            ./go.mod
+            ./go.sum
+          ];
+        };
+
       };
     in
       flake-parts.lib.mkFlake { inherit inputs; } {
@@ -28,14 +37,7 @@
               inherit (exporter-cli) version;
               pname = exporter-cli.name;
               ldflags = ["-X main.ShortName=${exporter-cli.name}"];
-              src = with lib; fileset.toSource {
-                root = ./.;
-                fileset = fileset.unions [
-                  (fileset.fromSource (sources.sourceFilesBySuffices ./. [".go"]))
-                  ./go.mod
-                  ./go.sum
-                ];
-              };
+              src = exporter-cli.src lib;
               subPackages = ["cmd/exporter"];
               vendorHash = "sha256-HiWXSvLwRzt1/wMl2LQfwrBPoRpsl5E3TsN/1N0PGWs=";
               meta = exporter-cli.meta lib;
@@ -45,14 +47,19 @@
               cp ${exporter}/bin/exporter $out/bin/${exporter-cli.name}
             '';
           };
+          devShells.default = pkgs.mkShell {
+            packages = with pkgs; [go];
+          };
           apps.exporter = {
             meta = exporter-cli.meta lib;
             type = "app";
             program = "${self'.packages.${exporter-cli.name}}/bin/${exporter-cli.name}";
           };
-          checks.exporter = pkgs.runCommand "exporter-help" {} ''
-            ${self'.packages.${exporter-cli.name}}/bin/${exporter-cli.name} --help > $out
-          # '';
+          checks = {
+            exporter = pkgs.runCommand "exporter-help" {} ''
+                     ${self'.packages.${exporter-cli.name}}/bin/${exporter-cli.name} --help > $out
+            '';
+          };
         };
         flake = {};
       };
