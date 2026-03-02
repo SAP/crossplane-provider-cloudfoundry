@@ -1,0 +1,15 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceRole
+metadata:
+  name: upgrade-test-space-role
+spec:
+  forProvider:
+    type: Developer
+    username: upgrade-test-user@example.com
+    spaceRef:
+      name: upgrade-test-space
+      policy:
+        resolution: Required
+        resolve: Always
+  providerConfigRef:
+    name: default

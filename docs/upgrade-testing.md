@@ -191,6 +191,14 @@ Base tests use YAML manifests from `test/upgrade/testdata/baseCrs/`. Currently t
 
 - **Organization** (import) - Uses `managementPolicies: [Observe]` to import existing org
 - **Space** - Lightweight resource for testing basic upgrade flow
+- **Domain**
+- **SpaceQuota**
+- **SpaceRole**
+
+### Test Base Resource Dependencies
+**SpaceRole:** A space role can only be assigned to a user if the user is also a member of the imported parent organization.
+
+  🠊 Assign a user to the organization by either creating a SpaceMembers/SpaceRole resource or by using the BTP Cockpit
 
 #### Adding New Base Test Resources
 
@@ -315,7 +323,13 @@ test/
 │   │   └── customCRs/                    # Custom upgrade test resources
 │   │       └── externalNames/            # External-name validation test
 │   │           └── space.yaml
-|   |           └── import.yaml           
+|   |           └── import.yaml
+|   |       └── domain                    # Domain   
+|   │           └── domain.yaml
+|   |       └── spaceQuota                # SpaceQuota  
+|   │           └── space_quota.yaml
+|   |       └── spaceRole                 # SpaceRole  
+|   │           └── space_role.yaml
 │   ├── main_test.go                      # Test environment setup
 │   ├── upgrade_test.go                   # Base upgrade test logic
 │   ├── base_upgrade_test.go              # Custom upgrade test framework

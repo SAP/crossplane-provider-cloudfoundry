@@ -1,0 +1,11 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Domain
+metadata:
+  name: upgrade-test-domain
+spec:
+  forProvider:
+    name: cfupgradetest.eu12.hana.ondemand.com
+    orgRef:
+      name: upgrade-test-org
+  providerConfigRef:
+    name: default
