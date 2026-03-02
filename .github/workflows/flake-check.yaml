@@ -42,7 +42,7 @@ jobs:
         run: |
           echo "HASH=$(nix eval --file ./config.nix --raw --argstr lib '' 'exporter-cli.vendorHash' --raw)" >> "$GITHUB_OUTPUT"
       - name: Comparing hashes
-        if: ${{ steps.calculated-hash.HASH != steps.current-hash.HASH }}
+        if: ${{ steps.calculated-hash.output.HASH != steps.current-hash.output.HASH }}
         run: |
-          echo "::error file=config.nix,line=6,title=Invalid vendorHash::Update the vendor hash. Suggested value: ${{steps.calculated-hash.HASH}}"
+          echo "::error file=config.nix,line=6,title=Invalid vendorHash::Update the vendor hash. Suggested value: ${{steps.calculated-hash.output.HASH}}"
           exit 1
