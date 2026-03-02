@@ -21,10 +21,10 @@
                 inherit (config.exporter-cli) version;
                 pname = config.exporter-cli.name;
                 ldflags = ["-X main.ShortName=${config.exporter-cli.name}"];
-                src = config.exporter-cli.src lib;
+                src = config.exporter-cli.src;
                 subPackages = ["cmd/exporter"];
-                vendorHash = "sha256-HiWXSvLwRzt1/wMl2LQfwrBPoRpsl5E3TsN/1N0PGWs=";
-                meta = config.exporter-cli.meta lib;
+                vendorHash = config.exporter-cli.vendorHash;
+                meta = config.exporter-cli.meta;
               };
               "${config.exporter-cli.name}" = pkgs.runCommand "${config.exporter-cli.name}" {} ''
               mkdir -p $out/bin
@@ -35,7 +35,7 @@
               packages = with pkgs; [go];
             };
             apps.exporter = {
-              meta = config.exporter-cli.meta lib;
+              meta = config.exporter-cli.meta;
               type = "app";
               program = "${self'.packages.${config.exporter-cli.name}}/bin/${config.exporter-cli.name}";
             };
