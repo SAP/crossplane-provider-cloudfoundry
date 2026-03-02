@@ -36,3 +36,6 @@ jobs:
       - name: Calculate vendor hash
         run: |
           nix hash path vendor
+      - name: Get the current vendor hash
+        run: |
+          nix eval --file ./config.nix --raw --argstr lib '' 'exporter-cli.vendorHash' --raw
