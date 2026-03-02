@@ -21,7 +21,7 @@ jobs:
   vendor-hash-check:
     permissions:
       contents: read
-    name: Check nix flakes
+    name: Comparing vendor hash values
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
@@ -33,9 +33,16 @@ jobs:
       - name: Get vendor directory
         run: |
           nix develop . -c go mod vendor
-      - name: Calculate vendor hash
+      - id: calculated-hash
+        name: Calculate vendor hash
         run: |
-          nix hash path vendor
-      - name: Get the current vendor hash
+          echo "HASH=$(nix hash path vendor)" >> "$GITHUB_OUTPUT"
+      - id: current-hash
+        name: Get the current vendor hash
         run: |
-          nix eval --file ./config.nix --raw --argstr lib '' 'exporter-cli.vendorHash' --raw
+          echo "HASH=$(nix eval --file ./config.nix --raw --argstr lib '' 'exporter-cli.vendorHash' --raw)" >> "$GITHUB_OUTPUT"
+      - name: Comparing hashes
+        if: ${{ steps.calculated-hash.HASH != steps.current-hash.HASH }}
+        run: |
+          echo "::error file=config.nix,line=6,title=Invalid vendorHash::Update the vendor hash. Suggested value: ${{steps.calculated-hash.HASH}}"
+          exit 1
