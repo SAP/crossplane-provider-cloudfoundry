@@ -2,7 +2,9 @@ on:
   pull_request:
 
 jobs:
-  build:
+  flake-check:
+    permissions:
+      contents: read
     name: Check nix flakes
     runs-on: ubuntu-latest
     steps:
