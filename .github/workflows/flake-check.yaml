@@ -36,13 +36,17 @@ jobs:
       - id: calculated-hash
         name: Calculate vendor hash
         run: |
-          echo "HASH=$(nix hash path vendor)" >> "$GITHUB_OUTPUT"
+          hash=$(nix hash path vendor)
+          echo "Calculated vendor hash: $hash"
+          echo "HASH=$hash" >> "$GITHUB_OUTPUT"
       - id: current-hash
         name: Get the current vendor hash
         run: |
-          echo "HASH=$(nix eval --file ./config.nix --raw --argstr lib '' 'exporter-cli.vendorHash' --raw)" >> "$GITHUB_OUTPUT"
+          hash=$(nix eval --file ./config.nix --raw --argstr lib '' 'exporter-cli.vendorHash' --raw)
+          echo "Configured vendor hash: $hash"
+          echo "HASH=$hash" >> "$GITHUB_OUTPUT"
       - name: Comparing hashes
-        if: ${{ steps.calculated-hash.output.HASH != steps.current-hash.output.HASH }}
+        if: ${{ steps.calculated-hash.outputs.HASH != steps.current-hash.outputs.HASH }}
         run: |
-          echo "::error file=config.nix,line=6,title=Invalid vendorHash::Update the vendor hash. Suggested value: ${{steps.calculated-hash.output.HASH}}"
+          echo "::error file=config.nix,line=6,title=Invalid vendorHash::Update the vendor hash. Suggested value: ${{steps.calculated-hash.outputs.HASH}}"
           exit 1
