@@ -1,0 +1,14 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceQuota
+metadata:
+  name: upgrade-test-space-quota
+spec:
+  forProvider:
+    allowPaidServicePlans: false
+    name: upgrade-test-space-quota
+    orgRef:
+      name: upgrade-test-org
+    spacesRefs:
+      - name: upgrade-test-space
+  providerConfigRef:
+    name: default
