@@ -380,6 +380,8 @@ type servicePlanInitializer struct {
 }
 
 // Initialize implements crossplane InitializeFn interface
+//
+//nolint:gocyclo
 func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
 	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
