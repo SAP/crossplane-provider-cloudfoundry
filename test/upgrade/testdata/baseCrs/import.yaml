@@ -11,3 +11,17 @@ spec:
     name: cf-ci-e2e # ← TODO: Change this to an existing org name
   providerConfigRef:
     name: default
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  name: upgrade-test-import-space
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: upgrade-test-space-donotdelete
+    orgRef:
+      name: upgrade-test-org  # ← References the imported org
+  providerConfigRef:
+    name: default

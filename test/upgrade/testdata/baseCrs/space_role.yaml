@@ -5,7 +5,7 @@ metadata:
 spec:
   forProvider:
     type: Developer
-    username: upgrade-test-user@example.com
+    username: upgrade-test-space-role@example.com
     spaceRef:
       name: upgrade-test-space
       policy:

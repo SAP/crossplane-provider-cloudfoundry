@@ -1,0 +1,17 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceMembers
+metadata:
+  name: upgrade-test-space-members
+spec:
+  forProvider:
+    roleType: Developers
+    members:
+    - username: upgrade-test-space-member-1@example.com
+    - username: upgrade-test-space-member-2@example.com
+    spaceRef:
+      name: upgrade-test-import-space
+      policy:
+        resolve: Always
+    enforcementPolicy: Lax
+  providerConfigRef:
+    name: default
