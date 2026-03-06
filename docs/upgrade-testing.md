@@ -60,9 +60,15 @@ You need valid CloudFoundry credentials with appropriate permissions:
 
 ## Quick Start
 
-### ⚠️ IMPORTANT: Configure Your CF Organization First
+### ⚠️ IMPORTANT: Necessary configuration steps before running any tests
 
-Before running any tests, you **must** update the organization name to one you have access to:
+Some configuration steps are necessary before you can successfully run any upgrade tests:
+- Configure your CF organization
+- Configure your CF space
+
+#### CF Organization
+
+Before running any tests, you **must** update the organization name to one you have access:
 
 1. **List your available CF organizations:**
 ```bash
@@ -83,6 +89,42 @@ spec:
     - Observe
   forProvider:
     name: your-org-name-here  # ← Change this to your CF org name
+```
+
+#### CF Space
+
+Before running the base tests, you **must** update the space name to one in your organization.
+That can either be an existing one you have atleast the SpaceDeveloper role in or you create a new one as describe below:
+
+1. **Optionally create and configure a new CF Space**
+
+Create a space and give your user the SpaceDeveloper role
+```bash
+cf create-space <SPACE_NAME> -o <ORG_NAME>  # Create a space in your org
+cf set-space-role <USERNAME> <ORG_NAME> <SPACE_NAME> SpaceDeveloper # Assign your user the SpaceDeveloper role
+```
+
+2. **List your available CF spaces:**
+```bash
+cf spaces # List spaces
+```
+3. **Update the spaces name** in test manifests: 
+- For base tests: `test/upgrade/testdata/baseCrs/import.yaml`:
+- For custom tests: `test/upgrade/testdata/customCRs/*/import.yaml` (if applicable)
+```yaml
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  name: upgrade-test-import-space
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: upgrade-test-space-donotdelete  # ← Change this to you CF space name
+    orgRef:
+      name: upgrade-test-org 
+  providerConfigRef:
+    name: default
 ```
 
 ### 1. Set Environment Variables
@@ -194,10 +236,17 @@ Base tests use YAML manifests from `test/upgrade/testdata/baseCrs/`. Currently t
 - **Domain**
 - **SpaceQuota**
 - **SpaceRole**
+- **SpaceMembers**
+- **ServiceInstance**
+- **ServiceCredentialBinding**
 
 #### Test Base Resource Dependencies
 - **SpaceRole:** A space role can only be assigned to a user if the user is also a member of the space's organization.\
 🠊 Assign a user to the space's organization by either creating a SpaceMembers/SpaceRole resource or by using the BTP Cockpit
+- **ServiceInstance:** A managed service instance requires a ServicePlan specifying an offering and a plan.
+If the combination of offering and plan is not available in your space change it something different.\
+🠊 Run `cf marketplace` and update the values in test/upgrade/testdata/baseCrs/service_instance.yaml
+- **ServiceCredentialBinding:** The ServiceCredentialBinding directly depends on the ServiceInstance it is referencing
 
 #### Adding New Base Test Resources
 
@@ -317,11 +366,14 @@ test/
 ├── upgrade/
 │   ├── testdata/
 │   │   ├── baseCrs/                      # Base upgrade test resources
-│   │   │   ├── import.yaml               # Organization (observe)
+│   │   │   ├── import.yaml               # Organization (observe) + Space (observe)
 │   │   │   ├── space.yaml                # Space (create)
 |   │   │   ├── domain.yaml
 |   │   │   ├── space_quota.yaml
-|   │   │   └── space_role.yaml
+|   │   │   ├── space_role.yaml
+|   │   │   ├── service_credential_binding.yaml
+|   │   │   ├── service_instance.yaml
+|   │   │   └── space_members.yaml
 │   │   └── customCRs/                    # Custom upgrade test resources
 │   │       └── externalNames/            # External-name validation test
 │   │           ├── space.yaml

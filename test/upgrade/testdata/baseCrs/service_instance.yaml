@@ -1,0 +1,17 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: upgrade-test-service-instance
+spec:
+  forProvider:
+    type: managed
+    name: upgrade-test-service-instance
+    spaceRef:
+      name: upgrade-test-import-space
+      policy:
+        resolve: Always
+    servicePlan:
+      offering: destination # Change the offering if not available
+      plan: lite            # Change the plan if not available
+  providerConfigRef:
+    name: default
