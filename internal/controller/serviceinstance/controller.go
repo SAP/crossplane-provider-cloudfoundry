@@ -380,6 +380,8 @@ type servicePlanInitializer struct {
 }
 
 // Initialize implements crossplane InitializeFn interface
+//
+//nolint:gocyclo
 func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
 	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
@@ -390,28 +392,32 @@ func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Mana
 	}
 
 	if cr.Spec.ForProvider.ServicePlan != nil {
-		// When ServicePlan is set we populate the service
-		// plan ID based on the external resource GUID.
+		// When ServicePlan is set we either populate/update the service plan ID with the external resource GUID
+		// based on the specified offering and plan or we use the provided ID directly.
 		cf, err := clients.ClientFnBuilder(ctx, s.kube)(mg)
 		if err != nil {
 			return errors.Wrapf(err, errNewClient)
 		}
-
-		opt := client.NewServicePlanListOptions()
-		if cr.Spec.ForProvider.ServicePlan.Offering != nil {
+		// Populate/Update service plan ID based on offering and plan
+		if cr.Spec.ForProvider.ServicePlan.Offering != nil && cr.Spec.ForProvider.ServicePlan.Plan != nil {
+			opt := client.NewServicePlanListOptions()
 			opt.ServiceOfferingNames.EqualTo(*cr.Spec.ForProvider.ServicePlan.Offering)
-		}
-		if cr.Spec.ForProvider.ServicePlan.Plan != nil {
 			opt.Names.EqualTo(*cr.Spec.ForProvider.ServicePlan.Plan)
+			sp, err := cf.ServicePlans.Single(ctx, opt)
+			if err != nil {
+				return errors.Wrapf(err, "Cannot initialize service plan using serviceName/servicePlanName: %s:%s`", *cr.Spec.ForProvider.ServicePlan.Offering, *cr.Spec.ForProvider.ServicePlan.Plan)
+			}
+			cr.Spec.ForProvider.ServicePlan.ID = &sp.GUID
+			return s.kube.Update(ctx, cr)
 		}
-		sp, err := cf.ServicePlans.Single(ctx, opt)
-		if err != nil {
-			return errors.Wrapf(err, "Cannot initialize service plan using serviceName/servicePlanName: %s:%s`", *cr.Spec.ForProvider.ServicePlan.Offering, *cr.Spec.ForProvider.ServicePlan.Plan)
+		// Verify whether service plan ID is valid
+		if cr.Spec.ForProvider.ServicePlan.ID != nil {
+			_, err := cf.ServicePlans.Get(ctx, *cr.Spec.ForProvider.ServicePlan.ID)
+			if err != nil {
+				return errors.Wrapf(err, "Cannot initialize service plan using ID: %s", *cr.Spec.ForProvider.ServicePlan.ID)
+			}
+			return nil
 		}
-
-		cr.Spec.ForProvider.ServicePlan.ID = &sp.GUID
-
-		return s.kube.Update(ctx, cr)
 	}
 
 	// Service plan is not set
