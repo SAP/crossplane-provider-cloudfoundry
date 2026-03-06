@@ -243,6 +243,9 @@ Base tests use YAML manifests from `test/upgrade/testdata/baseCrs/`. Currently t
 #### Test Base Resource Dependencies
 - **SpaceRole:** A space role can only be assigned to a user if the user is also a member of the space's organization.\
 🠊 Assign a user to the space's organization by either creating a SpaceMembers/SpaceRole resource or by using the BTP Cockpit
+- **ServiceInstance:** A managed service instance requires a ServicePlan specifying an offering and a plan.
+If the combination of offering and plan is not available in your space change it something different.\
+🠊 Run `cf marketplace` and update the values in test/upgrade/testdata/baseCrs/service_instance.yaml
 
 #### Adding New Base Test Resources
 
