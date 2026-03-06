@@ -246,6 +246,7 @@ Base tests use YAML manifests from `test/upgrade/testdata/baseCrs/`. Currently t
 - **ServiceInstance:** A managed service instance requires a ServicePlan specifying an offering and a plan.
 If the combination of offering and plan is not available in your space change it something different.\
 🠊 Run `cf marketplace` and update the values in test/upgrade/testdata/baseCrs/service_instance.yaml
+- **ServiceCredentialBinding:** The ServiceCredentialBinding directly depends on the ServiceInstance it is referencing
 
 #### Adding New Base Test Resources
 
