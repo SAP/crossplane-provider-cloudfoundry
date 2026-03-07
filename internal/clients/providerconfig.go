@@ -10,7 +10,7 @@ import (
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -25,6 +25,7 @@ type CfCredentials struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
 	Passcode string `json:"passcode"`
+	Origin   string `json:"origin,omitempty"`
 }
 
 const (
@@ -55,12 +56,30 @@ func GetCredentialConfig(ctx context.Context, client client.Client, mg resource.
 		return nil, errors.Wrap(err, errExtractEndpoint)
 	}
 
-	return config.New(*url, config.UserPassword(cred.Email, cred.Password), config.SkipTLSValidation())
+	opts := []config.Option{
+		config.UserPassword(cred.Email, cred.Password),
+		config.SkipTLSValidation(),
+	}
+	if cred.Origin != "" {
+		opts = append(opts, config.Origin(cred.Origin))
+	}
+	return config.New(*url, opts...)
 }
 
 func getProviderConfig(ctx context.Context, client client.Client, mg resource.Managed) (*v1beta1.ProviderConfig, error) {
+	mm, ok := mg.(resource.ModernManaged)
+	if !ok {
+		return nil, errors.New(errNoProviderConfig)
+	}
+	ref := mm.GetProviderConfigReference()
+	if ref == nil {
+		return nil, errors.New(errNoProviderConfig)
+	}
 	pc := &v1beta1.ProviderConfig{}
-	if err := client.Get(ctx, types.NamespacedName{Name: mg.GetProviderConfigReference().Name}, pc); err != nil {
+	if err := client.Get(ctx, types.NamespacedName{
+		Name:      ref.Name,
+		Namespace: mg.GetNamespace(),
+	}, pc); err != nil {
 		return nil, err
 	}
 	return pc, nil

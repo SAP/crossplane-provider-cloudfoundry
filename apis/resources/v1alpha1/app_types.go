@@ -8,8 +8,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	v2 "github.com/crossplane/crossplane-runtime/v2/apis/common/v2"
 )
 
 type AppObservation struct {
@@ -107,7 +107,7 @@ type DockerConfiguration struct {
 
 	// (Attributes) Defines login credentials for private docker repositories
 	// +kubebuilder:validation:Optional
-	Credentials *xpv1.SecretReference `json:"credentialsSecretRef,omitempty"`
+	Credentials *v1.SecretReference `json:"credentialsSecretRef,omitempty"`
 }
 
 // RouteConfiguration defines the route for the application
@@ -124,11 +124,11 @@ type RouteConfiguration struct {
 
 	// Reference to a Route in route to populate route.
 	// +kubebuilder:validation:Optional
-	RouteRef *v1.Reference `json:"routeRef,omitempty"`
+	RouteRef *v1.NamespacedReference `json:"routeRef,omitempty"`
 
 	// Selector for a Route in route to populate route.
 	// +kubebuilder:validation:Optional
-	RouteSelector *v1.Selector `json:"routeSelector,omitempty"`
+	RouteSelector *v1.NamespacedSelector `json:"routeSelector,omitempty"`
 }
 
 // ServiceBindingConfiguration defines the service instance to bind to the application
@@ -142,11 +142,11 @@ type ServiceBindingConfiguration struct {
 
 	// Reference to a ServiceInstance in service to populate serviceInstance.
 	// +kubebuilder:validation:Optional
-	ServiceInstanceRef *v1.Reference `json:"serviceInstanceRef,omitempty"`
+	ServiceInstanceRef *v1.NamespacedReference `json:"serviceInstanceRef,omitempty"`
 
 	// Selector for a ServiceInstance in service to populate serviceInstance.
 	// +kubebuilder:validation:Optional
-	ServiceInstanceSelector *v1.Selector `json:"serviceInstanceSelector,omitempty"`
+	ServiceInstanceSelector *v1.NamespacedSelector `json:"serviceInstanceSelector,omitempty"`
 
 	// The name of the service instance to bind to the application.
 	// +kubebuilder:validation:Optional
@@ -245,7 +245,7 @@ type SidecarConfiguration struct {
 
 // AppSpec defines the desired state of App
 type AppSpec struct {
-	v1.ResourceSpec `json:",inline"`
+	v2.ManagedResourceSpec `json:",inline"`
 	ForProvider     AppParameters `json:"forProvider"`
 }
 
@@ -264,7 +264,7 @@ type AppStatus struct {
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:resource:scope=Namespaced,categories={crossplane,managed,cloudfoundry}
 // +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName) || has(self.spec.forProvider.spaceRef) || has(self.spec.forProvider.spaceSelector))",message="SpaceReference is required: exactly one of spaceName, spaceRef, or spaceSelector must be set"
 // +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.spaceName), has(self.spec.forProvider.spaceRef), has(self.spec.forProvider.spaceSelector)].filter(x, x).size() <= 1",message="SpaceReference validation: only one of spaceName, spaceRef, or spaceSelector can be set"
 type App struct {

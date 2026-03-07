@@ -4,7 +4,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	v2 "github.com/crossplane/crossplane-runtime/v2/apis/common/v2"
 )
 
 type OrgMembersParameters struct {
@@ -19,7 +20,7 @@ type OrgMembersParameters struct {
 }
 
 type OrgMembersSpec struct {
-	v1.ResourceSpec `json:",inline"`
+	v2.ManagedResourceSpec `json:",inline"`
 	ForProvider     OrgMembersParameters `json:"forProvider"`
 }
 
@@ -37,7 +38,7 @@ type OrgMembersStatus struct {
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:resource:scope=Namespaced,categories={crossplane,managed,cloudfoundry}
 type OrgMembers struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

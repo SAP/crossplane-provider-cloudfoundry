@@ -3,6 +3,7 @@ apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Route
 metadata:
   name: my-route
+  namespace: default
 spec:
   forProvider:
     domainRef:

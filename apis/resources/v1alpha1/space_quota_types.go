@@ -10,7 +10,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	v2 "github.com/crossplane/crossplane-runtime/v2/apis/common/v2"
 )
 
 type SpaceQuotaInitParameters struct {
@@ -28,11 +29,11 @@ type SpaceQuotaInitParameters struct {
 
 	// (Attributes) Reference to an Org in resources to populate `org`.
 	// +kubebuilder:validation:Optional
-	OrgRef *v1.Reference `json:"orgRef,omitempty" tf:"-"`
+	OrgRef *v1.NamespacedReference `json:"orgRef,omitempty" tf:"-"`
 
 	// (Attributes) Selector for an Org in resources to populate `org`.
 	// +kubebuilder:validation:Optional
-	OrgSelector *v1.Selector `json:"orgSelector,omitempty" tf:"-"`
+	OrgSelector *v1.NamespacedSelector `json:"orgSelector,omitempty" tf:"-"`
 
 	// (Set of String) Set of space GUIDs to which this space quota would be assigned.
 	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1.Space
@@ -42,11 +43,11 @@ type SpaceQuotaInitParameters struct {
 
 	// (Attributes) References to Space in cloudfoundry to populate `spaces`.
 	// +kubebuilder:validation:Optional
-	SpacesRefs []v1.Reference `json:"spacesRefs,omitempty" tf:"-"`
+	SpacesRefs []v1.NamespacedReference `json:"spacesRefs,omitempty" tf:"-"`
 
 	// (Attributes) Selector for a list of Space in cloudfoundry to populate `spaces`.
 	// +kubebuilder:validation:Optional
-	SpacesSelector *v1.Selector `json:"spacesSelector,omitempty" tf:"-"`
+	SpacesSelector *v1.NamespacedSelector `json:"spacesSelector,omitempty" tf:"-"`
 
 	// (Number) Maximum app instances allowed.
 	TotalAppInstances *float64 `json:"totalAppInstances,omitempty" tf:"total_app_instances,omitempty"`
@@ -143,11 +144,11 @@ type SpaceQuotaParameters struct {
 
 	// (Attributes) Reference to an Org in resources to populate `org`.
 	// +kubebuilder:validation:Optional
-	OrgRef *v1.Reference `json:"orgRef,omitempty" tf:"-"`
+	OrgRef *v1.NamespacedReference `json:"orgRef,omitempty" tf:"-"`
 
 	// (Attributes) Selector for an Org in resources to populate `org`.
 	// +kubebuilder:validation:Optional
-	OrgSelector *v1.Selector `json:"orgSelector,omitempty" tf:"-"`
+	OrgSelector *v1.NamespacedSelector `json:"orgSelector,omitempty" tf:"-"`
 
 	// (Set of String) Set of space GUIDs to which this space quota would be assigned.
 	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1.Space
@@ -158,11 +159,11 @@ type SpaceQuotaParameters struct {
 
 	// (Attributes) References to Space in cloudfoundry to populate `spaces`.
 	// +kubebuilder:validation:Optional
-	SpacesRefs []v1.Reference `json:"spacesRefs,omitempty" tf:"-"`
+	SpacesRefs []v1.NamespacedReference `json:"spacesRefs,omitempty" tf:"-"`
 
 	// (Attributes) Selector for a list of Space in cloudfoundry to populate `spaces`.
 	// +kubebuilder:validation:Optional
-	SpacesSelector *v1.Selector `json:"spacesSelector,omitempty" tf:"-"`
+	SpacesSelector *v1.NamespacedSelector `json:"spacesSelector,omitempty" tf:"-"`
 
 	// (Number) Maximum app instances allowed.
 	// +kubebuilder:validation:Optional
@@ -199,7 +200,7 @@ type SpaceQuotaParameters struct {
 
 // SpaceQuotaSpec defines the desired state of SpaceQuota
 type SpaceQuotaSpec struct {
-	v1.ResourceSpec `json:",inline"`
+	v2.ManagedResourceSpec `json:",inline"`
 	ForProvider     SpaceQuotaParameters `json:"forProvider"`
 	// THIS IS A BETA FIELD. It will be honored
 	// unless the Management Policies feature flag is disabled.
@@ -229,7 +230,7 @@ type SpaceQuotaStatus struct {
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
-// +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:resource:scope=Namespaced,categories={crossplane,managed,cloudfoundry}
 type SpaceQuota struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

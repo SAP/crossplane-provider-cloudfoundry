@@ -5,19 +5,19 @@ import (
 	"slices"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
-	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/reference"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reference"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/google/go-cmp/cmp"
 
 	resources "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources"
@@ -25,7 +25,6 @@ import (
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/spacequota"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
 const (
@@ -44,8 +43,6 @@ const (
 // Setup adds a controller that reconciles space quota managed resources.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
 	name := managed.ControllerName(v1alpha1.SpaceQuota_GroupKind)
-
-	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
 	options := []managed.ReconcilerOption{
 
 		managed.WithExternalConnecter(&connector{
@@ -54,17 +51,12 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-		managed.WithConnectionPublishers(cps...),
 		managed.WithPollInterval(o.PollInterval),
 		managed.WithInitializers(initializer{
 			client: mgr.GetClient(),
 		}),
 	}
 
-	if o.Features.Enabled(features.EnableBetaManagementPolicies) {
-		options = append(options,
-			managed.WithManagementPolicies())
-	}
 
 	r := managed.NewReconciler(mgr,
 		resource.ManagedKind(v1alpha1.SpaceQuota_GroupVersionKind),
@@ -81,7 +73,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 // Connect method is called.
 type connector struct {
 	kube  k8s.Client
-	usage resource.Tracker
+	usage *resource.ProviderConfigUsageTracker
 }
 
 // ResolveReferences resolves the references in the managed resources
@@ -95,8 +87,9 @@ func ResolveReferences(ctx context.Context, mg *v1alpha1.SpaceQuota, client k8s.
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Org),
 		Extract:      resources.ExternalID(),
-		Reference:    mg.Spec.ForProvider.OrgRef,
-		Selector:     mg.Spec.ForProvider.OrgSelector,
+		Reference:    clients.NamespacedRefToRef(mg.Spec.ForProvider.OrgRef),
+		Selector:     clients.NamespacedSelectorToSelector(mg.Spec.ForProvider.OrgSelector),
+		Namespace:    mg.GetNamespace(),
 		To: reference.To{
 			List:    &v1alpha1.OrganizationList{},
 			Managed: &v1alpha1.Organization{},
@@ -106,13 +99,14 @@ func ResolveReferences(ctx context.Context, mg *v1alpha1.SpaceQuota, client k8s.
 		return errors.Wrap(err, "mg.Spec.ForProvider.Organization")
 	}
 	mg.Spec.ForProvider.Org = reference.ToPtrValue(rsp.ResolvedValue)
-	mg.Spec.ForProvider.OrgRef = rsp.ResolvedReference
+	mg.Spec.ForProvider.OrgRef = clients.RefToNamespacedRef(rsp.ResolvedReference)
 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.InitProvider.Org),
 		Extract:      resources.ExternalID(),
-		Reference:    mg.Spec.InitProvider.OrgRef,
-		Selector:     mg.Spec.InitProvider.OrgSelector,
+		Reference:    clients.NamespacedRefToRef(mg.Spec.InitProvider.OrgRef),
+		Selector:     clients.NamespacedSelectorToSelector(mg.Spec.InitProvider.OrgSelector),
+		Namespace:    mg.GetNamespace(),
 		To: reference.To{
 			List:    &v1alpha1.OrganizationList{},
 			Managed: &v1alpha1.Organization{},
@@ -122,7 +116,7 @@ func ResolveReferences(ctx context.Context, mg *v1alpha1.SpaceQuota, client k8s.
 		return errors.Wrap(err, "mg.Spec.InitProvider.Organization")
 	}
 	mg.Spec.InitProvider.Org = reference.ToPtrValue(rsp.ResolvedValue)
-	mg.Spec.InitProvider.OrgRef = rsp.ResolvedReference
+	mg.Spec.InitProvider.OrgRef = clients.RefToNamespacedRef(rsp.ResolvedReference)
 
 	return nil
 }
@@ -247,7 +241,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.New(errUnexpectedObject)
 	}
 
-	if err := c.usage.Track(ctx, mg); err != nil {
+	if err := c.usage.Track(ctx, mg.(resource.ModernManaged)); err != nil {
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 

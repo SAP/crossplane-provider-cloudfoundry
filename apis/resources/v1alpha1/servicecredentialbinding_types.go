@@ -5,7 +5,8 @@ Copyright 2023 SAP SE.
 package v1alpha1
 
 import (
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	v2 "github.com/crossplane/crossplane-runtime/v2/apis/common/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -42,11 +43,11 @@ type ServiceCredentialBindingParameters struct {
 
 	// (Attributes) Reference to a managed service instance to populate `serviceInstance`.
 	// +kubebuilder:validation:Optional
-	ServiceInstanceRef *v1.Reference `json:"serviceInstanceRef,omitempty"`
+	ServiceInstanceRef *v1.NamespacedReference `json:"serviceInstanceRef,omitempty"`
 
 	// (Attributes) Selector for a managed service instance to populate `serviceInstance`.
 	// +kubebuilder:validation:Optional
-	ServiceInstanceSelector *v1.Selector `json:"serviceInstanceSelector,omitempty"`
+	ServiceInstanceSelector *v1.NamespacedSelector `json:"serviceInstanceSelector,omitempty"`
 
 	// (String) The ID of an app that should be bound to. Required if `type` is "app".
 	// +crossplane:generate:reference:type=App
@@ -55,11 +56,11 @@ type ServiceCredentialBindingParameters struct {
 
 	// (Attributes) Reference to an app CR to populate `app`.
 	// +kubebuilder:validation:Optional
-	AppRef *v1.Reference `json:"appRef,omitempty"`
+	AppRef *v1.NamespacedReference `json:"appRef,omitempty"`
 
 	// (Attributes) Selector for an app CR to populate `app`.
 	// +kubebuilder:validation:Optional
-	AppSelector *v1.Selector `json:"appSelector,omitempty"`
+	AppSelector *v1.NamespacedSelector `json:"appSelector,omitempty"`
 
 	// (Attributes) An optional JSON object to pass `parameters` to the service broker.
 	// +kubebuilder:validation:Optional
@@ -80,7 +81,7 @@ type ServiceCredentialBindingParameters struct {
 }
 
 type ServiceCredentialBindingSpec struct {
-	v1.ResourceSpec `json:",inline"`
+	v2.ManagedResourceSpec `json:",inline"`
 
 	// (Boolean) True to write `connectionDetails` as a single key-value in a secret rather than a map. The key is the metadata.name of the service credential binding CR itself.
 	// +kubebuilder:validation:Optional
@@ -121,7 +122,7 @@ type SCBResource struct {
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:subresource:status
-// +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:resource:scope=Namespaced,categories={crossplane,managed,cloudfoundry}
 type ServiceCredentialBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
