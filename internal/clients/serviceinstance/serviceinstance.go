@@ -27,6 +27,7 @@ type ServiceInstance interface {
 	CreateUserProvided(context.Context, *resource.ServiceInstanceUserProvidedCreate) (*resource.ServiceInstance, error)
 	UpdateUserProvided(context.Context, string, *resource.ServiceInstanceUserProvidedUpdate) (*resource.ServiceInstance, error)
 	Delete(context.Context, string) (string, error)
+	GetSharedSpaceRelationships(context.Context, string) (*resource.ServiceInstanceSharedSpaceRelationships, error)
 }
 
 // Job defines interfaces to async operations/jobs.
@@ -336,4 +337,18 @@ func IsUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.Servi
 		}
 	}
 	return true
+}
+
+// GetSharedSpaces retrieves the GUIDs of spaces a service instance is shared with
+func (c *Client) GetSharedSpaces(ctx context.Context, guid string) ([]string, error) {
+	relationships, err := c.ServiceInstance.GetSharedSpaceRelationships(ctx, guid)
+	if err != nil {
+		return nil, err
+	}
+
+	spaceGUIDs := make([]string, 0, len(relationships.Data))
+	for _, rel := range relationships.Data {
+		spaceGUIDs = append(spaceGUIDs, rel.GUID)
+	}
+	return spaceGUIDs, nil
 }
