@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"time"
 
-	"github.com/cloudfoundry/go-cfclient/v3/client"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -380,8 +379,6 @@ type servicePlanInitializer struct {
 }
 
 // Initialize implements crossplane InitializeFn interface
-//
-//nolint:gocyclo
 func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Managed) error {
 	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
@@ -398,26 +395,10 @@ func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Mana
 		if err != nil {
 			return errors.Wrapf(err, errNewClient)
 		}
-		// Populate/Update service plan ID based on offering and plan
-		if cr.Spec.ForProvider.ServicePlan.Offering != nil && cr.Spec.ForProvider.ServicePlan.Plan != nil {
-			opt := client.NewServicePlanListOptions()
-			opt.ServiceOfferingNames.EqualTo(*cr.Spec.ForProvider.ServicePlan.Offering)
-			opt.Names.EqualTo(*cr.Spec.ForProvider.ServicePlan.Plan)
-			sp, err := cf.ServicePlans.Single(ctx, opt)
-			if err != nil {
-				return errors.Wrapf(err, "Cannot initialize service plan using serviceName/servicePlanName: %s:%s`", *cr.Spec.ForProvider.ServicePlan.Offering, *cr.Spec.ForProvider.ServicePlan.Plan)
-			}
-			cr.Spec.ForProvider.ServicePlan.ID = &sp.GUID
-			return s.kube.Update(ctx, cr)
-		}
-		// Verify whether service plan ID is valid
-		if cr.Spec.ForProvider.ServicePlan.ID != nil {
-			_, err := cf.ServicePlans.Get(ctx, *cr.Spec.ForProvider.ServicePlan.ID)
-			if err != nil {
-				return errors.Wrapf(err, "Cannot initialize service plan using ID: %s", *cr.Spec.ForProvider.ServicePlan.ID)
-			}
-			return nil
-		}
+
+		client := serviceinstance.NewClient(cf)
+		return client.ResolveServicePlan(ctx, s.kube, cr)
+
 	}
 
 	// Service plan is not set
