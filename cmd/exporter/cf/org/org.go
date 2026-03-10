@@ -19,7 +19,7 @@ import (
 	"github.com/SAP/xp-clifford/yaml"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 )
 
 var (
@@ -126,7 +126,7 @@ func ResolveReference(ctx context.Context, cfClient *client.Client, orgRef *v1al
 	if org == nil {
 		return erratt.New("space reference not found", "GUID", *orgRef.Org)
 	}
-	orgRef.OrgRef = &v1.Reference{
+	orgRef.OrgRef = &v1.NamespacedReference{
 		Name: org.(mkcontainer.ItemWithName).GetName(),
 	}
 	orgRef.Org = nil

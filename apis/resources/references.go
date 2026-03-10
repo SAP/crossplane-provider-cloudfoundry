@@ -1,8 +1,8 @@
 package resources
 
 import (
-	"github.com/crossplane/crossplane-runtime/pkg/reference"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reference"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 )
 
 // Referenceable return ID for references. All upjet.Observable are referenceable.

@@ -4,6 +4,7 @@ apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceInstance
 metadata:
   name: my-service-instance
+  namespace: default
 spec:
   forProvider:
     type: managed

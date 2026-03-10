@@ -7,8 +7,8 @@ import (
 	"os"
 
 	meta "github.com/SAP/crossplane-provider-cloudfoundry/apis"
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	v1 "k8s.io/api/core/v1"
 	wait2 "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"

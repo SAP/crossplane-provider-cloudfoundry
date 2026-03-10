@@ -4,6 +4,7 @@ apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceInstance
 metadata:
   name: my-cloud-logging
+  namespace: default
 spec:
   forProvider:
     type: managed
@@ -25,6 +26,7 @@ apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceInstance
 metadata:
   name: my-cloud-logging
+  namespace: default
 spec:
   forProvider:
     type: managed
@@ -44,6 +46,7 @@ apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceCredentialBinding
 metadata:
   name: my-cloud-binding
+  namespace: default
 spec:
   forProvider:
     type: key

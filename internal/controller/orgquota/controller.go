@@ -3,13 +3,13 @@ package orgquota
 import (
 	"context"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
-	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -18,7 +18,6 @@ import (
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/orgquota"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
 const (
@@ -39,7 +38,7 @@ const (
 // the API used to sync and delete external resources.
 type externalConnecter struct {
 	kubeClient   k8s.Client
-	usageTracker resource.Tracker
+	usageTracker *resource.ProviderConfigUsageTracker
 }
 
 // externalConnecter type implements managed.ExternalConnecter
@@ -52,7 +51,7 @@ func (c *externalConnecter) Connect(ctx context.Context, mg resource.Managed) (m
 		return nil, errors.New(errNotOrgQuota)
 	}
 
-	if err := c.usageTracker.Track(ctx, mg); err != nil {
+	if err := c.usageTracker.Track(ctx, mg.(resource.ModernManaged)); err != nil {
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
@@ -79,9 +78,6 @@ func Setup(mgr ctrl.Manager, controllerOptions controller.Options) error {
 		managed.WithPollInterval(controllerOptions.PollInterval),
 	}
 
-	if controllerOptions.Features.Enabled(features.EnableBetaManagementPolicies) {
-		options = append(options, managed.WithManagementPolicies())
-	}
 
 	r := managed.NewReconciler(mgr,
 		resource.ManagedKind(v1alpha1.OrgQuota_GroupVersionKind),
