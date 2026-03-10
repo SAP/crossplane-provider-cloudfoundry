@@ -352,3 +352,31 @@ func (c *Client) GetSharedSpaces(ctx context.Context, guid string) ([]string, er
 	}
 	return spaceGUIDs, nil
 }
+
+// TODO This does not handle duplicates well, see tests, deduplicate both current and desired before?
+// diffSharedSpaces compares the current and desired shared spaces and returns the spaces to add and remove
+func diffSharedSpaces(current, desired []string) (toAdd, toRemove []string) {
+	currentSet := make(map[string]struct{}, len(current))
+	for _, guid := range current {
+		currentSet[guid] = struct{}{}
+	}
+
+	// Find spaces to add (in desired but not in current)
+	for _, guid := range desired {
+		if _, exists := currentSet[guid]; !exists {
+			toAdd = append(toAdd, guid)
+		}
+		// Mark as seen by deleting from set
+		delete(currentSet, guid)
+	}
+
+	// Remaining spaces in currentSet need to be removed
+	if len(currentSet) > 0 {
+		toRemove = make([]string, 0, len(currentSet))
+		for guid := range currentSet {
+			toRemove = append(toRemove, guid)
+		}
+	}
+
+	return toAdd, toRemove
+}
