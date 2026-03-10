@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
@@ -259,6 +260,10 @@ func TestObserve(t *testing.T) {
 					fake.JSONRawMessage(""),
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
 				return m
 			},
 		},
@@ -289,6 +294,10 @@ func TestObserve(t *testing.T) {
 				m.On("GetManagedParameters", guid).Return(
 					fake.JSONRawMessage(""),
 					nil, // no error
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
 				)
 				return m
 			},
@@ -456,6 +465,10 @@ func TestObserve(t *testing.T) {
 					fake.JSONRawMessage("{\"foo\":\"bar\"}"),
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
 				return m
 			},
 		},
@@ -488,6 +501,10 @@ func TestObserve(t *testing.T) {
 				m.On("GetManagedParameters", guid).Return(
 					fake.JSONRawMessage("{\"foo\":\"bar\"}"),
 					nil, // no error
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
 				)
 				return m
 			},
@@ -821,6 +838,10 @@ func TestUpdate(t *testing.T) {
 					nil,
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
 				return m
 			},
 			job: func() *fake.MockJob {
@@ -852,6 +873,10 @@ func TestUpdate(t *testing.T) {
 					fake.JSONRawMessage(jsonCredentials),
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
 				return m
 			},
 			job: func() *fake.MockJob {
@@ -882,6 +907,10 @@ func TestUpdate(t *testing.T) {
 				m.On("GetManagedParameters", guid).Return(
 					fake.JSONRawMessage(jsonCredentials),
 					nil, // no error
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
 				)
 				return m
 			},
@@ -915,6 +944,10 @@ func TestUpdate(t *testing.T) {
 				m.On("GetManagedParameters", guid).Return(
 					nil,
 					nil, // no error
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
 				)
 				return m
 			},
