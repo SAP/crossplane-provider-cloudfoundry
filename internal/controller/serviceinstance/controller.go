@@ -270,9 +270,9 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.Wrap(err, errUpdateCR)
 	}
 
-	// Share with spaces after successful creation
+	// Update shared spaces after successful creation
 	if len(cr.Spec.ForProvider.SharedSpaces) > 0 {
-		if err := c.serviceinstance.ReconcileSharedSpaces(ctx, r.GUID, cr.Spec.ForProvider.SharedSpaces); err != nil {
+		if err := c.serviceinstance.UpdateSharedSpaces(ctx, r.GUID, cr.Spec.ForProvider.SharedSpaces); err != nil {
 			return managed.ExternalCreation{}, err
 		}
 	}
@@ -307,8 +307,8 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		}
 	}
 
-	// Reconcile shared spaces after successful update
-	if err := c.serviceinstance.ReconcileSharedSpaces(ctx, *cr.Status.AtProvider.ID, cr.Spec.ForProvider.SharedSpaces); err != nil {
+	// Update shared spaces after successful update
+	if err := c.serviceinstance.UpdateSharedSpaces(ctx, *cr.Status.AtProvider.ID, cr.Spec.ForProvider.SharedSpaces); err != nil {
 		return managed.ExternalUpdate{}, err
 	}
 
