@@ -42,7 +42,7 @@ func (sr spaceRole) Export(ctx context.Context, cfClient *client.Client, evHandl
 		evHandler.Warn(erratt.New("no spacerole found"))
 	} else {
 		for _, spaceRole := range spaceRoles.AllByGUIDs() {
-			evHandler.Resource(convertSpaceRoleResource(ctx, cfClient, spaceRole.(*userrole.Role), evHandler, resolveReferences))
+			evHandler.Resource(convertSpaceRoleResource(ctx, cfClient, spaceRole, evHandler, resolveReferences))
 		}
 	}
 	return nil
