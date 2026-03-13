@@ -192,8 +192,8 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	meta.SetExternalName(cr, serviceBinding.GUID)
 
-	if cr.ObjectMeta.Annotations != nil {
-		if _, ok := cr.ObjectMeta.Annotations[scb.ForceRotationKey]; ok {
+	if cr.Annotations != nil {
+		if _, ok := cr.Annotations[scb.ForceRotationKey]; ok {
 			meta.RemoveAnnotations(cr, scb.ForceRotationKey)
 		}
 	}

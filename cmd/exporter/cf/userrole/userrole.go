@@ -60,7 +60,7 @@ func (r *Role) GetGUID() string {
 }
 
 func (r *Role) GetName() string {
-	name := fmt.Sprintf("%s --- %s", *r.User.Username, r.Role.Type)
+	name := fmt.Sprintf("%s --- %s", *r.Username, r.Type)
 	names := parsan.ParseAndSanitize(
 		name,
 		parsan.RFC1035LowerSubdomain,

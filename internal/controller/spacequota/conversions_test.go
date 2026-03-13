@@ -9,6 +9,7 @@ import (
 const alpha = "alpha"
 const beta = "beta"
 
+//nolint:gocyclo
 func TestGetSpaceStatusHelper(t *testing.T) {
 	t.Log("empty inputs")
 	// We don't expect or observe any space assigned to the space quota.
