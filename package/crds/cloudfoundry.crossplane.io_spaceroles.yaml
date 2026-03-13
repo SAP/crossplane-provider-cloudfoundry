@@ -185,9 +185,6 @@ spec:
                     description: (String) The username of the Cloud Foundry user to
                       assign the role to.
                     type: string
-                required:
-                - type
-                - username
                 type: object
               managementPolicies:
                 default:
@@ -445,6 +442,10 @@ spec:
         - spec
         type: object
         x-kubernetes-validations:
+        - message: type is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.type)
+        - message: username is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.username)
         - message: 'SpaceReference is required: exactly one of spaceName, spaceRef,
             or spaceSelector must be set'
           rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName)

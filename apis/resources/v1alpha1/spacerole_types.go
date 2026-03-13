@@ -41,7 +41,6 @@ type SpaceRoleParameters struct {
 	SpaceReference `json:",inline"`
 
 	// (String) The space role type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types).
-	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=Developer;Auditor;Manager;Supporter;Developers;Auditors;Managers;Supporters
 	Type string `json:"type,omitempty" tf:"type,omitempty"`
 
@@ -50,7 +49,6 @@ type SpaceRoleParameters struct {
 	Origin *string `json:"origin,omitempty" tf:"origin,omitempty"`
 
 	// (String) The username of the Cloud Foundry user to assign the role to.
-	// +kubebuilder:validation:Required
 	Username string `json:"username,omitempty" tf:"username,omitempty"`
 }
 
@@ -76,6 +74,8 @@ type SpaceRoleStatus struct {
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.type)",message="type is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.username)",message="username is required"
 // +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName) || has(self.spec.forProvider.spaceRef) || has(self.spec.forProvider.spaceSelector))",message="SpaceReference is required: exactly one of spaceName, spaceRef, or spaceSelector must be set"
 // +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.spaceName), has(self.spec.forProvider.spaceRef), has(self.spec.forProvider.spaceSelector)].filter(x, x).size() <= 1",message="SpaceReference validation: only one of spaceName, spaceRef, or spaceSelector can be set"
 type SpaceRole struct {

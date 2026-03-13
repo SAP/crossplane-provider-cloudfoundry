@@ -303,7 +303,6 @@ spec:
                     - user-provided
                     type: string
                 required:
-                - name
                 - type
                 type: object
               managementPolicies:
@@ -645,6 +644,29 @@ spec:
         - spec
         type: object
         x-kubernetes-validations:
+        - message: name is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.name)
+        - message: type is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.type)
+        - message: servicePlan is required when type is managed
+          rule: self.spec.managementPolicies == ['Observe'] || !(has(self.spec.forProvider.type)
+            && self.spec.forProvider.type == 'managed') || has(self.spec.forProvider.servicePlan)
+        - message: either id or offering and plan must be set on servicePlan
+          rule: self.spec.managementPolicies == ['Observe'] || !(has(self.spec.forProvider.type)
+            && self.spec.forProvider.type == 'managed') || !has(self.spec.forProvider.servicePlan)
+            || (has(self.spec.forProvider.servicePlan.id) && !has(self.spec.forProvider.servicePlan.offering)
+            && !has(self.spec.forProvider.servicePlan.plan)) || (!has(self.spec.forProvider.servicePlan.id)
+            && has(self.spec.forProvider.servicePlan.offering) && has(self.spec.forProvider.servicePlan.plan))
+        - message: 'CredentialsReference validation: only one of credentials, jsonCredentials,
+            or credentialsSecretRef can be set'
+          rule: '!(has(self.spec.forProvider.type) && self.spec.forProvider.type ==
+            ''user-provided'') || [has(self.spec.forProvider.credentials), has(self.spec.forProvider.jsonCredentials),
+            has(self.spec.forProvider.credentialsSecretRef)].filter(x, x).size() <=
+            1'
+        - message: 'ParamsReference validation: only one of parameters, jsonParams,
+            or paramsSecretRef  can be set'
+          rule: '[has(self.spec.forProvider.parameters), has(self.spec.forProvider.jsonParams),
+            has(self.spec.forProvider.paramsSecretRef )].filter(x, x).size() <= 1'
         - message: 'SpaceReference is required: exactly one of spaceName, spaceRef,
             or spaceSelector must be set'
           rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName)
