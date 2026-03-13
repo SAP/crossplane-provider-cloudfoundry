@@ -539,6 +539,10 @@ func TestObserve(t *testing.T) {
 					fake.JSONRawMessage(jsonCredentials),
 					nil,
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
 				return m
 			},
 		}}
