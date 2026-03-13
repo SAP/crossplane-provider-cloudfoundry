@@ -2,6 +2,8 @@ apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: SpaceMembers
 metadata:
   name: upgrade-test-space-members
+  annotations:
+    crossplane.io/paused: "false"
 spec:
   forProvider:
     roleType: Developers

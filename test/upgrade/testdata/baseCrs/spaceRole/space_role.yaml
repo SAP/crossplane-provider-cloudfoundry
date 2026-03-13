@@ -2,6 +2,8 @@ apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: SpaceRole
 metadata:
   name: upgrade-test-space-role
+  annotations:
+    crossplane.io/paused: "false"
 spec:
   forProvider:
     type: Developer

@@ -2,6 +2,8 @@ apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceInstance
 metadata:
   name: upgrade-test-service-instance
+  annotations:
+    crossplane.io/paused: "false"
 spec:
   forProvider:
     type: managed

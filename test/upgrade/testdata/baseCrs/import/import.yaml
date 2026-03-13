@@ -2,6 +2,8 @@ apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Organization
 metadata:
   name: upgrade-test-org
+  annotations:
+    crossplane.io/paused: "false"
 spec:
   managementPolicies:
     - Observe
@@ -16,6 +18,8 @@ apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Space
 metadata:
   name: upgrade-test-import-space
+  annotations:
+    crossplane.io/paused: "false"
 spec:
   managementPolicies:
     - Observe
