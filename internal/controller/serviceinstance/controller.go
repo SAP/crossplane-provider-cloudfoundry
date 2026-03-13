@@ -187,8 +187,9 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 			ResourceExists:   r.LastOperation.Type != v1alpha1.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
 			ResourceUpToDate: r.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
 		}, nil
-	case v1alpha1.LastOperationSucceeded:
+	case v1alpha1.LastOperationSucceeded, "":
 		// If the last operation succeeded, set the CR to available
+		// Empty state is treated as succeeded (happens with user-provided services that have no async operations)
 		cr.SetConditions(xpv1.Available())
 		var credentialsUpToDate bool
 		desiredCredentials, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
