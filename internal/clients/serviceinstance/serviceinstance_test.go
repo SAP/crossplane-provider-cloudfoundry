@@ -1,184 +1,468 @@
 package serviceinstance
 
 import (
+	"context"
 	"testing"
 
+	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/go-cmp/cmp/cmpopts"
+	"github.com/pkg/errors"
+	"github.com/stretchr/testify/mock"
+	"k8s.io/utils/ptr"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 )
 
-func TestDiffSharedSpaces(t *testing.T) {
+var (
+	serviceInstanceGUID              = "service-instance-guid"
+	spaceGUID1                       = "space-guid-1"
+	spaceGUID2                       = "space-guid-2"
+	spaceGUID3                       = "space-guid-3"
+	spaceGUID4                       = "space-guid-4"
+	spaceGUID5                       = "space-guid-5"
+	errorGetSharedSpaceRelationships = "cannot get shared space relationships"
+	errorShareWithSpaces             = "cannot share service instance with spaces"
+	errorUnShareWithSpaces           = "cannot unshare service instance from spaces"
+	apiError                         = "HTTP 500"
+)
+
+// matchSpaces returns a matcher that validates a slice contains the expected spaces in any order. This is required because Go randomizes map iteration order.
+func matchSpaces(expectedSpaces ...string) func([]string) bool {
+	return func(spaces []string) bool {
+		if len(spaces) != len(expectedSpaces) {
+			return false
+		}
+
+		expectedSet := make(map[string]bool, len(expectedSpaces))
+		for _, s := range expectedSpaces {
+			expectedSet[s] = true
+		}
+
+		for _, s := range spaces {
+			if !expectedSet[s] {
+				return false
+			}
+		}
+
+		return true
+	}
+}
+
+func TestAreSharedSpacesUpToDate(t *testing.T) {
 	type args struct {
-		current []string
-		desired []string
+		guid    string
+		desired []v1alpha1.SpaceReference
 	}
 
 	type want struct {
-		toAdd    []string
-		toRemove []string
+		result bool
+		err    error
 	}
 
 	cases := map[string]struct {
-		args args
-		want want
+		args      args
+		want      want
+		mockSetup func(*fake.MockServiceInstance)
 	}{
-		"NoChanges": {
+		"UpToDate": {
 			args: args{
-				current: []string{"space-1", "space-2", "space-3"},
-				desired: []string{"space-1", "space-2", "space-3"},
+				guid: serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{
+					{Space: ptr.To(spaceGUID1)},
+					{Space: ptr.To(spaceGUID2)},
+				},
 			},
 			want: want{
-				toAdd:    nil,
-				toRemove: nil,
+				result: true,
+				err:    nil,
+			},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{
+						Data: []resource.Relationship{
+							{GUID: spaceGUID1},
+							{GUID: spaceGUID2},
+						},
+					},
+					nil,
+				)
 			},
 		},
-		"AddOnly": {
+		"Add": {
 			args: args{
-				current: []string{"space-1", "space-2"},
-				desired: []string{"space-1", "space-2", "space-3", "space-4"},
+				guid: serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{
+					{Space: ptr.To(spaceGUID1)},
+					{Space: ptr.To(spaceGUID2)},
+					{Space: ptr.To(spaceGUID3)},
+				},
 			},
 			want: want{
-				toAdd:    []string{"space-3", "space-4"},
-				toRemove: nil,
+				result: false,
+				err:    nil,
+			},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{
+						Data: []resource.Relationship{
+							{GUID: spaceGUID1},
+							{GUID: spaceGUID2},
+						},
+					},
+					nil,
+				)
 			},
 		},
-		"RemoveOnly": {
+		"Remove": {
 			args: args{
-				current: []string{"space-1", "space-2", "space-3", "space-4"},
-				desired: []string{"space-1", "space-2"},
+				guid: serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{
+					{Space: ptr.To(spaceGUID1)},
+				},
 			},
 			want: want{
-				toAdd:    nil,
-				toRemove: []string{"space-3", "space-4"},
+				result: false,
+				err:    nil,
+			},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{
+						Data: []resource.Relationship{
+							{GUID: spaceGUID1},
+							{GUID: spaceGUID2},
+							{GUID: spaceGUID3},
+						},
+					},
+					nil,
+				)
 			},
 		},
 		"AddAndRemove": {
 			args: args{
-				current: []string{"space-1", "space-2", "space-3"},
-				desired: []string{"space-2", "space-4", "space-5"},
+				guid: serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{
+					{Space: ptr.To(spaceGUID2)},
+					{Space: ptr.To(spaceGUID4)},
+				},
 			},
 			want: want{
-				toAdd:    []string{"space-4", "space-5"},
-				toRemove: []string{"space-1", "space-3"},
+				result: false,
+				err:    nil,
+			},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{
+						Data: []resource.Relationship{
+							{GUID: spaceGUID1},
+							{GUID: spaceGUID2},
+							{GUID: spaceGUID3},
+						},
+					},
+					nil,
+				)
 			},
 		},
-		"AddAll": {
+		"Empty": {
 			args: args{
-				current: []string{},
-				desired: []string{"space-1", "space-2", "space-3"},
+				guid:    serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{},
 			},
 			want: want{
-				toAdd:    []string{"space-1", "space-2", "space-3"},
-				toRemove: nil,
+				result: true,
+				err:    nil,
+			},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{
+						Data: []resource.Relationship{},
+					},
+					nil,
+				)
 			},
 		},
-		"RemoveAll": {
+		"ErrorFromGetSharedSpaceRelationships": {
 			args: args{
-				current: []string{"space-1", "space-2", "space-3"},
-				desired: []string{},
+				guid: serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{
+					{Space: ptr.To(spaceGUID1)},
+				},
 			},
 			want: want{
-				toAdd:    nil,
-				toRemove: []string{"space-1", "space-2", "space-3"},
+				result: false,
+				err:    errors.New(errorGetSharedSpaceRelationships + ": " + apiError),
 			},
-		},
-		"BothEmpty": {
-			args: args{
-				current: []string{},
-				desired: []string{},
-			},
-			want: want{
-				toAdd:    nil,
-				toRemove: nil,
-			},
-		},
-		"CompleteReplacement": {
-			args: args{
-				current: []string{"space-1", "space-2"},
-				desired: []string{"space-3", "space-4"},
-			},
-			want: want{
-				toAdd:    []string{"space-3", "space-4"},
-				toRemove: []string{"space-1", "space-2"},
-			},
-		},
-		"DuplicatesInCurrent": {
-			args: args{
-				current: []string{"space-1", "space-1", "space-2"},
-				desired: []string{"space-2", "space-3"},
-			},
-			want: want{
-				toAdd:    []string{"space-3"},
-				toRemove: []string{"space-1"},
-			},
-		},
-		"DuplicatesInDesired": {
-			args: args{
-				current: []string{"space-1", "space-2"},
-				desired: []string{"space-2", "space-2", "space-3"},
-			},
-			want: want{
-				// The second "space-2" will be added because we delete from the set on first encounter
-				toAdd:    []string{"space-2", "space-3"},
-				toRemove: []string{"space-1"},
-			},
-		},
-		"SingleItemNoChange": {
-			args: args{
-				current: []string{"space-1"},
-				desired: []string{"space-1"},
-			},
-			want: want{
-				toAdd:    nil,
-				toRemove: nil,
-			},
-		},
-		"SingleItemAdd": {
-			args: args{
-				current: []string{},
-				desired: []string{"space-1"},
-			},
-			want: want{
-				toAdd:    []string{"space-1"},
-				toRemove: nil,
-			},
-		},
-		"SingleItemRemove": {
-			args: args{
-				current: []string{"space-1"},
-				desired: []string{},
-			},
-			want: want{
-				toAdd:    nil,
-				toRemove: []string{"space-1"},
-			},
-		},
-		"LargeSet": {
-			args: args{
-				current: []string{"space-1", "space-2", "space-3", "space-4", "space-5", "space-6", "space-7", "space-8", "space-9", "space-10"},
-				desired: []string{"space-3", "space-5", "space-7", "space-11", "space-12", "space-13"},
-			},
-			want: want{
-				toAdd:    []string{"space-11", "space-12", "space-13"},
-				toRemove: []string{"space-1", "space-2", "space-4", "space-6", "space-8", "space-9", "space-10"},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					nil,
+					errors.New(apiError),
+				)
 			},
 		},
 	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			toAdd, toRemove := diffSharedSpaces(tc.args.current, tc.args.desired)
+			mockSI := &fake.MockServiceInstance{}
+			tc.mockSetup(mockSI)
 
-			// Use cmpopts.SortSlices to handle order independence in slice comparison
-			sortStrings := cmpopts.SortSlices(func(a, b string) bool { return a < b })
-
-			if diff := cmp.Diff(tc.want.toAdd, toAdd, sortStrings); diff != "" {
-				t.Errorf("diffSharedSpaces(...) toAdd mismatch (-want +got):\n%s", diff)
+			client := &Client{
+				ServiceInstance: mockSI,
 			}
 
-			if diff := cmp.Diff(tc.want.toRemove, toRemove, sortStrings); diff != "" {
-				t.Errorf("diffSharedSpaces(...) toRemove mismatch (-want +got):\n%s", diff)
+			got, err := AreSharedSpacesUpToDate(context.Background(), client, tc.args.guid, tc.args.desired)
+
+			if tc.want.err != nil && err != nil {
+				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
+					t.Errorf("AreSharedSpacesUpToDate(...): want error string != got error string:\n%s", diff)
+				}
+			} else {
+				if diff := cmp.Diff(tc.want.err, err); diff != "" {
+					t.Errorf("AreSharedSpacesUpToDate(...): want error != got error:\n%s", diff)
+				}
 			}
+
+			if diff := cmp.Diff(tc.want.result, got); diff != "" {
+				t.Errorf("AreSharedSpacesUpToDate(...): -want, +got:\n%s", diff)
+			}
+
+			mockSI.AssertExpectations(t)
+		})
+	}
+}
+
+func TestUpdateSharedSpaces(t *testing.T) {
+	type args struct {
+		guid    string
+		desired []v1alpha1.SpaceReference
+	}
+
+	type want struct {
+		err error
+	}
+
+	cases := map[string]struct {
+		args      args
+		want      want
+		mockSetup func(*fake.MockServiceInstance)
+	}{
+		"InSync": {
+			args: args{
+				guid: serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{
+					{Space: ptr.To(spaceGUID1)},
+					{Space: ptr.To(spaceGUID2)},
+				},
+			},
+			want: want{
+				err: nil,
+			},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{
+						Data: []resource.Relationship{
+							{GUID: spaceGUID1},
+							{GUID: spaceGUID2},
+						},
+					},
+					nil,
+				)
+			},
+		},
+		"Add": {
+			args: args{
+				guid: serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{
+					{Space: ptr.To(spaceGUID1)},
+					{Space: ptr.To(spaceGUID2)},
+					{Space: ptr.To(spaceGUID3)},
+				},
+			},
+			want: want{
+				err: nil,
+			},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{
+						Data: []resource.Relationship{
+							{GUID: spaceGUID1},
+						},
+					},
+					nil,
+				)
+				m.On("ShareWithSpaces", serviceInstanceGUID, []string{spaceGUID2, spaceGUID3}).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{}, // can be empty as return value is not used by UpdateSharedSpaces
+					nil,
+				)
+			},
+		},
+		"Remove": {
+			args: args{
+				guid: serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{
+					{Space: ptr.To(spaceGUID1)},
+				},
+			},
+			want: want{
+				err: nil,
+			},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{
+						Data: []resource.Relationship{
+							{GUID: spaceGUID1},
+							{GUID: spaceGUID2},
+							{GUID: spaceGUID3},
+						},
+					},
+					nil,
+				)
+				m.On("UnShareWithSpaces", serviceInstanceGUID, mock.MatchedBy(matchSpaces(spaceGUID2, spaceGUID3))).Return(nil)
+			},
+		},
+		"AddAndRemove": {
+			args: args{
+				guid: serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{
+					{Space: ptr.To(spaceGUID2)},
+					{Space: ptr.To(spaceGUID4)},
+					{Space: ptr.To(spaceGUID5)},
+				},
+			},
+			want: want{
+				err: nil,
+			},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{
+						Data: []resource.Relationship{
+							{GUID: spaceGUID1},
+							{GUID: spaceGUID2},
+							{GUID: spaceGUID3},
+						},
+					},
+					nil,
+				)
+				m.On("ShareWithSpaces", serviceInstanceGUID, mock.MatchedBy(matchSpaces(spaceGUID4, spaceGUID5))).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
+				m.On("UnShareWithSpaces", serviceInstanceGUID, mock.MatchedBy(matchSpaces(spaceGUID1, spaceGUID3))).Return(nil)
+			},
+		},
+		"ErrorFromGetSharedSpaceRelationships": {
+			args: args{
+				guid: serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{
+					{Space: ptr.To(spaceGUID1)},
+				},
+			},
+			want: want{
+				err: errors.New(errorGetSharedSpaceRelationships + ": " + apiError),
+			},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					nil,
+					errors.New(apiError),
+				)
+			},
+		},
+		"ErrorFromShareWithSpaces": {
+			args: args{
+				guid: serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{
+					{Space: ptr.To(spaceGUID1)},
+					{Space: ptr.To(spaceGUID2)},
+				},
+			},
+			want: want{
+				err: errors.New(errorShareWithSpaces + ": " + apiError),
+			},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{
+						Data: []resource.Relationship{},
+					},
+					nil,
+				)
+				m.On("ShareWithSpaces", serviceInstanceGUID, []string{spaceGUID1, spaceGUID2}).Return(
+					nil,
+					errors.New(apiError),
+				)
+			},
+		},
+		"ErrorFromUnShareWithSpaces": {
+			args: args{
+				guid:    serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{},
+			},
+			want: want{
+				err: errors.New(errorUnShareWithSpaces + ": " + apiError),
+			},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{
+						Data: []resource.Relationship{
+							{GUID: spaceGUID1},
+							{GUID: spaceGUID2},
+						},
+					},
+					nil,
+				)
+				m.On("UnShareWithSpaces", serviceInstanceGUID, mock.MatchedBy(matchSpaces(spaceGUID1, spaceGUID2))).Return(
+					errors.New(apiError),
+				)
+			},
+		},
+		"DesiredWithNilAndEmptySpaces": {
+			args: args{
+				guid: serviceInstanceGUID,
+				desired: []v1alpha1.SpaceReference{
+					{Space: ptr.To(spaceGUID1)},
+					{Space: nil},
+					{Space: ptr.To("")},
+					{Space: ptr.To(spaceGUID2)},
+				},
+			},
+			want: want{
+				err: nil,
+			},
+			mockSetup: func(m *fake.MockServiceInstance) {
+				m.On("GetSharedSpaceRelationships", serviceInstanceGUID).Return(
+					&resource.ServiceInstanceSharedSpaceRelationships{
+						Data: []resource.Relationship{
+							{GUID: spaceGUID1},
+							{GUID: spaceGUID2},
+						},
+					},
+					nil,
+				)
+			},
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			mockSI := &fake.MockServiceInstance{}
+			tc.mockSetup(mockSI)
+
+			client := &Client{
+				ServiceInstance: mockSI,
+			}
+
+			err := client.UpdateSharedSpaces(context.Background(), tc.args.guid, tc.args.desired)
+
+			if tc.want.err != nil && err != nil {
+				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
+					t.Errorf("UpdateSharedSpaces(...): want error string != got error string:\n%s", diff)
+				}
+			} else {
+				if diff := cmp.Diff(tc.want.err, err); diff != "" {
+					t.Errorf("UpdateSharedSpaces(...): want error != got error:\n%s", diff)
+				}
+			}
+
+			mockSI.AssertExpectations(t)
 		})
 	}
 }
