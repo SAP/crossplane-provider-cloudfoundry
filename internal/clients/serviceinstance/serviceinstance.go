@@ -27,6 +27,9 @@ type ServiceInstance interface {
 	CreateUserProvided(context.Context, *resource.ServiceInstanceUserProvidedCreate) (*resource.ServiceInstance, error)
 	UpdateUserProvided(context.Context, string, *resource.ServiceInstanceUserProvidedUpdate) (*resource.ServiceInstance, error)
 	Delete(context.Context, string) (string, error)
+	GetSharedSpaceRelationships(context.Context, string) (*resource.ServiceInstanceSharedSpaceRelationships, error)
+	ShareWithSpaces(context.Context, string, []string) (*resource.ServiceInstanceSharedSpaceRelationships, error)
+	UnShareWithSpaces(ctx context.Context, guid string, spaceGUIDs []string) error
 }
 
 // Job defines interfaces to async operations/jobs.
@@ -336,4 +339,93 @@ func IsUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.Servi
 		}
 	}
 	return true
+}
+
+// AreSharedSpacesUpToDate checks if the shared spaces of a service instance are in sync with the CR
+func AreSharedSpacesUpToDate(ctx context.Context, c *Client, guid string, desired []v1alpha1.SpaceReference) (bool, error) {
+	currentGUIDs, err := c.getCurrentSharedSpaces(ctx, guid)
+	if err != nil {
+		return false, err
+	}
+	desiredGUIDs := getDesiredSharedSpaces(desired)
+
+	toAdd, toRemove := diffSharedSpaces(currentGUIDs, desiredGUIDs)
+	return len(toAdd) == 0 && len(toRemove) == 0, nil
+}
+
+// UpdateSharedSpaces updates the shared spaces of a service instance to keep them in sync with the CR
+func (c *Client) UpdateSharedSpaces(ctx context.Context, guid string, desired []v1alpha1.SpaceReference) error {
+	currentGUIDs, err := c.getCurrentSharedSpaces(ctx, guid)
+	if err != nil {
+		return err
+	}
+	desiredGUIDs := getDesiredSharedSpaces(desired)
+
+	toAdd, toRemove := diffSharedSpaces(currentGUIDs, desiredGUIDs)
+	if len(toAdd) > 0 {
+		_, err := c.ServiceInstance.ShareWithSpaces(ctx, guid, toAdd)
+		if err != nil {
+			return errors.Wrap(err, "cannot share service instance with spaces")
+		}
+	}
+	if len(toRemove) > 0 {
+		err := c.ServiceInstance.UnShareWithSpaces(ctx, guid, toRemove)
+		if err != nil {
+			return errors.Wrap(err, "cannot unshare service instance from spaces")
+		}
+	}
+
+	return nil
+}
+
+// getCurrentSharedSpaces retrieves the GUIDs of spaces a service instance is shared with
+func (c *Client) getCurrentSharedSpaces(ctx context.Context, guid string) ([]string, error) {
+	relationships, err := c.ServiceInstance.GetSharedSpaceRelationships(ctx, guid)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get shared space relationships")
+	}
+
+	spaceGUIDs := make([]string, 0, len(relationships.Data))
+	for _, rel := range relationships.Data {
+		spaceGUIDs = append(spaceGUIDs, rel.GUID)
+	}
+	return spaceGUIDs, nil
+}
+
+// getDesiredSharedSpaces extracts space GUIDs from a list of SpaceReference
+func getDesiredSharedSpaces(refs []v1alpha1.SpaceReference) []string {
+	guids := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		if ref.Space != nil && *ref.Space != "" {
+			guids = append(guids, *ref.Space)
+		}
+	}
+	return guids
+}
+
+// diffSharedSpaces compares the current and desired shared spaces and returns the spaces to add and remove to match the desired state
+func diffSharedSpaces(current, desired []string) (toAdd, toRemove []string) {
+	currentSet := make(map[string]struct{}, len(current))
+	for _, guid := range current {
+		currentSet[guid] = struct{}{}
+	}
+
+	// Find spaces to add (in desired but not in current)
+	for _, guid := range desired {
+		if _, exists := currentSet[guid]; !exists {
+			toAdd = append(toAdd, guid)
+		}
+		// Mark as seen by deleting from set
+		delete(currentSet, guid)
+	}
+
+	// Remaining spaces in currentSet need to be removed
+	if len(currentSet) > 0 {
+		toRemove = make([]string, 0, len(currentSet))
+		for guid := range currentSet {
+			toRemove = append(toRemove, guid)
+		}
+	}
+
+	return toAdd, toRemove
 }
