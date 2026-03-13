@@ -71,11 +71,12 @@ func (c *Client) pollJobComplete(ctx context.Context, job string) error {
 type Client struct {
 	ServiceInstance
 	Job
+	ServicePlanResolver
 }
 
 // NewClient creates a new client instance from a cfclient.ServiceInstance instance.
 func NewClient(cf *client.Client) *Client {
-	return &Client{cf.ServiceInstances, cf.Jobs}
+	return &Client{cf.ServiceInstances, cf.Jobs, cf.ServicePlans}
 }
 
 // GetByIDOrSpec retrieves external resource by GUID or by matching CR's ForProvider spec
