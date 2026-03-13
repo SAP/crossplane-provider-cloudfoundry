@@ -232,6 +232,7 @@ make test-upgrade-custom
 Base tests use YAML manifests from `test/upgrade/testdata/baseCrs/`. Currently tested resources:
 
 - **Organization** (import) - Uses `managementPolicies: [Observe]` to import existing org
+- **Space** (import) - Uses `managementPolicies: [Observe]` to import existing space
 - **Space** - Lightweight resource for testing basic upgrade flow
 - **Domain**
 - **SpaceQuota**
@@ -246,7 +247,8 @@ Base tests use YAML manifests from `test/upgrade/testdata/baseCrs/`. Currently t
 - **ServiceInstance:** A managed service instance requires a ServicePlan specifying an offering and a plan.
 If the combination of offering and plan is not available in your space change it something different.\
 🠊 Run `cf marketplace` and update the values in test/upgrade/testdata/baseCrs/service_instance.yaml
-- **ServiceCredentialBinding:** The ServiceCredentialBinding directly depends on the ServiceInstance it is referencing
+- **ServiceCredentialBinding:** The ServiceCredentialBinding directly depends on the ServiceInstance it is referencing \
+🠊 The `base_upgrade_test` includes dedicated pre- and post-upgrade assessment for the ServiceInstance resources and its dependents. These assessments verify the ServiceInstance first, and only then thedependent resources such as ServiceCredentialBinding. This ordering makes dependency failures easier to diagnose and test less flaky when the upstream ServiceInstance is not healthy.
 
 #### Adding New Base Test Resources
 
@@ -366,18 +368,26 @@ test/
 ├── upgrade/
 │   ├── testdata/
 │   │   ├── baseCrs/                      # Base upgrade test resources
-│   │   │   ├── import.yaml               # Organization (observe) + Space (observe)
-│   │   │   ├── space.yaml                # Space (create)
-|   │   │   ├── domain.yaml
-|   │   │   ├── space_quota.yaml
-|   │   │   ├── space_role.yaml
-|   │   │   ├── service_credential_binding.yaml
-|   │   │   ├── service_instance.yaml
-|   │   │   └── space_members.yaml
-│   │   └── customCRs/                    # Custom upgrade test resources
+│   │   │   ├── import/
+│   │   │   │   └── import_org.yaml       # Organization (observe)
+│   │   │   ├── space/
+│   │   │   │   └── space.yaml            # Space (create)
+│   │   │   ├── domain/
+│   │   │   │   └── domain.yaml
+│   │   │   ├── spaceQuota/
+│   │   │   │   └── space_quota.yaml
+│   │   │   ├── spaceRole/
+│   │   │   │   └── space_role.yaml
+│   │   │   ├── serviceCredentialBinding/
+│   │   │   │   └── service_credential_binding.yaml
+│   │   │   ├── serviceInstance/
+│   │   │   │   └── service_instance.yaml
+│   │   │   └── spaceMembers/
+│   │   │       └── space_members.yaml
+│   │   └── customCrs/                    # Custom upgrade test resources
 │   │       └── externalNames/            # External-name validation test
 │   │           ├── space.yaml
-|   |           └── import.yaml
+│   │           └── import.yaml
 │   ├── main_test.go                      # Test environment setup
 │   ├── upgrade_test.go                   # Base upgrade test logic
 │   ├── base_upgrade_test.go              # Custom upgrade test framework
