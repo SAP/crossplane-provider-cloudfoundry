@@ -176,9 +176,6 @@ spec:
                     description: (String) The username of the Cloud Foundry user to
                       assign the role to.
                     type: string
-                required:
-                - type
-                - username
                 type: object
               managementPolicies:
                 default:
@@ -435,6 +432,15 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: type is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.type)
+        - message: username is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.username)
+        - message: 'OrgReference is required: exactly one of orgName, orgRef, or orgSelector
+            must be set'
+          rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.orgName)
+            || has(self.spec.forProvider.orgRef) || has(self.spec.forProvider.orgSelector))
     served: true
     storage: true
     subresources:

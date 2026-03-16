@@ -10,7 +10,7 @@ require (
 	github.com/crossplane-contrib/xp-testing v1.9.0
 	github.com/crossplane/crossplane-runtime v1.20.0
 	github.com/crossplane/crossplane-tools v0.0.0-20240522174801-1ad3d4c87f21
-	github.com/docker/cli v27.1.1+incompatible
+	github.com/docker/cli v29.2.0+incompatible
 	github.com/google/go-cmp v0.7.0
 	github.com/pkg/errors v0.9.1
 	github.com/vladimirvivien/gexe v0.5.0

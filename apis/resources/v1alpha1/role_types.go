@@ -74,6 +74,7 @@ type RoleAssignments struct {
 // MemberList includes a list of members and an enforcement policy for role assignment.
 type MemberList struct {
 	// (List of Attributes) List of members (usernames) to assign as org members with the specified role type. Defaults to empty list.
+	// +kubebuilder:validation:Optional
 	Members []*Member `json:"members"`
 
 	// (String) Set to `Lax` to enforce that the role is assigned to AT LEAST those members as defined in this CR. Set to `Strict` to enforce that the role is assigned to EXACTLY those members as defined in this CR and any other members will be removed. Defaults to `Lax`.
