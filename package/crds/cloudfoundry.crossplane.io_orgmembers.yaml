@@ -198,9 +198,6 @@ spec:
                     - Managers
                     - BillingManagers
                     type: string
-                required:
-                - members
-                - roleType
                 type: object
               managementPolicies:
                 default:
@@ -439,6 +436,16 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: roleType is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.roleType)
+        - message: 'OrgReference is required: exactly one of orgName, orgRef, or orgSelector
+            must be set'
+          rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.orgName)
+            || has(self.spec.forProvider.orgRef) || has(self.spec.forProvider.orgSelector))
+        - message: 'Members validation: at least one member must be set'
+          rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.members)
+            && self.spec.forProvider.members.size() >= 1)
     served: true
     storage: true
     subresources:

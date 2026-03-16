@@ -40,7 +40,6 @@ type OrgRoleParameters struct {
 	OrgReference `json:",inline"`
 
 	// (String) The org role type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types).
-	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=User;Auditor;Manager;BillingManager;Users;Auditors;Managers;BillingManagers
 	Type string `json:"type,omitempty" tf:"type,omitempty"`
 
@@ -49,7 +48,6 @@ type OrgRoleParameters struct {
 	Origin *string `json:"origin,omitempty" tf:"origin,omitempty"`
 
 	// (String) The username of the Cloud Foundry user to assign the role to.
-	// +kubebuilder:validation:Required
 	Username string `json:"username,omitempty" tf:"username,omitempty"`
 }
 
@@ -75,6 +73,9 @@ type OrgRoleStatus struct {
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.type)",message="type is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.username)",message="username is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.orgName) || has(self.spec.forProvider.orgRef) || has(self.spec.forProvider.orgSelector))",message="OrgReference is required: exactly one of orgName, orgRef, or orgSelector must be set"
 type OrgRole struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

@@ -21,12 +21,8 @@ type ServiceCredentialBindingObservation struct {
 	RetiredKeys []*SCBResource `json:"retiredKeys,omitempty"`
 }
 
-// +kubebuilder:validation:XValidation:rule="!(has(self.type) && self.type == 'app') || !has(self.rotation)",message="rotation cannot be enabled when type is app"
-// +kubebuilder:validation:XValidation:rule="!(has(self.type) && self.type == 'key') || has(self.name)",message="name is required when type is key"
-// +kubebuilder:validation:XValidation:rule="!(has(self.type) && self.type == 'app') || has(self.app) || has(self.appRef) || has(self.appSelector)",message="app, appRef, or appSelector is required when type is app"
 type ServiceCredentialBindingParameters struct {
 	// (String) The type of the service credential binding in Cloud Foundry. Either "key" or "app".
-	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=key;app
 	// +kubebuilder:default=key
 	Type string `json:"type,omitempty"`
@@ -122,6 +118,12 @@ type SCBResource struct {
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.type)",message="type is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || !(has(self.spec.forProvider.type) && self.spec.forProvider.type == 'key') || has(self.spec.forProvider.name)",message="name is required when type is key"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || !(has(self.spec.forProvider.type) && self.spec.forProvider.type == 'app') || !has(self.spec.forProvider.rotation)",message="rotation cannot be enabled when type is app"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || !(has(self.spec.forProvider.type) && self.spec.forProvider.type == 'app') || (has(self.spec.forProvider.app) || has(self.spec.forProvider.appRef) || has(self.spec.forProvider.appSelector))",message="AppReference is required: exactly one of app, appRef, or appSelector must be set if type is app"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.serviceInstance) || has(self.spec.forProvider.serviceInstanceRef) || has(self.spec.forProvider.serviceInstanceSelector))",message="ServiceInstanceReference is required: exactly one of serviceInstance, serviceInstanceRef, or serviceInstanceSelector must be set"
+// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.parameters), has(self.spec.forProvider.paramsSecretRef)].filter(x, x).size() <= 1",message="ParametersReference validation:either parameters or paramsSecretRef may be set but not both"
 type ServiceCredentialBinding struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

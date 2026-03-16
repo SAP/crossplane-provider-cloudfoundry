@@ -494,6 +494,10 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: either name or domain and subDomain must be set
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.name)
+            || (has(self.spec.forProvider.subDomain) && has(self.spec.forProvider.domain))
     served: true
     storage: true
     subresources:

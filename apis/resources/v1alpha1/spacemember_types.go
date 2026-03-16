@@ -13,8 +13,8 @@ type SpaceMembersParameters struct {
 	SpaceReference `json:",inline"`
 
 	// (String) Space role type to assign to members; see valid role types https://v3-apidocs.cloudfoundry.space/version/3.127.0/index.html#valid-role-types
+	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Enum=Developer;Auditor;Manager;Supporter;Developers;Auditors;Managers;Supporters
-	// +kubebuilder:validation:Required
 	RoleType string `json:"roleType"`
 
 	// (Attributes) List of members and enforcement policy for role assignment.
@@ -43,8 +43,9 @@ type SpaceMembersStatus struct {
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.roleType)",message="roleType is required"
 // +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName) || has(self.spec.forProvider.spaceRef) || has(self.spec.forProvider.spaceSelector))",message="SpaceReference is required: exactly one of spaceName, spaceRef, or spaceSelector must be set"
-// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.spaceName), has(self.spec.forProvider.spaceRef), has(self.spec.forProvider.spaceSelector)].filter(x, x).size() <= 1",message="SpaceReference validation: only one of spaceName, spaceRef, or spaceSelector can be set"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.members) && self.spec.forProvider.members.size() >= 1)",message="Members validation: at least one member must be set"
 type SpaceMembers struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
