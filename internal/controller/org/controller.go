@@ -100,6 +100,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	return &external{client: org.NewClient(cf), kube: c.kube}, nil
 }
 
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
 // An external is a managed.ExternalConnecter that is using the CloudFoundry API to observe and modify resources.
 type external struct {
 	client org.Client
@@ -191,12 +197,12 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Delete managed resource Org
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.Organization)
 	if !ok {
-		return errors.New(errNotOrgKind)
+		return managed.ExternalDelete{}, errors.New(errNotOrgKind)
 	}
 	// Do nothing, as Org is observe-only
 	cr.SetConditions(xpv1.Deleting())
-	return nil
+	return managed.ExternalDelete{}, nil
 }

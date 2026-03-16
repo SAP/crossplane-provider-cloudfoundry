@@ -32,12 +32,12 @@ NPROCS ?= 1
 # to half the number of CPU cores.
 GO_TEST_PARALLEL := $(shell echo $$(( $(NPROCS) / 2 )))
 
-GO_REQUIRED_VERSION ?= 1.22
-GO_STATIC_PACKAGES = $(GO_PROJECT)/cmd/provider
+GO_REQUIRED_VERSION ?= 1.23
+GO_STATIC_PACKAGES = $(GO_PROJECT)/cmd/provider $(GO_PROJECT)/cmd/exporter
 GO_LDFLAGS += -X $(GO_PROJECT)/internal/version.Version=$(VERSION)
 GO_SUBDIRS += cmd internal apis
 GO111MODULE = on
-GOLANGCILINT_VERSION ?= 1.62.2
+GOLANGCILINT_VERSION ?= 1.64.5
 -include build/makelib/golang.mk
 
 # kind-related versions
@@ -46,7 +46,6 @@ KIND_NODE_IMAGE_TAG ?= v1.32.0
 
 # Setup Kubernetes tools
 
-KIND_VERSION = v0.22.0
 UP_VERSION = v0.31.0
 UP_CHANNEL = stable
 UPTEST_VERSION = v0.11.1
@@ -63,7 +62,19 @@ IMAGES = $(BASE_NAME) $(BASE_NAME)-controller
 
 export UUT_CONFIG = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME)):$(VERSION)
 export UUT_CONTROLLER = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME))-controller:$(VERSION)
+export UUT_IMAGES = {"crossplane/provider-cloudfoundry":"docker.io/$(UUT_CONFIG)","crossplane/provider-cloudfoundry-controller":"docker.io/$(UUT_CONTROLLER)"}
 export E2E_IMAGES = {"package":"$(UUT_CONFIG)","controller":"$(UUT_CONTROLLER)"}
+
+# Import upgrade test environment variables from shell
+export UPGRADE_TEST_FROM_TAG
+export UPGRADE_TEST_TO_TAG
+export UPGRADE_TEST_VERIFY_TIMEOUT
+export UPGRADE_TEST_WAIT_FOR_PAUSE
+export CF_EMAIL
+export CF_USERNAME
+export CF_PASSWORD
+export CF_ENDPOINT
+
 
 # NOTE(hasheddan): we ensure up is installed prior to running platform-specific
 # build steps in parallel to avoid encountering an installation race condition.
@@ -137,6 +148,8 @@ run: go.build
 
 # ====================================================================================
 # End to End Testing
+# ====================================================================================
+
 CROSSPLANE_NAMESPACE = upbound-system
 -include build/makelib/local.xpkg.mk
 -include build/makelib/controlplane.mk
@@ -164,7 +177,7 @@ test-acceptance:  $(KIND) $(HELM3) build
 	@echo UUT_CONTROLLER=$$UUT_CONTROLLER
 	@$(INFO) ${E2E_IMAGES}
 	@echo "E2E_IMAGES=$$E2E_IMAGES"
-	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -run '$(testFilter)' 2>&1 | tee test-output.log
+	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -timeout=15m -run '$(testFilter)' 2>&1 | tee test-output.log
 	@echo "===========Test Summary==========="
 	@grep -E "PASS|FAIL" test-output.log
 	@case `tail -n 1 test-output.log` in \
@@ -174,6 +187,222 @@ test-acceptance:  $(KIND) $(HELM3) build
 .PHONY: cobertura submodules fallthrough run crds.clean dev-debug dev-clean demo-cluster demo-install demo-clean demo-debug
 
 # ====================================================================================
+# Upgrade Tests
+# ====================================================================================
+
+# Upgrade test directory
+UPGRADE_TEST_DIR := test/upgrade
+UPGRADE_TEST_CRS_DIR := $(UPGRADE_TEST_DIR)/testdata/baseCrs
+UPGRADE_TEST_CUSTOM_CRS_DIR := $(UPGRADE_TEST_DIR)/testdata/customCRs
+UPGRADE_TEST_OUTPUT_LOG := test-upgrade-output.log
+
+# If UPGRADE_TEST_CRS_TAG is not set, use UPGRADE_TEST_FROM_TAG as default
+UPGRADE_TEST_CRS_TAG ?= $(UPGRADE_TEST_FROM_TAG)
+
+# Test filter for running specific tests
+UPGRADE_TEST_FILTER ?= .
+
+.PHONY: check-upgrade-test-vars
+check-upgrade-test-vars: ## Verify required upgrade test environment variables
+	@$(INFO) Checking required environment variables for upgrade tests are present 
+	@test -n "$(UPGRADE_TEST_FROM_TAG)" || { echo "❌ Set UPGRADE_TEST_FROM_TAG"; exit 1; }
+	@test -n "$(UPGRADE_TEST_TO_TAG)" || { echo "❌ Set UPGRADE_TEST_TO_TAG"; exit 1; }
+	@$(OK) required upgrade test environment variables are set
+
+.PHONY: build-upgrade-test-images
+build-upgrade-test-images: ## Build local images if testing with 'local' tag
+	@if [ "$(UPGRADE_TEST_FROM_TAG)" == "local" ] || [ "$(UPGRADE_TEST_TO_TAG)" == "local" ]; then \
+		$(INFO) "Building local images (UPGRADE_TEST_FROM_TAG or UPGRADE_TEST_TO_TAG is \"local\")"; \
+		$(MAKE) build; \
+		$(OK) "Built local images: $(UUT_IMAGES)"; \
+	fi
+
+
+.PHONY: test-upgrade-compile
+test-upgrade-compile: ## Verify upgrade tests compile
+	@$(INFO) compiling upgrade tests
+	@cd $(UPGRADE_TEST_DIR) && go test -c -tags=upgrade -o /dev/null
+	@$(OK) upgrade tests compile successfully
+
+# ====================================================================================
+# Base Upgrade Tests (Standard Resource Verification)
+# ====================================================================================
+
+
+.PHONY: test-upgrade-base
+test-upgrade-base: $(KIND) check-upgrade-test-vars build-upgrade-test-images ## Run upgrade tests (standard resource verification )
+	@$(INFO) running upgrade tests from $(UPGRADE_TEST_FROM_TAG) to $(UPGRADE_TEST_TO_TAG)
+	@cd $(UPGRADE_TEST_DIR) && go test -v -tags=upgrade -timeout=45m -run TestUpgradeProvider ./... 2>&1 | tee ../../$(UPGRADE_TEST_OUTPUT_LOG)
+	@echo "==========Base Upgrade Test Summary =========="
+	@grep -E "PASS|FAIL|ok " $(UPGRADE_TEST_OUTPUT_LOG) | tail -5
+	@case `tail -n 1 $(UPGRADE_TEST_OUTPUT_LOG)` in \
+		*FAIL*) echo "❌ Upgrade test failed"; exit 1 ;; \
+		*ok*) echo "✅ Upgrade tests passed"; $(OK) upgrade tests passed ;; \
+		*) echo "⚠️  Could not determine test result"; exit 1 ;; \
+	esac
+
+# ====================================================================================
+# Custom Upgrade Tests (External-Name Validation, etc.)
+# ====================================================================================
+
+.PHONY: test-upgrade-custom
+test-upgrade-custom: $(KIND) check-upgrade-test-vars build-upgrade-test-images ## Run custom upgrade tests (external-name validation, etc.)
+	@$(INFO) running custom upgrade tests from $(UPGRADE_TEST_FROM_TAG) to $(UPGRADE_TEST_TO_TAG)
+	@$(INFO) test filter: $(UPGRADE_TEST_FILTER)
+	@cd $(UPGRADE_TEST_DIR) && go test -v -tags=upgrade -timeout=45m -run '$(UPGRADE_TEST_FILTER)' ./... 2>&1 | tee ../../$(UPGRADE_TEST_OUTPUT_LOG)
+	@echo "========== Custom Upgrade Test Summary =========="
+	@grep -E "PASS|FAIL|ok " $(UPGRADE_TEST_OUTPUT_LOG) | tail -5
+	@case `tail -n 1 $(UPGRADE_TEST_OUTPUT_LOG)` in \
+		*FAIL*) echo "❌ Custom upgrade test failed"; exit 1 ;; \
+		*ok*) echo "✅ Custom upgrade tests passed"; $(OK) custom upgrade tests passed ;; \
+		*) echo "⚠️  Could not determine test result"; exit 1 ;; \
+	esac
+
+# ====================================================================================
+# Combined: Run All Upgrade Tests
+# ====================================================================================
+
+.PHONY: test-upgrade
+test-upgrade: $(KIND) check-upgrade-test-vars build-upgrade-test-images ## Run ALL upgrade tests (base + custom)
+	@$(INFO) running all upgrade tests from $(UPGRADE_TEST_FROM_TAG) to $(UPGRADE_TEST_TO_TAG)
+	@cd $(UPGRADE_TEST_DIR) && go test -v -tags=upgrade -timeout=45m ./... 2>&1 | tee ../../$(UPGRADE_TEST_OUTPUT_LOG)
+	@echo "========== Upgrade Test Summary =========="
+	@grep -E "PASS|FAIL|ok " $(UPGRADE_TEST_OUTPUT_LOG) | tail -5
+	@case `tail -n 1 $(UPGRADE_TEST_OUTPUT_LOG)` in \
+		*FAIL*) echo "❌ Upgrade test failed"; exit 1 ;; \
+		*ok*) echo "✅ Upgrade tests passed"; $(OK) upgrade tests passed ;; \
+		*) echo "⚠️  Could not determine test result"; exit 1 ;; \
+	esac
+
+
+# ====================================================================================
+# CR Preparation
+# ====================================================================================
+
+.PHONY: test-upgrade-prepare-crs
+test-upgrade-prepare-crs: ## Prepare CRs from CRS_TAG version
+	@$(INFO) preparing CRs from $(UPGRADE_TEST_CRS_TAG)
+	@test -n "$(UPGRADE_TEST_CRS_TAG)" || { echo "❌ Set UPGRADE_TEST_CRS_TAG or UPGRADE_TEST_FROM_TAG"; exit 1; }
+	@if [ "$(UPGRADE_TEST_CRS_TAG)" = "local" ]; then \
+		$(OK) "Using local CRs from $(UPGRADE_TEST_CRS_DIR)/ (CRS_TAG is 'local')"; \
+	else \
+		$(INFO) "Checking out CRs from tag $(UPGRADE_TEST_CRS_TAG)"; \
+		rm -rf $(UPGRADE_TEST_CRS_DIR)/*; \
+		mkdir -p $(UPGRADE_TEST_CRS_DIR); \
+		if git ls-tree -r $(UPGRADE_TEST_CRS_TAG) --name-only | grep -q "^$(UPGRADE_TEST_CRS_DIR)/"; then \
+			$(INFO) "✅ Found $(UPGRADE_TEST_CRS_DIR)/ in $(UPGRADE_TEST_CRS_TAG)"; \
+			git archive $(UPGRADE_TEST_CRS_TAG) $(UPGRADE_TEST_CRS_DIR)/ | tar -x --strip-components=4 -C $(UPGRADE_TEST_CRS_DIR)/; \
+			$(OK) "Copied all CRs from $(UPGRADE_TEST_CRS_DIR)/"; \
+		else \
+			$(INFO) "⚠️  $(UPGRADE_TEST_CRS_DIR)/ not found, using hardcoded e2e paths"; \
+			git show $(UPGRADE_TEST_CRS_TAG):test/e2e/crs/orgspace/import.yaml > $(UPGRADE_TEST_CRS_DIR)/import.yaml 2>/dev/null || \
+				{ echo "❌ Could not find import.yaml in $(UPGRADE_TEST_CRS_TAG)"; exit 1; }; \
+			git show $(UPGRADE_TEST_CRS_TAG):test/e2e/crs/orgspace/space.yaml > $(UPGRADE_TEST_CRS_DIR)/space.yaml 2>/dev/null || \
+				{ echo "❌ Could not find space.yaml in $(UPGRADE_TEST_CRS_TAG)"; exit 1; }; \
+			$(OK) "Copied e2e CRs to $(UPGRADE_TEST_CRS_DIR)/"; \
+		fi; \
+	fi
+
+# ====================================================================================
+# Upgrade Tests with Version-Specific CRs
+# ====================================================================================
+
+.PHONY: test-upgrade-with-version-crs
+test-upgrade-with-version-crs: $(KIND) check-upgrade-test-vars build-upgrade-test-images test-upgrade-prepare-crs ## Run upgrade tests with FROM version CRs
+	@$(INFO) running upgrade tests from $(UPGRADE_TEST_FROM_TAG) to $(UPGRADE_TEST_TO_TAG)
+	@cd $(UPGRADE_TEST_DIR) && go test -v -tags=upgrade -timeout=45m ./... 2>&1 | tee ../../$(UPGRADE_TEST_OUTPUT_LOG)
+	@echo "========== Upgrade Test Summary =========="
+	@grep -E "PASS|FAIL|ok " $(UPGRADE_TEST_OUTPUT_LOG) | tail -5
+	@case `tail -n 1 $(UPGRADE_TEST_OUTPUT_LOG)` in \
+		*FAIL*) echo "❌ Upgrade test failed"; exit 1; ;; \
+		*ok*) echo "✅ Upgrade tests passed"; $(OK) upgrade tests passed; ;; \
+		*) echo "⚠️  Could not determine test result"; exit 1; ;; \
+	esac
+
+# ====================================================================================
+# Debugging Support
+# ====================================================================================
+
+# TODO: Add test-upgrade-debug-base and test-upgrade-debug-custom variants
+
+.PHONY: test-upgrade-debug
+test-upgrade-debug: $(KIND) check-upgrade-test-vars build-upgrade-test-images test-upgrade-prepare-crs ## Run upgrade tests with debugger
+	@$(INFO) running upgrade tests with debugger
+	@cd $(UPGRADE_TEST_DIR) && dlv test -tags=upgrade . --listen=:2345 --headless=true --api-version=2 --build-flags="-tags=upgrade" -- -test.v -test.timeout 45m 2>&1 | tee ../../$(UPGRADE_TEST_OUTPUT_LOG)
+	@echo "========== Upgrade Test Summary =========="
+	@grep -E "PASS|FAIL|ok " $(UPGRADE_TEST_OUTPUT_LOG) | tail -5
+
+# ====================================================================================
+# Utility Targets
+# ====================================================================================
+
+.PHONY: test-upgrade-restore-crs
+test-upgrade-restore-crs: ## Restore $(UPGRADE_TEST_CRS_DIR)/ to current version
+	@$(INFO) restoring $(UPGRADE_TEST_CRS_DIR)/ 
+	@git checkout $(UPGRADE_TEST_CRS_DIR)/
+	@$(OK) CRs restored
+
+.PHONY: test-upgrade-clean
+test-upgrade-clean: $(KIND) ## Clean upgrade test artifacts
+	@$(INFO) cleaning upgrade test artifacts
+	@$(KIND) get clusters 2>/dev/null | grep e2e | xargs -r -n1 $(KIND) delete cluster --name || true
+	@rm -rf $(UPGRADE_TEST_DIR)/logs/
+	@rm -f $(UPGRADE_TEST_OUTPUT_LOG)
+	@$(OK) cleanup complete
+
+.PHONY: test-upgrade-help
+test-upgrade-help: ## Show upgrade test usage examples
+	@$(INFO) ""
+	@$(INFO) "Upgrade Test Examples:"
+	@$(INFO) "======================"
+	@$(INFO) ""
+	@$(INFO) "  1. Run ALL upgrade tests (base + custom):"
+	@$(INFO) "     export UPGRADE_TEST_FROM_TAG=v0.3.2"
+	@$(INFO) "     export UPGRADE_TEST_TO_TAG=v0.4.0"
+	@$(INFO) "     make test-upgrade"
+	@$(INFO) ""
+	@$(INFO) "  2. Run ONLY base upgrade tests:"
+	@$(INFO) "     export UPGRADE_TEST_FROM_TAG=v0.3.2"
+	@$(INFO) "     export UPGRADE_TEST_TO_TAG=v0.4.0"
+	@$(INFO) "     make test-upgrade-base"
+	@$(INFO) ""
+	@$(INFO) "  3. Run ONLY custom upgrade tests:"
+	@$(INFO) "     export UPGRADE_TEST_FROM_TAG=v0.3.2"
+	@$(INFO) "     export UPGRADE_TEST_TO_TAG=v0.4.0"
+	@$(INFO) "     make test-upgrade-custom"
+	@$(INFO) ""
+	@$(INFO) "  4. Run specific custom test:"
+	@$(INFO) "     export UPGRADE_TEST_FROM_TAG=v0.3.2"
+	@$(INFO) "     export UPGRADE_TEST_TO_TAG=v0.4.0"
+	@$(INFO) "     export UPGRADE_TEST_FILTER='Test_Space_External_Name'"
+	@$(INFO) "     make test-upgrade-custom"
+	@$(INFO) ""
+	@$(INFO) "  5. Test local changes (v0.3.2 -> your code):"
+	@$(INFO) "     export UPGRADE_TEST_FROM_TAG=v0.3.2"
+	@$(INFO) "     export UPGRADE_TEST_TO_TAG=local"
+	@$(INFO) "     make test-upgrade"
+	@$(INFO) ""
+	@$(INFO) "  6. Clean up test artifacts:"
+	@$(INFO) "     make test-upgrade-clean"
+	@$(INFO) ""
+	@$(INFO) "  7. Restore CRs after version checkout:"
+	@$(INFO) "     make test-upgrade-restore-crs"
+	@$(INFO) ""
+	@$(INFO) "Required Environment Variables:"
+	@$(INFO) "  CF_EMAIL, CF_USERNAME, CF_PASSWORD, CF_ENDPOINT"
+	@$(INFO) "  UPGRADE_TEST_FROM_TAG, UPGRADE_TEST_TO_TAG"
+	@$(INFO) ""
+	@$(INFO) "Optional Environment Variables:"
+	@$(INFO) "  UPGRADE_TEST_FILTER (default: '.' - runs all tests)"
+	@$(INFO) "  UPGRADE_TEST_CRS_TAG (default: UPGRADE_TEST_FROM_TAG)"
+	@$(INFO) ""
+	@$(INFO) "Test Types:"
+	@$(INFO) "==========="
+	@$(INFO) "  Base Tests:   Standard resource verification (TestUpgradeProvider)"
+	@$(INFO) "  Custom Tests: External-name validation (Test_Space_External_Name, etc.)"
+	@$(INFO) ""
+	
+# ====================================================================================
 # Special Targets
 
 define CROSSPLANE_MAKE_HELP
@@ -182,6 +411,19 @@ Crossplane Targets:
     submodules            Update the submodules, such as the common build scripts.
     run                   Run crossplane locally, out-of-cluster. Useful for development.
 
+Upgrade Testing:
+    test-upgrade                   Run ALL upgrade tests (requires env vars, base + custom)
+	test-upgrade-base              Run base upgrade tests only
+	test-upgrade-custom            Run custom upgrade tests only (external-name validation, etc.)
+    test-upgrade-with-version-crs  Run upgrade tests with auto CR checkout
+    test-upgrade-compile           Verify upgrade tests compile
+    test-upgrade-debug             Run upgrade tests with debugger
+    test-upgrade-prepare-crs       Prepare CRs from CRS_TAG version
+    test-upgrade-restore-crs       Restore test/upgrade/crs/ to current version
+    test-upgrade-clean             Clean up upgrade test artifacts
+    test-upgrade-help              Show detailed upgrade test usage
+    check-upgrade-test-vars        Verify required environment variables
+    build-upgrade-test-images      Build local images if needed
 endef
 # The reason CROSSPLANE_MAKE_HELP is used instead of CROSSPLANE_HELP is because the crossplane
 # binary will try to use CROSSPLANE_HELP if it is set, and this is for something different.

@@ -565,7 +565,7 @@ func TestDelete(t *testing.T) {
 				client:  tc.service().MockSpace,
 			}
 
-			err := c.Delete(context.Background(), tc.args.mg)
+			_, err := c.Delete(context.Background(), tc.args.mg)
 
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.

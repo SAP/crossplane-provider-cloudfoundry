@@ -67,6 +67,10 @@ Please note that when running multiple times you might want to delete the kind c
 kind delete cluster <cluster-name>
 ```
 
+### Upgrade Tests
+
+The provider comes with a set of upgrade tests that can be run locally. To learn more about it : [Upgrade Tests README](./docs/upgrade-testing.md).
+
 #### Required Configuration
 In order for the tests to perform successfully some configuration need to be present as environment variables:
 
@@ -88,9 +92,15 @@ Contains the CF server URL, for example:
 https://api.cf.eu12.hana.ondemand.com
 ```
 
+## Export CLI
+
+The provider includes an export CLI tool that generates managed resource definitions from the existing resource configurations of a Cloud Foundry cluster.
+
+For more details, refer to the [user guide](cmd/exporter/docs/USERGUIDE.md).
+
 ## 👐 Support, Feedback, Contributing
 
-If you have a question always feel free to reach out on our official crossplane slack channel: 
+If you have a question always feel free to reach out on our official crossplane slack channel:
 
 :rocket: [**#provider-sap-cloudfoundry**](https://crossplane.slack.com/archives/C08NBTJ1J05).
 

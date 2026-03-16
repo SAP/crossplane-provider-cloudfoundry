@@ -1,0 +1,11 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  name: upgrade-test-space
+spec:
+  forProvider:
+    name: upgrade-test-space
+    orgRef:
+      name: upgrade-test-org  # ← References the imported org
+  providerConfigRef:
+    name: default

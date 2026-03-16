@@ -1,0 +1,52 @@
+on:
+  pull_request:
+
+jobs:
+  flake-check:
+    permissions:
+      contents: read
+    name: Check nix flakes
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Check Nix flake inputs
+        uses: DeterminateSystems/flake-checker-action@main
+        with:
+          check-outdated: false
+      - uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # version v31.9.0
+      - name: Check flake
+        run: |
+          nix flake check
+
+  vendor-hash-check:
+    permissions:
+      contents: read
+    name: Comparing vendor hash values
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
+      - name: Check Nix flake inputs
+        uses: DeterminateSystems/flake-checker-action@main
+        with:
+          check-outdated: false
+      - uses: cachix/install-nix-action@4e002c8ec80594ecd40e759629461e26c8abed15 # version v31.9.0
+      - name: Get vendor directory
+        run: |
+          nix develop . -c go mod vendor
+      - id: calculated-hash
+        name: Calculate vendor hash
+        run: |
+          hash=$(nix hash path vendor)
+          echo "Calculated vendor hash: $hash"
+          echo "HASH=$hash" >> "$GITHUB_OUTPUT"
+      - id: current-hash
+        name: Get the current vendor hash
+        run: |
+          hash=$(nix eval --file ./config.nix --raw --argstr lib '' 'exporter-cli.vendorHash' --raw)
+          echo "Configured vendor hash: $hash"
+          echo "HASH=$hash" >> "$GITHUB_OUTPUT"
+      - name: Comparing hashes
+        if: ${{ steps.calculated-hash.outputs.HASH != steps.current-hash.outputs.HASH }}
+        run: |
+          echo "::error file=config.nix,line=6,title=Invalid vendorHash::Update the vendor hash. Suggested value: ${{steps.calculated-hash.outputs.HASH}}"
+          exit 1

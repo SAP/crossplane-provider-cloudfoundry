@@ -258,6 +258,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	return &external{client: spacequota.NewClient(cf), kube: c.kube, isUpToDate: isUpToDate}, nil
 }
 
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
 // An ExternalClient observes, then either creates, updates, or
 // deletes an external resource to ensure it reflects the managed
 // resource's desired state.
@@ -364,28 +370,28 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Delete deletes a space quota
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.SpaceQuota)
 	if !ok {
-		return errors.New(errUnexpectedObject)
+		return managed.ExternalDelete{}, errors.New(errUnexpectedObject)
 	}
 	cr.SetConditions(xpv1.Deleting())
 
 	// assert that ID is set
 	if cr.Status.AtProvider.ID == nil {
-		return errors.New(errDelete)
+		return managed.ExternalDelete{}, errors.New(errDelete)
 	}
 
 	for i := range cr.Status.AtProvider.Spaces {
 		err := c.client.Remove(ctx, *cr.Status.AtProvider.ID, *cr.Status.AtProvider.Spaces[i])
 		if err != nil {
-			return errors.Wrap(err, errDelete)
+			return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 		}
 	}
 	_, err := c.client.Delete(ctx, *cr.Status.AtProvider.ID)
 	if err != nil {
-		return errors.Wrap(err, errDelete)
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 
-	return nil
+	return managed.ExternalDelete{}, nil
 }

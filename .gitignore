@@ -17,3 +17,12 @@ dev.env
 secrets.env
 *~
 /test/e2e/logs/
+# Environment files with secrets
+.env
+test/**/.env
+test/upgrade/.env
+
+# Upgrade Test artifacts
+test-upgrade-output.log
+test/upgrade/logs/
+
