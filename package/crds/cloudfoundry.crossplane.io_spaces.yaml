@@ -183,8 +183,6 @@ spec:
                             type: string
                         type: object
                     type: object
-                required:
-                - name
                 type: object
               managementPolicies:
                 default:
@@ -461,6 +459,13 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: name is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.name)
+        - message: 'OrgReference is required: exactly one of orgName, orgRef, or orgSelector
+            must be set'
+          rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.orgName)
+            || has(self.spec.forProvider.orgRef) || has(self.spec.forProvider.orgSelector))
     served: true
     storage: true
     subresources:
