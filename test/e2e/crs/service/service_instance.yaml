@@ -14,5 +14,8 @@ spec:
       policy:
         resolve: Always
     servicePlan:
-      offering: destination
-      plan: lite
+      offering: alert-notification
+      plan: standard
+    sharedSpaces:
+      - spaceRef:
+          name: service-space-shared
