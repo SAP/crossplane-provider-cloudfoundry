@@ -15,18 +15,90 @@
 package upgrade
 
 import (
+	"context"
+	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
+	"time"
+
+	"github.com/crossplane-contrib/xp-testing/pkg/resources"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/e2e-framework/klient/wait"
+	"sigs.k8s.io/e2e-framework/pkg/envconf"
 )
 
 func TestUpgradeProvider(t *testing.T) {
 	fromTag, toTag := loadTags()
 
+	serviceInstanceDir := filepath.Join(resourceDirectoryRoot, "serviceInstance")
+	serviceCredentialBindingDir := filepath.Join(resourceDirectoryRoot, "serviceCredentialBinding")
+	dependentDirs := []string{serviceCredentialBindingDir}
+
+	requiredDirs := removeFromDirs(resourceDirectories, dependentDirs)
+
 	upgradeTest := NewCustomUpgradeTest("baseline-upgrade-test").
 		FromVersion(fromTag).
 		ToVersion(toTag).
-		WithResourceDirectories(resourceDirectories)
-
+		WithResourceDirectories(resourceDirectories).
+		SkipDefaultResourceVerification().
+		WithCustomPreUpgradeAssessment(
+			"Check all required resources are healthy before upgrade",
+			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+				return verifyResources(ctx, t, cfg, requiredDirs, verifyTimeout)
+			},
+		).
+		WithCustomPreUpgradeAssessment(
+			"Check service instance and dependent resources are healthy before upgrade",
+			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+				return verifyServiceInstanceWithDependents(ctx, t, cfg, serviceInstanceDir, dependentDirs, verifyTimeout)
+			},
+		).
+		WithCustomPostUpgradeAssessment(
+			"Check all required resources are healthy after upgrade",
+			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+				return verifyResources(ctx, t, cfg, requiredDirs, verifyTimeout)
+			},
+		).
+		WithCustomPostUpgradeAssessment(
+			"Check service instance and dependent resources are healthy after upgrade",
+			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+				return verifyServiceInstanceWithDependents(ctx, t, cfg, serviceInstanceDir, dependentDirs, verifyTimeout)
+			},
+		)
 	testenv.Test(t, upgradeTest.Feature())
+}
+
+// verifyResources waits for resources in dirs to be ready
+func verifyResources(ctx context.Context, t *testing.T, cfg *envconf.Config, dirs []string, timeout time.Duration) context.Context {
+	for _, dir := range dirs {
+		klog.V(4).Infof("verify resources of directory %s", dir)
+		if err := resources.WaitForResourcesToBeSynced(ctx, cfg, dir, nil, wait.WithTimeout(timeout)); err != nil {
+			t.Errorf("verify resources of directory %s failed: %v", dir, err)
+		}
+	}
+
+	return ctx
+}
+
+// verifyServiceInstanceWithDependents verifies the service instance directory first and
+// if successful dependent directories
+func verifyServiceInstanceWithDependents(ctx context.Context, t *testing.T, cfg *envconf.Config, serviceInstanceDir string, dependentDirs []string, timeout time.Duration) context.Context {
+	klog.V(4).Infof("verify service instance")
+	if err := resources.WaitForResourcesToBeSynced(ctx, cfg, serviceInstanceDir, nil, wait.WithTimeout(timeout)); err != nil {
+		t.Errorf("verify service instance failed: %v — skipping verification of: %s", err, strings.Join(dependentDirs, ", "))
+		return ctx
+	}
+	return verifyResources(ctx, t, cfg, dependentDirs, timeout)
+}
+
+// removeFromDirs is a helper function to remove directories from the list of directories to verify,
+// allowing dependent resources to be verified separately
+func removeFromDirs(dirs []string, remove []string) []string {
+	result := slices.Clone(dirs)
+	return slices.DeleteFunc(result, func(d string) bool {
+		return slices.Contains(remove, d)
+	})
 }
 
 // loadTags is a helper function to load FROM and TO tags for tests
