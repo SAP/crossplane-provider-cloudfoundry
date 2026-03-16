@@ -491,6 +491,39 @@ func TestObserve(t *testing.T) {
 				)
 				return m
 			},
+		},
+		"UserProvidedService_EmptyLastOperation": {
+			args: args{
+				mg: serviceInstance("user-provided", withExternalName(guid), withSpace(spaceGUID), withCredentials(&jsonCredentials), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte(jsonCredentials))})),
+			},
+			want: want{
+				mg: serviceInstance("user-provided",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withCredentials(&jsonCredentials),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: iSha256([]byte(jsonCredentials))}),
+					withConditions(xpv1.Available()),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				// User-provided services have empty LastOperation
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("user-provided").SetName(name).SetGUID(guid).SetLastOperation("", "").ServiceInstance,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("user-provided").SetName(name).SetGUID(guid).SetLastOperation("", "").ServiceInstance,
+					nil,
+				)
+				m.On("GetUserProvidedCredentials", guid).Return(
+					fake.JSONRawMessage(jsonCredentials),
+					nil,
+				)
+				return m
+			},
 		}}
 
 	for n, tc := range cases {

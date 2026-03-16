@@ -17,8 +17,8 @@ import (
 )
 
 var (
-	roleCache mkcontainer.Container
-	userCache mkcontainer.Container
+	roleCache mkcontainer.TypedContainer[*Role]
+	userCache mkcontainer.TypedContainer[*user]
 )
 
 const defaultUserName = "undefined username"
@@ -73,7 +73,7 @@ func (r *Role) GetName() string {
 	return name
 }
 
-func GetOrgRoles(ctx context.Context, cfClient *client.Client) (mkcontainer.Container, mkcontainer.Container, error) {
+func GetOrgRoles(ctx context.Context, cfClient *client.Client) (mkcontainer.TypedContainer[*Role], mkcontainer.TypedContainer[*user], error) {
 	if userCache != nil || roleCache != nil {
 		return roleCache, userCache, nil
 	}
@@ -89,14 +89,14 @@ func GetOrgRoles(ctx context.Context, cfClient *client.Client) (mkcontainer.Cont
 	if err != nil {
 		return nil, nil, erratt.Errorf("cannot get roles and users: %w", err)
 	}
-	roleCache = mkcontainer.New()
-	userCache = mkcontainer.New()
+	roleCache = mkcontainer.NewTyped[*Role]()
+	userCache = mkcontainer.NewTyped[*user]()
 	roleCache.Store(roles...)
 	userCache.Store(users...)
 	return roleCache, userCache, nil
 }
 
-func GetSpaceRoles(ctx context.Context, cfClient *client.Client) (mkcontainer.Container, mkcontainer.Container, error) {
+func GetSpaceRoles(ctx context.Context, cfClient *client.Client) (mkcontainer.TypedContainer[*Role], mkcontainer.TypedContainer[*user], error) {
 	if userCache != nil || roleCache != nil {
 		return roleCache, userCache, nil
 	}
@@ -118,14 +118,14 @@ func GetSpaceRoles(ctx context.Context, cfClient *client.Client) (mkcontainer.Co
 	if err != nil {
 		return nil, nil, erratt.Errorf("cannot get roles and users: %w", err)
 	}
-	roleCache = mkcontainer.New()
-	userCache = mkcontainer.New()
+	roleCache = mkcontainer.NewTyped[*Role]()
+	userCache = mkcontainer.NewTyped[*user]()
 	roleCache.Store(roles...)
 	userCache.Store(users...)
 	return roleCache, userCache, nil
 }
 
-func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spaceGuids []string) ([]mkcontainer.Item, []mkcontainer.Item, error) {
+func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spaceGuids []string) ([]*Role, []*user, error) {
 	listOptions := client.NewRoleListOptions()
 	listOptions.OrganizationGUIDs.EqualTo(orgGuids...)
 	listOptions.SpaceGUIDs.EqualTo(spaceGuids...)
@@ -134,8 +134,8 @@ func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spa
 		return nil, nil, err
 	}
 
-	roleResults := make([]mkcontainer.Item, len(roles))
-	userResults := make([]mkcontainer.Item, len(users))
+	roleResults := make([]*Role, len(roles))
+	userResults := make([]*user, len(users))
 	userGUIDMap := map[string]*resource.User{}
 
 	for i, u := range users {

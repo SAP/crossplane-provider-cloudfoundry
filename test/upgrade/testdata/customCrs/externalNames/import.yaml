@@ -9,5 +9,3 @@ spec:
     # IMPORTANT: Change this to an org you have access to
     # Run `cf orgs` to see available organizations
     name: cf-ci-e2e # ← TODO: Change this to an existing org name
-  providerConfigRef:
-    name: default

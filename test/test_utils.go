@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 
 	"github.com/crossplane-contrib/xp-testing/pkg/envvar"
 	"github.com/crossplane-contrib/xp-testing/pkg/logging"
@@ -37,6 +38,7 @@ var (
 	UUT_IMAGES_KEY     = "UUT_IMAGES"
 	UUT_CONFIG_KEY     = "crossplane/provider-cloudfoundry"
 	UUT_CONTROLLER_KEY = "crossplane/provider-cloudfoundry-controller"
+	UUIDRegex          = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$`)
 )
 
 type mockList struct {
@@ -135,57 +137,6 @@ func ApplySecretInCrossplaneNamespace(secretName string, data map[string][]byte)
 	}
 }
 
-// CreateProviderConfigFn creates a CloudFoundry ProviderConfig resource
-// This configures the provider to connect to a specific CloudFoundry instance
-//
-// Parameters:
-//   - namespace: Namespace for the test (currently unused but kept for consistency)
-//   - cfEndpoint: CloudFoundry API endpoint URL (e.g., "https://api.cf.eu12.hana.ondemand.com")
-//   - secretName: Name of the secret containing CF credentials
-//
-// Returns: An env.Func that can be used with testenv.Setup()
-//
-// Note: The ProviderConfig is named "default" which is the default name that
-// CloudFoundry managed resources will use if no specific providerConfigRef is set
-func CreateProviderConfigFn(namespace, cfEndpoint, secretName string) env.Func {
-	_ = namespace // Reserved for future use
-	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		// Register the CloudFoundry scheme so the client knows about ProviderConfig
-		err := cloudfoundryv1beta1.SchemeBuilder.AddToScheme(cfg.Client().Resources().GetScheme())
-		if err != nil {
-			return ctx, fmt.Errorf("failed to add CloudFoundry scheme: %w", err)
-		}
-		providerConfig := &cloudfoundryv1beta1.ProviderConfig{
-			ObjectMeta: metav1.ObjectMeta{
-				Name: "default",
-			},
-			Spec: cloudfoundryv1beta1.ProviderConfigSpec{
-				APIEndpoint: &cfEndpoint,
-				Credentials: cloudfoundryv1beta1.ProviderCredentials{
-					Source: "Secret",
-					CommonCredentialSelectors: xpv1.CommonCredentialSelectors{
-						SecretRef: &xpv1.SecretKeySelector{
-							SecretReference: xpv1.SecretReference{
-								Name:      secretName,
-								Namespace: crossplaneSystemNamespace,
-							},
-							Key: "credentials",
-						},
-					},
-				},
-			},
-		}
-
-		client := cfg.Client()
-		if err := client.Resources().Create(ctx, providerConfig); err != nil {
-			return ctx, fmt.Errorf("failed to create ProviderConfig 'default': %w", err)
-		}
-
-		klog.V(4).Infof("created ProviderConfig 'default' for CF endpoint %s", cfEndpoint)
-		return ctx, nil
-	}
-}
-
 func DeleteResourcesFromDirsGracefully(ctx context.Context, cfg *envconf.Config, resourceDirs []string, timeout wait.Option) error {
 	klog.V(4).Info("Attempt to delete previously imported resources")
 	r, _ := resources.GetResourcesWithRESTConfig(cfg)
@@ -241,4 +192,72 @@ func GetObjectsToImport(ctx context.Context, cfg *envconf.Config, dirs []string)
 func resClient(cfg *envconf.Config) *res.Resources {
 	r, _ := resources.GetResourcesWithRESTConfig(cfg)
 	return r
+}
+
+// LoadUpgradePackages resolves provider packages for upgrade tests.
+// Returns: fromProviderPackage, toProviderPackage
+func LoadUpgradePackages(fromTag, toTag string, fromPackage, toPackage string) (string, string) {
+	// If using "local" tag, use the provided packages directly
+	// Otherwise construct from tag
+	fromProviderPackage := fromPackage
+	toProviderPackage := toPackage
+
+	return fromProviderPackage, toProviderPackage
+}
+
+// CreateProviderConfig contains the core logic for creating or updating a ProviderConfig.
+// Returns an error if the operation fails.
+func CreateProviderConfig(
+	ctx context.Context,
+	cfg *envconf.Config,
+	namespace string,
+	cfEndpoint string,
+	secretName string,
+) error {
+	r, err := res.New(cfg.Client().RESTConfig())
+	if err != nil {
+		return fmt.Errorf("failed to create resources client: %w", err)
+	}
+
+	err = cloudfoundryv1beta1.SchemeBuilder.AddToScheme(r.GetScheme())
+	if err != nil {
+		return fmt.Errorf("failed to add CloudFoundry scheme: %w", err)
+	}
+
+	providerConfig := &cloudfoundryv1beta1.ProviderConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "default",
+		},
+		Spec: cloudfoundryv1beta1.ProviderConfigSpec{
+			APIEndpoint: &cfEndpoint,
+			Credentials: cloudfoundryv1beta1.ProviderCredentials{
+				Source: "Secret",
+				CommonCredentialSelectors: xpv1.CommonCredentialSelectors{
+					SecretRef: &xpv1.SecretKeySelector{
+						SecretReference: xpv1.SecretReference{
+							Name:      secretName,
+							Namespace: crossplaneSystemNamespace,
+						},
+						Key: "credentials",
+					},
+				},
+			},
+		},
+	}
+
+	err = r.Create(ctx, providerConfig)
+	if kubeErrors.IsAlreadyExists(err) {
+		// If already exists, fetch the current object first to get resourceVersion
+		existing := &cloudfoundryv1beta1.ProviderConfig{}
+		if getErr := r.Get(ctx, "default", "", existing); getErr != nil {
+			return fmt.Errorf("failed to get existing ProviderConfig: %w", getErr)
+		}
+
+		// Update the spec on the existing object
+		existing.Spec = providerConfig.Spec
+		// Now update with the correct resourceVersion
+		return r.Update(ctx, existing)
+	}
+
+	return err
 }
