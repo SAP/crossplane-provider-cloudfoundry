@@ -42,6 +42,7 @@ type SpaceRoleParameters struct {
 
 	// (String) The space role type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types).
 	// +kubebuilder:validation:Enum=Developer;Auditor;Manager;Supporter;Developers;Auditors;Managers;Supporters
+	// +kubebuilder:validation:Optional
 	Type string `json:"type,omitempty" tf:"type,omitempty"`
 
 	// (String) The identity provider for the UAA user.
@@ -49,6 +50,7 @@ type SpaceRoleParameters struct {
 	Origin *string `json:"origin,omitempty" tf:"origin,omitempty"`
 
 	// (String) The username of the Cloud Foundry user to assign the role to.
+	// +kubebuilder:validation:Optional
 	Username string `json:"username,omitempty" tf:"username,omitempty"`
 }
 
