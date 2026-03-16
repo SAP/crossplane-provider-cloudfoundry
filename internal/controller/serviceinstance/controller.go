@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"time"
 
-	"github.com/cloudfoundry/go-cfclient/v3/client"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -187,8 +186,9 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 			ResourceExists:   r.LastOperation.Type != v1alpha1.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
 			ResourceUpToDate: r.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
 		}, nil
-	case v1alpha1.LastOperationSucceeded:
+	case v1alpha1.LastOperationSucceeded, "":
 		// If the last operation succeeded, set the CR to available
+		// Empty state is treated as succeeded (happens with user-provided services that have no async operations)
 		cr.SetConditions(xpv1.Available())
 		var credentialsUpToDate bool
 		desiredCredentials, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
@@ -390,28 +390,16 @@ func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Mana
 	}
 
 	if cr.Spec.ForProvider.ServicePlan != nil {
-		// When ServicePlan is set we populate the service
-		// plan ID based on the external resource GUID.
+		// When ServicePlan is set we either populate/update the service plan ID with the external resource GUID
+		// based on the specified offering and plan or we use the provided ID directly.
 		cf, err := clients.ClientFnBuilder(ctx, s.kube)(mg)
 		if err != nil {
 			return errors.Wrapf(err, errNewClient)
 		}
 
-		opt := client.NewServicePlanListOptions()
-		if cr.Spec.ForProvider.ServicePlan.Offering != nil {
-			opt.ServiceOfferingNames.EqualTo(*cr.Spec.ForProvider.ServicePlan.Offering)
-		}
-		if cr.Spec.ForProvider.ServicePlan.Plan != nil {
-			opt.Names.EqualTo(*cr.Spec.ForProvider.ServicePlan.Plan)
-		}
-		sp, err := cf.ServicePlans.Single(ctx, opt)
-		if err != nil {
-			return errors.Wrapf(err, "Cannot initialize service plan using serviceName/servicePlanName: %s:%s`", *cr.Spec.ForProvider.ServicePlan.Offering, *cr.Spec.ForProvider.ServicePlan.Plan)
-		}
+		client := serviceinstance.NewClient(cf)
+		return client.ResolveServicePlan(ctx, s.kube, cr)
 
-		cr.Spec.ForProvider.ServicePlan.ID = &sp.GUID
-
-		return s.kube.Update(ctx, cr)
 	}
 
 	// Service plan is not set

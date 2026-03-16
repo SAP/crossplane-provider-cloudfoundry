@@ -1,0 +1,10 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  name: upgrade-test-space
+spec:
+  forProvider:
+    name: "upgrade-test-space"
+    orgGuid: "your-org-guid-here"  # TODO: Make this configurable
+  providerConfigRef:
+    name: cf-provider-config
