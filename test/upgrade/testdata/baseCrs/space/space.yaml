@@ -2,6 +2,8 @@ apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Space
 metadata:
   name: upgrade-test-space
+  annotations:
+    crossplane.io/paused: "false"
 spec:
   forProvider:
     name: upgrade-test-space
