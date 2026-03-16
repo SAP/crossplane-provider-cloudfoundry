@@ -2,6 +2,8 @@ apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: Domain
 metadata:
   name: upgrade-test-domain
+  annotations:
+    crossplane.io/paused: "false"
 spec:
   forProvider:
     name: cfupgradetest.eu12.hana.ondemand.com
