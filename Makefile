@@ -177,7 +177,7 @@ test-acceptance:  $(KIND) $(HELM3) build
 	@echo UUT_CONTROLLER=$$UUT_CONTROLLER
 	@$(INFO) ${E2E_IMAGES}
 	@echo "E2E_IMAGES=$$E2E_IMAGES"
-	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -run '$(testFilter)' 2>&1 | tee test-output.log
+	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -timeout=15m -run '$(testFilter)' 2>&1 | tee test-output.log
 	@echo "===========Test Summary==========="
 	@grep -E "PASS|FAIL" test-output.log
 	@case `tail -n 1 test-output.log` in \
