@@ -141,7 +141,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	guid := meta.GetExternalName(cr)
 
-	atProvider, err := c.RouteService.GetByIDOrSpec(ctx, guid, cr.Spec.ForProvider)
+	atProvider, err := c.GetByIDOrSpec(ctx, guid, cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
 	}
@@ -153,8 +153,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	cr.SetConditions(xpv1.Available())
 
 	lateInitialized := false
-	if atProvider.Resource.GUID != guid {
-		meta.SetExternalName(cr, atProvider.Resource.GUID)
+	if atProvider.GUID != guid {
+		meta.SetExternalName(cr, atProvider.GUID)
 		lateInitialized = true
 	}
 

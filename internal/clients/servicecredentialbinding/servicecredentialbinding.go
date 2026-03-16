@@ -23,6 +23,9 @@ const (
 	ErrAppMissing             = "app is required for app binding"
 	ErrNameMissing            = "name is required for key binding"
 	ErrBindingTypeUnknown     = "unknown binding type. supported types are key and app"
+
+	bindingTypeApp = "app"
+	bindingTypeKey = "key"
 )
 
 // serviceCredentialBinding defines interfaces to CloudFoundry ServiceCredentialBinding resource
@@ -132,14 +135,14 @@ func newListOptions(forProvider v1alpha1.ServiceCredentialBindingParameters) (*c
 	}
 	opt.ServiceInstanceGUIDs.EqualTo(*forProvider.ServiceInstance)
 
-	if forProvider.Type == "app" {
+	if forProvider.Type == bindingTypeApp {
 		if forProvider.App == nil {
 			return nil, errors.New(ErrAppMissing)
 		}
 		opt.AppGUIDs.EqualTo(*forProvider.App)
 	}
 
-	if forProvider.Type == "key" {
+	if forProvider.Type == bindingTypeKey {
 		if forProvider.Name == nil {
 			return nil, errors.New(ErrNameMissing)
 		}
@@ -157,7 +160,7 @@ func newCreateOption(forProvider v1alpha1.ServiceCredentialBindingParameters, pa
 
 	var opt *resource.ServiceCredentialBindingCreate
 	switch forProvider.Type {
-	case "key":
+	case bindingTypeKey:
 		if forProvider.Name == nil {
 			return nil, errors.New(ErrNameMissing)
 		}
@@ -165,7 +168,7 @@ func newCreateOption(forProvider v1alpha1.ServiceCredentialBindingParameters, pa
 		name := randomName(*forProvider.Name)
 
 		opt = resource.NewServiceCredentialBindingCreateKey(*forProvider.ServiceInstance, name)
-	case "app":
+	case bindingTypeApp:
 		if forProvider.App == nil {
 			return nil, errors.New(ErrAppMissing)
 		}
@@ -192,11 +195,11 @@ func createToListOptions(create *resource.ServiceCredentialBindingCreate) *clien
 
 	opts.ServiceInstanceGUIDs.EqualTo(create.Relationships.ServiceInstance.Data.GUID)
 
-	if create.Type == "app" && create.Relationships.App != nil {
+	if create.Type == bindingTypeApp && create.Relationships.App != nil {
 		opts.AppGUIDs.EqualTo(create.Relationships.App.Data.GUID)
 	}
 
-	if create.Type == "key" && create.Name != nil {
+	if create.Type == bindingTypeKey && create.Name != nil {
 		opts.Names.EqualTo(*create.Name)
 	}
 
@@ -212,7 +215,7 @@ func newUpdateOption(forProvider v1alpha1.ServiceCredentialBindingParameters) *r
 
 // UpdateObservation updates the CR's AtProvider status from the observed resource
 func UpdateObservation(observation *v1alpha1.ServiceCredentialBindingObservation, r *resource.ServiceCredentialBinding) {
-	observation.GUID = r.Resource.GUID
+	observation.GUID = r.GUID
 	observation.LastOperation = &v1alpha1.LastOperation{
 		Type:        r.LastOperation.Type,
 		State:       r.LastOperation.State,
