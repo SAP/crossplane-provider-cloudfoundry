@@ -364,13 +364,13 @@ func (c *Client) UpdateSharedSpaces(ctx context.Context, guid string, desired []
 
 	toAdd, toRemove := diffSharedSpaces(currentGUIDs, desiredGUIDs)
 	if len(toAdd) > 0 {
-		_, err := c.ServiceInstance.ShareWithSpaces(ctx, guid, toAdd)
+		_, err := c.ShareWithSpaces(ctx, guid, toAdd)
 		if err != nil {
 			return errors.Wrap(err, "cannot share service instance with spaces")
 		}
 	}
 	if len(toRemove) > 0 {
-		err := c.ServiceInstance.UnShareWithSpaces(ctx, guid, toRemove)
+		err := c.UnShareWithSpaces(ctx, guid, toRemove)
 		if err != nil {
 			return errors.Wrap(err, "cannot unshare service instance from spaces")
 		}
@@ -381,7 +381,7 @@ func (c *Client) UpdateSharedSpaces(ctx context.Context, guid string, desired []
 
 // getCurrentSharedSpaces retrieves the GUIDs of spaces a service instance is shared with
 func (c *Client) getCurrentSharedSpaces(ctx context.Context, guid string) ([]string, error) {
-	relationships, err := c.ServiceInstance.GetSharedSpaceRelationships(ctx, guid)
+	relationships, err := c.GetSharedSpaceRelationships(ctx, guid)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get shared space relationships")
 	}

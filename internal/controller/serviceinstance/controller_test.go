@@ -23,14 +23,13 @@ import (
 )
 
 var (
-	errBoom          = errors.New("boom")
-	name             = "my-service-instance"
-	spaceGUID        = "a46808d1-d09a-4eef-add1-30872dec82f7"
-	guid             = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
-	servicePlan      = "c595293f-2696-438d-887e-053200ec47c8"
-	jsonCredentials  = `{"json":"bar"}`
-	sharedSpaceGUID  = "b1000000-0000-0000-0000-000000000001"
-	sharedSpaceGUID2 = "b2000000-0000-0000-0000-000000000002"
+	errBoom         = errors.New("boom")
+	name            = "my-service-instance"
+	spaceGUID       = "a46808d1-d09a-4eef-add1-30872dec82f7"
+	guid            = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
+	servicePlan     = "c595293f-2696-438d-887e-053200ec47c8"
+	jsonCredentials = `{"json":"bar"}`
+	sharedSpaceGUID = "2514e716-ebd0-4cea-ba35-84ce6631c63e"
 )
 
 type modifier func(*v1alpha1.ServiceInstance)
