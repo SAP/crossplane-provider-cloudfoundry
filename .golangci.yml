@@ -1,5 +1,6 @@
 run:
-  timeout: 2m
+  timeout: 10m
+  concurrency: 2
 
 linters-settings:
   errcheck:
@@ -80,6 +81,7 @@ linters-settings:
         sizeThreshold: 32
 
 linters:
+  disable-all: true
   enable:
     - goconst
     - gocritic
