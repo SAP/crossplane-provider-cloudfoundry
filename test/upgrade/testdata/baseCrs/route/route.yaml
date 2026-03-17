@@ -1,0 +1,17 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Route
+metadata:
+  name: upgrade-test-route
+  annotations:
+    crossplane.io/paused: "false"
+spec:
+  forProvider:
+    domainRef: 
+      name: upgrade-test-domain
+      policy:
+        resolve: Always
+    host: upgrade-test-route-host
+    spaceRef:
+      name: upgrade-test-import-space
+      policy:
+        resolve: Always
