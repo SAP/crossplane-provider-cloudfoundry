@@ -144,16 +144,16 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 	managedSI.Spec.ForProvider.ServicePlan = generateServicePlan(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
 
 	if mInfo := serviceInstance.MaintenanceInfo; mInfo != nil {
-		managedSI.Spec.ForProvider.Managed.MaintenanceInfo.Description = &mInfo.Description
-		managedSI.Spec.ForProvider.Managed.MaintenanceInfo.Version = &mInfo.Description
+		managedSI.Spec.ForProvider.MaintenanceInfo.Description = &mInfo.Description
+		managedSI.Spec.ForProvider.MaintenanceInfo.Version = &mInfo.Description
 	}
 
 	var comment *string
-	managedSI.Spec.ForProvider.Managed.Parameters, comment = generateParams(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
+	managedSI.Spec.ForProvider.Parameters, comment = generateParams(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
 	if comment != nil {
 		serviceInstanceWithComment.AddComment(*comment)
 	}
-	managedSI.Spec.ForProvider.UserProvided.Credentials = generateCreds(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
+	managedSI.Spec.ForProvider.Credentials = generateCreds(ctx, cfClient, serviceInstance.ServiceInstance, evHandler)
 
 	managedSI.Spec.ForProvider.SpaceReference = v1alpha1.SpaceReference{
 		Space: &serviceInstance.Relationships.Space.Data.GUID,

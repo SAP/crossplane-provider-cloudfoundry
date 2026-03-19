@@ -212,7 +212,7 @@ func newUpdateOption(forProvider v1alpha1.ServiceCredentialBindingParameters) *r
 
 // UpdateObservation updates the CR's AtProvider status from the observed resource
 func UpdateObservation(observation *v1alpha1.ServiceCredentialBindingObservation, r *resource.ServiceCredentialBinding) {
-	observation.GUID = r.Resource.GUID
+	observation.GUID = r.GUID
 	observation.LastOperation = &v1alpha1.LastOperation{
 		Type:        r.LastOperation.Type,
 		State:       r.LastOperation.State,

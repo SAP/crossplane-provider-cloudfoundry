@@ -31,7 +31,7 @@ type modifier func(*v1alpha1.App)
 
 func withExternalName(name string) modifier {
 	return func(r *v1alpha1.App) {
-		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
+		r.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
