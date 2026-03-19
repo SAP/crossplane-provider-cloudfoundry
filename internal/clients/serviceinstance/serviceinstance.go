@@ -50,7 +50,7 @@ func (c *Client) pollJobComplete(ctx context.Context, job string) error {
 	ctx, cancel := context.WithTimeout(ctx, pollTimeout)
 	defer cancel()
 
-	err := c.Job.PollComplete(ctx, job, newPollingOptions())
+	err := c.PollComplete(ctx, job, newPollingOptions())
 
 	if err != nil {
 		isTimeoutError := false
@@ -132,14 +132,14 @@ func (c *Client) GetServiceCredentials(ctx context.Context, r *resource.ServiceI
 	}
 
 	if r.Type == string(v1alpha1.ManagedService) {
-		raw, err := c.ServiceInstance.GetManagedParameters(ctx, r.GUID)
+		raw, err := c.GetManagedParameters(ctx, r.GUID)
 		if raw == nil {
 			return nil, err
 		}
 		return *raw, err
 	}
 
-	raw, err := c.ServiceInstance.GetUserProvidedCredentials(ctx, r.GUID)
+	raw, err := c.GetUserProvidedCredentials(ctx, r.GUID)
 	if raw == nil {
 		return nil, err
 	}
@@ -173,7 +173,7 @@ func (c *Client) createManaged(ctx context.Context, spec v1alpha1.ServiceInstanc
 		opt.Parameters = &params
 	}
 
-	job, err := c.ServiceInstance.CreateManaged(ctx, opt)
+	job, err := c.CreateManaged(ctx, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -193,7 +193,7 @@ func (c *Client) createUserProvided(ctx context.Context, spec v1alpha1.ServiceIn
 	}
 	// create the service instance
 	opt := resource.NewServiceInstanceCreateUserProvided(*spec.Name, *spec.Space)
-	si, err := c.ServiceInstance.CreateUserProvided(ctx, opt)
+	si, err := c.CreateUserProvided(ctx, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +206,7 @@ func (c *Client) createUserProvided(ctx context.Context, spec v1alpha1.ServiceIn
 	upt.WithRouteServiceURL(spec.RouteServiceURL).
 		WithSyslogDrainURL(spec.SyslogDrainURL)
 
-	return c.ServiceInstance.UpdateUserProvided(ctx, si.GUID, upt)
+	return c.UpdateUserProvided(ctx, si.GUID, upt)
 }
 
 // Update updates the external resource to keep it in sync with CR's ForProvider spec
@@ -242,7 +242,7 @@ func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceIn
 	}
 
 	// Update the service instance
-	job, s, err := c.ServiceInstance.UpdateManaged(ctx, observed.GUID, upd)
+	job, s, err := c.UpdateManaged(ctx, observed.GUID, upd)
 	if err != nil {
 		return nil, err
 	}
@@ -273,7 +273,7 @@ func (c *Client) updateUserProvided(ctx context.Context, observed *resource.Serv
 	upd.WithRouteServiceURL(desired.RouteServiceURL).
 		WithSyslogDrainURL(desired.SyslogDrainURL)
 
-	return c.ServiceInstance.UpdateUserProvided(ctx, observed.GUID, upd)
+	return c.UpdateUserProvided(ctx, observed.GUID, upd)
 }
 
 // Delete deletes a service instance managed by the CR

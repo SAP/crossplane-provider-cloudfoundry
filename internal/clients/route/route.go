@@ -37,13 +37,13 @@ func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, forProvider v1a
 	var r *resource.Route
 	var err error
 	if clients.IsValidGUID(guid) {
-		r, err = c.Route.Get(ctx, guid)
+		r, err = c.Get(ctx, guid)
 	} else {
 		opts, e := FormatListOption(forProvider)
 		if e != nil {
 			return nil, e
 		}
-		r, err = c.Route.Single(ctx, opts)
+		r, err = c.Single(ctx, opts)
 	}
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
