@@ -13,7 +13,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 )
 
-const ErrOrgNotSpecified = "Org is not specified"
+const ErrOrgNotSpecified = "org is not specified"
 
 // OrgRoleType converts string to OrganizationRoleType enum
 func OrgRoleType(roleType string) resource.OrganizationRoleType {

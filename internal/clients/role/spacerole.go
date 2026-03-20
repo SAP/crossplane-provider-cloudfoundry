@@ -14,7 +14,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 )
 
-const ErrSpaceNotSpecified = "Space is not specified"
+const ErrSpaceNotSpecified = "space is not specified"
 
 // SpaceRoleType converts string to SpaceRoleType enum
 func SpaceRoleType(roleType string) resource.SpaceRoleType {
