@@ -17,8 +17,10 @@ import (
 )
 
 var (
-	roleCache mkcontainer.TypedContainer[*Role]
-	userCache mkcontainer.TypedContainer[*user]
+	orgRoleCache   mkcontainer.TypedContainer[*Role]
+	orgUserCache   mkcontainer.TypedContainer[*user]
+	spaceRoleCache mkcontainer.TypedContainer[*Role]
+	spaceUserCache mkcontainer.TypedContainer[*user]
 )
 
 const defaultUserName = "undefined username"
@@ -74,8 +76,8 @@ func (r *Role) GetName() string {
 }
 
 func GetOrgRoles(ctx context.Context, cfClient *client.Client) (mkcontainer.TypedContainer[*Role], mkcontainer.TypedContainer[*user], error) {
-	if userCache != nil || roleCache != nil {
-		return roleCache, userCache, nil
+	if orgUserCache != nil && orgRoleCache != nil {
+		return orgRoleCache, orgUserCache, nil
 	}
 	orgs, err := org.Get(ctx, cfClient)
 	if err != nil {
@@ -89,16 +91,16 @@ func GetOrgRoles(ctx context.Context, cfClient *client.Client) (mkcontainer.Type
 	if err != nil {
 		return nil, nil, erratt.Errorf("cannot get roles and users: %w", err)
 	}
-	roleCache = mkcontainer.NewTyped[*Role]()
-	userCache = mkcontainer.NewTyped[*user]()
-	roleCache.Store(roles...)
-	userCache.Store(users...)
-	return roleCache, userCache, nil
+	orgRoleCache = mkcontainer.NewTyped[*Role]()
+	orgUserCache = mkcontainer.NewTyped[*user]()
+	orgRoleCache.Store(roles...)
+	orgUserCache.Store(users...)
+	return orgRoleCache, orgUserCache, nil
 }
 
 func GetSpaceRoles(ctx context.Context, cfClient *client.Client) (mkcontainer.TypedContainer[*Role], mkcontainer.TypedContainer[*user], error) {
-	if userCache != nil || roleCache != nil {
-		return roleCache, userCache, nil
+	if spaceUserCache != nil || spaceRoleCache != nil {
+		return spaceRoleCache, spaceUserCache, nil
 	}
 
 	orgs, err := org.Get(ctx, cfClient)
@@ -118,11 +120,11 @@ func GetSpaceRoles(ctx context.Context, cfClient *client.Client) (mkcontainer.Ty
 	if err != nil {
 		return nil, nil, erratt.Errorf("cannot get roles and users: %w", err)
 	}
-	roleCache = mkcontainer.NewTyped[*Role]()
-	userCache = mkcontainer.NewTyped[*user]()
-	roleCache.Store(roles...)
-	userCache.Store(users...)
-	return roleCache, userCache, nil
+	spaceRoleCache = mkcontainer.NewTyped[*Role]()
+	spaceUserCache = mkcontainer.NewTyped[*user]()
+	spaceRoleCache.Store(roles...)
+	spaceUserCache.Store(users...)
+	return spaceRoleCache, spaceUserCache, nil
 }
 
 func getAll(ctx context.Context, cfClient *client.Client, orgGuids []string, spaceGuids []string) ([]*Role, []*user, error) {
