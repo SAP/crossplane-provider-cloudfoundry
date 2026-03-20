@@ -9,6 +9,7 @@ import (
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
@@ -28,6 +29,7 @@ var (
 	guid            = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 	servicePlan     = "c595293f-2696-438d-887e-053200ec47c8"
 	jsonCredentials = `{"json":"bar"}`
+	sharedSpaceGUID = "2514e716-ebd0-4cea-ba35-84ce6631c63e"
 )
 
 type modifier func(*v1alpha1.ServiceInstance)
@@ -88,6 +90,24 @@ func withDeletionTimestamp() modifier {
 		ts := metav1.Now()
 		r.DeletionTimestamp = &ts
 	}
+}
+
+func withSharedSpaces(guids ...string) modifier {
+	return func(r *v1alpha1.ServiceInstance) {
+		refs := make([]v1alpha1.SpaceReference, 0, len(guids))
+		for i := range guids {
+			refs = append(refs, v1alpha1.SpaceReference{Space: &guids[i]})
+		}
+		r.Spec.ForProvider.SharedSpaces = refs
+	}
+}
+
+func sharedSpaceRelationships(guids ...string) *cfresource.ServiceInstanceSharedSpaceRelationships {
+	rels := make([]cfresource.Relationship, 0, len(guids))
+	for _, g := range guids {
+		rels = append(rels, cfresource.Relationship{GUID: g})
+	}
+	return &cfresource.ServiceInstanceSharedSpaceRelationships{Data: rels}
 }
 
 func serviceInstance(typ string, m ...modifier) *v1alpha1.ServiceInstance {
@@ -259,6 +279,10 @@ func TestObserve(t *testing.T) {
 					fake.JSONRawMessage(""),
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
 				return m
 			},
 		},
@@ -289,6 +313,10 @@ func TestObserve(t *testing.T) {
 				m.On("GetManagedParameters", guid).Return(
 					fake.JSONRawMessage(""),
 					nil, // no error
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
 				)
 				return m
 			},
@@ -456,6 +484,10 @@ func TestObserve(t *testing.T) {
 					fake.JSONRawMessage("{\"foo\":\"bar\"}"),
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
 				return m
 			},
 		},
@@ -488,6 +520,10 @@ func TestObserve(t *testing.T) {
 				m.On("GetManagedParameters", guid).Return(
 					fake.JSONRawMessage("{\"foo\":\"bar\"}"),
 					nil, // no error
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
 				)
 				return m
 			},
@@ -522,9 +558,125 @@ func TestObserve(t *testing.T) {
 					fake.JSONRawMessage(jsonCredentials),
 					nil,
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
 				return m
 			},
-		}}
+		},
+		"SharedSpacesUpToDate": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withConditions(xpv1.Available()),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage(""),
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(sharedSpaceGUID),
+					nil,
+				)
+				return m
+			},
+		},
+		"SharedSpacesOutOfDate": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withConditions(xpv1.Available()),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage(""),
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
+				return m
+			},
+		},
+		"GetSharedSpaceRelationshipsError": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withConditions(xpv1.Available()),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true},
+				err: errors.New("cannot get shared space relationships: boom"),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage(""),
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					nil,
+					errBoom,
+				)
+				return m
+			},
+		},
+	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
@@ -741,6 +893,104 @@ func TestCreate(t *testing.T) {
 				return m
 			},
 		},
+		"SharedSpacesSuccessful": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+					withConditions(xpv1.Creating()),
+					withExternalName(guid),
+				),
+				obs: managed.ExternalCreation{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("CreateManaged").Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					nil,
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
+				m.On("ShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(
+					sharedSpaceRelationships(sharedSpaceGUID),
+					nil,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"ShareWithSpacesError": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+					withConditions(xpv1.Creating()),
+					withExternalName(guid),
+				),
+				obs: managed.ExternalCreation{},
+				err: errors.New("cannot share service instance with spaces: boom"),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("CreateManaged").Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					nil,
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
+				m.On("ShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(
+					nil,
+					errBoom,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
 	}
 
 	for n, tc := range cases {
@@ -821,6 +1071,10 @@ func TestUpdate(t *testing.T) {
 					nil,
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
 				return m
 			},
 			job: func() *fake.MockJob {
@@ -852,6 +1106,10 @@ func TestUpdate(t *testing.T) {
 					fake.JSONRawMessage(jsonCredentials),
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
 				return m
 			},
 			job: func() *fake.MockJob {
@@ -882,6 +1140,10 @@ func TestUpdate(t *testing.T) {
 				m.On("GetManagedParameters", guid).Return(
 					fake.JSONRawMessage(jsonCredentials),
 					nil, // no error
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
 				)
 				return m
 			},
@@ -916,6 +1178,10 @@ func TestUpdate(t *testing.T) {
 					nil,
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
 				return m
 			},
 			job: func() *fake.MockJob {
@@ -943,6 +1209,200 @@ func TestUpdate(t *testing.T) {
 					fake.ServiceInstanceNil,
 					errBoom,
 				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"AddSharedSpace": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					nil,
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
+				m.On("ShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(
+					sharedSpaceRelationships(sharedSpaceGUID),
+					nil,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"RemoveSharedSpace": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+				),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					nil,
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(sharedSpaceGUID),
+					nil,
+				)
+				m.On("UnShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(nil)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"ShareWithSpacesError": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+				obs: managed.ExternalUpdate{},
+				err: errors.New("cannot share service instance with spaces: boom"),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					nil,
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					nil,
+				)
+				m.On("ShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(
+					nil,
+					errBoom,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"UnShareWithSpacesError": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+				),
+				obs: managed.ExternalUpdate{},
+				err: errors.New("cannot unshare service instance from spaces: boom"),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					nil,
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(sharedSpaceGUID),
+					nil,
+				)
+				m.On("UnShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(errBoom)
 				return m
 			},
 			job: func() *fake.MockJob {

@@ -1,16 +1,13 @@
----
-# CR to create a managed ServiceInstance
 apiVersion: cloudfoundry.crossplane.io/v1alpha1
 kind: ServiceInstance
 metadata:
-  name: e2e-service-instance
-  namespace: service-test
+  name: my-service-instance-shared
 spec:
   forProvider:
     type: managed
-    name: e2e-service-instance
+    name: my-service-instance-shared
     spaceRef:
-      name: service-space
+      name: my-space
       policy:
         resolve: Always
     servicePlan:
@@ -18,4 +15,4 @@ spec:
       plan: standard
     sharedSpaces:
       - spaceRef:
-          name: service-space-shared
+          name: my-space-shared

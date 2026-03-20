@@ -274,6 +274,25 @@ func (mg *ServiceInstance) ResolveReferences(ctx context.Context, c client.Reade
 	mg.Spec.ForProvider.SpaceReference.Space = reference.ToPtrValue(rsp.ResolvedValue)
 	mg.Spec.ForProvider.SpaceReference.SpaceRef = rsp.ResolvedReference
 
+	for i3 := 0; i3 < len(mg.Spec.ForProvider.SharedSpaces); i3++ {
+		rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+			CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SharedSpaces[i3].Space),
+			Extract:      resources.ExternalID(),
+			Reference:    mg.Spec.ForProvider.SharedSpaces[i3].SpaceRef,
+			Selector:     mg.Spec.ForProvider.SharedSpaces[i3].SpaceSelector,
+			To: reference.To{
+				List:    &SpaceList{},
+				Managed: &Space{},
+			},
+		})
+		if err != nil {
+			return errors.Wrap(err, "mg.Spec.ForProvider.SharedSpaces[i3].Space")
+		}
+		mg.Spec.ForProvider.SharedSpaces[i3].Space = reference.ToPtrValue(rsp.ResolvedValue)
+		mg.Spec.ForProvider.SharedSpaces[i3].SpaceRef = rsp.ResolvedReference
+
+	}
+
 	return nil
 }
 

@@ -210,6 +210,14 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		}
 		// Check if the credentials in the spec match the credentials in the external resource
 		upToDate := credentialsUpToDate && serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r)
+
+		// Check if shared spaces are up to date
+		sharedSpacesUpToDate, err := serviceinstance.AreSharedSpacesUpToDate(ctx, c.serviceinstance, r.GUID, cr.Spec.ForProvider.SharedSpaces)
+		if err != nil {
+			return managed.ExternalObservation{ResourceExists: true}, err
+		}
+		upToDate = upToDate && sharedSpacesUpToDate
+
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
 	default:
 		// should never reach here
@@ -220,7 +228,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 }
 
 // Create attempts to create the external resource.
-func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
+func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) { //nolint:gocyclo
 	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
@@ -261,6 +269,13 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.Wrap(err, errUpdateCR)
 	}
 
+	// Update shared spaces after successful creation
+	if len(cr.Spec.ForProvider.SharedSpaces) > 0 {
+		if err := c.serviceinstance.UpdateSharedSpaces(ctx, r.GUID, cr.Spec.ForProvider.SharedSpaces); err != nil {
+			return managed.ExternalCreation{}, err
+		}
+	}
+
 	return managed.ExternalCreation{}, nil
 }
 
@@ -289,6 +304,11 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		if err := c.kube.Status().Update(ctx, cr); err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateCR)
 		}
+	}
+
+	// Update shared spaces after successful update
+	if err := c.serviceinstance.UpdateSharedSpaces(ctx, *cr.Status.AtProvider.ID, cr.Spec.ForProvider.SharedSpaces); err != nil {
+		return managed.ExternalUpdate{}, err
 	}
 
 	return managed.ExternalUpdate{}, nil
