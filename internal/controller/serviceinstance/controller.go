@@ -235,7 +235,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	// If the last operation is create and it failed, clean up the failed service instance before retry create
-	if cr.Status.AtProvider.LastOperation.Type == v1alpha1.LastOperationCreate && cr.Status.AtProvider.LastOperation.State == v1alpha1.LastOperationFailed {
+	if cr.Status.AtProvider.Type == v1alpha1.LastOperationCreate && cr.Status.AtProvider.State == v1alpha1.LastOperationFailed {
 		err := c.serviceinstance.Delete(ctx, cr)
 		if err != nil {
 			return managed.ExternalCreation{}, errors.Wrap(err, errCleanFailed)

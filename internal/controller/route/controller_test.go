@@ -56,7 +56,7 @@ type modifier func(*v1alpha1.Route)
 
 func withExternalName(guid string) modifier {
 	return func(r *v1alpha1.Route) {
-		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = guid
+		r.Annotations[meta.AnnotationKeyExternalName] = guid
 	}
 }
 

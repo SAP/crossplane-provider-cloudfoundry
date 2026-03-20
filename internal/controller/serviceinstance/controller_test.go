@@ -36,7 +36,7 @@ type modifier func(*v1alpha1.ServiceInstance)
 
 func withExternalName(name string) modifier {
 	return func(r *v1alpha1.ServiceInstance) {
-		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
+		r.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
@@ -88,7 +88,7 @@ func withDriftDetection(d bool) modifier {
 func withDeletionTimestamp() modifier {
 	return func(r *v1alpha1.ServiceInstance) {
 		ts := metav1.Now()
-		r.ObjectMeta.DeletionTimestamp = &ts
+		r.DeletionTimestamp = &ts
 	}
 }
 
