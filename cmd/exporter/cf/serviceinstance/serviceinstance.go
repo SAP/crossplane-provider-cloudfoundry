@@ -79,7 +79,7 @@ func (si serviceinstance) Export(ctx context.Context, cfClient *client.Client, e
 	ctx, cancel := context.WithTimeout(ctx, 10*time.Minute)
 	defer cancel()
 	for _, sInstance := range serviceInstances.AllByGUIDs() {
-		slog.Debug("exporting serviceinstance", "name", sInstance.(*res).ServiceInstance.Name)
+		slog.Debug("exporting serviceinstance", "name", sInstance.(*res).Name)
 		evHandler.Resource(convertServiceInstanceResource(ctx, cfClient, sInstance.(*res), evHandler, resolveReferences))
 	}
 	return nil

@@ -32,7 +32,7 @@ type modifier func(*v1alpha1.OrgQuota)
 
 func withExternalName(guid string) modifier {
 	return func(r *v1alpha1.OrgQuota) {
-		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = guid
+		r.Annotations[meta.AnnotationKeyExternalName] = guid
 	}
 }
 

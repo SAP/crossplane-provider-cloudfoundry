@@ -51,7 +51,7 @@ type mockList struct {
 type CFCredentials struct {
 	Email    string `json:"email"`
 	Username string `json:"username"`
-	Password string `json:"password"`
+	Password string `json:"password"` //nolint:gosec
 }
 
 // SetupLogging configures klog and controller-runtime logging with the specified verbosity

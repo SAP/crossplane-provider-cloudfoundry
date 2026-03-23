@@ -37,8 +37,13 @@ GO_STATIC_PACKAGES = $(GO_PROJECT)/cmd/provider $(GO_PROJECT)/cmd/exporter
 GO_LDFLAGS += -X $(GO_PROJECT)/internal/version.Version=$(VERSION)
 GO_SUBDIRS += cmd internal apis
 GO111MODULE = on
-GOLANGCILINT_VERSION ?= 1.64.5
+GOLANGCILINT_VERSION ?= 2.10.1
 -include build/makelib/golang.mk
+
+# --out-format is deprecated with v2, replace with --output.checkstyle.path
+ifeq ($(RUNNING_IN_CI),true)
+GO_LINT_ARGS := --timeout 10m0s --output.checkstyle.path=$(GO_LINT_OUTPUT)/checkstyle.xml
+endif
 
 # kind-related versions
 KIND_VERSION ?= v0.26.0
@@ -204,7 +209,7 @@ UPGRADE_TEST_FILTER ?= .
 
 .PHONY: check-upgrade-test-vars
 check-upgrade-test-vars: ## Verify required upgrade test environment variables
-	@$(INFO) Checking required environment variables for upgrade tests are present 
+	@$(INFO) Checking required environment variables for upgrade tests are present
 	@test -n "$(UPGRADE_TEST_FROM_TAG)" || { echo "❌ Set UPGRADE_TEST_FROM_TAG"; exit 1; }
 	@test -n "$(UPGRADE_TEST_TO_TAG)" || { echo "❌ Set UPGRADE_TEST_TO_TAG"; exit 1; }
 	@$(OK) required upgrade test environment variables are set
@@ -338,7 +343,7 @@ test-upgrade-debug: $(KIND) check-upgrade-test-vars build-upgrade-test-images te
 
 .PHONY: test-upgrade-restore-crs
 test-upgrade-restore-crs: ## Restore $(UPGRADE_TEST_CRS_DIR)/ to current version
-	@$(INFO) restoring $(UPGRADE_TEST_CRS_DIR)/ 
+	@$(INFO) restoring $(UPGRADE_TEST_CRS_DIR)/
 	@git checkout $(UPGRADE_TEST_CRS_DIR)/
 	@$(OK) CRs restored
 
@@ -401,7 +406,7 @@ test-upgrade-help: ## Show upgrade test usage examples
 	@$(INFO) "  Base Tests:   Standard resource verification (TestUpgradeProvider)"
 	@$(INFO) "  Custom Tests: External-name validation (Test_Space_External_Name, etc.)"
 	@$(INFO) ""
-	
+
 # ====================================================================================
 # Special Targets
 
