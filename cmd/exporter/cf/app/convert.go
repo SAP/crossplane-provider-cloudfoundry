@@ -1,3 +1,4 @@
+// Package app implements Cloud Foundry App resource export functionality.
 package app
 
 import (
@@ -18,6 +19,8 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// convertDockerField converts Docker configuration from CF manifest to Crossplane DockerConfiguration.
+// Generates a Secret for Docker credentials if username is provided. Password is set to "TODO" placeholder.
 func convertDockerField(app *res, managedApp *v1alpha1.App, appManifest *operation.AppManifest, evHandler export.EventHandler) error {
 	docker := appManifest.Docker
 
@@ -51,6 +54,8 @@ func convertDockerField(app *res, managedApp *v1alpha1.App, appManifest *operati
 	return nil
 }
 
+// convertProcessesField converts CF application processes to Crossplane ProcessConfiguration.
+// Handles all process types including web and worker processes with health checks.
 func convertProcessesField(managedApp *v1alpha1.App, appManifest *operation.AppManifest) {
 	if appManifest.Processes == nil {
 		return
@@ -78,6 +83,9 @@ func convertProcessesField(managedApp *v1alpha1.App, appManifest *operation.AppM
 	}
 }
 
+// convertAppResource converts a CF application to a Crossplane App resource with manifest data.
+// Fetches the app manifest, converts Docker config and processes, and optionally resolves space references.
+// Returns a ResourceWithComment containing the converted App and any warning comments.
 func convertAppResource(ctx context.Context, cfClient *client.Client, app *res, evHandler export.EventHandler, resolveReferences bool) *yaml.ResourceWithComment {
 	slog.Debug("converting app", "name", app.Name)
 
