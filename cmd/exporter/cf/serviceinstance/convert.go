@@ -161,7 +161,7 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 
 	if resolveReferences {
 		if err := space.ResolveReference(ctx, cfClient, &managedSI.Spec.ForProvider.SpaceReference); err != nil {
-			erra := erratt.Errorf("cannot resolve space reference: %w", err).With("serviceinstance-name", serviceInstance.GetName)
+			erra := erratt.Errorf("cannot resolve space reference: %w", err).With("serviceinstance-name", serviceInstance.GetName())
 			evHandler.Warn(erra)
 		}
 	}
