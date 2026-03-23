@@ -210,7 +210,7 @@ func TestAreSharedSpacesUpToDate(t *testing.T) {
 				ServiceInstance: mockSI,
 			}
 
-			got, err := AreSharedSpacesUpToDate(context.Background(), client, tc.args.guid, tc.args.desired)
+			got, err := client.AreSharedSpacesUpToDate(context.Background(), tc.args.guid, tc.args.desired)
 
 			if tc.want.err != nil && err != nil {
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {

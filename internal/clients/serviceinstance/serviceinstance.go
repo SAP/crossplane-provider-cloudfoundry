@@ -343,7 +343,7 @@ func IsUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.Servi
 }
 
 // AreSharedSpacesUpToDate checks if the shared spaces of a service instance are in sync with the CR
-func AreSharedSpacesUpToDate(ctx context.Context, c *Client, guid string, desired []v1alpha1.SpaceReference) (bool, error) {
+func (c *Client) AreSharedSpacesUpToDate(ctx context.Context, guid string, desired []v1alpha1.SpaceReference) (bool, error) {
 	currentGUIDs, err := c.getCurrentSharedSpaces(ctx, guid)
 	if err != nil {
 		return false, err
@@ -384,6 +384,9 @@ func (c *Client) getCurrentSharedSpaces(ctx context.Context, guid string) ([]str
 	relationships, err := c.GetSharedSpaceRelationships(ctx, guid)
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot get shared space relationships")
+	}
+	if relationships == nil {
+		return []string{}, nil
 	}
 
 	spaceGUIDs := make([]string, 0, len(relationships.Data))

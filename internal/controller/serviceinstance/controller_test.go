@@ -280,7 +280,7 @@ func TestObserve(t *testing.T) {
 					nil, // no error
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				return m
@@ -315,7 +315,7 @@ func TestObserve(t *testing.T) {
 					nil, // no error
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				return m
@@ -485,7 +485,7 @@ func TestObserve(t *testing.T) {
 					nil, // no error
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				return m
@@ -522,7 +522,7 @@ func TestObserve(t *testing.T) {
 					nil, // no error
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				return m
@@ -559,7 +559,7 @@ func TestObserve(t *testing.T) {
 					nil,
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				return m
@@ -633,7 +633,7 @@ func TestObserve(t *testing.T) {
 					nil,
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				return m
@@ -657,7 +657,7 @@ func TestObserve(t *testing.T) {
 					withConditions(xpv1.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true},
-				err: errors.New("cannot get shared space relationships: boom"),
+				err: errors.New("cannot check shared spaces: cannot get shared space relationships: boom"),
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
@@ -927,7 +927,7 @@ func TestCreate(t *testing.T) {
 					nil,
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				m.On("ShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(
@@ -959,7 +959,7 @@ func TestCreate(t *testing.T) {
 					withExternalName(guid),
 				),
 				obs: managed.ExternalCreation{},
-				err: errors.New("cannot share service instance with spaces: boom"),
+				err: errors.New("cannot update shared spaces: cannot share service instance with spaces: boom"),
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
@@ -976,7 +976,7 @@ func TestCreate(t *testing.T) {
 					nil,
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				m.On("ShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(
@@ -1072,7 +1072,7 @@ func TestUpdate(t *testing.T) {
 					nil, // no error
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				return m
@@ -1107,7 +1107,7 @@ func TestUpdate(t *testing.T) {
 					nil, // no error
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				return m
@@ -1142,7 +1142,7 @@ func TestUpdate(t *testing.T) {
 					nil, // no error
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				return m
@@ -1179,7 +1179,7 @@ func TestUpdate(t *testing.T) {
 					nil, // no error
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				return m
@@ -1253,7 +1253,7 @@ func TestUpdate(t *testing.T) {
 					nil,
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				m.On("ShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(
@@ -1333,7 +1333,7 @@ func TestUpdate(t *testing.T) {
 					withSharedSpaces(sharedSpaceGUID),
 				),
 				obs: managed.ExternalUpdate{},
-				err: errors.New("cannot share service instance with spaces: boom"),
+				err: errors.New("cannot update shared spaces: cannot share service instance with spaces: boom"),
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
@@ -1350,7 +1350,7 @@ func TestUpdate(t *testing.T) {
 					nil,
 				)
 				m.On("GetSharedSpaceRelationships", guid).Return(
-					&cfresource.ServiceInstanceSharedSpaceRelationships{},
+					sharedSpaceRelationships(),
 					nil,
 				)
 				m.On("ShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(
@@ -1382,7 +1382,7 @@ func TestUpdate(t *testing.T) {
 					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
 				),
 				obs: managed.ExternalUpdate{},
-				err: errors.New("cannot unshare service instance from spaces: boom"),
+				err: errors.New("cannot update shared spaces: cannot unshare service instance from spaces: boom"),
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
