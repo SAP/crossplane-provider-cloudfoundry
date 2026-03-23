@@ -366,6 +366,7 @@ Specifies the resource kinds to export. If not set, the user is prompted interac
 
 The possible values are:
 
+-   `app`
 -   `organization`
 -   `orgrole`
 -   `serviceinstance`
@@ -424,6 +425,18 @@ When exporting *Organization* resource kinds, the `org` parameter value specifie
 
 When exporting *Space* resource kinds, the `space` parameter value specifies regular expressions that the *Space* names must match.
 
+
+<a id="app"></a>
+
+##### App
+
+| Type                 | []string |
+|-------------------- |--------- |
+| CLI flag             | `--app`   |
+| Environment variable | -         |
+| Config file key      | `app`     |
+
+When exporting *App* resource kinds, the `app` parameter value specifies regular expressions that the *App* names must match. Apps can be filtered by organization (`--org`) and space (`--space`) parameters.
 
 <a id="serviceinstance"></a>
 
@@ -571,6 +584,32 @@ The `kind`, `resolve-references`, and `output` configuration parameters are set 
 The `org`, `space`, and `serviceinstance` parameter values are entered interactively.
 
 ![img](vhs/cf-export-sis-interactive.gif "Exporting an interactively selected ServiceInstance resource")
+
+
+## Exporting all *Apps* from spaces matching a regex
+
+This example shows how to export all *App* resources from spaces with names containing the word *production*. It demonstrates resolving space references by name.
+
+Configure the following:
+
+-   The credentials and API URL of the Cloud Foundry cluster ([username](#username), [password](#password), [apiurl](#apiurl))
+-   The resource kind to export, set to `app` ([kind](#kind))
+-   A regular expression matching the organization names to include ([org](#org))
+-   A regular expression matching the space names to include ([space](#space))
+-   A regular expression matching the app names to include ([app](#app))
+-   The resolve references setting ([resolve-references](#resolve-references))
+
+In this example, the export tool retrieves the `username`, `password`, and `apiurl` parameters from the configuration file, as set by the [login](#login-workflows) command.
+
+The `kind`, `org`, `space`, `app`, and `resolve-references` configuration parameters are set using CLI flags.
+
+The regular expression `.*` matches all names. The regular expression `.*production.*` matches names containing the string *production*.
+
+The following command exports the required resources:
+
+```bash
+xpcf export --kind app --org '.*' --space '.*production.*' --app '.*' -r
+```
 
 
 # Troubleshooting
