@@ -1,3 +1,6 @@
+// Package app implements Cloud Foundry App resource export functionality.
+// It fetches CF applications from the API, converts them to Crossplane App resources,
+// and handles filtering by organization and space.
 package app
 
 import (
@@ -32,15 +35,19 @@ func init() {
 	resources.RegisterKind(app{})
 }
 
+// res wraps a Cloud Foundry App with comment metadata for YAML export.
 type res struct {
 	*resource.App
 	*yaml.ResourceWithComment
 }
 
+// GetGUID returns the Cloud Foundry GUID of the application.
 func (r *res) GetGUID() string {
 	return r.GUID
 }
 
+// GetName returns the sanitized name of the application suitable for Kubernetes resources.
+// If sanitization fails, a warning comment is added to the resource.
 func (r *res) GetName() string {
 	name := r.Name
 	names := parsan.ParseAndSanitize(name, parsan.RFC1035LowerSubdomain)
@@ -52,18 +59,23 @@ func (r *res) GetName() string {
 	return name
 }
 
+// app implements the resources.Kind interface for CF App export.
 type app struct{}
 
 var _ resources.Kind = app{}
 
+// Param returns the configuration parameter for filtering apps during export.
 func (a app) Param() configparam.ConfigParam {
 	return param
 }
 
+// KindName returns the name of this resource kind ("app").
 func (a app) KindName() string {
 	return param.GetName()
 }
 
+// Export fetches CF applications, converts them to Crossplane resources, and emits them via the event handler.
+// It filters apps by organization/space and processes each matching application.
 func (a app) Export(ctx context.Context, cfClient *client.Client, evHandler export.EventHandler, resolveReferences bool) error {
 	apps, err := Get(ctx, cfClient)
 	if err != nil {
@@ -83,6 +95,7 @@ func (a app) Export(ctx context.Context, cfClient *client.Client, evHandler expo
 	return nil
 }
 
+// getAllNamesFn returns a function that fetches all app names for the given org/space GUIDs.
 func getAllNamesFn(ctx context.Context, cfClient *client.Client, orgGuids, spaceGuids []string) func() ([]string, error) {
 	return func() ([]string, error) {
 		resources, err := getAll(ctx, cfClient, orgGuids, spaceGuids, []string{})
@@ -97,6 +110,8 @@ func getAllNamesFn(ctx context.Context, cfClient *client.Client, orgGuids, space
 	}
 }
 
+// Get returns all CF applications matching the configured filter criteria.
+// Results are cached for subsequent calls. It prompts for app selection if none are specified.
 func Get(ctx context.Context, cfClient *client.Client) (mkcontainer.TypedContainer[*res], error) {
 	if c != nil {
 		return c, nil
@@ -143,6 +158,8 @@ func Get(ctx context.Context, cfClient *client.Client) (mkcontainer.TypedContain
 	return c, nil
 }
 
+// getAll retrieves applications from the CF API and filters them by the provided name patterns.
+// Supports regex matching for app names. If appNames is empty, matches all applications.
 func getAll(ctx context.Context, cfClient *client.Client, orgGuids, spaceGuids, appNames []string) ([]*res, error) {
 	var nameRxs []*regexp.Regexp
 

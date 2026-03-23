@@ -1,3 +1,4 @@
+// Package app implements Cloud Foundry App resource export functionality.
 package app
 
 import (
@@ -6,6 +7,9 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
+// generateDockerCredentialSecret creates a Kubernetes Secret for Docker registry credentials.
+// The password field is set to "TODO" as a placeholder since the actual password cannot be exported.
+// The secret includes a comment reminding users to manually fill in the password.
 func generateDockerCredentialSecret(name, username string) *yaml.ResourceWithComment {
 	s := &v1.Secret{
 		TypeMeta: metav1.TypeMeta{

@@ -1,3 +1,4 @@
+// Package app implements Cloud Foundry App resource export functionality.
 package app
 
 import (
@@ -27,6 +28,8 @@ import (
 // 	Applications []application `json:"applications"`
 // }
 
+// getManifest fetches the application manifest from Cloud Foundry API for the given app GUID.
+// Returns the parsed manifest containing all application configurations.
 func getManifest(ctx context.Context, cfClient *client.Client, appGUID string) (*operation.Manifest, error) {
 	m := &operation.Manifest{}
 	stringManifest, err := cfClient.Manifests.Generate(ctx, appGUID)
@@ -40,6 +43,8 @@ func getManifest(ctx context.Context, cfClient *client.Client, appGUID string) (
 	return m, err
 }
 
+// getAppManifest retrieves the first application manifest from the CF API response.
+// Returns nil if no applications are found in the manifest.
 func getAppManifest(ctx context.Context, cfClient *client.Client, appGUID string) (*operation.AppManifest, error) {
 	m, err := getManifest(ctx, cfClient, appGUID)
 	if err != nil {
