@@ -338,7 +338,282 @@ func TestGenerateDockerCredentialSecret(t *testing.T) {
 	}
 }
 
+func TestConvertProcessConfiguration(t *testing.T) {
+	tests := []struct {
+		name    string
+		process operation.AppManifestProcess
+		check   func(t *testing.T, cfg *v1alpha1.ProcessConfiguration)
+	}{
+		{
+			name: "process with all fields set",
+			process: operation.AppManifestProcess{
+				Type:                         "web",
+				Command:                      "node server.js",
+				DiskQuota:                    "1G",
+				Instances:                    ptr.To[uint](3),
+				Memory:                       "512M",
+				Timeout:                      60,
+				HealthCheckType:              "http",
+				HealthCheckHTTPEndpoint:      "/health",
+				HealthCheckInterval:          30,
+				HealthCheckInvocationTimeout: 5,
+			},
+			check: func(t *testing.T, cfg *v1alpha1.ProcessConfiguration) {
+				if *cfg.Type != "web" {
+					t.Errorf("expected type 'web', got %s", *cfg.Type)
+				}
+				if *cfg.Command != "node server.js" {
+					t.Errorf("expected command 'node server.js', got %s", *cfg.Command)
+				}
+				if *cfg.DiskQuota != "1G" {
+					t.Errorf("expected disk quota '1G', got %s", *cfg.DiskQuota)
+				}
+				if *cfg.Instances != 3 {
+					t.Errorf("expected 3 instances, got %d", *cfg.Instances)
+				}
+				if *cfg.Memory != "512M" {
+					t.Errorf("expected memory '512M', got %s", *cfg.Memory)
+				}
+				if *cfg.Timeout != 60 {
+					t.Errorf("expected timeout 60, got %d", *cfg.Timeout)
+				}
+				if *cfg.HealthCheckType != "http" {
+					t.Errorf("expected health check type 'http', got %s", *cfg.HealthCheckType)
+				}
+				if *cfg.HealthCheckHTTPEndpoint != "/health" {
+					t.Errorf("expected health check endpoint '/health', got %s", *cfg.HealthCheckHTTPEndpoint)
+				}
+				if *cfg.HealthCheckInterval != 30 {
+					t.Errorf("expected health check interval 30, got %d", *cfg.HealthCheckInterval)
+				}
+				if *cfg.HealthCheckInvocationTimeout != 5 {
+					t.Errorf("expected health check invocation timeout 5, got %d", *cfg.HealthCheckInvocationTimeout)
+				}
+			},
+		},
+		{
+			name: "process with only required fields",
+			process: operation.AppManifestProcess{
+				Type:            "worker",
+				Instances:       ptr.To[uint](1),
+				HealthCheckType: "port",
+			},
+			check: func(t *testing.T, cfg *v1alpha1.ProcessConfiguration) {
+				if *cfg.Type != "worker" {
+					t.Errorf("expected type 'worker', got %s", *cfg.Type)
+				}
+				if cfg.Command != nil {
+					t.Errorf("expected nil command for empty value, got %v", *cfg.Command)
+				}
+				if cfg.DiskQuota != nil {
+					t.Errorf("expected nil disk quota for empty value, got %v", *cfg.DiskQuota)
+				}
+				if *cfg.Instances != 1 {
+					t.Errorf("expected 1 instance, got %d", *cfg.Instances)
+				}
+				if cfg.Memory != nil {
+					t.Errorf("expected nil memory for empty value, got %v", *cfg.Memory)
+				}
+				if cfg.Timeout != nil {
+					t.Errorf("expected nil timeout for zero value, got %v", *cfg.Timeout)
+				}
+				if *cfg.HealthCheckType != "port" {
+					t.Errorf("expected health check type 'port', got %s", *cfg.HealthCheckType)
+				}
+				if cfg.HealthCheckHTTPEndpoint != nil {
+					t.Errorf("expected nil health check endpoint for empty value, got %v", *cfg.HealthCheckHTTPEndpoint)
+				}
+				if cfg.HealthCheckInterval != nil {
+					t.Errorf("expected nil health check interval for zero value, got %v", *cfg.HealthCheckInterval)
+				}
+				if cfg.HealthCheckInvocationTimeout != nil {
+					t.Errorf("expected nil health check invocation timeout for zero value, got %v", *cfg.HealthCheckInvocationTimeout)
+				}
+			},
+		},
+		{
+			name: "process with partial fields",
+			process: operation.AppManifestProcess{
+				Type:                "web",
+				Command:             "python app.py",
+				Instances:           ptr.To[uint](2),
+				Memory:              "256M",
+				Timeout:             30,
+				HealthCheckType:     "http",
+				HealthCheckInterval: 10,
+			},
+			check: func(t *testing.T, cfg *v1alpha1.ProcessConfiguration) {
+				if *cfg.Type != "web" {
+					t.Errorf("expected type 'web', got %s", *cfg.Type)
+				}
+				if *cfg.Command != "python app.py" {
+					t.Errorf("expected command 'python app.py', got %s", *cfg.Command)
+				}
+				if cfg.DiskQuota != nil {
+					t.Errorf("expected nil disk quota for empty value, got %v", *cfg.DiskQuota)
+				}
+				if *cfg.Instances != 2 {
+					t.Errorf("expected 2 instances, got %d", *cfg.Instances)
+				}
+				if *cfg.Memory != "256M" {
+					t.Errorf("expected memory '256M', got %s", *cfg.Memory)
+				}
+				if *cfg.Timeout != 30 {
+					t.Errorf("expected timeout 30, got %d", *cfg.Timeout)
+				}
+				if cfg.HealthCheckHTTPEndpoint != nil {
+					t.Errorf("expected nil health check endpoint for empty value, got %v", *cfg.HealthCheckHTTPEndpoint)
+				}
+				if *cfg.HealthCheckInterval != 10 {
+					t.Errorf("expected health check interval 10, got %d", *cfg.HealthCheckInterval)
+				}
+				if cfg.HealthCheckInvocationTimeout != nil {
+					t.Errorf("expected nil health check invocation timeout for zero value, got %v", *cfg.HealthCheckInvocationTimeout)
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := convertProcessConfiguration(&tt.process)
+			if tt.check != nil {
+				tt.check(t, result)
+			}
+		})
+	}
+}
+
+func TestConvertReadinessHealthCheckConfiguration(t *testing.T) {
+	tests := []struct {
+		name        string
+		appManifest *operation.AppManifest
+		check       func(t *testing.T, cfg *v1alpha1.ReadinessHealthCheckConfiguration)
+	}{
+		{
+			name:        "nil manifest returns empty config",
+			appManifest: nil,
+			check: func(t *testing.T, cfg *v1alpha1.ReadinessHealthCheckConfiguration) {
+				if cfg.ReadinessHealthCheckType != nil {
+					t.Errorf("expected nil type for nil manifest, got %v", *cfg.ReadinessHealthCheckType)
+				}
+				if cfg.ReadinessHealthCheckHTTPEndpoint != nil {
+					t.Errorf("expected nil endpoint for nil manifest, got %v", *cfg.ReadinessHealthCheckHTTPEndpoint)
+				}
+				if cfg.ReadinessHealthCheckInterval != nil {
+					t.Errorf("expected nil interval for nil manifest, got %v", *cfg.ReadinessHealthCheckInterval)
+				}
+				if cfg.ReadinessHealthCheckInvocationTimeout != nil {
+					t.Errorf("expected nil timeout for nil manifest, got %v", *cfg.ReadinessHealthCheckInvocationTimeout)
+				}
+			},
+		},
+		{
+			name: "empty manifest returns empty config",
+			appManifest: &operation.AppManifest{
+				AppManifestProcess: operation.AppManifestProcess{
+					ReadinessHealthCheckType:         "",
+					ReadinessHealthCheckHttpEndpoint: "",
+					ReadinessHealthCheckInterval:     0,
+					ReadinessHealthInvocationTimeout: 0,
+				},
+			},
+			check: func(t *testing.T, cfg *v1alpha1.ReadinessHealthCheckConfiguration) {
+				if cfg.ReadinessHealthCheckType != nil {
+					t.Errorf("expected nil type for empty value, got %v", *cfg.ReadinessHealthCheckType)
+				}
+				if cfg.ReadinessHealthCheckHTTPEndpoint != nil {
+					t.Errorf("expected nil endpoint for empty value, got %v", *cfg.ReadinessHealthCheckHTTPEndpoint)
+				}
+				if cfg.ReadinessHealthCheckInterval != nil {
+					t.Errorf("expected nil interval for zero value, got %v", *cfg.ReadinessHealthCheckInterval)
+				}
+				if cfg.ReadinessHealthCheckInvocationTimeout != nil {
+					t.Errorf("expected nil timeout for zero value, got %v", *cfg.ReadinessHealthCheckInvocationTimeout)
+				}
+			},
+		},
+		{
+			name: "all fields set",
+			appManifest: &operation.AppManifest{
+				AppManifestProcess: operation.AppManifestProcess{
+					ReadinessHealthCheckType:         "http",
+					ReadinessHealthCheckHttpEndpoint: "/ready",
+					ReadinessHealthCheckInterval:     30,
+					ReadinessHealthInvocationTimeout: 5,
+				},
+			},
+			check: func(t *testing.T, cfg *v1alpha1.ReadinessHealthCheckConfiguration) {
+				if cfg.ReadinessHealthCheckType == nil || *cfg.ReadinessHealthCheckType != "http" {
+					t.Errorf("expected type 'http', got %v", cfg.ReadinessHealthCheckType)
+				}
+				if cfg.ReadinessHealthCheckHTTPEndpoint == nil || *cfg.ReadinessHealthCheckHTTPEndpoint != "/ready" {
+					t.Errorf("expected endpoint '/ready', got %v", cfg.ReadinessHealthCheckHTTPEndpoint)
+				}
+				if cfg.ReadinessHealthCheckInterval == nil || *cfg.ReadinessHealthCheckInterval != 30 {
+					t.Errorf("expected interval 30, got %v", cfg.ReadinessHealthCheckInterval)
+				}
+				if cfg.ReadinessHealthCheckInvocationTimeout == nil || *cfg.ReadinessHealthCheckInvocationTimeout != 5 {
+					t.Errorf("expected timeout 5, got %v", cfg.ReadinessHealthCheckInvocationTimeout)
+				}
+			},
+		},
+		{
+			name: "partial fields set - only type",
+			appManifest: &operation.AppManifest{
+				AppManifestProcess: operation.AppManifestProcess{
+					ReadinessHealthCheckType: "port",
+				},
+			},
+			check: func(t *testing.T, cfg *v1alpha1.ReadinessHealthCheckConfiguration) {
+				if cfg.ReadinessHealthCheckType == nil || *cfg.ReadinessHealthCheckType != "port" {
+					t.Errorf("expected type 'port', got %v", cfg.ReadinessHealthCheckType)
+				}
+				if cfg.ReadinessHealthCheckHTTPEndpoint != nil {
+					t.Errorf("expected nil endpoint for empty value, got %v", *cfg.ReadinessHealthCheckHTTPEndpoint)
+				}
+				if cfg.ReadinessHealthCheckInterval != nil {
+					t.Errorf("expected nil interval for zero value, got %v", *cfg.ReadinessHealthCheckInterval)
+				}
+				if cfg.ReadinessHealthCheckInvocationTimeout != nil {
+					t.Errorf("expected nil timeout for zero value, got %v", *cfg.ReadinessHealthCheckInvocationTimeout)
+				}
+			},
+		},
+		{
+			name: "partial fields set - only interval and timeout",
+			appManifest: &operation.AppManifest{
+				AppManifestProcess: operation.AppManifestProcess{
+					ReadinessHealthCheckInterval:     10,
+					ReadinessHealthInvocationTimeout: 2,
+				},
+			},
+			check: func(t *testing.T, cfg *v1alpha1.ReadinessHealthCheckConfiguration) {
+				if cfg.ReadinessHealthCheckType != nil {
+					t.Errorf("expected nil type for empty value, got %v", *cfg.ReadinessHealthCheckType)
+				}
+				if cfg.ReadinessHealthCheckHTTPEndpoint != nil {
+					t.Errorf("expected nil endpoint for empty value, got %v", *cfg.ReadinessHealthCheckHTTPEndpoint)
+				}
+				if cfg.ReadinessHealthCheckInterval == nil || *cfg.ReadinessHealthCheckInterval != 10 {
+					t.Errorf("expected interval 10, got %v", cfg.ReadinessHealthCheckInterval)
+				}
+				if cfg.ReadinessHealthCheckInvocationTimeout == nil || *cfg.ReadinessHealthCheckInvocationTimeout != 2 {
+					t.Errorf("expected timeout 2, got %v", cfg.ReadinessHealthCheckInvocationTimeout)
+				}
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := convertReadinessHealthCheckConfiguration(tt.appManifest)
+			if tt.check != nil {
+				tt.check(t, result)
+			}
+		})
+	}
+}
+
 // Note: convertAppResource is tested through integration-style tests
 // since it calls getAppManifest which makes external API calls.
-// The helper functions (convertDockerField, convertProcessesField) are
-// unit tested above.
+// The helper functions (convertDockerField, convertProcessesField, convertProcessConfiguration,
+// convertReadinessHealthCheckConfiguration) are unit tested above.
