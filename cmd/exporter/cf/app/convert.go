@@ -54,6 +54,40 @@ func convertDockerField(app *res, managedApp *v1alpha1.App, appManifest *operati
 	return nil
 }
 
+// convertProcessConfiguration converts a single CF AppManifestProcess to Crossplane ProcessConfiguration.
+// Handles all process fields including type, command, resources, and health check settings.
+func convertProcessConfiguration(process *operation.AppManifestProcess) *v1alpha1.ProcessConfiguration {
+	processConfig := &v1alpha1.ProcessConfiguration{
+		Type:      (*string)(&process.Type),
+		Instances: process.Instances,
+		HealthCheckConfiguration: v1alpha1.HealthCheckConfiguration{
+			HealthCheckType: (*string)(&process.HealthCheckType),
+		},
+	}
+	if process.Command != "" {
+		processConfig.Command = &process.Command
+	}
+	if process.DiskQuota != "" {
+		processConfig.DiskQuota = &process.DiskQuota
+	}
+	if process.Memory != "" {
+		processConfig.Memory = &process.Memory
+	}
+	if process.Timeout != 0 {
+		processConfig.Timeout = &process.Timeout
+	}
+	if process.HealthCheckHTTPEndpoint != "" {
+		processConfig.HealthCheckHTTPEndpoint = &process.HealthCheckHTTPEndpoint
+	}
+	if process.HealthCheckInterval != 0 {
+		processConfig.HealthCheckInterval = &process.HealthCheckInterval
+	}
+	if process.HealthCheckInvocationTimeout != 0 {
+		processConfig.HealthCheckInvocationTimeout = &process.HealthCheckInvocationTimeout
+	}
+	return processConfig
+}
+
 // convertProcessesField converts CF application processes to Crossplane ProcessConfiguration.
 // Handles all process types including web and worker processes with health checks.
 func convertProcessesField(managedApp *v1alpha1.App, appManifest *operation.AppManifest) {
@@ -66,21 +100,30 @@ func convertProcessesField(managedApp *v1alpha1.App, appManifest *operation.AppM
 
 	managedApp.Spec.ForProvider.Processes = make([]v1alpha1.ProcessConfiguration, len(*appManifest.Processes))
 	for i, process := range *appManifest.Processes {
-		managedApp.Spec.ForProvider.Processes[i] = v1alpha1.ProcessConfiguration{
-			Type:      (*string)(&process.Type),
-			Command:   &process.Command,
-			DiskQuota: &process.DiskQuota,
-			Instances: process.Instances,
-			Memory:    &process.Memory,
-			Timeout:   &process.Timeout,
-			HealthCheckConfiguration: v1alpha1.HealthCheckConfiguration{
-				HealthCheckType:              (*string)(&process.HealthCheckType),
-				HealthCheckHTTPEndpoint:      &process.HealthCheckHTTPEndpoint,
-				HealthCheckInterval:          &process.HealthCheckInterval,
-				HealthCheckInvocationTimeout: &process.HealthCheckInvocationTimeout,
-			},
-		}
+		managedApp.Spec.ForProvider.Processes[i] = *convertProcessConfiguration(&process)
 	}
+}
+
+// convertReadinessHealthCheckConfiguration converts readiness health check settings from CF manifest.
+// Returns a ReadinessHealthCheckConfiguration with only the fields that are set in the manifest.
+func convertReadinessHealthCheckConfiguration(appManifest *operation.AppManifest) *v1alpha1.ReadinessHealthCheckConfiguration {
+	rhcConfig := &v1alpha1.ReadinessHealthCheckConfiguration{}
+	if appManifest == nil {
+		return rhcConfig
+	}
+	if appManifest.ReadinessHealthCheckType != "" {
+		rhcConfig.ReadinessHealthCheckType = &appManifest.ReadinessHealthCheckType
+	}
+	if appManifest.ReadinessHealthCheckHttpEndpoint != "" {
+		rhcConfig.ReadinessHealthCheckHTTPEndpoint = &appManifest.ReadinessHealthCheckHttpEndpoint
+	}
+	if appManifest.ReadinessHealthCheckInterval != 0 {
+		rhcConfig.ReadinessHealthCheckInterval = &appManifest.ReadinessHealthCheckInterval
+	}
+	if appManifest.ReadinessHealthInvocationTimeout != 0 {
+		rhcConfig.ReadinessHealthCheckInvocationTimeout = &appManifest.ReadinessHealthInvocationTimeout
+	}
+	return rhcConfig
 }
 
 // convertAppResource converts a CF application to a Crossplane App resource with manifest data.
@@ -131,7 +174,7 @@ func convertAppResource(ctx context.Context, cfClient *client.Client, app *res, 
 		erra := erratt.Errorf("cannot get app manifest: %w", err).With("app-name", app.GetName())
 		evHandler.Warn(erra)
 		appWithComment.AddComment(erra.Error())
-	} else {
+	} else if appManifest != nil {
 		slog.Debug("app manifest fetched", "app-manifest", appManifest, "app-name", app.GetName())
 
 		if app.Lifecycle.Type == "docker" {
@@ -145,12 +188,7 @@ func convertAppResource(ctx context.Context, cfClient *client.Client, app *res, 
 		managedApp.Spec.ForProvider.RandomRoute = appManifest.RandomRoute
 		managedApp.Spec.ForProvider.DefaultRoute = appManifest.DefaultRoute
 		convertProcessesField(managedApp, appManifest)
-		managedApp.Spec.ForProvider.ReadinessHealthCheckConfiguration = v1alpha1.ReadinessHealthCheckConfiguration{
-			ReadinessHealthCheckType:              &appManifest.ReadinessHealthCheckType,
-			ReadinessHealthCheckHTTPEndpoint:      &appManifest.ReadinessHealthCheckHttpEndpoint,
-			ReadinessHealthCheckInterval:          &appManifest.ReadinessHealthCheckInterval,
-			ReadinessHealthCheckInvocationTimeout: &appManifest.ReadinessHealthInvocationTimeout,
-		}
+		managedApp.Spec.ForProvider.ReadinessHealthCheckConfiguration = *convertReadinessHealthCheckConfiguration(appManifest)
 		managedApp.Spec.ForProvider.LogRateLimitPerSecond = &appManifest.LogRateLimitPerSecond
 	}
 	if resolveReferences {

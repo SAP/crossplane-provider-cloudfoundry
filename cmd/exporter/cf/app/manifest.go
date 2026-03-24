@@ -5,7 +5,6 @@ import (
 	"context"
 	"log/slog"
 
-	// kyaml "sigs.k8s.io/yaml"
 	gyaml "gopkg.in/yaml.v2"
 
 	"github.com/SAP/xp-clifford/erratt"
@@ -13,20 +12,6 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
 )
-
-// type docker struct {
-// 	Image string `json:"image"`
-// 	Username *string `json:"username,omitempty"`
-// }
-
-// type application struct {
-// 	Name string `json:"name"`
-// 	Docker *docker `json:"docker,omitempty"`
-// }
-
-// type manifest struct {
-// 	Applications []application `json:"applications"`
-// }
 
 // getManifest fetches the application manifest from Cloud Foundry API for the given app GUID.
 // Returns the parsed manifest containing all application configurations.
