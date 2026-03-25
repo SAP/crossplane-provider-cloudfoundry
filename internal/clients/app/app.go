@@ -77,7 +77,7 @@ func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha1.AppParameters,
 	if err != nil {
 		return nil, err
 	}
-	return c.PushClient.Push(ctx, application, manifest, nil)
+	return c.Push(ctx, application, manifest, nil)
 }
 
 // Update updates an app in the Cloud Foundry.
@@ -100,7 +100,7 @@ func (c *Client) UpdateAndPush(ctx context.Context, guid string, spec v1alpha1.A
 	if err != nil {
 		return nil, err
 	}
-	return c.PushClient.Push(ctx, application, manifest, nil)
+	return c.Push(ctx, application, manifest, nil)
 }
 
 // Delete deletes an app in the Cloud Foundry.

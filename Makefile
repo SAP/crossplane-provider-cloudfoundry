@@ -1,8 +1,8 @@
 # ====================================================================================
 # Setup Project
 BASE_NAME := cloudfoundry
-PROJECT_NAME := crossplane-provider-$(BASE_NAME)
-PROJECT_REPO := github.com/SAP/$(PROJECT_NAME)
+PROJECT_NAME := provider-$(BASE_NAME)
+PROJECT_REPO := github.com/SAP/crossplane-$(PROJECT_NAME)
 
 
 PLATFORMS ?= linux_amd64 linux_arm64
@@ -37,8 +37,13 @@ GO_STATIC_PACKAGES = $(GO_PROJECT)/cmd/provider $(GO_PROJECT)/cmd/exporter
 GO_LDFLAGS += -X $(GO_PROJECT)/internal/version.Version=$(VERSION)
 GO_SUBDIRS += cmd internal apis
 GO111MODULE = on
-GOLANGCILINT_VERSION ?= 1.64.5
+GOLANGCILINT_VERSION ?= 2.10.1
 -include build/makelib/golang.mk
+
+# --out-format is deprecated with v2, replace with --output.checkstyle.path
+ifeq ($(RUNNING_IN_CI),true)
+GO_LINT_ARGS := --timeout 10m0s --output.checkstyle.path=$(GO_LINT_OUTPUT)/checkstyle.xml
+endif
 
 # kind-related versions
 KIND_VERSION ?= v0.26.0
@@ -53,17 +58,9 @@ UPTEST_VERSION = v0.11.1
 
 # ====================================================================================
 # Setup Images
-DOCKER_REGISTRY ?= crossplane
-IMAGES = $(BASE_NAME) $(BASE_NAME)-controller
+IMAGES = provider-cloudfoundry
+-include build/makelib/imagelight.mk
 
--include build/makelib/image.mk
-
-
-
-export UUT_CONFIG = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME)):$(VERSION)
-export UUT_CONTROLLER = $(BUILD_REGISTRY)/$(subst crossplane-,crossplane/,$(PROJECT_NAME))-controller:$(VERSION)
-export UUT_IMAGES = {"crossplane/provider-cloudfoundry":"docker.io/$(UUT_CONFIG)","crossplane/provider-cloudfoundry-controller":"docker.io/$(UUT_CONTROLLER)"}
-export E2E_IMAGES = {"package":"$(UUT_CONFIG)","controller":"$(UUT_CONTROLLER)"}
 
 # Import upgrade test environment variables from shell
 export UPGRADE_TEST_FROM_TAG
@@ -95,7 +92,19 @@ fallthrough: submodules
 	@make
 
 # ====================================================================================
-# Targets
+# Setup XPKG
+
+# XPKG_REG_ORGS ?= xpkg.upbound.io/crossplane-contrib index.docker.io/crossplanecontrib
+# NOTE(hasheddan): skip promoting on xpkg.upbound.io as channel tags are
+# inferred.
+# XPKG_REG_ORGS_NO_PROMOTE ?= xpkg.upbound.io/crossplane-contrib
+XPKGS ?= provider-cloudfoundry
+XPKG_REG_ORGS ?= ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane
+-include build/makelib/xpkg.mk
+
+# NOTE(hasheddan): we force image building to happen prior to xpkg build so that
+# we ensure image is present in daemon.
+xpkg.build.crossplane-provider-cloudfoundry: do.build.images
 
 # NOTE: the build submodule currently overrides XDG_CACHE_HOME in order to
 # force the Helm 3 to use the .work/helm directory. This causes Go on Linux
@@ -105,6 +114,9 @@ fallthrough: submodules
 # its location in CI so that we cache between builds.
 go.cachedir:
 	@go env GOCACHE
+
+# ====================================================================================
+# Targets
 
 # Generate a coverage report for cobertura applying exclusions on
 # - generated file
@@ -152,6 +164,7 @@ run: go.build
 
 CROSSPLANE_NAMESPACE = upbound-system
 -include build/makelib/local.xpkg.mk
+CROSSPLANE_ARGS = '--enable-usages'
 -include build/makelib/controlplane.mk
 
 uptest: $(UPTEST) $(KUBECTL) $(KUTTL)
@@ -169,21 +182,22 @@ e2e: local-deploy uptest
 
 # Updated End to End Testing following BTP Provider
 
+export E2E_REUSE_CLUSTER = $(KIND_CLUSTER_NAME)
+export E2E_CLUSTER_NAME = $(KIND_CLUSTER_NAME)
+
 .PHONY: test-acceptance
-test-acceptance:  $(KIND) $(HELM3) build
+test-acceptance: local-deploy $(KUBECTL)
+	@echo "Creating crossplane-system namespace"
+	@$(KUBECTL) create namespace crossplane-system
 	@$(INFO) running integration tests
 	@$(INFO) Skipping long running tests
-	@echo UUT_CONFIG=$$UUT_CONFIG
-	@echo UUT_CONTROLLER=$$UUT_CONTROLLER
-	@$(INFO) ${E2E_IMAGES}
-	@echo "E2E_IMAGES=$$E2E_IMAGES"
 	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -timeout=15m -run '$(testFilter)' 2>&1 | tee test-output.log
 	@echo "===========Test Summary==========="
 	@grep -E "PASS|FAIL" test-output.log
 	@case `tail -n 1 test-output.log` in \
-     		*FAIL*) echo "❌ Error: Test failed"; exit 1 ;; \
-     		*) echo "✅ All tests passed"; $(OK) integration tests passed ;; \
-     esac
+		*FAIL*) echo "❌ Error: Test failed"; exit 1 ;; \
+		*) echo "✅ All tests passed"; $(OK) integration tests passed ;; \
+	esac
 .PHONY: cobertura submodules fallthrough run crds.clean dev-debug dev-clean demo-cluster demo-install demo-clean demo-debug
 
 # ====================================================================================
@@ -204,7 +218,7 @@ UPGRADE_TEST_FILTER ?= .
 
 .PHONY: check-upgrade-test-vars
 check-upgrade-test-vars: ## Verify required upgrade test environment variables
-	@$(INFO) Checking required environment variables for upgrade tests are present 
+	@$(INFO) Checking required environment variables for upgrade tests are present
 	@test -n "$(UPGRADE_TEST_FROM_TAG)" || { echo "❌ Set UPGRADE_TEST_FROM_TAG"; exit 1; }
 	@test -n "$(UPGRADE_TEST_TO_TAG)" || { echo "❌ Set UPGRADE_TEST_TO_TAG"; exit 1; }
 	@$(OK) required upgrade test environment variables are set
@@ -338,7 +352,7 @@ test-upgrade-debug: $(KIND) check-upgrade-test-vars build-upgrade-test-images te
 
 .PHONY: test-upgrade-restore-crs
 test-upgrade-restore-crs: ## Restore $(UPGRADE_TEST_CRS_DIR)/ to current version
-	@$(INFO) restoring $(UPGRADE_TEST_CRS_DIR)/ 
+	@$(INFO) restoring $(UPGRADE_TEST_CRS_DIR)/
 	@git checkout $(UPGRADE_TEST_CRS_DIR)/
 	@$(OK) CRs restored
 
@@ -401,7 +415,7 @@ test-upgrade-help: ## Show upgrade test usage examples
 	@$(INFO) "  Base Tests:   Standard resource verification (TestUpgradeProvider)"
 	@$(INFO) "  Custom Tests: External-name validation (Test_Space_External_Name, etc.)"
 	@$(INFO) ""
-	
+
 # ====================================================================================
 # Special Targets
 
@@ -435,14 +449,3 @@ crossplane.help:
 help-special: crossplane.help
 
 .PHONY: crossplane.help help-special
-
-PUBLISH_IMAGES ?= crossplane/provider-cloudfoundry crossplane/provider-cloudfoundry-controller
-
-.PHONY: publish
-publish:
-	@$(INFO) "Publishing images $(PUBLISH_IMAGES) to $(DOCKER_REGISTRY)"
-	@for image in $(PUBLISH_IMAGES); do \
-		echo "Publishing image $(DOCKER_REGISTRY)/$${image}:$(VERSION)"; \
-		docker push $(DOCKER_REGISTRY)/$${image}:$(VERSION); \
-	done
-	@$(OK) "Publishing images $(PUBLISH_IMAGES) to $(DOCKER_REGISTRY)"

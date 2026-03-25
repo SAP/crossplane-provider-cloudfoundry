@@ -216,7 +216,7 @@ func TestCreate(t *testing.T) {
 			},
 			want: want{
 				guid: "",
-				err:  errors.New("Space and Domain are required"),
+				err:  errors.New("space and domain are required"),
 			},
 			service: func() *fake.MockRoute {
 				m := &fake.MockRoute{}
