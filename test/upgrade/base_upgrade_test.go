@@ -33,9 +33,15 @@ func TestUpgradeProvider(t *testing.T) {
 
 	serviceInstanceDir := filepath.Join(resourceDirectoryRoot, "serviceInstance")
 	serviceCredentialBindingDir := filepath.Join(resourceDirectoryRoot, "serviceCredentialBinding")
-	dependentDirs := []string{serviceCredentialBindingDir}
+	serviceInstanceDependencyChain := []string{serviceInstanceDir, serviceCredentialBindingDir}
 
-	requiredDirs := removeFromDirs(resourceDirectories, dependentDirs)
+	domainDir := filepath.Join(resourceDirectoryRoot, "domain")
+	routeDir := filepath.Join(resourceDirectoryRoot, "route")
+	appDir := filepath.Join(resourceDirectoryRoot, "app")
+	domainDependencyChain := []string{domainDir, routeDir, appDir}
+
+	dependencyDirs := append(serviceInstanceDependencyChain, domainDependencyChain...)
+	requiredDirs := removeFromDirs(resourceDirectories, dependencyDirs)
 
 	upgradeTest := NewCustomUpgradeTest("baseline-upgrade-test").
 		FromVersion(fromTag).
@@ -49,9 +55,15 @@ func TestUpgradeProvider(t *testing.T) {
 			},
 		).
 		WithCustomPreUpgradeAssessment(
-			"Check service instance and dependent resources are healthy before upgrade",
+			"Check service instance and service credential binding resources are healthy before upgrade",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-				return verifyServiceInstanceWithDependents(ctx, t, cfg, serviceInstanceDir, dependentDirs, verifyTimeout)
+				return verifyDependencyChain(ctx, t, cfg, serviceInstanceDependencyChain, verifyTimeout)
+			},
+		).
+		WithCustomPreUpgradeAssessment(
+			"Check domain, route, and app resources are healthy before upgrade",
+			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+				return verifyDependencyChain(ctx, t, cfg, domainDependencyChain, verifyTimeout)
 			},
 		).
 		WithCustomPostUpgradeAssessment(
@@ -61,9 +73,15 @@ func TestUpgradeProvider(t *testing.T) {
 			},
 		).
 		WithCustomPostUpgradeAssessment(
-			"Check service instance and dependent resources are healthy after upgrade",
+			"Check service instance and service credential binding resources are healthy after upgrade",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-				return verifyServiceInstanceWithDependents(ctx, t, cfg, serviceInstanceDir, dependentDirs, verifyTimeout)
+				return verifyDependencyChain(ctx, t, cfg, serviceInstanceDependencyChain, verifyTimeout)
+			},
+		).
+		WithCustomPostUpgradeAssessment(
+			"Check domain, route, and app resources are healthy after upgrade",
+			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+				return verifyDependencyChain(ctx, t, cfg, domainDependencyChain, verifyTimeout)
 			},
 		)
 	testenv.Test(t, upgradeTest.Feature())
@@ -81,15 +99,17 @@ func verifyResources(ctx context.Context, t *testing.T, cfg *envconf.Config, dir
 	return ctx
 }
 
-// verifyServiceInstanceWithDependents verifies the service instance directory first and
-// if successful dependent directories
-func verifyServiceInstanceWithDependents(ctx context.Context, t *testing.T, cfg *envconf.Config, serviceInstanceDir string, dependentDirs []string, timeout time.Duration) context.Context {
-	klog.V(4).Infof("verify service instance")
-	if err := resources.WaitForResourcesToBeSynced(ctx, cfg, serviceInstanceDir, nil, wait.WithTimeout(timeout)); err != nil {
-		t.Errorf("verify service instance failed: %v — skipping verification of: %s", err, strings.Join(dependentDirs, ", "))
-		return ctx
+// verifyDependencyChain verifies the resource directories in the order as they appear in the slice
+// and skips the remaining if any resource directory in the chain fails verification
+func verifyDependencyChain(ctx context.Context, t *testing.T, cfg *envconf.Config, dirs []string, timeout time.Duration) context.Context {
+	for i, dir := range dirs {
+		klog.V(4).Infof("verify resources of directory %s", dir)
+		if err := resources.WaitForResourcesToBeSynced(ctx, cfg, dir, nil, wait.WithTimeout(timeout)); err != nil {
+			t.Errorf("verify resources of directory %s failed: %v — skipping verification of remaining dependent directories: %s", dir, err, strings.Join(dirs[i+1:], ", "))
+			return ctx
+		}
 	}
-	return verifyResources(ctx, t, cfg, dependentDirs, timeout)
+	return ctx
 }
 
 // removeFromDirs is a helper function to remove directories from the list of directories to verify,

@@ -240,6 +240,7 @@ Base tests use YAML manifests from `test/upgrade/testdata/baseCrs/`. Currently t
 - **SpaceMembers**
 - **ServiceInstance**
 - **ServiceCredentialBinding**
+- ~~**OrgQuota**~~ - To create org quotas, broad [admin privileges](https://docs.cloudfoundry.org/concepts/roles.html#activeroles) are required which we do not want to grant the technical user just for testing purposes so we intentionally leave it out
 
 #### Test Base Resource Dependencies
 - **SpaceRole:** A space role can only be assigned to a user if the user is also a member of the space's organization.\
@@ -248,7 +249,9 @@ Base tests use YAML manifests from `test/upgrade/testdata/baseCrs/`. Currently t
 If the combination of offering and plan is not available in your space change it something different.\
 🠊 Run `cf marketplace` and update the values in test/upgrade/testdata/baseCrs/service_instance.yaml
 - **ServiceCredentialBinding:** The ServiceCredentialBinding directly depends on the ServiceInstance it is referencing \
-🠊 The `base_upgrade_test` includes dedicated pre- and post-upgrade assessment for the ServiceInstance resources and its dependents. These assessments verify the ServiceInstance first, and only then thedependent resources such as ServiceCredentialBinding. This ordering makes dependency failures easier to diagnose and test less flaky when the upstream ServiceInstance is not healthy.
+🠊 The `base_upgrade_test` includes dedicated pre- and post-upgrade assessment for the ServiceInstance resources and its dependents. These assessments verify the ServiceInstance first, and only then the dependent resources such as ServiceCredentialBinding. This ordering makes dependency failures easier to diagnose and test less flaky when the upstream ServiceInstance is not healthy.
+- **Domain, Route & App:** App depends on Route, and Route depends on Domain \
+🠊 The `base_upgrade_test` includes dedicated pre- and post-upgrade assessments for this chain and verifies resources in dependency order (Domain -> Route -> App), skipping dependent resources when a previous dependency fails. This ordering makes dependency failures easier to diagnose and test less flaky when the upstream resources are not healthy.
 
 #### Adding New Base Test Resources
 
@@ -368,22 +371,30 @@ test/
 ├── upgrade/
 │   ├── testdata/
 │   │   ├── baseCrs/                      # Base upgrade test resources
-│   │   │   ├── import/
-│   │   │   │   └── import_org.yaml       # Organization (observe)
-│   │   │   ├── space/
-│   │   │   │   └── space.yaml            # Space (create)
+│   │   │   ├── app/
+│   │   │   │   └── app.yaml       
 │   │   │   ├── domain/
-│   │   │   │   └── domain.yaml
-│   │   │   ├── spaceQuota/
-│   │   │   │   └── space_quota.yaml
-│   │   │   ├── spaceRole/
-│   │   │   │   └── space_role.yaml
+│   │   │   │   └── domain.yaml           # Organization (observe) + Space (observe)
+│   │   │   ├── import/
+│   │   │   │   └── import.yaml
+│   │   │   ├── orgMembers/
+│   │   │   │   └── org_members.yaml
+│   │   │   ├── orgRole/
+│   │   │   │   └── org_role.yaml
+│   │   │   ├── route/
+│   │   │   │   └── route.yaml
 │   │   │   ├── serviceCredentialBinding/
 │   │   │   │   └── service_credential_binding.yaml
 │   │   │   ├── serviceInstance/
 │   │   │   │   └── service_instance.yaml
-│   │   │   └── spaceMembers/
-│   │   │       └── space_members.yaml
+│   │   │   ├── space/
+│   │   │   │   └── space.yaml             # Space (create)
+│   │   │   ├── spaceMembers/
+│   │   │   │   └── space_members.yaml
+│   │   │   ├── spaceQuota/
+│   │   │   │   └── space_quota.yaml
+│   │   │   └── spaceRole/
+│   │   │       └── space_role.yaml
 │   │   └── customCrs/                    # Custom upgrade test resources
 │   │       └── externalNames/            # External-name validation test
 │   │           ├── space.yaml
