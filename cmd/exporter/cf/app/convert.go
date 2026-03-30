@@ -150,7 +150,7 @@ func convertAppResource(ctx context.Context, cfClient *client.Client, app *res, 
 				},
 			},
 			ForProvider: v1alpha1.AppParameters{
-				Name:      app.GetName(),
+				Name:      app.Name,
 				Lifecycle: app.Lifecycle.Type,
 				SpaceReference: v1alpha1.SpaceReference{
 					Space: &app.Relationships.Space.Data.GUID,
