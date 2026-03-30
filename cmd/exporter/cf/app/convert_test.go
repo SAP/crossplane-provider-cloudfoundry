@@ -327,6 +327,63 @@ func TestGenerateDockerCredentialSecret(t *testing.T) {
 				}
 			},
 		},
+		{
+			name:       "empty username",
+			secretName: "myapp-docker-credentials",
+			username:   "",
+			check: func(t *testing.T, secretWithComment *yaml.ResourceWithComment) {
+				secret, ok := secretWithComment.Resource().(*v1.Secret)
+				if !ok {
+					t.Fatalf("expected *v1.Secret, got %T", secretWithComment.Resource())
+				}
+				if secret.Name != "myapp-docker-credentials" {
+					t.Errorf("expected name 'myapp-docker-credentials', got %s", secret.Name)
+				}
+				if secret.StringData["username"] != "" {
+					t.Errorf("expected empty username, got %s", secret.StringData["username"])
+				}
+				if secret.StringData["password"] != "TODO" {
+					t.Errorf("expected password placeholder 'TODO', got %s", secret.StringData["password"])
+				}
+			},
+		},
+		{
+			name:       "empty secret name",
+			secretName: "",
+			username:   "dockeruser",
+			check: func(t *testing.T, secretWithComment *yaml.ResourceWithComment) {
+				secret, ok := secretWithComment.Resource().(*v1.Secret)
+				if !ok {
+					t.Fatalf("expected *v1.Secret, got %T", secretWithComment.Resource())
+				}
+				if secret.Name != "" {
+					t.Errorf("expected empty secret name, got %s", secret.Name)
+				}
+				if secret.StringData["username"] != "dockeruser" {
+					t.Errorf("expected username 'dockeruser', got %s", secret.StringData["username"])
+				}
+			},
+		},
+		{
+			name:       "both empty",
+			secretName: "",
+			username:   "",
+			check: func(t *testing.T, secretWithComment *yaml.ResourceWithComment) {
+				secret, ok := secretWithComment.Resource().(*v1.Secret)
+				if !ok {
+					t.Fatalf("expected *v1.Secret, got %T", secretWithComment.Resource())
+				}
+				if secret.Name != "" {
+					t.Errorf("expected empty secret name, got %s", secret.Name)
+				}
+				if secret.StringData["username"] != "" {
+					t.Errorf("expected empty username, got %s", secret.StringData["username"])
+				}
+				if secret.StringData["password"] != "TODO" {
+					t.Errorf("expected password placeholder 'TODO', got %s", secret.StringData["password"])
+				}
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
