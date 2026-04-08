@@ -2,6 +2,7 @@ package spacerole
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 
@@ -9,6 +10,7 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -26,6 +28,7 @@ import (
 	role "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/role"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/utils"
 )
 
 const (
@@ -125,6 +128,14 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errWrongKind)
 	}
 
+	if meta.GetExternalName(cr) == "" {
+		return managed.ExternalObservation{ResourceExists: false}, nil
+	}
+
+	if !utils.IsValidUUID(meta.GetExternalName(cr)) {
+		return managed.ExternalObservation{}, errors.New(fmt.Sprintf("external-name '%s' is not a valid GUID format", meta.GetExternalName(cr)))
+	}
+
 	// Fetch the role object using the CloudFoundry API by guid or according to the specified parameters
 	guid := meta.GetExternalName(cr)
 	r, err := role.GetSpaceRole(ctx, c.role, guid, cr.Spec.ForProvider)
@@ -212,7 +223,10 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	// Delete is async and we need to implement wait for deletion
-	jobGUID, err := c.role.Delete(ctx, *cr.Status.AtProvider.ID)
+	jobGUID, err := c.role.Delete(ctx, meta.GetExternalName(cr))
+	if cfresource.IsResourceNotFoundError(err) {
+		return managed.ExternalDelete{}, nil
+	}
 	if err != nil {
 		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
