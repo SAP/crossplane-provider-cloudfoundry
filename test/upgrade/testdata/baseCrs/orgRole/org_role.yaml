@@ -1,0 +1,15 @@
+# create a new org role with org ref
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: OrgRole
+metadata:
+  name: upgrade-test-org-role
+  annotations:
+    crossplane.io/paused: "false"
+spec:
+  forProvider:
+    type: Auditor
+    username: upgrade-test-org-role-user@example.com
+    orgRef:
+      name: upgrade-test-org
+      policy:
+        resolve: Always
