@@ -88,6 +88,12 @@ func withExternalName(name string) modifier {
 	}
 }
 
+func withID(id string) modifier {
+	return func(r *v1alpha1.SpaceRole) {
+		r.Status.AtProvider.ID = ptr.To(id)
+	}
+}
+
 func fakeSpaceRole(m ...modifier) *v1alpha1.SpaceRole {
 	r := &v1alpha1.SpaceRole{
 		ObjectMeta: metav1.ObjectMeta{
@@ -183,26 +189,7 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
-		"NotFound by uuid is not found": {
-			args: args{
-				mg: fakeSpaceRole(withSpace("my-space"), withExternalName(guidRole)),
-			},
-			want: want{
-				mg:  fakeSpaceRole(withSpace("my-space"), withExternalName(guidRole)),
-				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: false, ResourceLateInitialized: false},
-				err: nil,
-			},
-			service: func() *fake.MockSpaceRole {
-				m := &fake.MockSpaceRole{}
-
-				m.On("Get", guidRole).Return(
-					fake.SpaceRoleNil,
-					nil,
-				)
-				return m
-			},
-		},
-		"Successful": {
+		"UnsetExternalNameSuccesful": {
 			args: args{
 				mg: fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager)),
 			},
@@ -219,10 +206,32 @@ func TestObserve(t *testing.T) {
 					[]*cfresource.User{healthyUser},
 					nil,
 				)
+
+				m.On("Get", guidRole).Return(
+					healthyRole,
+					nil,
+				)
 				return m
 			},
 		},
-		"Successful when SpaceRole guid is found": {
+		"UnsetExternalNameNotFound": {
+			args: args{
+				mg: fakeSpaceRole(withSpace(guidSpace), withUsername("user1"), withType(v1alpha1.SpaceManager)),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withSpace(guidSpace), withUsername("user1"), withType(v1alpha1.SpaceManager)),
+				obs: managed.ExternalObservation{ResourceExists: false},
+				err: nil,
+			},
+			service: func() *fake.MockSpaceRole {
+				m := &fake.MockSpaceRole{}
+				var emptyRoles []*cfresource.Role
+				var emptyUsers []*cfresource.User
+				m.On("ListIncludeUsersAll").Return(emptyRoles, emptyUsers, nil)
+				return m
+			},
+		},
+		"SetExternalNameSuccesful": {
 			args: args{
 				mg: fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager), withExternalName(guidRole)),
 			},
@@ -239,6 +248,37 @@ func TestObserve(t *testing.T) {
 					nil,
 				)
 				return m
+			},
+		},
+		"SetExternalNameNotFound": {
+			args: args{
+				mg: fakeSpaceRole(withExternalName(guidRole)),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withExternalName(guidRole)),
+				obs: managed.ExternalObservation{ResourceExists: false},
+				err: nil,
+			},
+			service: func() *fake.MockSpaceRole {
+				m := &fake.MockSpaceRole{}
+				m.On("Get", guidRole).Return(
+					fake.SpaceRoleNil,
+					errors.New("CF-ResourceNotFound: The role was not found"),
+				)
+				return m
+			},
+		},
+		"SetExternalNameInvalidFormat": {
+			args: args{
+				mg: fakeSpaceRole(withExternalName("not-a-valid-guid")),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withExternalName("not-a-valid-guid")),
+				obs: managed.ExternalObservation{},
+				err: errors.New("external-name 'not-a-valid-guid' is not a valid GUID format"),
+			},
+			service: func() *fake.MockSpaceRole {
+				return &fake.MockSpaceRole{}
 			},
 		},
 	}
@@ -450,6 +490,112 @@ func TestCreate(t *testing.T) {
 			}
 
 			obs, err := c.Create(context.Background(), tc.args.mg)
+
+			if tc.want.err != nil && err != nil {
+				// the case where our mock server returns error.
+				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
+					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+				}
+			} else {
+				if diff := cmp.Diff(tc.want.err, err); diff != "" {
+					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+				}
+			}
+			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
+				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestDelete(t *testing.T) {
+	type service func() *fake.MockSpaceRole
+	type args struct {
+		mg resource.Managed
+	}
+
+	type want struct {
+		mg  resource.Managed
+		obs managed.ExternalDelete
+		err error
+	}
+
+	cases := map[string]struct {
+		args    args
+		want    want
+		service service
+		kube    k8s.Client
+	}{
+		"SuccessfulDelete": {
+			args: args{
+				mg: fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockSpaceRole {
+				m := &fake.MockSpaceRole{}
+				m.On("Delete").Return(
+					"job-guid-123",
+					nil,
+				)
+				return m
+			},
+		},
+		"404NotFound": {
+			args: args{
+				mg: fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockSpaceRole {
+				m := &fake.MockSpaceRole{}
+				m.On("Delete").Return(
+					"",
+					errors.New("CF-ResourceNotFound: The role was not found"),
+				)
+				return m
+			},
+		},
+		"Error": {
+			args: args{
+				mg: fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
+				obs: managed.ExternalDelete{},
+				err: errors.Wrap(errors.New("CF-ResourceNotDeleted: The role could not be deleted"), errDelete),
+			},
+			service: func() *fake.MockSpaceRole {
+				m := &fake.MockSpaceRole{}
+				m.On("Delete").Return(
+					"",
+					errors.New("CF-ResourceNotDeleted: The role could not be deleted"),
+				)
+				return m
+			},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			t.Logf("Testing: %s", t.Name())
+			mockJob := &fake.MockJob{}
+			mockJob.On("PollComplete").Return(nil)
+
+			c := &external{
+				kube: &test.MockClient{
+					MockDelete: test.NewMockDeleteFn(nil),
+				},
+				job:  mockJob,
+				role: tc.service(),
+			}
+
+			obs, err := c.Delete(context.Background(), tc.args.mg)
 
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
