@@ -28,7 +28,6 @@ import (
 	role "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/role"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/utils"
 )
 
 const (
@@ -128,17 +127,33 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errWrongKind)
 	}
 
+	resourceLateInitialized := false
+
+	// ADR Step 1: Check if external-name is empty
 	if meta.GetExternalName(cr) == "" {
-		return managed.ExternalObservation{ResourceExists: false}, nil
+		// Backwards compatibility required as previously lookup by spec was supported
+		r, err := role.FindSpaceRole(ctx, c.role, cr.Spec.ForProvider)
+		if err != nil {
+			if clients.ErrorIsNotFound(err) {
+				return managed.ExternalObservation{ResourceExists: false}, nil
+			}
+			return managed.ExternalObservation{}, errors.Wrap(err, errGet)
+		}
+		if r == nil {
+			return managed.ExternalObservation{ResourceExists: false}, nil
+		}
+		meta.SetExternalName(cr, r.GUID)
+		resourceLateInitialized = true
 	}
 
-	if !utils.IsValidUUID(meta.GetExternalName(cr)) {
-		return managed.ExternalObservation{}, errors.New(fmt.Sprintf("external-name '%s' is not a valid GUID format", meta.GetExternalName(cr)))
-	}
-
-	// Fetch the role object using the CloudFoundry API by guid or according to the specified parameters
 	guid := meta.GetExternalName(cr)
-	r, err := role.GetSpaceRole(ctx, c.role, guid, cr.Spec.ForProvider)
+
+	// ADR Step 2: External-name is set, check its format (must be valid GUID)
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.New(fmt.Sprintf("external-name '%s' is not a valid GUID format", guid))
+	}
+	// ADR Step 3: Build the Get API Request from the external-name (using GUID directly)
+	r, err := role.GetSpaceRole(ctx, c.role, guid)
 
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
@@ -149,12 +164,6 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	if r == nil {
 		return managed.ExternalObservation{ResourceExists: false}, nil
-	}
-
-	resourceLateInitialized := false
-	if guid != r.GUID {
-		meta.SetExternalName(cr, r.GUID)
-		resourceLateInitialized = true
 	}
 
 	cr.Status.AtProvider = role.GenerateSpaceRoleObservation(r)
@@ -224,10 +233,11 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	// Delete is async and we need to implement wait for deletion
 	jobGUID, err := c.role.Delete(ctx, meta.GetExternalName(cr))
-	if cfresource.IsResourceNotFoundError(err) {
-		return managed.ExternalDelete{}, nil
-	}
 	if err != nil {
+		// ADR: 404 not found means already deleted - not considered as error case
+		if cfresource.IsResourceNotFoundError(err) {
+			return managed.ExternalDelete{}, nil
+		}
 		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 
