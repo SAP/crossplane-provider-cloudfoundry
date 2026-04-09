@@ -10,7 +10,6 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -235,7 +234,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	jobGUID, err := c.role.Delete(ctx, meta.GetExternalName(cr))
 	if err != nil {
 		// ADR: 404 not found means already deleted - not considered as error case
-		if cfresource.IsResourceNotFoundError(err) {
+		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalDelete{}, nil
 		}
 		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
