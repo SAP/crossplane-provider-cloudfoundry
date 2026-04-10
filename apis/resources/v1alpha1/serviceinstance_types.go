@@ -55,6 +55,10 @@ type ServiceInstanceParameters struct {
 	// +kubebuilder:validation:Optional
 	// +mapType=granular
 	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
+
+	// (List of SpaceReference) List of references to Cloud Foundry spaces the service instance will be shared with.
+	// +kubebuilder:validation:Optional
+	SharedSpaces []SpaceReference `json:"sharedSpaces,omitempty"`
 }
 
 // Managed configuration for a managed service instance. Only used when `type` is `managed`.

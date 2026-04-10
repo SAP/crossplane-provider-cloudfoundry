@@ -5,6 +5,7 @@ package e2e
 
 import (
 	"context"
+	"fmt"
 	"testing"
 	"time"
 
@@ -20,6 +21,9 @@ import (
 func TestCloudFoundryServices(t *testing.T) {
 	var dir = "./crs/service"
 	var namespace = "service-test"
+
+	targetSpaceObj := &v1alpha1.Space{}
+
 	var feats = map[string]struct {
 		// name of the managed resource
 		name string
@@ -28,8 +32,31 @@ func TestCloudFoundryServices(t *testing.T) {
 		// updated checks if resource is updated, normally by observing a new value on managed field.
 		updated func(k8s.Object) (bool, error)
 	}{
-		"space":              {name: "service-space", obj: &v1alpha1.Space{}},
-		"service_instance":   {name: "e2e-service-instance", obj: &v1alpha1.ServiceInstance{}},
+		"space":        {name: "service-space", obj: &v1alpha1.Space{}},
+		"target_space": {name: "service-space-shared", obj: targetSpaceObj},
+		"service_instance": {
+			name: "e2e-service-instance",
+			obj:  &v1alpha1.ServiceInstance{},
+			updated: func(obj k8s.Object) (bool, error) {
+				si := obj.(*v1alpha1.ServiceInstance)
+				if len(si.Spec.ForProvider.SharedSpaces) == 0 {
+					return false, fmt.Errorf("expected sharedSpaces to be non-empty")
+				}
+				resolvedGUID := si.Spec.ForProvider.SharedSpaces[0].Space
+				if resolvedGUID == nil || *resolvedGUID == "" {
+					return false, fmt.Errorf("sharedSpaces[0].space GUID was not resolved (nil or empty)")
+				}
+				targetGUID := targetSpaceObj.Status.AtProvider.ID
+				if targetGUID == "" {
+					return false, fmt.Errorf("target space %q GUID not yet available in status", targetSpaceObj.GetName())
+				}
+				if *resolvedGUID != targetGUID {
+					return false, fmt.Errorf("sharedSpaces[0].space GUID %q does not match target space %q GUID %q",
+						*resolvedGUID, targetSpaceObj.GetName(), targetGUID)
+				}
+				return true, nil
+			},
+		},
 		"ups":                {name: "e2e-ups", obj: &v1alpha1.ServiceInstance{}},
 		"ups_no_credentials": {name: "e2e-ups-no-credentials", obj: &v1alpha1.ServiceInstance{}},
 		"scb_key":            {name: "e2e-scb-key", obj: &v1alpha1.ServiceCredentialBinding{}},
@@ -56,7 +83,7 @@ func TestCloudFoundryServices(t *testing.T) {
 		},
 	)
 
-	var steps = [...]string{"space", "service_instance", "ups", "ups_no_credentials", "scb_key"}
+	var steps = [...]string{"space", "target_space", "service_instance", "ups", "ups_no_credentials", "scb_key"}
 	for _, name := range steps {
 		ft, ok := feats[name]
 		if !ok {

@@ -44,6 +44,8 @@ const (
 	errSecret             = "cannot resolve secret reference"
 	errGetParameters      = "cannot get parameters of the service instance for drift detection. Please check this is supported or set enableParameterDriftDetection to false."
 	errMissingServicePlan = "managed resource service instance requires a service plan"
+	errCheckSharedSpaces  = "cannot check shared spaces"
+	errUpdateSharedSpaces = "cannot update shared spaces"
 )
 
 // Setup adds a controller that reconciles ServiceInstance CR.
@@ -210,6 +212,14 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		}
 		// Check if the credentials in the spec match the credentials in the external resource
 		upToDate := credentialsUpToDate && serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r)
+
+		// Check if shared spaces are up to date
+		sharedSpacesUpToDate, err := c.serviceinstance.AreSharedSpacesUpToDate(ctx, r.GUID, cr.Spec.ForProvider.SharedSpaces)
+		if err != nil {
+			return managed.ExternalObservation{ResourceExists: true}, errors.Wrap(err, errCheckSharedSpaces)
+		}
+		upToDate = upToDate && sharedSpacesUpToDate
+
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
 	default:
 		// should never reach here
@@ -247,21 +257,35 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
 
-	// Set the external name of the CR
-	meta.SetExternalName(cr, r.GUID)
+	if err := c.postCreate(ctx, cr, r.GUID, creds); err != nil {
+		return managed.ExternalCreation{}, err
+	}
+
+	return managed.ExternalCreation{}, nil
+}
+
+// postCreate sets the external name, persists the CR and status, and reconciles shared spaces after a successful creation.
+func (c *external) postCreate(ctx context.Context, cr *v1alpha1.ServiceInstance, guid string, creds []byte) error {
+	meta.SetExternalName(cr, guid)
 
 	// Update the CR before updating the status so that the status update is not lost.
-	if err = c.kube.Update(ctx, cr); err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, errUpdateCR)
+	if err := c.kube.Update(ctx, cr); err != nil {
+		return errors.Wrap(err, errUpdateCR)
 	}
 
 	// Save hash value of credentials in the status of the CR
 	cr.Status.AtProvider.Credentials = iSha256(creds)
-	if err = c.kube.Status().Update(ctx, cr); err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, errUpdateCR)
+	if err := c.kube.Status().Update(ctx, cr); err != nil {
+		return errors.Wrap(err, errUpdateCR)
 	}
 
-	return managed.ExternalCreation{}, nil
+	if len(cr.Spec.ForProvider.SharedSpaces) > 0 {
+		if err := c.serviceinstance.UpdateSharedSpaces(ctx, guid, cr.Spec.ForProvider.SharedSpaces); err != nil {
+			return errors.Wrap(err, errUpdateSharedSpaces)
+		}
+	}
+
+	return nil
 }
 
 // Update attempts to update the external resource to reflect the managed resource's desired state.
@@ -289,6 +313,11 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		if err := c.kube.Status().Update(ctx, cr); err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateCR)
 		}
+	}
+
+	// Update shared spaces after successful update
+	if err := c.serviceinstance.UpdateSharedSpaces(ctx, *cr.Status.AtProvider.ID, cr.Spec.ForProvider.SharedSpaces); err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateSharedSpaces)
 	}
 
 	return managed.ExternalUpdate{}, nil
