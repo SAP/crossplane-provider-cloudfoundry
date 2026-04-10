@@ -1,0 +1,17 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceRole
+metadata:
+  name: upgrade-test-external-name-space-role
+  annotations:
+    crossplane.io/paused: "false"
+spec:
+  forProvider:
+    type: Developer
+    username: user1@example.com
+    spaceRef:
+      name: upgrade-test-import-space
+      policy:
+        resolution: Required
+        resolve: Always
+  providerConfigRef:
+    name: default
