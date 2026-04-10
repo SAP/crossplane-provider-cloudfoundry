@@ -11,9 +11,11 @@ import (
 )
 
 var (
-	spaceRoleImportK8sResName = "e2e-test-space-role-import"
-	spaceRoleTypeE2e          = "Developer"
-	spaceRoleUsernameE2e      = "user1@example.com"
+	spaceRoleImportTestK8sResName = "e2e-test-space-role-import"
+	spaceRoleImportTestType       = "Developer"
+	spaceRoleImportTestUsername   = "user1@example.com"
+	spaceRoleImportTestOrgName    = "cf-ci-e2e"
+	spaceRoleImportTestSpaceName  = "import-test-space-donotdelete"
 )
 
 func TestSpaceRoleImportFlow(t *testing.T) {
@@ -22,15 +24,15 @@ func TestSpaceRoleImportFlow(t *testing.T) {
 			Spec: v1alpha1.SpaceRoleSpec{
 				ForProvider: v1alpha1.SpaceRoleParameters{
 					SpaceReference: v1alpha1.SpaceReference{
-						SpaceName: &testSpaceName,
-						OrgName:   &testOrgName,
+						SpaceName: &spaceRoleImportTestSpaceName,
+						OrgName:   &spaceRoleImportTestOrgName,
 					},
-					Type:     spaceRoleTypeE2e,
-					Username: spaceRoleUsernameE2e,
+					Type:     spaceRoleImportTestType,
+					Username: spaceRoleImportTestUsername,
 				},
 			},
 		},
-		spaceRoleImportK8sResName,
+		spaceRoleImportTestK8sResName,
 		WithWaitCreateTimeout[*v1alpha1.SpaceRole](wait.WithTimeout(5*time.Minute)),
 		WithWaitDeletionTimeout[*v1alpha1.SpaceRole](wait.WithTimeout(5*time.Minute)),
 	)
