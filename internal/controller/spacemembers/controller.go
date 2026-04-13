@@ -2,6 +2,8 @@ package spacemembers
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/pkg/errors"
@@ -37,7 +39,31 @@ const (
 	errUpdate            = "cannot update cloudfoundry SpaceMembers"
 	errDelete            = "cannot delete cloudfoundry SpaceMembers"
 	errSpaceNotResolved  = "cannot resolve reference to Space."
+	errExternalNameFmt   = "external-name '%s' is not a valid format, expected '<space-guid>/<role-type>'"
 )
+
+const externalNameSeparator = "/"
+
+func composeExternalName(spaceGUID, roleType string) string {
+	return spaceGUID + externalNameSeparator + roleType
+}
+
+func parseExternalName(externalName string) (spaceGUID, roleType string, err error) {
+	parts := strings.SplitN(externalName, externalNameSeparator, 3)
+	if len(parts) != 2 {
+		return "", "", errors.New(fmt.Sprintf(errExternalNameFmt, externalName))
+	}
+	spaceGUID = parts[0]
+	roleType = parts[1]
+	if spaceGUID == "" || roleType == "" {
+		return "", "", errors.New(fmt.Sprintf(errExternalNameFmt, externalName))
+	}
+	return spaceGUID, roleType, nil
+}
+
+func isOldExternalNameFormat(externalName string) bool {
+	return clients.IsValidGUID(externalName)
+}
 
 // Setup adds a controller that reconciles managed resources SpaceMembers.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
@@ -58,6 +84,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
 		managed.WithPollInterval(o.PollInterval),
+		managed.WithInitializers(),
 	}
 
 	if o.Features.Enabled(features.EnableBetaManagementPolicies) {
@@ -112,11 +139,16 @@ func (c *external) Disconnect(ctx context.Context) error {
 	return nil
 }
 
+type spaceMemberClient interface {
+	ObserveSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
+	AssignSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
+	UpdateSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
+	DeleteSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) error
+}
 // An ExternalClient observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
-	// A 'client' used to connect to the external resource API, in this case the Cloud Foundry v3 API.
-	client *members.Client
+	client spaceMemberClient
 }
 
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
@@ -130,8 +162,35 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errSpaceNotResolved)
 	}
 
-	if meta.GetExternalName(cr) == "" || meta.GetExternalName(cr) != *cr.Spec.ForProvider.Space {
-		return managed.ExternalObservation{ResourceExists: false}, nil
+	externalName := meta.GetExternalName(cr)
+
+	// Step 1: Handle empty or default external-name
+	if externalName == "" || externalName == cr.GetName() {
+		meta.SetExternalName(cr, composeExternalName(*cr.Spec.ForProvider.Space, cr.Spec.ForProvider.RoleType))
+		return managed.ExternalObservation{
+			ResourceExists:          false,
+			ResourceLateInitialized: true,
+		}, nil
+	}
+
+	// Step 2: Migrate legacy format (bare space GUID)
+	if isOldExternalNameFormat(externalName) {
+		meta.SetExternalName(cr, composeExternalName(externalName, cr.Spec.ForProvider.RoleType))
+		return managed.ExternalObservation{
+			ResourceExists:          false,
+			ResourceLateInitialized: true,
+		}, nil
+	}
+
+	// Step 3: Validate compound key format
+	spaceGUID, _, err := parseExternalName(externalName)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
+
+	// Step 4: Validate GUID portion of compound key
+	if !clients.IsValidGUID(spaceGUID) {
+		return managed.ExternalObservation{}, errors.New(fmt.Sprintf("space GUID '%s' in external-name is not a valid UUID format", spaceGUID))
 	}
 
 	observed, err := c.client.ObserveSpaceMembers(ctx, cr)
@@ -147,7 +206,6 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		}, nil
 	}
 
-	// Set external names
 	cr.Status.AtProvider.AssignedRoles = observed.AssignedRoles
 	cr.SetConditions(xpv1.Available())
 
@@ -163,7 +221,6 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errWrongKind)
 	}
 
-	// TODO: checking conflicting CR that `strictly` enforces the same role on the same
 	cr.SetConditions(xpv1.Creating())
 
 	created, err := c.client.AssignSpaceMembers(ctx, cr)
@@ -172,15 +229,12 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
 
-	// Set external names
-	meta.SetExternalName(cr, *cr.Spec.ForProvider.Space)
+	meta.SetExternalName(cr, composeExternalName(*cr.Spec.ForProvider.Space, cr.Spec.ForProvider.RoleType))
 
-	// Directly set observation instead of external names, as the collection does not have a single identity.
+	// Collection resource — no single CF GUID, so set status directly.
 	cr.Status.AtProvider.AssignedRoles = created.AssignedRoles
 
 	return managed.ExternalCreation{
-		// Optionally return any details that may be required to connect to the
-		// external resource. These will be stored as the connection secret.
 		ConnectionDetails: managed.ConnectionDetails{},
 	}, nil
 }
@@ -195,6 +249,8 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
+
+	meta.SetExternalName(cr, composeExternalName(*cr.Spec.ForProvider.Space, cr.Spec.ForProvider.RoleType))
 
 	cr.Status.AtProvider.AssignedRoles = updated.AssignedRoles
 
@@ -218,6 +274,10 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	err := c.client.DeleteSpaceMembers(ctx, cr)
 	if err != nil {
+		// ADR: 404 not found means already deleted — not an error
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
 		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 
