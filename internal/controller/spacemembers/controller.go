@@ -145,6 +145,7 @@ type spaceMemberClient interface {
 	UpdateSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
 	DeleteSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) error
 }
+
 // An ExternalClient observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {

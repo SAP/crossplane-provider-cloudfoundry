@@ -305,6 +305,61 @@ func TestCreate(t *testing.T) {
 	}
 }
 
+func TestUpdate(t *testing.T) {
+	type want struct {
+		extName string
+		err     error
+	}
+
+	cases := map[string]struct {
+		cr   *v1alpha1.SpaceMembers
+		want want
+		mock mockMembersClient
+	}{
+		"SuccessfulUpdate": {
+			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(extName)),
+			want: want{extName: extName, err: nil},
+			mock: mockMembersClient{
+				updateFn: func(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
+					return &v1alpha1.RoleAssignments{AssignedRoles: assignedRoles}, nil
+				},
+			},
+		},
+		"UpdateError": {
+			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(extName)),
+			want: want{extName: "", err: errors.Wrap(errBoom, errUpdate)},
+			mock: mockMembersClient{
+				updateFn: func(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
+					return nil, errBoom
+				},
+			},
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			c := &external{client: &tc.mock}
+			_, err := c.Update(context.Background(), tc.cr)
+
+			if tc.want.err != nil {
+				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
+					t.Errorf("Update(...): want error string != got error string:\n%s", diff)
+				}
+			} else {
+				if diff := cmp.Diff(tc.want.err, err); diff != "" {
+					t.Errorf("Update(...): want error != got error:\n%s", diff)
+				}
+				if tc.want.extName != "" && tc.cr != nil {
+					gotExtName := meta.GetExternalName(tc.cr)
+					if diff := cmp.Diff(tc.want.extName, gotExtName); diff != "" {
+						t.Errorf("Update(...): external-name -want, +got:\n%s", diff)
+					}
+				}
+			}
+		})
+	}
+}
+
 func TestDelete(t *testing.T) {
 	type want struct {
 		err error
