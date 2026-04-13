@@ -1,0 +1,42 @@
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  namespace: spacemembers-import-test
+  name: spacemembers-import-org
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: cf-ci-e2e
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  namespace: spacemembers-import-test
+  name: spacemembers-import-space
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: space-donotdelete
+    orgRef:
+      name: spacemembers-import-org
+      policy:
+        resolve: Always
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceMembers
+metadata:
+  namespace: spacemembers-import-test
+  name: e2e-space-members-import
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    roleType: Developers
+    spaceRef:
+      name: spacemembers-import-space
+      policy:
+        resolve: Always
+    enforcementPolicy: Lax
