@@ -218,7 +218,7 @@ metadata:
 spec:
   forProvider:
     type: Manager # valid role types are: Manager, BillingManager, Auditor, User
-    username: user1@example.com 
+    username: user1@example.com
     orgRef:
       name: my-org
 ```
@@ -254,8 +254,8 @@ spec:
   forProvider:
     roleType: Manager # valid role types are: Manager, BillingManager, Auditor, User
     members:
-    - username: user1@sap.com
-    - username: user2@sap.com
+    - username: user1@example.com
+    - username: user2@example.com
     orgRef:
       name: my-org
     enforcementPolicy: Lax
@@ -273,8 +273,8 @@ spec:
   forProvider:
     roleType: Developer # valid role types are: Developer, Supporter, Auditor, Manager
     members:
-    - username: dev1@sap.com
-    - username: dev2@sap.com
+    - username: dev1@example.com
+    - username: dev2@example.com
     spaceRef:
       name: my-space
       policy:
@@ -300,9 +300,9 @@ We can use `enforcementPolicy` to control group assignment behavior:
 
 ## FAQs
 
-### Error: "user with username `abc@sap.com` does not exist"
+### Error: "user with username `abc@example.com` does not exist"
 
-If the user with the username/e-mail never logged in to your SAP Cloud Foundry environment, you will receive an error "user with username `abc@sap.com` does not exist".
+If the user with the username/e-mail never logged in to your SAP Cloud Foundry environment, you will receive an error "user with username `abc@example.com` does not exist".
 
 ### What `origins` are supported?
 
