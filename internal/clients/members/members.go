@@ -142,9 +142,9 @@ func (c *Client) DeleteOrgMembers(ctx context.Context, cr *v1alpha1.OrgMembers) 
 }
 
 // AssignSpaceMembers assigns Space Role for the given list of users
-func (c *Client) AssignSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
+func (c *Client) AssignSpaceMembers(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
 	// get all users with the role
-	observed, err := c.ListUsersWithRole(ctx, newSpaceRoleListOptions(cr))
+	observed, err := c.ListUsersWithRole(ctx, newSpaceRoleListOptions(spaceGUID, roleType))
 	if err != nil {
 		return nil, err
 	}
@@ -155,7 +155,7 @@ func (c *Client) AssignSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembe
 		user := u.Key()
 		role, ok := observed[user]
 		if !ok {
-			r, err := c.CreateSpaceRoleByUsername(ctx, *cr.Spec.ForProvider.Space, cr.Spec.ForProvider.RoleType, u.Username, u.Origin)
+			r, err := c.CreateSpaceRoleByUsername(ctx, spaceGUID, roleType, u.Username, u.Origin)
 			if err != nil {
 				return nil, err
 			}
@@ -183,8 +183,8 @@ func (c *Client) AssignSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembe
 }
 
 // UpdateSpaceMembers observes external state and update it according the CR specification
-func (c *Client) UpdateSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
-	members, err := c.AssignSpaceMembers(ctx, cr)
+func (c *Client) UpdateSpaceMembers(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
+	members, err := c.AssignSpaceMembers(ctx, spaceGUID, roleType, cr)
 	if err != nil {
 		return nil, err
 	}
@@ -206,7 +206,7 @@ func (c *Client) UpdateSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembe
 
 // ObserveSpaceMembers generates external state for the managed resources based on CR specification.
 // If the observed state is not consistent with CR, return a nil observation together with an error.
-func (c *Client) ObserveSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
+func (c *Client) ObserveSpaceMembers(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, bool, error) {
 	// sync every currently assigned role and remove it from members list if it no longer exists
 	for user, role := range cr.Status.AtProvider.AssignedRoles {
 		_, err := c.Roles.Get(ctx, role)
@@ -216,12 +216,12 @@ func (c *Client) ObserveSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMemb
 	}
 
 	// get all users with the role
-	observed, err := c.ListUsersWithRole(ctx, newSpaceRoleListOptions(cr))
+	observed, err := c.ListUsersWithRole(ctx, newSpaceRoleListOptions(spaceGUID, roleType))
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	return generateSpaceMemberObservation(observed, cr), nil
+	return generateSpaceMemberObservation(observed, cr), len(observed) > 0, nil
 }
 
 func generateSpaceMemberObservation(observed map[string]string, cr *v1alpha1.SpaceMembers) *v1alpha1.RoleAssignments {
@@ -254,11 +254,11 @@ func generateSpaceMemberObservation(observed map[string]string, cr *v1alpha1.Spa
 }
 
 // DeleteSpaceMembers removes space Role managed by the given CR.
-func (c *Client) DeleteSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) error {
+func (c *Client) DeleteSpaceMembers(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) error {
 	fp := cr.Spec.ForProvider
 	// if strict, remove all users from the role
 	if fp.EnforcementPolicy == enforcementPolicyStrict {
-		allUsersWithRole, err := c.ListUsersWithRole(ctx, newSpaceRoleListOptions(cr))
+		allUsersWithRole, err := c.ListUsersWithRole(ctx, newSpaceRoleListOptions(spaceGUID, roleType))
 		if err != nil {
 			return err
 		}

@@ -140,10 +140,10 @@ func (c *external) Disconnect(ctx context.Context) error {
 }
 
 type spaceMemberClient interface {
-	ObserveSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
-	AssignSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
-	UpdateSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
-	DeleteSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) error
+	ObserveSpaceMembers(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, bool, error)
+	AssignSpaceMembers(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
+	UpdateSpaceMembers(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
+	DeleteSpaceMembers(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) error
 }
 
 // An ExternalClient observes, then either creates, updates, or deletes an
@@ -152,58 +152,68 @@ type external struct {
 	client spaceMemberClient
 }
 
+func resolveIdentity(cr *v1alpha1.SpaceMembers) (spaceGUID, roleType string, lateInitialized bool, err error) {
+	externalName := meta.GetExternalName(cr)
+
+	switch {
+	case externalName == "" || externalName == cr.GetName():
+		if cr.Spec.ForProvider.Space == nil {
+			return "", "", false, errors.New(errSpaceNotResolved)
+		}
+		return *cr.Spec.ForProvider.Space, cr.Spec.ForProvider.RoleType, true, nil
+	case isOldExternalNameFormat(externalName):
+		return externalName, cr.Spec.ForProvider.RoleType, true, nil
+	default:
+		spaceGUID, roleType, err := parseExternalName(externalName)
+		if err != nil {
+			return "", "", false, err
+		}
+		if !clients.IsValidGUID(spaceGUID) {
+			return "", "", false, errors.New(fmt.Sprintf("space GUID '%s' in external-name is not a valid UUID format", spaceGUID))
+		}
+		return spaceGUID, roleType, false, nil
+	}
+}
+
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
 	cr, ok := mg.(*v1alpha1.SpaceMembers)
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errWrongKind)
 	}
 
-	// Check that reference to Space is resolved
-	if cr.Spec.ForProvider.Space == nil {
-		return managed.ExternalObservation{}, errors.New(errSpaceNotResolved)
-	}
-
-	externalName := meta.GetExternalName(cr)
-
-	// Step 1: Handle empty or default external-name
-	if externalName == "" || externalName == cr.GetName() {
-		meta.SetExternalName(cr, composeExternalName(*cr.Spec.ForProvider.Space, cr.Spec.ForProvider.RoleType))
-		return managed.ExternalObservation{
-			ResourceExists:          false,
-			ResourceLateInitialized: true,
-		}, nil
-	}
-
-	// Step 2: Migrate legacy format (bare space GUID)
-	if isOldExternalNameFormat(externalName) {
-		meta.SetExternalName(cr, composeExternalName(externalName, cr.Spec.ForProvider.RoleType))
-		return managed.ExternalObservation{
-			ResourceExists:          false,
-			ResourceLateInitialized: true,
-		}, nil
-	}
-
-	// Step 3: Validate compound key format
-	spaceGUID, _, err := parseExternalName(externalName)
+	spaceGUID, roleType, lateInitialized, err := resolveIdentity(cr)
 	if err != nil {
 		return managed.ExternalObservation{}, err
 	}
 
-	// Step 4: Validate GUID portion of compound key
-	if !clients.IsValidGUID(spaceGUID) {
-		return managed.ExternalObservation{}, errors.New(fmt.Sprintf("space GUID '%s' in external-name is not a valid UUID format", spaceGUID))
+	if cr.Spec.ForProvider.Space != nil && meta.GetExternalName(cr) != "" && meta.GetExternalName(cr) != cr.GetName() && !isOldExternalNameFormat(meta.GetExternalName(cr)) {
+		if *cr.Spec.ForProvider.Space != spaceGUID || cr.Spec.ForProvider.RoleType != roleType {
+			return managed.ExternalObservation{}, errors.Errorf("identity conflict: external-name (%s/%s) differs from spec (%s/%s)", spaceGUID, roleType, *cr.Spec.ForProvider.Space, cr.Spec.ForProvider.RoleType)
+		}
 	}
 
-	observed, err := c.client.ObserveSpaceMembers(ctx, cr)
+	if lateInitialized {
+		meta.SetExternalName(cr, composeExternalName(spaceGUID, roleType))
+	}
+
+	observed, exists, err := c.client.ObserveSpaceMembers(ctx, spaceGUID, roleType, cr)
 
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, errRead)
 	}
 
+	if !exists {
+		return managed.ExternalObservation{
+			ResourceExists:          false,
+			ResourceLateInitialized: lateInitialized,
+		}, nil
+	}
+
 	if observed == nil {
 		return managed.ExternalObservation{
-			ResourceExists:   cr.Status.AtProvider.AssignedRoles != nil,
-			ResourceUpToDate: false,
+			ResourceExists:          true,
+			ResourceUpToDate:        false,
+			ResourceLateInitialized: lateInitialized,
 		}, nil
 	}
 
@@ -211,8 +221,9 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	cr.SetConditions(xpv1.Available())
 
 	return managed.ExternalObservation{
-		ResourceExists:   true,
-		ResourceUpToDate: true,
+		ResourceExists:          true,
+		ResourceUpToDate:        true,
+		ResourceLateInitialized: lateInitialized,
 	}, nil
 }
 
@@ -224,7 +235,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Creating())
 
-	created, err := c.client.AssignSpaceMembers(ctx, cr)
+	created, err := c.client.AssignSpaceMembers(ctx, *cr.Spec.ForProvider.Space, cr.Spec.ForProvider.RoleType, cr)
 
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
@@ -246,12 +257,15 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errWrongKind)
 	}
 
-	updated, err := c.client.UpdateSpaceMembers(ctx, cr)
+	spaceGUID, roleType, _, err := resolveIdentity(cr)
+	if err != nil {
+		return managed.ExternalUpdate{}, err
+	}
+
+	updated, err := c.client.UpdateSpaceMembers(ctx, spaceGUID, roleType, cr)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
-
-	meta.SetExternalName(cr, composeExternalName(*cr.Spec.ForProvider.Space, cr.Spec.ForProvider.RoleType))
 
 	cr.Status.AtProvider.AssignedRoles = updated.AssignedRoles
 
@@ -273,7 +287,12 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalDelete{}, nil
 	}
 
-	err := c.client.DeleteSpaceMembers(ctx, cr)
+	spaceGUID, roleType, _, err := resolveIdentity(cr)
+	if err != nil {
+		return managed.ExternalDelete{}, err
+	}
+
+	err = c.client.DeleteSpaceMembers(ctx, spaceGUID, roleType, cr)
 	if err != nil {
 		// ADR: 404 not found means already deleted — not an error
 		if clients.ErrorIsNotFound(err) {

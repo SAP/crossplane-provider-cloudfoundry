@@ -49,10 +49,10 @@ func spaceRoleType(roleType string) resource.SpaceRoleType {
 	}
 }
 
-func newSpaceRoleListOptions(cr *v1alpha1.SpaceMembers) *cfv3.RoleListOptions {
+func newSpaceRoleListOptions(spaceGUID, roleType string) *cfv3.RoleListOptions {
 	opts := cfv3.NewRoleListOptions()
-	opts.SpaceGUIDs.EqualTo(*cr.Spec.ForProvider.Space)
-	opts.WithSpaceRoleType(spaceRoleType(cr.Spec.ForProvider.RoleType))
+	opts.SpaceGUIDs.EqualTo(spaceGUID)
+	opts.WithSpaceRoleType(spaceRoleType(roleType))
 	return opts
 }
 

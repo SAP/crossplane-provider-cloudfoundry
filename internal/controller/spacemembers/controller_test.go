@@ -75,26 +75,38 @@ func fakeSpaceMembers(m ...modifier) *v1alpha1.SpaceMembers {
 
 // mockMembersClient is a mock for the members.Client methods used by the SpaceMembers controller.
 type mockMembersClient struct {
-	observeFn func(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
-	assignFn  func(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
-	updateFn  func(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
-	deleteFn  func(ctx context.Context, cr *v1alpha1.SpaceMembers) error
+	observeFn func(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, bool, error)
+	assignFn  func(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
+	updateFn  func(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error)
+	deleteFn  func(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) error
 }
 
-func (m *mockMembersClient) ObserveSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
-	return m.observeFn(ctx, cr)
+func (m *mockMembersClient) ObserveSpaceMembers(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, bool, error) {
+	if m.observeFn == nil {
+		return nil, false, nil
+	}
+	return m.observeFn(ctx, spaceGUID, roleType, cr)
 }
 
-func (m *mockMembersClient) AssignSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
-	return m.assignFn(ctx, cr)
+func (m *mockMembersClient) AssignSpaceMembers(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
+	if m.assignFn == nil {
+		return nil, nil
+	}
+	return m.assignFn(ctx, spaceGUID, roleType, cr)
 }
 
-func (m *mockMembersClient) UpdateSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
-	return m.updateFn(ctx, cr)
+func (m *mockMembersClient) UpdateSpaceMembers(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
+	if m.updateFn == nil {
+		return nil, nil
+	}
+	return m.updateFn(ctx, spaceGUID, roleType, cr)
 }
 
-func (m *mockMembersClient) DeleteSpaceMembers(ctx context.Context, cr *v1alpha1.SpaceMembers) error {
-	return m.deleteFn(ctx, cr)
+func (m *mockMembersClient) DeleteSpaceMembers(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) error {
+	if m.deleteFn == nil {
+		return nil
+	}
+	return m.deleteFn(ctx, spaceGUID, roleType, cr)
 }
 
 func TestObserve(t *testing.T) {
@@ -175,8 +187,11 @@ func TestObserve(t *testing.T) {
 				err: nil,
 			},
 			mock: mockMembersClient{
-				observeFn: func(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
-					return &v1alpha1.RoleAssignments{AssignedRoles: assignedRoles}, nil
+				observeFn: func(ctx context.Context, gotSpaceGUID, gotRoleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, bool, error) {
+					if gotSpaceGUID != spaceGUID || gotRoleType != roleType {
+						return nil, false, fmt.Errorf("unexpected identity: %s/%s", gotSpaceGUID, gotRoleType)
+					}
+					return &v1alpha1.RoleAssignments{AssignedRoles: assignedRoles}, true, nil
 				},
 			},
 		},
@@ -184,12 +199,12 @@ func TestObserve(t *testing.T) {
 		"ResourceNotUpToDate": {
 			cr: fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(extName)),
 			want: want{
-				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: false},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
 			mock: mockMembersClient{
-				observeFn: func(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
-					return nil, nil
+				observeFn: func(ctx context.Context, _, _ string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, bool, error) {
+					return nil, true, nil
 				},
 			},
 		},
@@ -201,10 +216,18 @@ func TestObserve(t *testing.T) {
 				err: nil,
 			},
 			mock: mockMembersClient{
-				observeFn: func(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
-					return nil, nil
+				observeFn: func(ctx context.Context, _, _ string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, bool, error) {
+					return nil, true, nil
 				},
 			},
+		},
+		"IdentityConflict": {
+			cr: fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(composeExternalName("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", roleType))),
+			want: want{
+				obs: managed.ExternalObservation{},
+				err: errors.New("identity conflict: external-name (aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/Manager) differs from spec (9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/Manager)"),
+			},
+			mock: mockMembersClient{},
 		},
 		// Read error from API
 		"ObserveError": {
@@ -214,8 +237,8 @@ func TestObserve(t *testing.T) {
 				err: errors.Wrap(errBoom, errRead),
 			},
 			mock: mockMembersClient{
-				observeFn: func(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
-					return nil, errBoom
+				observeFn: func(ctx context.Context, _, _ string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, bool, error) {
+					return nil, false, errBoom
 				},
 			},
 		},
@@ -265,7 +288,10 @@ func TestCreate(t *testing.T) {
 			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType)),
 			want: want{extName: extName, err: nil},
 			mock: mockMembersClient{
-				assignFn: func(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
+				assignFn: func(ctx context.Context, gotSpaceGUID, gotRoleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
+					if gotSpaceGUID != spaceGUID || gotRoleType != roleType {
+						return nil, fmt.Errorf("unexpected identity: %s/%s", gotSpaceGUID, gotRoleType)
+					}
 					return &v1alpha1.RoleAssignments{AssignedRoles: assignedRoles}, nil
 				},
 			},
@@ -274,7 +300,7 @@ func TestCreate(t *testing.T) {
 			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType)),
 			want: want{extName: "", err: errors.Wrap(errBoom, errCreate)},
 			mock: mockMembersClient{
-				assignFn: func(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
+				assignFn: func(ctx context.Context, _, _ string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
 					return nil, errBoom
 				},
 			},
@@ -320,7 +346,10 @@ func TestUpdate(t *testing.T) {
 			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(extName)),
 			want: want{extName: extName, err: nil},
 			mock: mockMembersClient{
-				updateFn: func(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
+				updateFn: func(ctx context.Context, gotSpaceGUID, gotRoleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
+					if gotSpaceGUID != spaceGUID || gotRoleType != roleType {
+						return nil, fmt.Errorf("unexpected identity: %s/%s", gotSpaceGUID, gotRoleType)
+					}
 					return &v1alpha1.RoleAssignments{AssignedRoles: assignedRoles}, nil
 				},
 			},
@@ -329,7 +358,7 @@ func TestUpdate(t *testing.T) {
 			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(extName)),
 			want: want{extName: "", err: errors.Wrap(errBoom, errUpdate)},
 			mock: mockMembersClient{
-				updateFn: func(ctx context.Context, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
+				updateFn: func(ctx context.Context, _, _ string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, error) {
 					return nil, errBoom
 				},
 			},
@@ -374,7 +403,10 @@ func TestDelete(t *testing.T) {
 			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(extName), withAssignedRoles(assignedRoles)),
 			want: want{err: nil},
 			mock: mockMembersClient{
-				deleteFn: func(ctx context.Context, cr *v1alpha1.SpaceMembers) error {
+				deleteFn: func(ctx context.Context, gotSpaceGUID, gotRoleType string, cr *v1alpha1.SpaceMembers) error {
+					if gotSpaceGUID != spaceGUID || gotRoleType != roleType {
+						return fmt.Errorf("unexpected identity: %s/%s", gotSpaceGUID, gotRoleType)
+					}
 					return nil
 				},
 			},
@@ -388,7 +420,7 @@ func TestDelete(t *testing.T) {
 			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(extName), withAssignedRoles(assignedRoles)),
 			want: want{err: errors.Wrap(errBoom, errDelete)},
 			mock: mockMembersClient{
-				deleteFn: func(ctx context.Context, cr *v1alpha1.SpaceMembers) error {
+				deleteFn: func(ctx context.Context, _, _ string, cr *v1alpha1.SpaceMembers) error {
 					return errBoom
 				},
 			},
@@ -397,7 +429,7 @@ func TestDelete(t *testing.T) {
 			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(extName), withAssignedRoles(assignedRoles)),
 			want: want{err: nil},
 			mock: mockMembersClient{
-				deleteFn: func(ctx context.Context, cr *v1alpha1.SpaceMembers) error {
+				deleteFn: func(ctx context.Context, _, _ string, cr *v1alpha1.SpaceMembers) error {
 					return fmt.Errorf("NotFound: resource not found")
 				},
 			},
