@@ -27,3 +27,20 @@ spec:
       policy:
         resolve: Always
 
+---
+# Space that the service instance will be shared with
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  name: service-space-shared
+  namespace: service-test
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: space-shared-donotdelete
+    orgRef:
+      name: service-org
+      policy:
+        resolve: Always
+
