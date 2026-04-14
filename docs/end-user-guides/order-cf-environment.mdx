@@ -1,0 +1,72 @@
+---
+sidebar_position: 1
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import Badge, { READY,IN_PREVIEW, CONCEPT, IN_DEV, RESTRICTION, NA } from "@site/src/components/Badge.jsx";
+
+# Order
+
+In this guide, we will get familiar with the fundamentals of creating a managed `CloudFoundryEnvironment` in a BTP `Subaccount`.
+
+## 🚧 Prerequisites 
+- running [control plane](https://openmcp-project.github.io/docs/users/getting-started/onboard) 
+- [setup BTP subaccount](https://sap.github.io/crossplane-provider-docs/docs/crossplane-provider-btp/docs/end-user-guides/account/subaccount)
+
+
+:::note
+
+For `CloudFoundryEnvironment` to be enabled in your subaccount, the Service Manager service as well as the Cloud Management service must be available in the subaccount. If you followed the [guide on setting up a subaccount](https://sap.github.io/crossplane-provider-docs/docs/crossplane-provider-btp/docs/user-stories/account/subaccount), these services should already be in place.
+
+:::
+
+## Create CloudFoundryEnvironment <Badge isHeadline={true} type={READY}/>
+
+Now, we have everything in place to enable `CloudFoundry` in our selected `Subaccount` using code.
+
+![CF Overview](/img/overview-orchestrate-accounts-environments.png)
+
+
+```yaml title="examples/cloudfoundry.yaml"
+apiVersion: environment.btp.sap.crossplane.io/v1alpha1  
+kind: CloudFoundryEnvironment
+metadata:
+  name: cf-env
+spec:
+  forProvider:
+    initialOrgManagers:
+      - P-USER@example.com 
+    landscape: cf-eu12
+    orgName: test-eu12
+    environmentName: cf-test-eu12
+  cloudManagementRef:
+    name: cis-local
+  subaccountRef:
+    name: my-subaccount
+  writeConnectionSecretToRef:
+    name: cf-environment-secret # Secret containing connection details including apiEnpoint of the created cloudfoundry environment. 
+    namespace: default
+```
+
+<br/><br/>
+
+<button onClick={() => window.open("https://sap.github.io/crossplane-provider-docs/docs/crossplane-provider-btp/api-reference/environment.btp.sap.crossplane.io/cloudfoundryenvironment/v1alpha1", "_blank")} className='button button--secondary'>See full CRD reference</button>
+<br/><br/>
+
+**We take care that our P-USER is listed as `initialOrgManagers` in the `CloudFoundryEnvironment` resource. We will later use this P-USER to configure the connectivity our CloudFoundry provider.**
+
+We now apply the desired resource and will see Cloud Foundry show up in our Subaccount after a few moments.
+
+```sh
+kubectl create -f examples/cloudfoundry.yaml
+```
+Once the resource is created, you can find the connection details in the `Secret` specified in the `writeConnectionSecretToRef` field. This `Secret` can be used later to retrieve the `apiEndpoint` of the Cloud Foundry environment.
+
+
+
+
+## FAQs
+### 401, User Authentication failed: LOCKED_OTP_CODE
+
+The required services can only be consumed by technical P users. Please revisit our [configuration guide](https://sap.github.io/crossplane-provider-docs/docs/crossplane-provider-btp/docs/end-user-guides/setup/configure-provider-btp) page and switch to a non personal user.

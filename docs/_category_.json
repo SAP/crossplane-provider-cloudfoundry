@@ -1,0 +1,8 @@
+{
+  "label": "crossplane-provider-cloudfoundry",
+  "position": 10,
+  "link": {
+    "type": "generated-index",
+    "description": "Documentation for the SAP Crossplane Provider for Cloud Foundry."
+  }
+}
