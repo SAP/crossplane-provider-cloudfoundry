@@ -10,8 +10,13 @@ import Badge, { READY,IN_PREVIEW, CONCEPT, IN_DEV, RESTRICTION, NA } from "@site
 
 In this guide, we will get familiar with the fundamentals of creating a managed `CloudFoundryEnvironment` in a BTP `Subaccount`.
 
-## 🚧 Prerequisites 
-- running [control plane](https://openmcp-project.github.io/docs/users/getting-started/onboard) 
+:::note
+Are you a platform operator or administrator? Feel free to check out the [OpenMCP project](https://openmcp-project.github.io/docs/). It helps organizations enable more teams to use Crossplane by providing a managed control plane as a service.
+:::
+
+## 🚧 Prerequisites
+
+- You have a running control plane.
 - [setup BTP subaccount](https://sap.github.io/crossplane-provider-docs/docs/crossplane-provider-btp/docs/end-user-guides/account/subaccount)
 
 
@@ -36,7 +41,7 @@ metadata:
 spec:
   forProvider:
     initialOrgManagers:
-      - P-USER@example.com 
+      - technical-user@example.com 
     landscape: cf-eu12
     orgName: test-eu12
     environmentName: cf-test-eu12
@@ -51,10 +56,10 @@ spec:
 
 <br/><br/>
 
-<button onClick={() => window.open("https://sap.github.io/crossplane-provider-docs/docs/crossplane-provider-btp/api-reference/environment.btp.sap.crossplane.io/cloudfoundryenvironment/v1alpha1", "_blank")} className='button button--secondary'>See full CRD reference</button>
+<button onClick={() => window.open("https://doc.crds.dev/github.com/SAP/crossplane-provider-btp/environment.btp.sap.crossplane.io/CloudFoundryEnvironment/v1alpha1@v1.6.0", "_blank")} className='button button--secondary'>See full CRD reference</button>
 <br/><br/>
 
-**We take care that our P-USER is listed as `initialOrgManagers` in the `CloudFoundryEnvironment` resource. We will later use this P-USER to configure the connectivity our CloudFoundry provider.**
+**We take care that our technical user is listed as `initialOrgManagers` in the `CloudFoundryEnvironment` resource. We will later use this technical user to configure the connectivity our CloudFoundry provider.**
 
 We now apply the desired resource and will see Cloud Foundry show up in our Subaccount after a few moments.
 
@@ -69,4 +74,4 @@ Once the resource is created, you can find the connection details in the `Secret
 ## FAQs
 ### 401, User Authentication failed: LOCKED_OTP_CODE
 
-The required services can only be consumed by technical P users. Please revisit our [configuration guide](https://sap.github.io/crossplane-provider-docs/docs/crossplane-provider-btp/docs/end-user-guides/setup/configure-provider-btp) page and switch to a non personal user.
+The required services can only be consumed by technical users. Please revisit our [configuration guide](https://sap.github.io/crossplane-provider-docs/docs/crossplane-provider-btp/docs/end-user-guides/setup/configure-provider-btp) page and switch to a non personal user.

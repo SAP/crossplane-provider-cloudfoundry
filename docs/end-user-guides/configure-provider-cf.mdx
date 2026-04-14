@@ -11,17 +11,22 @@ import Badge, { READY,IN_PREVIEW, CONCEPT, IN_DEV, RESTRICTION, NA } from "@site
 In this guide, we will get familiar with setting up our control plane to manage Cloud Foundry resources on our BTP Cloud Foundry Environment.
 
 
+:::note
+Are you a platform operator or administrator? Feel free to check out the [OpenMCP project](https://openmcp-project.github.io/docs/). It helps organizations enable more teams to use Crossplane by providing a managed control plane as a service.
+:::
+
 ## 🚧 Prerequisites
-- We have a running [Control Plane](https://openmcp-project.github.io/docs/users/getting-started/onboard)
+
+- You have a running control plane.
 - We have created [CloudFoundryEnvironment](/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/order-cf-environment)
-- We have a P-USER with `OrgManager` role in the Cloud Foundry environment
+- We have a technical user with `OrgManager` role in the Cloud Foundry environment
 
 ## Install CloudFoundry Provider
 
 We first need to install the `CloudFoundry` provider in your control plane. This extends the control plane with additional custom resource types to manage Cloud Foundry resources.
 
 <Tabs>
-  <TabItem value="managed" label="using ManagedControlPlane" default>
+  <TabItem value="managed" label="using ManagedControlPlane">
       ```yaml
       apiVersion: core.openmcp.cloud/v1alpha1
       kind: ManagedControlPlane
@@ -31,14 +36,14 @@ We first need to install the `CloudFoundry` provider in your control plane. This
       spec:
         components:
           crossplane:
-            version: :mcp_cv_crossplane:
+            version: <version>
             providers:
               - name: cloudfoundry-opensource
-                version: :mcp_cv_provider-cloudfoundry-opensource:
+                version: <openControlPlane-provider-version>
       ...
       ```
   </TabItem>
-  <TabItem value="unmanaged" label="manually">
+  <TabItem value="unmanaged" label="manually" default>
     Crossplane v2 is NOT yet supported, please use Crossplane v1 for now.
 
     To use the provider in any control plane **apply the following provider resource**.
@@ -48,10 +53,10 @@ We first need to install the `CloudFoundry` provider in your control plane. This
     metadata:
       name: cloudfoundry-provider
     spec:
-      package: ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry:v:mcp_cv_provider-cloudfoundry-opensource:
+      package: ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry:<provider-version>
     ```
 
-    <button onClick={() => window.open("/cloud-orchestration/browser/Providers/provider-cloudfoundry", "_blank")} className='button button--secondary'>See full Provider reference</button>
+    <button onClick={() => window.open("https://doc.crds.dev/github.com/SAP/crossplane-provider-cloudfoundry", "_blank")} className='button button--secondary'>See full Provider reference</button>
 
   </TabItem>
 </Tabs>
@@ -81,7 +86,7 @@ stringData:
 ```
 
 :::info
-We recommend using a technical user *(P-User)* for basic user authentication. This user must have the `OrgManager` role in the Cloud Foundry environment. We do that by set this user as the `initialOrgManagers` during creation of the `CloudFoundryEnvironment` resource.
+We recommend using a technical user for basic user authentication. This user must have the `OrgManager` role in the Cloud Foundry environment. We do that by set this user as the `initialOrgManagers` during creation of the `CloudFoundryEnvironment` resource.
 :::
 
 ### Create `ProviderConfig`
@@ -196,7 +201,7 @@ spec:
     totalMemory: 10240           ## The total amount of memory you want to allocate to all app instances in the space
 ```
 
-For the complete definition of the `SpaceQuota` resource, refer to the [CRD browser](../../../browser/Providers/provider-cloudfoundry/cloudfoundry.crossplane.io/spacequota/v1alpha1).
+For the complete definition of the `SpaceQuota` resource, refer to the [CRD browser](https://doc.crds.dev/github.com/SAP/crossplane-provider-cloudfoundry/cloudfoundry.crossplane.io/SpaceQuota/v1alpha1@v0.3.3).
 
 ## Manage User Roles
 
@@ -289,7 +294,7 @@ We can use `enforcementPolicy` to control group assignment behavior:
 
 :::warning DO NOT DELETE CR with `Strict` group assignment
 
-`Strict` group assignment means that **all other users not included in the group will lose their role permission**. If you delete the CR, you **effectively remove EVERYONE** from the respective role. This can be problematic for example if you remove everyone (including our P-USER) from being an Org Manager.
+`Strict` group assignment means that **all other users not included in the group will lose their role permission**. If you delete the CR, you **effectively remove EVERYONE** from the respective role. This can be problematic for example if you remove everyone (including our technical user) from being an Org Manager.
 :::
 
 </TabItem>
@@ -303,7 +308,3 @@ We can use `enforcementPolicy` to control group assignment behavior:
 ### Error: "user with username `abc@example.com` does not exist"
 
 If the user with the username/e-mail never logged in to your SAP Cloud Foundry environment, you will receive an error "user with username `abc@example.com` does not exist".
-
-### What `origins` are supported?
-
-Because BTP does not yet publish its SCIM endpoint, we support only the default `origin` as configured in your BTP account. Multi-origin support is planned in Q4/2023. Until then, we recommend that you leave this field unspecified.
