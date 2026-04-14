@@ -10,7 +10,6 @@ import Badge, { READY,IN_PREVIEW, CONCEPT, IN_DEV, RESTRICTION, NA } from "@site
 
 In this guide, we will get familiar with setting up our control plane to manage Cloud Foundry resources on our BTP Cloud Foundry Environment.
 
-
 :::note
 Are you a platform operator or administrator? Feel free to check out the [OpenMCP project](https://openmcp-project.github.io/docs/). It helps organizations enable more teams to use Crossplane by providing a managed control plane as a service.
 :::
@@ -80,8 +79,8 @@ stringData:
     credentials: |
         {
         "email": "<your email>",
-        "username": "<P/D/I-user-number>",
-        "password": "<P/D/I-user-password>"
+        "username": "<technical-user-name>",
+        "password": "<technical-user-password>"
         }
 ```
 
@@ -294,7 +293,7 @@ We can use `enforcementPolicy` to control group assignment behavior:
 
 :::warning DO NOT DELETE CR with `Strict` group assignment
 
-`Strict` group assignment means that **all other users not included in the group will lose their role permission**. If you delete the CR, you **effectively remove EVERYONE** from the respective role. This can be problematic for example if you remove everyone (including our technical user) from being an Org Manager.
+`Strict` group assignment means that **all other users not included in the group will lose their role permission**. If you delete the CR, you **effectively remove EVERYONE** from the respective role. This can be problematic for example if you remove everyone (including your technical user) from being an Org Manager.
 :::
 
 </TabItem>
