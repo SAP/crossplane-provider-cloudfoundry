@@ -49,7 +49,7 @@ func waitForResource(res k8s.Object, cfg *envconf.Config, t *testing.T, opts ...
 	err := wait.For(match, opts...)
 
 	if err != nil {
-		t.Error(err)
+		t.Fatal(err)
 	}
 }
 
@@ -82,7 +82,7 @@ func DeleteResourcesIgnoreMissing(ctx context.Context, t *testing.T, cfg *envcon
 	r, _ := GetResourcesWithRESTConfig(cfg)
 	objects, err := test.GetObjectsToImport(ctx, cfg, []string{manifestDir})
 	if err != nil {
-		t.Fatal(objects)
+		t.Fatal(err)
 	}
 	for _, obj := range objects {
 		delErr := r.Delete(ctx, obj)

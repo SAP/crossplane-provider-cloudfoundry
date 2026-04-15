@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -92,6 +93,10 @@ func withID(id string) modifier {
 	return func(r *v1alpha1.SpaceRole) {
 		r.Status.AtProvider.ID = ptr.To(id)
 	}
+}
+
+func withConditions(c ...xpv1.Condition) modifier {
+	return func(i *v1alpha1.SpaceRole) { i.Status.SetConditions(c...) }
 }
 
 func fakeSpaceRole(m ...modifier) *v1alpha1.SpaceRole {
@@ -494,15 +499,15 @@ func TestCreate(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Create(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Create(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Create(...): -want, +got:\n%s", diff)
 			}
 		})
 	}
@@ -531,7 +536,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
 			},
 			want: want{
-				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
+				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id"), withConditions(xpv1.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -549,7 +554,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
 			},
 			want: want{
-				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
+				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id"), withConditions(xpv1.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -567,7 +572,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
 			},
 			want: want{
-				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
+				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id"), withConditions(xpv1.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: errors.Wrap(errors.New("CF-ResourceNotDeleted: The role could not be deleted"), errDelete),
 			},
@@ -600,15 +605,18 @@ func TestDelete(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Delete(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Delete(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Delete(...): -want, +got:\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+				t.Errorf("Delete(...): -want, +got:\n%s", diff)
 			}
 		})
 	}

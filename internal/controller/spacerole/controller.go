@@ -169,7 +169,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	cr.Status.SetConditions(xpv1.Available())
 
 	return managed.ExternalObservation{
-		ResourceExists:          cr.Status.AtProvider.ID != nil,
+		ResourceExists:          meta.GetExternalName(cr) != "",
 		ResourceUpToDate:        true,
 		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
@@ -226,7 +226,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	// TODO
 
 	cr.SetConditions(xpv1.Deleting())
-	if cr.Status.AtProvider.ID == nil {
+	if meta.GetExternalName(cr) == "" {
 		return managed.ExternalDelete{}, nil
 	}
 
