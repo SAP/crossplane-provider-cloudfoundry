@@ -13,7 +13,7 @@ Finally, we want to deploy workload into our CloudFoundry environment.
 Our sample application is a simple web application that uses `xsuaa` for authentication and `destination` service to connect to a backend system. The application is deployed as a docker image and exposed via a route. 
 
 To deploy our sample application, we can either directly orchestrate all aspects (routes, services, app etc) using the `CloudFoundry` provider or use the `Multi-target Application` *(MTA)* to deploy in a bundle.
-- [Direct Deployment](#simple-deployment)
+- [Direct Deployment](#direct-deployment)
 - [Multi-target Application (MTA)](#multi-target-application) (coming soon)
 
 ## Prerequisites: Application Runtime Quota
@@ -452,4 +452,4 @@ Set it as `SpaceDeveloper` or `SpaceManager` role in the respective `Space` and 
 
 ### CF-UnprocessableEntity|10008: Cfclient error - Routes quota exceeded
 
-When orchestrating `Routes`, ensure that you allocated route quota to your `Organization` using [`APPLICATION_RUNTIME Entitlement`](#application-runtime-quota) on `Subaccount` level.
+When orchestrating `Routes`, ensure that you allocated route quota to your `Organization` using [`APPLICATION_RUNTIME Entitlement`](#prerequisites-application-runtime-quota) on `Subaccount` level.
