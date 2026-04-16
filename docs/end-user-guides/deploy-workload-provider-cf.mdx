@@ -18,7 +18,7 @@ To deploy our sample application, we can either directly orchestrate all aspects
 
 ## Prerequisites: Application Runtime Quota
 
-Before we can deploy workload to Cloud Foundry, we need to first allocate **APPLICATION_RUNTIME** quota to our BTP `Subaccount`. We can use [`Entitlement`](https://sap.github.io/crossplane-provider-docs/docs/crossplane-provider-btp/api-reference/account.btp.sap.crossplane.io/entitlement/v1alpha1) of the BTP provider for this. 
+Before we can deploy workload to Cloud Foundry, we need to first allocate **APPLICATION_RUNTIME** quota to our BTP `Subaccount`. We can use [`Entitlement`](https://doc.crds.dev/github.com/SAP/crossplane-provider-btp/account.btp.sap.crossplane.io/Entitlement/v1alpha1@v1.6.0) of the BTP provider for this. 
 
 ```yaml title="examples/runtime-quota.yaml"
 apiVersion: account.btp.sap.crossplane.io/v1alpha1 
@@ -399,7 +399,7 @@ For `Apps` to consume `ServiceInstances` you can either bind them **using the de
 <details>
 <summary>How do I bind non-cloudfoundry service instances (e.g. using BTP Service Operator)</summary>
 
-    Let's assume we created [`ServiceInstance`](https://sap.github.io/crossplane-provider-docs/docs/crossplane-provider-btp/api-reference/account.btp.sap.crossplane.io/serviceinstance/v1alpha1) and [`ServiceBinding`](https://sap.github.io/crossplane-provider-docs/docs/crossplane-provider-btp/api-reference/account.btp.sap.crossplane.io/servicebinding/v1alpha1). 
+    Let's assume we created [`ServiceInstance`](https://doc.crds.dev/github.com/SAP/crossplane-provider-btp/account.btp.sap.crossplane.io/ServiceInstance/v1alpha1@v1.6.0) and [`ServiceBinding`](https://doc.crds.dev/github.com/SAP/crossplane-provider-btp/account.btp.sap.crossplane.io/ServiceBinding/v1alpha1@v1.6.0). 
     Note that this service is created outside of Cloud Foundry Environment.
 
     To bind it to a Cloud Foundry `App`, we first create a Cloud Foundry `ServiceInstance` of type `user-provided` called `my-ups`. It reads from the `Secret` of the `ServiceBinding` we created using BTP Service Operator.
@@ -416,8 +416,8 @@ For `Apps` to consume `ServiceInstances` you can either bind them **using the de
       forProvider:
         type: user-provided
         name: my-ups
-        routeServiceUrl: https://my-demo-route-service.example.com ## ???
-        syslogDrainUrl: syslog-tls://example.log-aggregator.com:6514 ## ???
+        routeServiceUrl: https://my-demo-route-service.example.com
+        syslogDrainUrl: syslog-tls://example.log-aggregator.com:6514
         spaceRef: 
           name: my-space
           policy:
