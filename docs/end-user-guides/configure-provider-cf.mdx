@@ -25,6 +25,22 @@ Are you a platform operator or administrator? Feel free to check out the [OpenMC
 We first need to install the `CloudFoundry` provider in your control plane. This extends the control plane with additional custom resource types to manage Cloud Foundry resources.
 
 <Tabs>
+  <TabItem value="unmanaged" label="manually" default>
+    Crossplane v2 is NOT yet supported, please use Crossplane v1 for now.
+
+    To use the provider in any control plane **apply the following provider resource**.
+    ```yaml
+    apiVersion: pkg.crossplane.io/v1
+    kind: Provider
+    metadata:
+      name: cloudfoundry-provider
+    spec:
+      package: ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry:<provider-version>
+    ```
+
+    <button onClick={() => window.open("https://doc.crds.dev/github.com/SAP/crossplane-provider-cloudfoundry", "_blank")} className='button button--secondary'>See full Provider reference</button>
+
+  </TabItem>
   <TabItem value="managed" label="using ManagedControlPlane">
       ```yaml
       apiVersion: core.openmcp.cloud/v1alpha1
@@ -41,22 +57,6 @@ We first need to install the `CloudFoundry` provider in your control plane. This
                 version: <openControlPlane-provider-version>
       ...
       ```
-  </TabItem>
-  <TabItem value="unmanaged" label="manually" default>
-    Crossplane v2 is NOT yet supported, please use Crossplane v1 for now.
-
-    To use the provider in any control plane **apply the following provider resource**.
-    ```yaml
-    apiVersion: pkg.crossplane.io/v1
-    kind: Provider
-    metadata:
-      name: cloudfoundry-provider
-    spec:
-      package: ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry:<provider-version>
-    ```
-
-    <button onClick={() => window.open("https://doc.crds.dev/github.com/SAP/crossplane-provider-cloudfoundry", "_blank")} className='button button--secondary'>See full Provider reference</button>
-
   </TabItem>
 </Tabs>
 
