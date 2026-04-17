@@ -66,10 +66,14 @@ jobs:
       - name: Install gettext for envsubst
         run: sudo apt-get update && sudo apt-get install -y gettext
 
+      - name: Set BUILD_ID
+        run: echo "BUILD_ID=${{ github.run_number }}" >> $GITHUB_ENV
+
       - name: Run build and e2e test
         run: make test-acceptance
         env:
           CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
           CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
+          BUILD_ID: ${{ env.BUILD_ID }}
           # USER_WHERE_ROLES_GET_ASSIGNED_EMAIL: ${{ secrets.USER_WHERE_ROLES_GET_ASSIGNED_EMAIL }}
           # TECHNICAL_USER_EMAIL: ${{ secrets.TECHNICAL_USER_EMAIL }}

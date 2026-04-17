@@ -24,19 +24,19 @@ import (
 )
 
 var (
-	customResourceDirectories = []string{
+	spaceRoleCustomResourceDirectories = []string{
 		"./testdata/customCrs/externalNames/import",
-		"./testdata/customCrs/externalNames/space",
+		"./testdata/customCrs/externalNames/spaceRole",
 	}
 )
 
-func Test_Space_External_Name(t *testing.T) {
-	const spaceName = "upgrade-test-space"
+func Test_Space_Role_External_Name(t *testing.T) {
+	const spaceRoleName = "upgrade-test-external-name-space-role"
 
 	upgradeTest := NewCustomUpgradeTest("space-external-name-test").
 		FromVersion(fromTag).
 		ToVersion(toTag).
-		WithResourceDirectories(customResourceDirectories).
+		WithResourceDirectories(spaceRoleCustomResourceDirectories).
 		WithCustomPreUpgradeAssessment(
 			"Verify external name before upgrade",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
@@ -50,14 +50,14 @@ func Test_Space_External_Name(t *testing.T) {
 					t.Fatalf("Failed to add CloudFoundry scheme: %v", err)
 				}
 
-				space := &v1alpha1.Space{}
+				spaceRole := &v1alpha1.SpaceRole{}
 
-				err = r.Get(ctx, spaceName, cfg.Namespace(), space)
+				err = r.Get(ctx, spaceRoleName, cfg.Namespace(), spaceRole)
 				if err != nil {
-					t.Fatalf("Failed to get Space resource: %v", err)
+					t.Fatalf("Failed to get SpaceRole resource: %v", err)
 				}
 
-				annotations := space.GetAnnotations()
+				annotations := spaceRole.GetAnnotations()
 				externalName, exists := annotations["crossplane.io/external-name"]
 				if !exists {
 					t.Fatal("External name annotation does not exist")
@@ -75,15 +75,15 @@ func Test_Space_External_Name(t *testing.T) {
 		WithCustomPostUpgradeAssessment(
 			"Verify external name after upgrade",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-				space := &v1alpha1.Space{}
+				spaceRole := &v1alpha1.SpaceRole{}
 				r := cfg.Client().Resources()
 
-				err := r.Get(ctx, spaceName, cfg.Namespace(), space)
+				err := r.Get(ctx, spaceRoleName, cfg.Namespace(), spaceRole)
 				if err != nil {
-					t.Fatalf("Failed to get Space resource: %v", err)
+					t.Fatalf("Failed to get SpaceRole resource: %v", err)
 				}
 
-				annotations := space.GetAnnotations()
+				annotations := spaceRole.GetAnnotations()
 				externalName, exists := annotations["crossplane.io/external-name"]
 				if !exists {
 					t.Fatal("External name annotation does not exist after upgrade")
