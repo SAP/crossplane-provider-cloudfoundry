@@ -53,7 +53,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
         with:
-          go-version: '1.23'
+          go-version: '1.25'
 
       - name: Install Helm
         run: |
@@ -66,10 +66,14 @@ jobs:
       - name: Install gettext for envsubst
         run: sudo apt-get update && sudo apt-get install -y gettext
 
+      - name: Set BUILD_ID
+        run: echo "BUILD_ID=${{ github.run_number }}" >> $GITHUB_ENV
+
       - name: Run build and e2e test
         run: make test-acceptance
         env:
           CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
           CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
+          BUILD_ID: ${{ env.BUILD_ID }}
           # USER_WHERE_ROLES_GET_ASSIGNED_EMAIL: ${{ secrets.USER_WHERE_ROLES_GET_ASSIGNED_EMAIL }}
           # TECHNICAL_USER_EMAIL: ${{ secrets.TECHNICAL_USER_EMAIL }}

@@ -11,7 +11,6 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 )
 
 const ErrSpaceNotSpecified = "space is not specified"
@@ -33,15 +32,12 @@ func SpaceRoleType(roleType string) resource.SpaceRoleType {
 }
 
 // GetSpaceRole returns the role of a user in a space by guid or by matching the spec
-func GetSpaceRole(ctx context.Context, client Role, guid string, spec v1alpha1.SpaceRoleParameters) (*resource.Role, error) {
-	if clients.IsValidGUID(guid) {
-		return client.Get(ctx, guid)
-	}
-	return findSpaceRole(ctx, client, spec)
+func GetSpaceRole(ctx context.Context, client Role, guid string) (*resource.Role, error) {
+	return client.Get(ctx, guid)
 }
 
 // searchSpaceRole returns the role of a user in a space if the role matches the spec
-func findSpaceRole(ctx context.Context, client Role, spec v1alpha1.SpaceRoleParameters) (*resource.Role, error) {
+func FindSpaceRole(ctx context.Context, client Role, spec v1alpha1.SpaceRoleParameters) (*resource.Role, error) {
 
 	opt, err := newSpaceRoleListOptions(spec)
 	if err != nil {
