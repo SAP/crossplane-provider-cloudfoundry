@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 
+	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/app"
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/orgrole"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/resources"
