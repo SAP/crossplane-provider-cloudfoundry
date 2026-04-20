@@ -41,8 +41,8 @@ spec:
             - Follows Standard: no (uses compound key <org-guid>/<role-type>, not a single GUID)
             - Format: <org-guid>/<role-type>
             - How to find:
-              - UI: BTP Cockpit → Subaccounts → [Select Subaccount] → Cloud Foundry → Organization → Org ID + Settings → Org Members
-              - CLI: cf org <ORG_NAME> --guid (field: guid) combined with spec.forProvider.roleType
+            - UI: BTP Cockpit → Subaccounts → [Select Subaccount] → Cloud Foundry → Organization → Org ID + Settings → Org Members
+            - CLI: cf org <ORG_NAME> --guid (field: guid) combined with spec.forProvider.roleType
         properties:
           apiVersion:
             description: |-
