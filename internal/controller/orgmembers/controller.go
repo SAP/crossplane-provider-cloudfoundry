@@ -2,6 +2,8 @@ package orgmembers
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/pkg/errors"
@@ -37,7 +39,65 @@ const (
 	errUpdate            = "cannot update cloudfoundry OrgMembers"
 	errDelete            = "cannot delete cloudfoundry OrgMembers"
 	errOrgNotResolved    = "org reference is not resolved."
+	errRoleTypeRequired  = "roleType is required when external-name is not set: specify spec.forProvider.roleType or set a valid <org-guid>/<role-type> external-name"
+	errExternalNameFmt   = "external-name '%s' is not a valid format, expected '<org-guid>/<role-type>'"
+	errInvalidRoleType   = "role type '%s' is not a valid org role type"
 )
+
+const externalNameSeparator = "/"
+
+func composeExternalName(orgGUID, roleType string) string {
+	return orgGUID + externalNameSeparator + canonicalizeRoleType(roleType)
+}
+
+func parseExternalName(externalName string) (orgGUID, roleType string, err error) {
+	parts := strings.SplitN(externalName, externalNameSeparator, 3)
+	if len(parts) != 2 {
+		return "", "", errors.New(fmt.Sprintf(errExternalNameFmt, externalName))
+	}
+	orgGUID = parts[0]
+	roleType = parts[1]
+	if orgGUID == "" || roleType == "" {
+		return "", "", errors.New(fmt.Sprintf(errExternalNameFmt, externalName))
+	}
+	if !isValidOrgRoleType(roleType) {
+		return "", "", errors.New(fmt.Sprintf(errInvalidRoleType, roleType))
+	}
+	return orgGUID, canonicalizeRoleType(roleType), nil
+}
+
+func isOldExternalNameFormat(externalName string) bool {
+	return strings.Contains(externalName, "@")
+}
+
+// canonicalizeRoleType normalizes role type aliases to their singular canonical form.
+// Both Manager/Managers, User/Users, etc. map to the same CF role;
+// the external-name must use the canonical form to avoid identity conflicts.
+func canonicalizeRoleType(roleType string) string {
+	switch roleType {
+	case v1alpha1.OrgAuditors:
+		return v1alpha1.OrgAuditor
+	case v1alpha1.OrgManagers:
+		return v1alpha1.OrgManager
+	case v1alpha1.OrgBillingManagers:
+		return v1alpha1.OrgBillingManager
+	case v1alpha1.OrgUsers:
+		return v1alpha1.OrgUser
+	default:
+		return roleType
+	}
+}
+
+// isValidOrgRoleType checks whether the role type (in any alias form) maps to a valid CF org role.
+// Used to validate external-name role segments before they are used in identity resolution.
+func isValidOrgRoleType(roleType string) bool {
+	switch canonicalizeRoleType(roleType) {
+	case v1alpha1.OrgAuditor, v1alpha1.OrgManager, v1alpha1.OrgBillingManager, v1alpha1.OrgUser:
+		return true
+	default:
+		return false
+	}
+}
 
 // Setup adds a controller that reconciles managed resources OrgMembers.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
@@ -57,6 +117,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
 		managed.WithPollInterval(o.PollInterval),
+		managed.WithInitializers(),
 	}
 
 	if o.Features.Enabled(features.EnableBetaManagementPolicies) {
@@ -115,11 +176,55 @@ func (c *external) Disconnect(ctx context.Context) error {
 	return nil
 }
 
+type orgMemberClient interface {
+	ObserveOrgMembers(ctx context.Context, orgGUID, roleType string, cr *v1alpha1.OrgMembers) (*v1alpha1.RoleAssignments, bool, error)
+	AssignOrgMembers(ctx context.Context, orgGUID, roleType string, cr *v1alpha1.OrgMembers) (*v1alpha1.RoleAssignments, error)
+	UpdateOrgMembers(ctx context.Context, orgGUID, roleType string, cr *v1alpha1.OrgMembers) (*v1alpha1.RoleAssignments, error)
+	DeleteOrgMembers(ctx context.Context, orgGUID, roleType string, cr *v1alpha1.OrgMembers) error
+}
+
 // An ExternalClient observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
-	// A 'client' used to connect to the external resource API, in this case the Cloud Foundry v3 API.
-	client *members.Client
+	client orgMemberClient
+}
+
+func resolveIdentity(cr *v1alpha1.OrgMembers) (orgGUID, roleType string, lateInitialized bool, err error) {
+	externalName := meta.GetExternalName(cr)
+
+	switch {
+	case externalName == "" || externalName == cr.GetName():
+		if cr.Spec.ForProvider.Org == nil {
+			return "", "", false, errors.New(errOrgNotResolved)
+		}
+		if !isValidOrgRoleType(cr.Spec.ForProvider.RoleType) {
+			return "", "", false, errors.New(errRoleTypeRequired)
+		}
+		return *cr.Spec.ForProvider.Org, canonicalizeRoleType(cr.Spec.ForProvider.RoleType), true, nil
+	case isOldExternalNameFormat(externalName):
+		// Legacy format: RoleType@OrgGUID
+		parts := strings.SplitN(externalName, "@", 2)
+		if len(parts) != 2 {
+			return "", "", false, errors.New(fmt.Sprintf("legacy external-name '%s' has invalid format, expected 'RoleType@OrgGUID'", externalName))
+		}
+		legacyOrgGUID, legacyRoleType := parts[1], parts[0]
+		if !clients.IsValidGUID(legacyOrgGUID) {
+			return "", "", false, errors.New(fmt.Sprintf("legacy external-name '%s' contains invalid org GUID '%s'", externalName, legacyOrgGUID))
+		}
+		if !isValidOrgRoleType(legacyRoleType) {
+			return "", "", false, errors.New(fmt.Sprintf(errInvalidRoleType, legacyRoleType))
+		}
+		return legacyOrgGUID, canonicalizeRoleType(legacyRoleType), true, nil
+	default:
+		orgGUID, roleType, err := parseExternalName(externalName)
+		if err != nil {
+			return "", "", false, err
+		}
+		if !clients.IsValidGUID(orgGUID) {
+			return "", "", false, errors.New(fmt.Sprintf("org GUID '%s' in external-name is not a valid UUID format", orgGUID))
+		}
+		return orgGUID, roleType, false, nil
+	}
 }
 
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
@@ -128,24 +233,42 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errWrongKind)
 	}
 
-	// Reference to Org must be resolved first
-	if cr.Spec.ForProvider.Org == nil {
-		return managed.ExternalObservation{}, errors.New(errOrgNotResolved)
+	orgGUID, roleType, lateInitialized, err := resolveIdentity(cr)
+	if err != nil {
+		return managed.ExternalObservation{}, err
 	}
 
-	// Observe external state and compile an observation if the states are consistent with the CR,
-	// otherwise a nil observation is returned
-	observed, err := c.client.ObserveOrgMembers(ctx, cr)
+	if cr.Spec.ForProvider.Org != nil && meta.GetExternalName(cr) != "" && meta.GetExternalName(cr) != cr.GetName() && !isOldExternalNameFormat(meta.GetExternalName(cr)) {
+		if *cr.Spec.ForProvider.Org != orgGUID {
+			return managed.ExternalObservation{}, errors.Errorf("identity conflict: external-name org (%s) differs from spec (%s)", orgGUID, *cr.Spec.ForProvider.Org)
+		}
+		if cr.Spec.ForProvider.RoleType != "" && canonicalizeRoleType(cr.Spec.ForProvider.RoleType) != roleType {
+			return managed.ExternalObservation{}, errors.Errorf("identity conflict: external-name role type (%s) differs from spec (%s)", roleType, cr.Spec.ForProvider.RoleType)
+		}
+	}
+
+	if lateInitialized {
+		meta.SetExternalName(cr, composeExternalName(orgGUID, roleType))
+	}
+
+	observed, exists, err := c.client.ObserveOrgMembers(ctx, orgGUID, roleType, cr)
 
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, errRead)
 	}
 
-	// external state is not consistent with CR
+	if !exists {
+		return managed.ExternalObservation{
+			ResourceExists:          false,
+			ResourceLateInitialized: lateInitialized,
+		}, nil
+	}
+
 	if observed == nil {
 		return managed.ExternalObservation{
-			ResourceExists:   cr.Status.AtProvider.AssignedRoles != nil,
-			ResourceUpToDate: false,
+			ResourceExists:          true,
+			ResourceUpToDate:        false,
+			ResourceLateInitialized: lateInitialized,
 		}, nil
 	}
 
@@ -153,8 +276,9 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	cr.SetConditions(xpv1.Available())
 
 	return managed.ExternalObservation{
-		ResourceExists:   true,
-		ResourceUpToDate: true,
+		ResourceExists:          true,
+		ResourceUpToDate:        true,
+		ResourceLateInitialized: lateInitialized,
 	}, nil
 }
 
@@ -167,20 +291,18 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	// TODO: checking conflicting CR that `strictly` enforces the same role on the same
 	cr.SetConditions(xpv1.Creating())
 
-	created, err := c.client.AssignOrgMembers(ctx, cr)
+	created, err := c.client.AssignOrgMembers(ctx, *cr.Spec.ForProvider.Org, cr.Spec.ForProvider.RoleType, cr)
+
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
 
-	// Set external names
-	meta.SetExternalName(cr, cr.Spec.ForProvider.RoleType+"@"+*cr.Spec.ForProvider.Org)
+	meta.SetExternalName(cr, composeExternalName(*cr.Spec.ForProvider.Org, cr.Spec.ForProvider.RoleType))
 
-	// Directly set observation instead of external names, as the collection does not have a single identity.
+	// Collection resource — no single CF GUID, so set status directly.
 	cr.Status.AtProvider.AssignedRoles = created.AssignedRoles
 
 	return managed.ExternalCreation{
-		// Optionally return any details that may be required to connect to the
-		// external resource. These will be stored as the connection secret.
 		ConnectionDetails: managed.ConnectionDetails{},
 	}, nil
 }
@@ -191,15 +313,17 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errWrongKind)
 	}
 
-	updated, err := c.client.UpdateOrgMembers(ctx, cr)
+	orgGUID, roleType, _, err := resolveIdentity(cr)
+	if err != nil {
+		return managed.ExternalUpdate{}, err
+	}
+
+	updated, err := c.client.UpdateOrgMembers(ctx, orgGUID, roleType, cr)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 
-	// Update external names
-	meta.SetExternalName(cr, cr.Spec.ForProvider.RoleType+"@"+*cr.Spec.ForProvider.Org)
-
-	// Directly set observation to the updated
+	// External-name is immutable after initial creation/migration — do NOT rewrite it.
 	cr.Status.AtProvider.AssignedRoles = updated.AssignedRoles
 
 	return managed.ExternalUpdate{
@@ -212,17 +336,27 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	if !ok {
 		return managed.ExternalDelete{}, errors.New(errWrongKind)
 	}
+
 	cr.SetConditions(xpv1.Deleting())
+
 
 	// TODO: make sure there is at least one manager of the org?
 	// TODO: In case of deletion error for some roles, this resource will stuck in a false status (READY=false and SYNCED=false). We need a strategy to handle this.
 	// 		 e.g., organization_user role cannot be deleted if the user has role in some spaces in the same org.
-	err := c.client.DeleteOrgMembers(ctx, cr)
+
+	orgGUID, roleType, _, err := resolveIdentity(cr)
 	if err != nil {
+		return managed.ExternalDelete{}, err
+	}
+
+	err = c.client.DeleteOrgMembers(ctx, orgGUID, roleType, cr)
+	if err != nil {
+		// ADR: 404 not found means already deleted — not an error
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
 		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 
-	// clear members
-	cr.Status.AtProvider.AssignedRoles = nil
 	return managed.ExternalDelete{}, nil
 }

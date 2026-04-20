@@ -12,9 +12,9 @@ const (
 )
 
 // AssignOrgMembers assigns org role to a set of users in an all-or-none fashion, and return a map of assigned roles.
-func (c *Client) AssignOrgMembers(ctx context.Context, cr *v1alpha1.OrgMembers) (*v1alpha1.RoleAssignments, error) {
+func (c *Client) AssignOrgMembers(ctx context.Context, orgGUID, roleType string, cr *v1alpha1.OrgMembers) (*v1alpha1.RoleAssignments, error) {
 	// get all users with the role
-	observed, err := c.ListUsersWithRole(ctx, newOrgRoleListOptions(cr))
+	observed, err := c.ListUsersWithRole(ctx, newOrgRoleListOptions(orgGUID, roleType))
 	if err != nil {
 		return nil, err
 	}
@@ -25,7 +25,7 @@ func (c *Client) AssignOrgMembers(ctx context.Context, cr *v1alpha1.OrgMembers) 
 		user := u.Key()
 		role, ok := observed[user]
 		if !ok {
-			r, err := c.CreateOrganizationRoleByUsername(ctx, *cr.Spec.ForProvider.Org, cr.Spec.ForProvider.RoleType, u.Username, u.Origin)
+			r, err := c.CreateOrganizationRoleByUsername(ctx, orgGUID, roleType, u.Username, u.Origin)
 			if err != nil {
 				return nil, err
 			}
@@ -53,9 +53,9 @@ func (c *Client) AssignOrgMembers(ctx context.Context, cr *v1alpha1.OrgMembers) 
 }
 
 // UpdateOrgMembers observes external state and update it according the CR specification
-func (c *Client) UpdateOrgMembers(ctx context.Context, cr *v1alpha1.OrgMembers) (*v1alpha1.RoleAssignments, error) {
+func (c *Client) UpdateOrgMembers(ctx context.Context, orgGUID, roleType string, cr *v1alpha1.OrgMembers) (*v1alpha1.RoleAssignments, error) {
 	// get all users with the role
-	members, err := c.AssignOrgMembers(ctx, (cr))
+	members, err := c.AssignOrgMembers(ctx, orgGUID, roleType, cr)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +78,7 @@ func (c *Client) UpdateOrgMembers(ctx context.Context, cr *v1alpha1.OrgMembers) 
 
 // ObserveOrgMembers generates external state for the managed resources based on CR specification.
 // If the observed state is not consistent with CR, return a nil observation together with an error.
-func (c *Client) ObserveOrgMembers(ctx context.Context, cr *v1alpha1.OrgMembers) (*v1alpha1.RoleAssignments, error) {
+func (c *Client) ObserveOrgMembers(ctx context.Context, orgGUID, roleType string, cr *v1alpha1.OrgMembers) (*v1alpha1.RoleAssignments, bool, error) {
 	// sync every currently assigned role and remove it from members list if it no longer exists
 	for user, role := range cr.Status.AtProvider.AssignedRoles {
 		_, err := c.Roles.Get(ctx, role)
@@ -87,12 +87,12 @@ func (c *Client) ObserveOrgMembers(ctx context.Context, cr *v1alpha1.OrgMembers)
 		}
 	}
 	// get all users with the role
-	observed, err := c.ListUsersWithRole(ctx, newOrgRoleListOptions(cr))
+	observed, err := c.ListUsersWithRole(ctx, newOrgRoleListOptions(orgGUID, roleType))
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 
-	return generateOrgMemberObservation(observed, cr), nil
+	return generateOrgMemberObservation(observed, cr), len(observed) > 0, nil
 }
 
 // isOrgMemberUpToDate checks if observation is consistent with CR
@@ -127,11 +127,11 @@ func generateOrgMemberObservation(observed map[string]string, cr *v1alpha1.OrgMe
 }
 
 // DeleteOrgMembers remove external org role resources managed by this CR
-func (c *Client) DeleteOrgMembers(ctx context.Context, cr *v1alpha1.OrgMembers) error {
+func (c *Client) DeleteOrgMembers(ctx context.Context, orgGUID, roleType string, cr *v1alpha1.OrgMembers) error {
 	fp := cr.Spec.ForProvider
 	// if strict, remove all users from the role
 	if fp.EnforcementPolicy == enforcementPolicyStrict {
-		allUsersWithRole, err := c.ListUsersWithRole(ctx, newOrgRoleListOptions(cr))
+		allUsersWithRole, err := c.ListUsersWithRole(ctx, newOrgRoleListOptions(orgGUID, roleType))
 		if err != nil {
 			return err
 		}

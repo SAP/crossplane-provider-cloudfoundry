@@ -56,10 +56,10 @@ func newSpaceRoleListOptions(spaceGUID, roleType string) *cfv3.RoleListOptions {
 	return opts
 }
 
-func newOrgRoleListOptions(cr *v1alpha1.OrgMembers) *cfv3.RoleListOptions {
+func newOrgRoleListOptions(orgGUID, roleType string) *cfv3.RoleListOptions {
 	opts := cfv3.NewRoleListOptions()
-	opts.OrganizationGUIDs.EqualTo(*cr.Spec.ForProvider.Org)
-	opts.WithOrganizationRoleType(orgRoleType(cr.Spec.ForProvider.RoleType))
+	opts.OrganizationGUIDs.EqualTo(orgGUID)
+	opts.WithOrganizationRoleType(orgRoleType(roleType))
 	return opts
 }
 
