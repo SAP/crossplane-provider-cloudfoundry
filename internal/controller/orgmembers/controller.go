@@ -194,36 +194,87 @@ func resolveIdentity(cr *v1alpha1.OrgMembers) (orgGUID, roleType string, lateIni
 
 	switch {
 	case externalName == "" || externalName == cr.GetName():
-		if cr.Spec.ForProvider.Org == nil {
-			return "", "", false, errors.New(errOrgNotResolved)
-		}
-		if !isValidOrgRoleType(cr.Spec.ForProvider.RoleType) {
-			return "", "", false, errors.New(errRoleTypeRequired)
-		}
-		return *cr.Spec.ForProvider.Org, canonicalizeRoleType(cr.Spec.ForProvider.RoleType), true, nil
+		return resolveIdentityFromSpec(cr)
 	case isOldExternalNameFormat(externalName):
-		// Legacy format: RoleType@OrgGUID
-		parts := strings.SplitN(externalName, "@", 2)
-		if len(parts) != 2 {
-			return "", "", false, errors.New(fmt.Sprintf("legacy external-name '%s' has invalid format, expected 'RoleType@OrgGUID'", externalName))
-		}
-		legacyOrgGUID, legacyRoleType := parts[1], parts[0]
-		if !clients.IsValidGUID(legacyOrgGUID) {
-			return "", "", false, errors.New(fmt.Sprintf("legacy external-name '%s' contains invalid org GUID '%s'", externalName, legacyOrgGUID))
-		}
-		if !isValidOrgRoleType(legacyRoleType) {
-			return "", "", false, errors.New(fmt.Sprintf(errInvalidRoleType, legacyRoleType))
-		}
-		return legacyOrgGUID, canonicalizeRoleType(legacyRoleType), true, nil
+		return resolveLegacyIdentity(externalName)
 	default:
-		orgGUID, roleType, err := parseExternalName(externalName)
-		if err != nil {
-			return "", "", false, err
+		return resolveCompoundIdentity(externalName)
+	}
+}
+
+func resolveIdentityFromSpec(cr *v1alpha1.OrgMembers) (orgGUID, roleType string, lateInitialized bool, err error) {
+	if cr.Spec.ForProvider.Org == nil {
+		return "", "", false, errors.New(errOrgNotResolved)
+	}
+	if !isValidOrgRoleType(cr.Spec.ForProvider.RoleType) {
+		return "", "", false, errors.New(errRoleTypeRequired)
+	}
+	return *cr.Spec.ForProvider.Org, canonicalizeRoleType(cr.Spec.ForProvider.RoleType), true, nil
+}
+
+func resolveLegacyIdentity(externalName string) (orgGUID, roleType string, lateInitialized bool, err error) {
+	parts := strings.SplitN(externalName, "@", 2)
+	if len(parts) != 2 {
+		return "", "", false, errors.New(fmt.Sprintf("legacy external-name '%s' has invalid format, expected 'RoleType@OrgGUID'", externalName))
+	}
+
+	legacyOrgGUID, legacyRoleType := parts[1], parts[0]
+	if !clients.IsValidGUID(legacyOrgGUID) {
+		return "", "", false, errors.New(fmt.Sprintf("legacy external-name '%s' contains invalid org GUID '%s'", externalName, legacyOrgGUID))
+	}
+	if !isValidOrgRoleType(legacyRoleType) {
+		return "", "", false, errors.New(fmt.Sprintf(errInvalidRoleType, legacyRoleType))
+	}
+
+	return legacyOrgGUID, canonicalizeRoleType(legacyRoleType), true, nil
+}
+
+func resolveCompoundIdentity(externalName string) (orgGUID, roleType string, lateInitialized bool, err error) {
+	orgGUID, roleType, err = parseExternalName(externalName)
+	if err != nil {
+		return "", "", false, err
+	}
+	if !clients.IsValidGUID(orgGUID) {
+		return "", "", false, errors.New(fmt.Sprintf("org GUID '%s' in external-name is not a valid UUID format", orgGUID))
+	}
+	return orgGUID, roleType, false, nil
+}
+
+func hasCompoundExternalName(externalName, resourceName string) bool {
+	return externalName != "" && externalName != resourceName && !isOldExternalNameFormat(externalName)
+}
+
+func validateIdentityConflict(cr *v1alpha1.OrgMembers, orgGUID, roleType string) error {
+	if !hasCompoundExternalName(meta.GetExternalName(cr), cr.GetName()) {
+		return nil
+	}
+	if cr.Spec.ForProvider.Org != nil && *cr.Spec.ForProvider.Org != orgGUID {
+		return errors.Errorf("identity conflict: external-name org (%s) differs from spec (%s)", orgGUID, *cr.Spec.ForProvider.Org)
+	}
+	if cr.Spec.ForProvider.RoleType != "" && canonicalizeRoleType(cr.Spec.ForProvider.RoleType) != roleType {
+		return errors.Errorf("identity conflict: external-name role type (%s) differs from spec (%s)", roleType, cr.Spec.ForProvider.RoleType)
+	}
+	return nil
+}
+
+func buildObservation(lateInitialized, exists bool, observed *v1alpha1.RoleAssignments) managed.ExternalObservation {
+	if !exists {
+		return managed.ExternalObservation{
+			ResourceExists:          false,
+			ResourceLateInitialized: lateInitialized,
 		}
-		if !clients.IsValidGUID(orgGUID) {
-			return "", "", false, errors.New(fmt.Sprintf("org GUID '%s' in external-name is not a valid UUID format", orgGUID))
+	}
+	if observed == nil {
+		return managed.ExternalObservation{
+			ResourceExists:          true,
+			ResourceUpToDate:        false,
+			ResourceLateInitialized: lateInitialized,
 		}
-		return orgGUID, roleType, false, nil
+	}
+	return managed.ExternalObservation{
+		ResourceExists:          true,
+		ResourceUpToDate:        true,
+		ResourceLateInitialized: lateInitialized,
 	}
 }
 
@@ -238,13 +289,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, err
 	}
 
-	if cr.Spec.ForProvider.Org != nil && meta.GetExternalName(cr) != "" && meta.GetExternalName(cr) != cr.GetName() && !isOldExternalNameFormat(meta.GetExternalName(cr)) {
-		if *cr.Spec.ForProvider.Org != orgGUID {
-			return managed.ExternalObservation{}, errors.Errorf("identity conflict: external-name org (%s) differs from spec (%s)", orgGUID, *cr.Spec.ForProvider.Org)
-		}
-		if cr.Spec.ForProvider.RoleType != "" && canonicalizeRoleType(cr.Spec.ForProvider.RoleType) != roleType {
-			return managed.ExternalObservation{}, errors.Errorf("identity conflict: external-name role type (%s) differs from spec (%s)", roleType, cr.Spec.ForProvider.RoleType)
-		}
+	if err := validateIdentityConflict(cr, orgGUID, roleType); err != nil {
+		return managed.ExternalObservation{}, err
 	}
 
 	if lateInitialized {
@@ -257,29 +303,12 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.Wrap(err, errRead)
 	}
 
-	if !exists {
-		return managed.ExternalObservation{
-			ResourceExists:          false,
-			ResourceLateInitialized: lateInitialized,
-		}, nil
+	if observed != nil {
+		cr.Status.AtProvider.AssignedRoles = observed.AssignedRoles
+		cr.SetConditions(xpv1.Available())
 	}
 
-	if observed == nil {
-		return managed.ExternalObservation{
-			ResourceExists:          true,
-			ResourceUpToDate:        false,
-			ResourceLateInitialized: lateInitialized,
-		}, nil
-	}
-
-	cr.Status.AtProvider.AssignedRoles = observed.AssignedRoles
-	cr.SetConditions(xpv1.Available())
-
-	return managed.ExternalObservation{
-		ResourceExists:          true,
-		ResourceUpToDate:        true,
-		ResourceLateInitialized: lateInitialized,
-	}, nil
+	return buildObservation(lateInitialized, exists, observed), nil
 }
 
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
@@ -339,6 +368,11 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Deleting())
 
+	// Lax resources only remove the roles tracked in status. If nothing is tracked,
+	// deletion is already complete and we should not block on resolving identity.
+	if cr.Spec.ForProvider.EnforcementPolicy != "Strict" && len(cr.Status.AtProvider.AssignedRoles) == 0 {
+		return managed.ExternalDelete{}, nil
+	}
 
 	// TODO: make sure there is at least one manager of the org?
 	// TODO: In case of deletion error for some roles, this resource will stuck in a false status (READY=false and SYNCED=false). We need a strategy to handle this.

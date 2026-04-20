@@ -4,7 +4,6 @@ package upgrade
 
 import (
 	"context"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -15,20 +14,24 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 )
 
-var CompoundExternalNameRegex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/(Developer|Auditor|Manager|Supporter|Developers|Auditors|Managers|Supporters)$`)
+var spaceMembersCustomResourceDirectories = []string{
+	"./testdata/customCrs/externalNames/import",
+	"./testdata/customCrs/externalNames/space",
+	"./testdata/customCrs/externalNames/spaceMembers",
+}
 
 func Test_SpaceMembers_External_Name(t *testing.T) {
 	const (
 		spaceMembersName = "upgrade-test-space-members"
-		expectedRoleType = "Developers"
+		expectedRoleType = "Developer"
 	)
 
 	upgradeTest := NewCustomUpgradeTest("space-members-external-name-test").
 		FromVersion(fromTag).
 		ToVersion(toTag).
-		WithResourceDirectories(customResourceDirectories).
+		WithResourceDirectories(spaceMembersCustomResourceDirectories).
 		WithCustomPreUpgradeAssessment(
-			"Verify compound external name before upgrade",
+			"Verify legacy external name before upgrade",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 				r, err := res.New(cfg.Client().RESTConfig())
 				if err != nil {
@@ -46,7 +49,7 @@ func Test_SpaceMembers_External_Name(t *testing.T) {
 					t.Fatalf("Failed to get SpaceMembers resource: %v", err)
 				}
 
-				externalName := assertCompoundExternalName(t, spaceMembers.GetAnnotations(), expectedRoleType, "before upgrade")
+				externalName := assertLegacySpaceMembersExternalName(t, spaceMembers.GetAnnotations(), "before upgrade")
 				klog.V(4).Infof("Pre-upgrade external name: %s", externalName)
 
 				return context.WithValue(ctx, "preUpgradeExternalName", externalName)
@@ -71,17 +74,32 @@ func Test_SpaceMembers_External_Name(t *testing.T) {
 					t.Fatal("Failed to retrieve pre-upgrade external name from context")
 				}
 
-				if externalName != preUpgradeExternalName {
-					t.Fatalf("External name changed during upgrade: before='%s', after='%s'",
-						preUpgradeExternalName, externalName)
+				expectedExternalName := preUpgradeExternalName + "/" + expectedRoleType
+				if externalName != expectedExternalName {
+					t.Fatalf("External name '%s' does not match migrated value '%s' derived from legacy name '%s'",
+						externalName, expectedExternalName, preUpgradeExternalName)
 				}
 
-				klog.V(4).Info("External name validation passed: compound format correct and unchanged")
+				klog.V(4).Info("External name validation passed: legacy GUID migrated to compound format")
 				return ctx
 			},
 		)
 
 	testenv.Test(t, upgradeTest.Feature())
+}
+
+func assertLegacySpaceMembersExternalName(t *testing.T, annotations map[string]string, phase string) string {
+	t.Helper()
+
+	externalName, exists := annotations["crossplane.io/external-name"]
+	if !exists {
+		t.Fatalf("External name annotation does not exist %s", phase)
+	}
+	if !test.UUIDRegex.MatchString(externalName) {
+		t.Fatalf("Legacy external name '%s' is not a valid GUID %s", externalName, phase)
+	}
+
+	return externalName
 }
 
 func assertCompoundExternalName(t *testing.T, annotations map[string]string, expectedRoleType string, phase string) string {
@@ -90,10 +108,6 @@ func assertCompoundExternalName(t *testing.T, annotations map[string]string, exp
 	externalName, exists := annotations["crossplane.io/external-name"]
 	if !exists {
 		t.Fatalf("External name annotation does not exist %s", phase)
-	}
-
-	if !CompoundExternalNameRegex.MatchString(externalName) {
-		t.Fatalf("External name '%s' does not match expected compound format %s", externalName, phase)
 	}
 
 	parts := strings.SplitN(externalName, "/", 2)

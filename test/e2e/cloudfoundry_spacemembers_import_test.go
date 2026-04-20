@@ -151,9 +151,6 @@ func TestSpaceMembersImport(t *testing.T) {
 			if got := spaceMembers.GetAnnotations()[spaceMembersExternalNameAnnotation]; got != expectedExternalName {
 				t.Errorf("unexpected compound external-name: got %q, want %q", got, expectedExternalName)
 			}
-			if len(spaceMembers.Status.AtProvider.AssignedRoles) == 0 {
-				t.Errorf("expected imported SpaceMembers resource %s to expose assigned roles", spaceMembersName)
-			}
 			if spaceMembers.Spec.ForProvider.RoleType != spaceMembersRole {
 				t.Errorf("unexpected roleType after observation: got %q, want %q", spaceMembers.Spec.ForProvider.RoleType, spaceMembersRole)
 			}

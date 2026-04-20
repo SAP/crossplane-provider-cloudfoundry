@@ -449,11 +449,23 @@ func TestDelete(t *testing.T) {
 				},
 			},
 		},
-		"DeleteEmptyRolesStillCallsClient": {
+		"DeleteEmptyRolesNoopWhenLaxAndIdentityInvalid": {
+			cr:   fakeOrgMembers(withExternalName("invalid-no-slash")),
+			want: want{err: nil},
+			mock: mockOrgMemberClient{
+				deleteFn: func(ctx context.Context, gotOrgGUID, gotRoleType string, cr *v1alpha1.OrgMembers) error {
+					return fmt.Errorf("delete client should not be called for lax resources without tracked roles")
+				},
+			},
+		},
+		"DeleteEmptyRolesStillCallsClientWhenStrict": {
 			cr:   fakeOrgMembers(withOrg(orgGUID), withRoleType(roleType), withExternalName(extName)),
 			want: want{err: nil},
 			mock: mockOrgMemberClient{
 				deleteFn: func(ctx context.Context, gotOrgGUID, gotRoleType string, cr *v1alpha1.OrgMembers) error {
+					if cr.Spec.ForProvider.EnforcementPolicy != "Strict" {
+						return fmt.Errorf("expected strict enforcement policy")
+					}
 					if gotOrgGUID != orgGUID || gotRoleType != roleType {
 						return fmt.Errorf("unexpected identity: %s/%s", gotOrgGUID, gotRoleType)
 					}
@@ -483,6 +495,9 @@ func TestDelete(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			if name == "DeleteEmptyRolesStillCallsClientWhenStrict" {
+				tc.cr.Spec.ForProvider.EnforcementPolicy = "Strict"
+			}
 			c := &external{client: &tc.mock}
 			_, err := c.Delete(context.Background(), tc.cr)
 
@@ -572,9 +587,9 @@ func TestComposeExternalName(t *testing.T) {
 	cases := map[string]struct {
 		orgGUID  string
 		roleType string
-		want      string
+		want     string
 	}{
-		"SingularManager": {"9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a", "Manager", "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/Manager"},
+		"SingularManager":             {"9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a", "Manager", "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/Manager"},
 		"PluralManagersCanonicalized": {"9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a", "Managers", "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/Manager"},
 		"PluralUsersCanonicalized":    {"9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a", "Users", "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/User"},
 	}
@@ -617,15 +632,15 @@ func TestCanonicalizeRoleType(t *testing.T) {
 		input string
 		want  string
 	}{
-		"SingularManager":      {"Manager", "Manager"},
-		"PluralManagers":       {"Managers", "Manager"},
-		"SingularUser":         {"User", "User"},
-		"PluralUsers":          {"Users", "User"},
-		"SingularAuditor":      {"Auditor", "Auditor"},
-		"PluralAuditors":       {"Auditors", "Auditor"},
+		"SingularManager":        {"Manager", "Manager"},
+		"PluralManagers":         {"Managers", "Manager"},
+		"SingularUser":           {"User", "User"},
+		"PluralUsers":            {"Users", "User"},
+		"SingularAuditor":        {"Auditor", "Auditor"},
+		"PluralAuditors":         {"Auditors", "Auditor"},
 		"SingularBillingManager": {"BillingManager", "BillingManager"},
 		"PluralBillingManagers":  {"BillingManagers", "BillingManager"},
-		"UnknownRoleType":      {"CustomRole", "CustomRole"},
+		"UnknownRoleType":        {"CustomRole", "CustomRole"},
 	}
 
 	for name, tc := range cases {

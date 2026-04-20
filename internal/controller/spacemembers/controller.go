@@ -99,6 +99,44 @@ func isOldExternalNameFormat(externalName string) bool {
 	return clients.IsValidGUID(externalName)
 }
 
+func hasCompoundExternalName(externalName, resourceName string) bool {
+	return externalName != "" && externalName != resourceName && !isOldExternalNameFormat(externalName)
+}
+
+func validateIdentityConflict(cr *v1alpha1.SpaceMembers, spaceGUID, roleType string) error {
+	if !hasCompoundExternalName(meta.GetExternalName(cr), cr.GetName()) {
+		return nil
+	}
+	if cr.Spec.ForProvider.Space != nil && *cr.Spec.ForProvider.Space != spaceGUID {
+		return errors.Errorf("identity conflict: external-name space (%s) differs from spec (%s)", spaceGUID, *cr.Spec.ForProvider.Space)
+	}
+	if cr.Spec.ForProvider.RoleType != "" && canonicalizeRoleType(cr.Spec.ForProvider.RoleType) != roleType {
+		return errors.Errorf("identity conflict: external-name role type (%s) differs from spec (%s)", roleType, cr.Spec.ForProvider.RoleType)
+	}
+	return nil
+}
+
+func buildObservation(lateInitialized, exists bool, observed *v1alpha1.RoleAssignments) managed.ExternalObservation {
+	if !exists {
+		return managed.ExternalObservation{
+			ResourceExists:          false,
+			ResourceLateInitialized: lateInitialized,
+		}
+	}
+	if observed == nil {
+		return managed.ExternalObservation{
+			ResourceExists:          true,
+			ResourceUpToDate:        false,
+			ResourceLateInitialized: lateInitialized,
+		}
+	}
+	return managed.ExternalObservation{
+		ResourceExists:          true,
+		ResourceUpToDate:        true,
+		ResourceLateInitialized: lateInitialized,
+	}
+}
+
 // Setup adds a controller that reconciles managed resources SpaceMembers.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
 	name := managed.ControllerName(v1alpha1.SpaceMembersGroupKind)
@@ -226,13 +264,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, err
 	}
 
-	if cr.Spec.ForProvider.Space != nil && meta.GetExternalName(cr) != "" && meta.GetExternalName(cr) != cr.GetName() && !isOldExternalNameFormat(meta.GetExternalName(cr)) {
-		if *cr.Spec.ForProvider.Space != spaceGUID {
-			return managed.ExternalObservation{}, errors.Errorf("identity conflict: external-name space (%s) differs from spec (%s)", spaceGUID, *cr.Spec.ForProvider.Space)
-		}
-		if cr.Spec.ForProvider.RoleType != "" && canonicalizeRoleType(cr.Spec.ForProvider.RoleType) != roleType {
-			return managed.ExternalObservation{}, errors.Errorf("identity conflict: external-name role type (%s) differs from spec (%s)", roleType, cr.Spec.ForProvider.RoleType)
-		}
+	if err := validateIdentityConflict(cr, spaceGUID, roleType); err != nil {
+		return managed.ExternalObservation{}, err
 	}
 
 	if lateInitialized {
@@ -245,29 +278,12 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.Wrap(err, errRead)
 	}
 
-	if !exists {
-		return managed.ExternalObservation{
-			ResourceExists:          false,
-			ResourceLateInitialized: lateInitialized,
-		}, nil
+	if observed != nil {
+		cr.Status.AtProvider.AssignedRoles = observed.AssignedRoles
+		cr.SetConditions(xpv1.Available())
 	}
 
-	if observed == nil {
-		return managed.ExternalObservation{
-			ResourceExists:          true,
-			ResourceUpToDate:        false,
-			ResourceLateInitialized: lateInitialized,
-		}, nil
-	}
-
-	cr.Status.AtProvider.AssignedRoles = observed.AssignedRoles
-	cr.SetConditions(xpv1.Available())
-
-	return managed.ExternalObservation{
-		ResourceExists:          true,
-		ResourceUpToDate:        true,
-		ResourceLateInitialized: lateInitialized,
-	}, nil
+	return buildObservation(lateInitialized, exists, observed), nil
 }
 
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {

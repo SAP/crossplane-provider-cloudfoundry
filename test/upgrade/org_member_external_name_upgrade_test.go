@@ -14,6 +14,12 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 )
 
+var orgMembersCustomResourceDirectories = []string{
+	"./testdata/customCrs/externalNames/import",
+	"./testdata/customCrs/externalNames/space",
+	"./testdata/customCrs/externalNames/orgMembers",
+}
+
 func Test_OrgMembers_External_Name(t *testing.T) {
 	const (
 		orgMembersName   = "upgrade-test-org-members"
@@ -23,7 +29,7 @@ func Test_OrgMembers_External_Name(t *testing.T) {
 	upgradeTest := NewCustomUpgradeTest("org-members-external-name-test").
 		FromVersion(fromTag).
 		ToVersion(toTag).
-		WithResourceDirectories(customResourceDirectories).
+		WithResourceDirectories(orgMembersCustomResourceDirectories).
 		WithCustomPreUpgradeAssessment(
 			"Verify legacy external name before upgrade",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
