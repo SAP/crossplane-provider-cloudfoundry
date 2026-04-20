@@ -1,0 +1,27 @@
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  namespace: orgmembers-import-test
+  name: orgmembers-import-org
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: cf-ci-e2e
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: OrgMembers
+metadata:
+  namespace: orgmembers-import-test
+  name: e2e-org-members-import
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    roleType: Managers
+    orgRef:
+      name: orgmembers-import-org
+      policy:
+        resolve: Always
+    enforcementPolicy: Lax
