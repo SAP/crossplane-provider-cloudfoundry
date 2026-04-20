@@ -533,4 +533,4 @@ kind get clusters | grep e2e | xargs -n1 kind delete cluster --name
 - [Crossplane Documentation](https://docs.crossplane.io)
 - [CloudFoundry Provider](https://github.com/SAP/crossplane-provider-cloudfoundry)
 - [BTP Provider Upgrade Tests](https://github.com/SAP/crossplane-provider-btp/tree/main/test/upgrade) (reference implementation)
-- [External-Name ADR](../docs/adr/) (internal documentation for external-name patterns)
+- [External-Name ADR](/docs/crossplane-provider-btp/docs/contribution-notes/external-name-handling) (internal documentation for external-name patterns)

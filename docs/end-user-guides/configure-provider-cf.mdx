@@ -1,0 +1,309 @@
+---
+sidebar_position: 2
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import Badge, { READY,IN_PREVIEW, CONCEPT, IN_DEV, RESTRICTION, NA } from "@site/src/components/Badge.jsx";
+
+# Configure
+
+In this guide, we will get familiar with setting up our control plane to manage Cloud Foundry resources on our BTP Cloud Foundry Environment.
+
+:::note
+Are you a platform operator or administrator? Feel free to check out the [OpenMCP project](https://openmcp-project.github.io/docs/). It helps organizations enable more teams to use Crossplane by providing a managed control plane as a service.
+:::
+
+## 🚧 Prerequisites
+
+- You have a running control plane.
+- We have created [CloudFoundryEnvironment](/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/order-cf-environment)
+- We have a technical user with `OrgManager` role in the Cloud Foundry environment
+
+## Install CloudFoundry Provider
+
+We first need to install the `CloudFoundry` provider in your control plane. This extends the control plane with additional custom resource types to manage Cloud Foundry resources.
+
+<Tabs>
+  <TabItem value="unmanaged" label="manually" default>
+    Crossplane v2 is NOT yet supported, please use Crossplane v1 for now.
+
+    To use the provider in any control plane **apply the following provider resource**.
+    ```yaml
+    apiVersion: pkg.crossplane.io/v1
+    kind: Provider
+    metadata:
+      name: cloudfoundry-provider
+    spec:
+      package: ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry:<provider-version>
+    ```
+
+    <button onClick={() => window.open("https://doc.crds.dev/github.com/SAP/crossplane-provider-cloudfoundry", "_blank")} className='button button--secondary'>See full Provider reference</button>
+
+  </TabItem>
+  <TabItem value="managed" label="using ManagedControlPlane">
+      ```yaml
+      apiVersion: core.openmcp.cloud/v1alpha1
+      kind: ManagedControlPlane
+      metadata:
+        name: <MCP_NAME>
+        namespace: <PROJECT_WORKSPACES_NAMESPACE>
+      spec:
+        components:
+          crossplane:
+            version: <version>
+            providers:
+              - name: cloudfoundry-opensource
+                version: <openControlPlane-provider-version>
+      ...
+      ```
+  </TabItem>
+</Tabs>
+
+## Configure Connection Details
+
+Next, we connect the CloudFoundry provider to the Cloud Foundry Environment on BTP. To do that, we set up a `ProviderConfig` to configure the connection details, including `apiEndpoint` and `credentials`. Typically, connection credentials are stored in a Kubernetes `Secret` and referenced in the `ProviderConfig`.
+
+
+### credentials `Secret`
+For basic user authentication, create a Kubernetes Secret containing user credentials.
+
+```yaml title="examples/cf-credentials.yaml"
+apiVersion: v1
+kind: Secret
+metadata:
+    name: cf-credentials-secret
+    namespace: default
+type: Opaque
+stringData:
+    credentials: |
+        {
+        "email": "<your email>",
+        "username": "<technical-user-name>",
+        "password": "<technical-user-password>"
+        }
+```
+
+:::info
+We recommend using a technical user for basic user authentication. This user must have the `OrgManager` role in the Cloud Foundry environment. We do that by set this user as the `initialOrgManagers` during creation of the `CloudFoundryEnvironment` resource.
+:::
+
+### Create `ProviderConfig`
+We then **reference the `Secret` and the `apiEndpoint` in our `ProviderConfig`** for the provider to use.
+
+For existing Cloud Foundry Environments, locate API Endpoint information in Subaccount overview page in the SAP BTP Cockpit.
+
+    ![CF API in BTP Cockpit](/img/cf_api.png)
+
+```yaml title="examples/provider/config.yaml"
+apiVersion: cloudfoundry.crossplane.io/v1beta1
+kind: ProviderConfig
+metadata:
+    name: default
+spec:
+    apiEndpoint: https://api.cf.eu12.hana.ondemand.com/
+    credentials:
+        source: Secret
+        secretRef:
+            name: cf-credentials-secret
+            namespace: default
+            key: credentials
+```
+
+Apply the provider configuration.
+
+```sh
+kubectl apply -f examples/provider/config.yaml
+```
+
+Now the provider is connected and we can use control plane to manage Cloud Foundry resources on our BTP Cloud Foundry environment. We start by importing the `Organization` and then create `Space` and assign `Roles` to users.
+
+## Import `Organization` <Badge isHeadline={true} type={READY}/>
+
+A Cloud Foundry `Organization` is automatically created when Cloud Foundry Environment is enabled for our BTP subaccount. This `Organization` is the top-level resource for all other Cloud Foundry resources we want to manage using our control plan. So the first step is to import the `Organization` into the control plane.
+
+To do this, we create an `Organization` managed resource, and manually set the `crossplane.io/external-name` annotation to the name of the Cloud Foundry `Organization` in BTP. Leaving `forProvider` empty. Optionally, we can set the `managementPolicies` to `Observe` only as we do not want to update or delete the Organization.
+
+
+```yaml title="examples/org-import.yaml"
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  name: my-org
+  annotations:
+    crossplane.io/external-name: cf-dev ## name of actual CF Org in BTP
+spec:
+  forProvider: {}
+  managementPolicies:
+    - Observe
+```
+
+Alternatively, the CloudFoundry provider can *automatically* importing resources matching the `forProvider` specification. In our example, we can set `forProvider.name` to the name of `Organization` in BTP, i.e., `cf-dev` and it will be imported automatically.
+
+```yaml title="examples/org-import.yaml"
+
+
+```yaml title="examples/org.yaml"
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  name: my-org
+spec:
+  forProvider:
+    name: cf-dev ## name of actual CF Org in BTP
+  managementPolicies:
+    - Observe
+```
+
+Once applied, the managed resource `my-org` in our control plane represents the Cloud Foundry `Organization` `cf-dev` in BTP. We can reference `my-org` when we want to manage resources like `Space` and `OrgMembers` in the `cf-dev` org.
+
+
+## Create `Spaces` <Badge isHeadline={true} type={READY}/>
+
+The `Space` custom resource lets you **create and manage** Cloud Foundry spaces in code. The following example creates a `Space` named `my-space`. By referencing `my-org` in `orgRef`, we instruct that the space `my-space` shall be created in the Organization `cf-dev`.
+
+```yaml title="examples/space.yaml"
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  name: my-space ## name of custom resource in control plane
+spec:
+  forProvider:
+    allowSsh: true
+    name: my-space
+    orgRef:
+      name:  my-org ## The managed resource name of the Organization in the control plane
+```
+
+## Create quota plan for the space <Badge isHeadline={true} type={READY}/>
+
+For each Organization, Org Managers create and modify quota plans for Spaces in the Organization. If an Org Manager allocates a space quota, Cloud Foundry verifies that resources do not exceed the allocated space limit.
+
+Quota plans limit the available resources in a `Space`, such as the maximum number of app instances allowed or the maximum memory usage.
+
+The `SpaceQuota` custom resource lets you specify a space quota plan. We have to define the Organization and the Space(s) to which the quota plan applies. We also have to specify the quota parameters that limit the available resources in a Space.
+
+```yaml title="examples/spacequota.yaml"
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceQuota
+metadata:
+  name: my-space-quota ## name of the custom resource in control plane
+spec:
+  forProvider:
+    name: my-space-quota
+    orgRef:
+      name: my-org ## The managed resource name of the Organization in the control plane
+    spacesRefs:
+      - name: my-space ## The managed resource name of the Space in the control plane
+    allowPaidServicePlans: false ## To allow provisioning instances of paid service plans
+    totalAppInstances: 10        ## The total number of service instances we want to allow
+    totalMemory: 10240           ## The total amount of memory you want to allocate to all app instances in the space
+```
+
+For the complete definition of the `SpaceQuota` resource, refer to the [CRD browser](https://doc.crds.dev/github.com/SAP/crossplane-provider-cloudfoundry/cloudfoundry.crossplane.io/SpaceQuota/v1alpha1@v0.3.3).
+
+## Manage User Roles
+
+Cloud Foundry uses a role-based access control (RBAC) model to manage user permissions. For more information, see [Roles and Permissons in Cloud Foundry](https://docs.cloudfoundry.org/concepts/roles.html).
+
+To manage user roles in code, we can use `OrgRole` and `SpaceRole` custom resources which assigns roles to individual user. Or alternatively, we can use `OrgMembers` and `SpaceMembers` to assign roles to a group of users.
+
+<Tabs>
+  <TabItem value="individual" label="Individual Assignment" default>
+### Individual `OrgRole` and `SpaceRole` <Badge isHeadline={true} type={READY}/>
+Use `OrgRole` and `SpaceRole` custom resources to assign roles to individual users.
+#### `OrgRole`
+
+```yaml title="Example: assigns user1@example.com as an Org Manager"
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: OrgRole
+metadata:
+  name: org-manager-user1
+spec:
+  forProvider:
+    type: Manager # valid role types are: Manager, BillingManager, Auditor, User
+    username: user1@example.com
+    orgRef:
+      name: my-org
+```
+#### `SpaceRole`
+
+```yaml title="Example: assign user1@example.com as a Space Developer."
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceRole
+metadata:
+  name: space-developer-user1
+spec:
+  forProvider:
+    type: Developer # valid role types are: Developer, Supporter, Auditor, Manager
+    username: user1@example.com 
+    spaceRef:
+      name: my-space
+```
+  </TabItem>
+
+  <TabItem value="group" label="Group Assignment">
+
+### User Group `OrgMembers` and `SpaceMembers` <Badge isHeadline={true} type={READY}/>
+Use `OrgMembers` and `SpaceMembers` to manage roles for a group of users.
+#### `OrgMembers`
+
+```yaml title="Example: manage Developers for an Org"
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: OrgMembers
+metadata:
+  namespace: default
+  name: org-managers
+spec:
+  forProvider:
+    roleType: Manager # valid role types are: Manager, BillingManager, Auditor, User
+    members:
+    - username: user1@example.com
+    - username: user2@example.com
+    orgRef:
+      name: my-org
+    enforcementPolicy: Lax
+```
+
+#### `SpaceMembers`
+
+```yaml title="Example: manage Developers for a Space"
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceMembers
+metadata:
+  namespace: default
+  name: my-space-members
+spec:
+  forProvider:
+    roleType: Developer # valid role types are: Developer, Supporter, Auditor, Manager
+    members:
+    - username: dev1@example.com
+    - username: dev2@example.com
+    spaceRef:
+      name: my-space
+      policy:
+        resolve: Always
+    enforcementPolicy: Lax
+```
+We can use `enforcementPolicy` to control group assignment behavior:
+
+- `enforcementPolicy: Lax`  ensures that roles are assigned to the specified group of users, and at the same time, permits that additional users not included in the group to have the same role permission.
+
+- `enforcementPolicy: Strict` ensures that the role is assigned **exclusively** to the specified group of users and no one else.
+
+:::warning DO NOT DELETE CR with `Strict` group assignment
+
+`Strict` group assignment means that **all other users not included in the group will lose their role permission**. If you delete the CR, you **effectively remove EVERYONE** from the respective role. This can be problematic for example if you remove everyone (including your technical user) from being an Org Manager.
+:::
+
+</TabItem>
+</Tabs>
+
+
+
+
+## FAQs
+
+### Error: "user with username `abc@example.com` does not exist"
+
+If the user with the username/e-mail never logged in to your SAP Cloud Foundry environment, you will receive an error "user with username `abc@example.com` does not exist".
