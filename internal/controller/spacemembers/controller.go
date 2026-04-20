@@ -39,13 +39,44 @@ const (
 	errUpdate            = "cannot update cloudfoundry SpaceMembers"
 	errDelete            = "cannot delete cloudfoundry SpaceMembers"
 	errSpaceNotResolved  = "cannot resolve reference to Space."
+	errRoleTypeRequired  = "roleType is required when external-name is not set: specify spec.forProvider.roleType or set a valid <space-guid>/<role-type> external-name"
 	errExternalNameFmt   = "external-name '%s' is not a valid format, expected '<space-guid>/<role-type>'"
+	errInvalidRoleType   = "role type '%s' is not a valid space role type"
 )
 
 const externalNameSeparator = "/"
 
 func composeExternalName(spaceGUID, roleType string) string {
-	return spaceGUID + externalNameSeparator + roleType
+	return spaceGUID + externalNameSeparator + canonicalizeRoleType(roleType)
+}
+
+// canonicalizeRoleType normalizes role type aliases to their singular canonical form.
+// Both Manager/Managers, Developer/Developers, etc. map to the same CF role;
+// the external-name must use the canonical form to avoid identity conflicts.
+func canonicalizeRoleType(roleType string) string {
+	switch roleType {
+	case v1alpha1.SpaceAuditors:
+		return v1alpha1.SpaceAuditor
+	case v1alpha1.SpaceDevelopers:
+		return v1alpha1.SpaceDeveloper
+	case v1alpha1.SpaceManagers:
+		return v1alpha1.SpaceManager
+	case v1alpha1.SpaceSupporters:
+		return v1alpha1.SpaceSupporter
+	default:
+		return roleType
+	}
+}
+
+// isValidSpaceRoleType checks whether the role type (in any alias form) maps to a valid CF space role.
+// Used to validate external-name role segments before they are used in identity resolution.
+func isValidSpaceRoleType(roleType string) bool {
+	switch canonicalizeRoleType(roleType) {
+	case v1alpha1.SpaceAuditor, v1alpha1.SpaceDeveloper, v1alpha1.SpaceManager, v1alpha1.SpaceSupporter:
+		return true
+	default:
+		return false
+	}
 }
 
 func parseExternalName(externalName string) (spaceGUID, roleType string, err error) {
@@ -58,7 +89,10 @@ func parseExternalName(externalName string) (spaceGUID, roleType string, err err
 	if spaceGUID == "" || roleType == "" {
 		return "", "", errors.New(fmt.Sprintf(errExternalNameFmt, externalName))
 	}
-	return spaceGUID, roleType, nil
+	if !isValidSpaceRoleType(roleType) {
+		return "", "", errors.New(fmt.Sprintf(errInvalidRoleType, roleType))
+	}
+	return spaceGUID, canonicalizeRoleType(roleType), nil
 }
 
 func isOldExternalNameFormat(externalName string) bool {
@@ -160,9 +194,15 @@ func resolveIdentity(cr *v1alpha1.SpaceMembers) (spaceGUID, roleType string, lat
 		if cr.Spec.ForProvider.Space == nil {
 			return "", "", false, errors.New(errSpaceNotResolved)
 		}
-		return *cr.Spec.ForProvider.Space, cr.Spec.ForProvider.RoleType, true, nil
+		if !isValidSpaceRoleType(cr.Spec.ForProvider.RoleType) {
+			return "", "", false, errors.New(errRoleTypeRequired)
+		}
+		return *cr.Spec.ForProvider.Space, canonicalizeRoleType(cr.Spec.ForProvider.RoleType), true, nil
 	case isOldExternalNameFormat(externalName):
-		return externalName, cr.Spec.ForProvider.RoleType, true, nil
+		if !isValidSpaceRoleType(cr.Spec.ForProvider.RoleType) {
+			return "", "", false, errors.New(errRoleTypeRequired)
+		}
+		return externalName, canonicalizeRoleType(cr.Spec.ForProvider.RoleType), true, nil
 	default:
 		spaceGUID, roleType, err := parseExternalName(externalName)
 		if err != nil {
@@ -187,8 +227,11 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}
 
 	if cr.Spec.ForProvider.Space != nil && meta.GetExternalName(cr) != "" && meta.GetExternalName(cr) != cr.GetName() && !isOldExternalNameFormat(meta.GetExternalName(cr)) {
-		if *cr.Spec.ForProvider.Space != spaceGUID || cr.Spec.ForProvider.RoleType != roleType {
-			return managed.ExternalObservation{}, errors.Errorf("identity conflict: external-name (%s/%s) differs from spec (%s/%s)", spaceGUID, roleType, *cr.Spec.ForProvider.Space, cr.Spec.ForProvider.RoleType)
+		if *cr.Spec.ForProvider.Space != spaceGUID {
+			return managed.ExternalObservation{}, errors.Errorf("identity conflict: external-name space (%s) differs from spec (%s)", spaceGUID, *cr.Spec.ForProvider.Space)
+		}
+		if cr.Spec.ForProvider.RoleType != "" && canonicalizeRoleType(cr.Spec.ForProvider.RoleType) != roleType {
+			return managed.ExternalObservation{}, errors.Errorf("identity conflict: external-name role type (%s) differs from spec (%s)", roleType, cr.Spec.ForProvider.RoleType)
 		}
 	}
 
@@ -282,8 +325,9 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Deleting())
 
-	// nothing to delete
-	if len(cr.Status.AtProvider.AssignedRoles) == 0 {
+	// Lax resources only remove the roles tracked in status. If nothing is tracked,
+	// deletion is already complete and we should not block on resolving identity.
+	if cr.Spec.ForProvider.EnforcementPolicy != "Strict" && len(cr.Status.AtProvider.AssignedRoles) == 0 {
 		return managed.ExternalDelete{}, nil
 	}
 

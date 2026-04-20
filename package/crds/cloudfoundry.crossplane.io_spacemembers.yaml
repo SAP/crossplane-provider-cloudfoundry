@@ -42,7 +42,7 @@ spec:
             - Format: <space-guid>/<role-type>
             - How to find:
               - UI: BTP Cockpit → Subaccounts → [Select Subaccount] → Cloud Foundry → Space → Space ID + Settings → Space Members
-              - CLI: Use CF CLI: `cf space <SPACE_NAME> --guid` combined with role type
+              - CLI: cf space <SPACE_NAME> --guid (field: guid) combined with spec.forProvider.roleType
         properties:
           apiVersion:
             description: |-

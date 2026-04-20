@@ -125,6 +125,11 @@ func TestObserve(t *testing.T) {
 			want: want{obs: managed.ExternalObservation{}, err: errors.New(errSpaceNotResolved)},
 			mock: mockMembersClient{},
 		},
+		"RoleTypeRequiredWithoutExternalName": {
+			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType("")),
+			want: want{obs: managed.ExternalObservation{}, err: errors.New(errRoleTypeRequired)},
+			mock: mockMembersClient{},
+		},
 		// ADR Step 1: Empty external-name should be late-initialized from spec
 		"EmptyExternalNameLateInitialized": {
 			cr: fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType)),
@@ -221,13 +226,36 @@ func TestObserve(t *testing.T) {
 				},
 			},
 		},
-		"IdentityConflict": {
+		"IdentityConflictSpaceGUID": {
 			cr: fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(composeExternalName("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee", roleType))),
 			want: want{
 				obs: managed.ExternalObservation{},
-				err: errors.New("identity conflict: external-name (aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/Manager) differs from spec (9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/Manager)"),
+				err: errors.New("identity conflict: external-name space (aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee) differs from spec (9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a)"),
 			},
 			mock: mockMembersClient{},
+		},
+		"IdentityConflictRoleType": {
+			cr: fakeSpaceMembers(withSpace(spaceGUID), withRoleType("Auditor"), withExternalName(extName)),
+			want: want{
+				obs: managed.ExternalObservation{},
+				err: errors.New("identity conflict: external-name role type (Manager) differs from spec (Auditor)"),
+			},
+			mock: mockMembersClient{},
+		},
+		"NoConflictWhenRoleTypeEmptyForObserveOnly": {
+			cr: fakeSpaceMembers(withSpace(spaceGUID), withRoleType(""), withExternalName(extName)),
+			want: want{
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			mock: mockMembersClient{
+				observeFn: func(ctx context.Context, gotSpaceGUID, gotRoleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, bool, error) {
+					if gotSpaceGUID != spaceGUID || gotRoleType != roleType {
+						return nil, false, fmt.Errorf("unexpected identity: %s/%s", gotSpaceGUID, gotRoleType)
+					}
+					return &v1alpha1.RoleAssignments{AssignedRoles: assignedRoles}, true, nil
+				},
+			},
 		},
 		// Read error from API
 		"ObserveError": {
@@ -411,10 +439,29 @@ func TestDelete(t *testing.T) {
 				},
 			},
 		},
-		"NothingToDeleteWhenNoAssignedRoles": {
+		"DeleteEmptyRolesNoopWhenLaxAndIdentityInvalid": {
+			cr:   fakeSpaceMembers(withExternalName("invalid-no-slash")),
+			want: want{err: nil},
+			mock: mockMembersClient{
+				deleteFn: func(ctx context.Context, gotSpaceGUID, gotRoleType string, cr *v1alpha1.SpaceMembers) error {
+					return fmt.Errorf("delete client should not be called for lax resources without tracked roles")
+				},
+			},
+		},
+		"DeleteEmptyRolesStillCallsClientWhenStrict": {
 			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(extName)),
 			want: want{err: nil},
-			mock: mockMembersClient{},
+			mock: mockMembersClient{
+				deleteFn: func(ctx context.Context, gotSpaceGUID, gotRoleType string, cr *v1alpha1.SpaceMembers) error {
+					if cr.Spec.ForProvider.EnforcementPolicy != "Strict" {
+						return fmt.Errorf("expected strict enforcement policy")
+					}
+					if gotSpaceGUID != spaceGUID || gotRoleType != roleType {
+						return fmt.Errorf("unexpected identity: %s/%s", gotSpaceGUID, gotRoleType)
+					}
+					return nil
+				},
+			},
 		},
 		"DeleteError": {
 			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(extName), withAssignedRoles(assignedRoles)),
@@ -438,6 +485,9 @@ func TestDelete(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
+			if name == "DeleteEmptyRolesStillCallsClientWhenStrict" {
+				tc.cr.Spec.ForProvider.EnforcementPolicy = "Strict"
+			}
 			c := &external{client: &tc.mock}
 			_, err := c.Delete(context.Background(), tc.cr)
 
@@ -493,6 +543,22 @@ func TestParseExternalName(t *testing.T) {
 			input:   "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/",
 			wantErr: true,
 		},
+		"InvalidRoleType": {
+			input:   "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/InvalidRole",
+			wantErr: true,
+		},
+		"PluralRoleTypeCanonicalized": {
+			input:     "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/Managers",
+			wantSpace: "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a",
+			wantRole:  "Manager",
+			wantErr:   false,
+		},
+		"PluralSupportersCanonicalized": {
+			input:     "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/Supporters",
+			wantSpace: "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a",
+			wantRole:  "Supporter",
+			wantErr:   false,
+		},
 	}
 
 	for name, tc := range cases {
@@ -518,10 +584,23 @@ func TestParseExternalName(t *testing.T) {
 }
 
 func TestComposeExternalName(t *testing.T) {
-	result := composeExternalName("9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a", "Manager")
-	expected := "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/Manager"
-	if diff := cmp.Diff(expected, result); diff != "" {
-		t.Errorf("composeExternalName(): -want, +got:\n%s", diff)
+	cases := map[string]struct {
+		spaceGUID string
+		roleType  string
+		want      string
+	}{
+		"SingularManager":               {"9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a", "Manager", "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/Manager"},
+		"PluralManagersCanonicalized":   {"9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a", "Managers", "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/Manager"},
+		"PluralSupportersCanonicalized": {"9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a", "Supporters", "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a/Supporter"},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			result := composeExternalName(tc.spaceGUID, tc.roleType)
+			if diff := cmp.Diff(tc.want, result); diff != "" {
+				t.Errorf("composeExternalName(%q, %q): -want, +got:\n%s", tc.spaceGUID, tc.roleType, diff)
+			}
+		})
 	}
 }
 
@@ -541,6 +620,32 @@ func TestIsOldExternalNameFormat(t *testing.T) {
 			result := isOldExternalNameFormat(tc.input)
 			if diff := cmp.Diff(tc.expected, result); diff != "" {
 				t.Errorf("isOldExternalNameFormat(%q): -want, +got:\n%s", tc.input, diff)
+			}
+		})
+	}
+}
+
+func TestCanonicalizeRoleType(t *testing.T) {
+	cases := map[string]struct {
+		input string
+		want  string
+	}{
+		"SingularManager":   {"Manager", "Manager"},
+		"PluralManagers":    {"Managers", "Manager"},
+		"SingularDeveloper": {"Developer", "Developer"},
+		"PluralDevelopers":  {"Developers", "Developer"},
+		"SingularAuditor":   {"Auditor", "Auditor"},
+		"PluralAuditors":    {"Auditors", "Auditor"},
+		"SingularSupporter": {"Supporter", "Supporter"},
+		"PluralSupporters":  {"Supporters", "Supporter"},
+		"UnknownRoleType":   {"CustomRole", "CustomRole"},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			result := canonicalizeRoleType(tc.input)
+			if diff := cmp.Diff(tc.want, result); diff != "" {
+				t.Errorf("canonicalizeRoleType(%q): -want, +got:\n%s", tc.input, diff)
 			}
 		})
 	}
