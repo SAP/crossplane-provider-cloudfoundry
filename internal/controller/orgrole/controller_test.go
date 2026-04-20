@@ -8,6 +8,7 @@ import (
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -346,6 +347,9 @@ func TestObserve(t *testing.T) {
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
 			}
+			if diff := cmp.Diff(tc.want.mg, tc.args.mg, cmp.Options{cmpopts.IgnoreFields(v1alpha1.OrgRole{}, "Status")}); diff != "" {
+				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+			}
 		})
 	}
 }
@@ -382,7 +386,7 @@ func TestCreate(t *testing.T) {
 					withType(v1alpha1.OrgManager),
 					withUsername("user1@test.com"),
 					withOrg("my-org"),
-					withOrigin("my-origin"),
+					withOrigin("sap.ids"),
 					withExternalName(guidOrg),
 				),
 				obs: managed.ExternalCreation{ConnectionDetails: managed.ConnectionDetails{}},
@@ -391,7 +395,15 @@ func TestCreate(t *testing.T) {
 			service: func() *fake.MockOrgRole {
 				m := &fake.MockOrgRole{}
 				m.On("CreateOrganizationRoleWithUsername").Return(
-					&fake.NewOrgRole().SetType("organization_manager").SetGUID(guidOrg).SetRelationships(cfresource.RoleSpaceUserOrganizationRelationships{User: cfresource.ToOneRelationship{Data: &cfresource.Relationship{GUID: guidHealthyUser}}, Org: cfresource.ToOneRelationship{Data: &cfresource.Relationship{GUID: guidOrg}}}).Role,
+					&fake.NewOrgRole().
+						SetType("organization_manager").
+						SetGUID(guidOrg).
+						SetRelationships(cfresource.RoleSpaceUserOrganizationRelationships{
+							User: cfresource.ToOneRelationship{
+								Data: &cfresource.Relationship{GUID: guidHealthyUser}},
+							Org: cfresource.ToOneRelationship{
+								Data: &cfresource.Relationship{GUID: guidOrg}},
+						}).Role,
 					nil,
 				)
 
@@ -414,7 +426,7 @@ func TestCreate(t *testing.T) {
 					withUsername("user1@test.com"),
 					withOrgName("my-org"),
 					withOrg("my-org"),
-					withOrigin("my-origin"),
+					withOrigin("sap.ids"),
 					withExternalName(guidOrg),
 				),
 				obs: managed.ExternalCreation{ConnectionDetails: managed.ConnectionDetails{}},
@@ -423,7 +435,15 @@ func TestCreate(t *testing.T) {
 			service: func() *fake.MockOrgRole {
 				m := &fake.MockOrgRole{}
 				m.On("CreateOrganizationRoleWithUsername").Return(
-					&fake.NewOrgRole().SetType("organization_manager").SetGUID(guidOrg).SetRelationships(cfresource.RoleSpaceUserOrganizationRelationships{User: cfresource.ToOneRelationship{Data: &cfresource.Relationship{GUID: guidHealthyUser}}, Org: cfresource.ToOneRelationship{Data: &cfresource.Relationship{GUID: guidOrg}}}).Role,
+					&fake.NewOrgRole().
+						SetType("organization_manager").
+						SetGUID(guidOrg).
+						SetRelationships(cfresource.RoleSpaceUserOrganizationRelationships{
+							User: cfresource.ToOneRelationship{
+								Data: &cfresource.Relationship{GUID: guidHealthyUser}},
+							Org: cfresource.ToOneRelationship{
+								Data: &cfresource.Relationship{GUID: guidOrg}},
+						}).Role,
 					nil,
 				)
 
@@ -572,6 +592,9 @@ func TestCreate(t *testing.T) {
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
+				t.Errorf("Create(...): -want, +got:\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
 				t.Errorf("Create(...): -want, +got:\n%s", diff)
 			}
 		})
