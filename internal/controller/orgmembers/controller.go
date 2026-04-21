@@ -320,13 +320,18 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	// TODO: checking conflicting CR that `strictly` enforces the same role on the same
 	cr.SetConditions(xpv1.Creating())
 
-	created, err := c.client.AssignOrgMembers(ctx, *cr.Spec.ForProvider.Org, cr.Spec.ForProvider.RoleType, cr)
+	orgGUID, roleType, _, err := resolveIdentity(cr)
+	if err != nil {
+		return managed.ExternalCreation{}, err
+	}
+
+	created, err := c.client.AssignOrgMembers(ctx, orgGUID, roleType, cr)
 
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
 
-	meta.SetExternalName(cr, composeExternalName(*cr.Spec.ForProvider.Org, cr.Spec.ForProvider.RoleType))
+	meta.SetExternalName(cr, composeExternalName(orgGUID, roleType))
 
 	// Collection resource — no single CF GUID, so set status directly.
 	cr.Status.AtProvider.AssignedRoles = created.AssignedRoles

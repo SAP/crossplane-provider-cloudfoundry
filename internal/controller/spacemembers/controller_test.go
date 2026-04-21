@@ -53,6 +53,12 @@ func withAssignedRoles(roles map[string]string) modifier {
 	}
 }
 
+func withEnforcementPolicy(policy string) modifier {
+	return func(r *v1alpha1.SpaceMembers) {
+		r.Spec.ForProvider.EnforcementPolicy = policy
+	}
+}
+
 func fakeSpaceMembers(m ...modifier) *v1alpha1.SpaceMembers {
 	r := &v1alpha1.SpaceMembers{
 		ObjectMeta: metav1.ObjectMeta{
@@ -449,13 +455,10 @@ func TestDelete(t *testing.T) {
 			},
 		},
 		"DeleteEmptyRolesStillCallsClientWhenStrict": {
-			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(extName)),
+			cr:   fakeSpaceMembers(withSpace(spaceGUID), withRoleType(roleType), withExternalName(extName), withEnforcementPolicy("Strict")),
 			want: want{err: nil},
 			mock: mockMembersClient{
 				deleteFn: func(ctx context.Context, gotSpaceGUID, gotRoleType string, cr *v1alpha1.SpaceMembers) error {
-					if cr.Spec.ForProvider.EnforcementPolicy != "Strict" {
-						return fmt.Errorf("expected strict enforcement policy")
-					}
 					if gotSpaceGUID != spaceGUID || gotRoleType != roleType {
 						return fmt.Errorf("unexpected identity: %s/%s", gotSpaceGUID, gotRoleType)
 					}
@@ -485,9 +488,6 @@ func TestDelete(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			if name == "DeleteEmptyRolesStillCallsClientWhenStrict" {
-				tc.cr.Spec.ForProvider.EnforcementPolicy = "Strict"
-			}
 			c := &external{client: &tc.mock}
 			_, err := c.Delete(context.Background(), tc.cr)
 

@@ -53,6 +53,12 @@ func withAssignedRoles(roles map[string]string) modifier {
 	}
 }
 
+func withEnforcementPolicy(policy string) modifier {
+	return func(r *v1alpha1.OrgMembers) {
+		r.Spec.ForProvider.EnforcementPolicy = policy
+	}
+}
+
 func fakeOrgMembers(m ...modifier) *v1alpha1.OrgMembers {
 	r := &v1alpha1.OrgMembers{
 		ObjectMeta: metav1.ObjectMeta{
@@ -459,13 +465,10 @@ func TestDelete(t *testing.T) {
 			},
 		},
 		"DeleteEmptyRolesStillCallsClientWhenStrict": {
-			cr:   fakeOrgMembers(withOrg(orgGUID), withRoleType(roleType), withExternalName(extName)),
+			cr:   fakeOrgMembers(withOrg(orgGUID), withRoleType(roleType), withExternalName(extName), withEnforcementPolicy("Strict")),
 			want: want{err: nil},
 			mock: mockOrgMemberClient{
 				deleteFn: func(ctx context.Context, gotOrgGUID, gotRoleType string, cr *v1alpha1.OrgMembers) error {
-					if cr.Spec.ForProvider.EnforcementPolicy != "Strict" {
-						return fmt.Errorf("expected strict enforcement policy")
-					}
 					if gotOrgGUID != orgGUID || gotRoleType != roleType {
 						return fmt.Errorf("unexpected identity: %s/%s", gotOrgGUID, gotRoleType)
 					}
@@ -495,9 +498,6 @@ func TestDelete(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			if name == "DeleteEmptyRolesStillCallsClientWhenStrict" {
-				tc.cr.Spec.ForProvider.EnforcementPolicy = "Strict"
-			}
 			c := &external{client: &tc.mock}
 			_, err := c.Delete(context.Background(), tc.cr)
 

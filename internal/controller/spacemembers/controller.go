@@ -294,13 +294,18 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Creating())
 
-	created, err := c.client.AssignSpaceMembers(ctx, *cr.Spec.ForProvider.Space, cr.Spec.ForProvider.RoleType, cr)
+	spaceGUID, roleType, _, err := resolveIdentity(cr)
+	if err != nil {
+		return managed.ExternalCreation{}, err
+	}
+
+	created, err := c.client.AssignSpaceMembers(ctx, spaceGUID, roleType, cr)
 
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
 
-	meta.SetExternalName(cr, composeExternalName(*cr.Spec.ForProvider.Space, cr.Spec.ForProvider.RoleType))
+	meta.SetExternalName(cr, composeExternalName(spaceGUID, roleType))
 
 	// Collection resource — no single CF GUID, so set status directly.
 	cr.Status.AtProvider.AssignedRoles = created.AssignedRoles

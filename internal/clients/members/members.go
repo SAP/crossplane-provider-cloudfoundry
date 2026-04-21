@@ -78,6 +78,8 @@ func (c *Client) UpdateOrgMembers(ctx context.Context, orgGUID, roleType string,
 
 // ObserveOrgMembers generates external state for the managed resources based on CR specification.
 // If the observed state is not consistent with CR, return a nil observation together with an error.
+// The bool return value indicates whether any roles exist in Cloud Foundry for the given org GUID and role type,
+// regardless of whether they match the desired state. It is used by the controller to determine ResourceExists.
 func (c *Client) ObserveOrgMembers(ctx context.Context, orgGUID, roleType string, cr *v1alpha1.OrgMembers) (*v1alpha1.RoleAssignments, bool, error) {
 	// sync every currently assigned role and remove it from members list if it no longer exists
 	for user, role := range cr.Status.AtProvider.AssignedRoles {
@@ -206,6 +208,8 @@ func (c *Client) UpdateSpaceMembers(ctx context.Context, spaceGUID, roleType str
 
 // ObserveSpaceMembers generates external state for the managed resources based on CR specification.
 // If the observed state is not consistent with CR, return a nil observation together with an error.
+// The bool return value indicates whether any roles exist in Cloud Foundry for the given space GUID and role type,
+// regardless of whether they match the desired state. It is used by the controller to determine ResourceExists.
 func (c *Client) ObserveSpaceMembers(ctx context.Context, spaceGUID, roleType string, cr *v1alpha1.SpaceMembers) (*v1alpha1.RoleAssignments, bool, error) {
 	// sync every currently assigned role and remove it from members list if it no longer exists
 	for user, role := range cr.Status.AtProvider.AssignedRoles {
