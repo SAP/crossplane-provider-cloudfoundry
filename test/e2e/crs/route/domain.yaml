@@ -1,0 +1,14 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Domain
+metadata:
+  name: e2e-route-import-domain
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: cfapps.eu12.hana.ondemand.com
+    orgRef:
+      name: e2e-route-import-org
+      policy:
+        resolve: Always
+    internal: false

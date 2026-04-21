@@ -1,0 +1,15 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Route
+metadata:
+  name: e2e-route-import-test
+spec:
+  forProvider:
+    domainRef:
+      name: e2e-route-import-domain
+      policy:
+        resolve: Always
+    host: route-import-e2e
+    spaceRef:
+      name: e2e-route-import-space
+      policy:
+        resolve: Always
