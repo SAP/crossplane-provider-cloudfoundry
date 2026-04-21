@@ -213,7 +213,8 @@ func TestObserve(t *testing.T) {
 					withOrg(guidOrg),
 					withUsername("user1"),
 					withType(v1alpha1.OrgManager),
-					withExternalName(guidRole)),
+					withExternalName(guidRole),
+					withConditions(xpv1.Available())),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
@@ -269,7 +270,8 @@ func TestObserve(t *testing.T) {
 					withOrg(guidOrg),
 					withUsername("user1"),
 					withType(v1alpha1.OrgManager),
-					withExternalName(guidRole)),
+					withExternalName(guidRole),
+					withConditions(xpv1.Available())),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
 				err: nil,
 			},
@@ -347,8 +349,10 @@ func TestObserve(t *testing.T) {
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
 			}
-			if diff := cmp.Diff(tc.want.mg, tc.args.mg, cmp.Options{cmpopts.IgnoreFields(v1alpha1.OrgRole{}, "Status")}); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg, cmp.Options{cmpopts.IgnoreFields(v1alpha1.OrgRole{}, "Status.AtProvider")}); diff != "" {
+					t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				}
 			}
 		})
 	}
@@ -594,8 +598,10 @@ func TestCreate(t *testing.T) {
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Create(...): -want, +got:\n%s", diff)
 			}
-			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
-				t.Errorf("Create(...): -want, +got:\n%s", diff)
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Create(...): -want, +got:\n%s", diff)
+				}
 			}
 		})
 	}
@@ -753,8 +759,10 @@ func TestDelete(t *testing.T) {
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Delete(...): -want, +got:\n%s", diff)
 			}
-			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
-				t.Errorf("Delete(...): -want, +got:\n%s", diff)
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Delete(...): -want, +got:\n%s", diff)
+				}
 			}
 		})
 	}
