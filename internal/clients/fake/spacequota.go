@@ -71,12 +71,25 @@ func (s *SpaceQuota) SetGUID(guid string) *SpaceQuota {
 
 // SetRelationships assigns Space relationships
 func (s *SpaceQuota) SetOrgGUID(guid string) *SpaceQuota {
-	s.Relationships = resource.SpaceQuotaRelationships{
-		Organization: &resource.ToOneRelationship{
-			Data: &resource.Relationship{
-				GUID: guid,
-			},
+	s.Relationships.Organization = &resource.ToOneRelationship{
+		Data: &resource.Relationship{
+			GUID: guid,
 		},
 	}
+	return s
+}
+
+// SetSpaces assigns spaces to the SpaceQuota
+func (s *SpaceQuota) SetSpaces(guids []*string) *SpaceQuota {
+	spaces := make([]resource.Relationship, len(guids))
+
+	for i, guid := range guids {
+		spaces[i] = resource.Relationship{GUID: *guid}
+	}
+
+	s.Relationships.Spaces = &resource.ToManyRelationships{
+		Data: spaces,
+	}
+
 	return s
 }
