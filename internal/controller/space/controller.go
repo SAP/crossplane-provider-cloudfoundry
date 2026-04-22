@@ -144,9 +144,6 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 			}
 			return managed.ExternalObservation{ResourceExists: false}, errors.Wrap(err, errGet)
 		}
-		if s == nil {
-			return managed.ExternalObservation{ResourceExists: false}, nil
-		}
 		meta.SetExternalName(cr, s.GUID)
 	}
 
@@ -164,10 +161,6 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 			return managed.ExternalObservation{ResourceExists: false}, nil
 		}
 		return managed.ExternalObservation{ResourceExists: false}, errors.Wrap(err, errGet)
-	}
-
-	if s == nil {
-		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
 	// ssh
