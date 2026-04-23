@@ -283,7 +283,14 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		cr.SetConditions(xpv1.Available())
 	}
 
-	return buildObservation(lateInitialized, exists, observed), nil
+	observation := buildObservation(lateInitialized, exists, observed)
+
+	// Under Lax enforcement, once our tracked roles are removed during deletion, the external resource is gone
+	if meta.WasDeleted(cr) && cr.Spec.ForProvider.EnforcementPolicy != "Strict" && len(cr.Status.AtProvider.AssignedRoles) == 0 {
+		observation.ResourceExists = false
+	}
+
+	return observation, nil
 }
 
 func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
