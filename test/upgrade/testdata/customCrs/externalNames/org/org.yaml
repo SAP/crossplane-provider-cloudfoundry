@@ -1,0 +1,12 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  name: upgrade-test-external-name-org
+  annotations:
+    crossplane.io/external-name: "a4b3c2d1-e5f6-7890-abcd-ef1234567890"
+    crossplane.io/paused: "false"
+spec:
+  forProvider:
+    name: cf-ci-e2e
+  providerConfigRef:
+    name: default

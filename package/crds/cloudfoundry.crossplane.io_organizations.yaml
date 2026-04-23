@@ -34,7 +34,15 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Org is the Schema for the Orgs API. Creates a Cloud Foundry Organization
+        description: |-
+          Org is the Schema for the Orgs API. Creates a Cloud Foundry Organization
+
+          External-Name Configuration:
+            - Follows Standard: yes
+            - Format: Organization GUID (UUID format)
+            - How to find:
+              - UI: In the BTP Cockpit, navigate to your org and find the ID in the URL
+              - CLI: Use `cf org <org-name> --guid`
         properties:
           apiVersion:
             description: |-
