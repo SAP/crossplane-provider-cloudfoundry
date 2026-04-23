@@ -169,3 +169,8 @@ func (r *Route) GetCloudFoundryName() string {
 func (r *Route) GetDomainRef() *DomainReference {
 	return &r.Spec.ForProvider.DomainReference
 }
+
+// implement SpaceScoped interface
+func (r *Route) GetSpaceRef() *SpaceReference {
+	return &r.Spec.ForProvider.SpaceReference
+}
