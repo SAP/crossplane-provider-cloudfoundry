@@ -182,7 +182,7 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withAllowSSH(false), withConditions(xpv1.Available())),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
 			service: func() *MockSpaceFeature {
