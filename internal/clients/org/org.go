@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
@@ -28,6 +29,8 @@ func NewClient(cf *client.Client) Client {
 }
 
 // GetByIDOrName returns an organization by ID or Name.
+//
+// Deprecated: use FindOrgBySpec and GetOrgByGUID instead.
 func GetByIDOrName(ctx context.Context, c Client, id, name string) (*resource.Organization, error) {
 
 	_, err := uuid.Parse(id)
@@ -36,6 +39,24 @@ func GetByIDOrName(ctx context.Context, c Client, id, name string) (*resource.Or
 	}
 
 	return c.Single(ctx, &client.OrganizationListOptions{Names: client.Filter{Values: []string{name}}})
+}
+
+// FindOrgBySpec finds an organization by spec.Name.
+// Returns nil, nil if no organization is found.
+func FindOrgBySpec(ctx context.Context, c Client, spec v1alpha1.OrgParameters) (*resource.Organization, error) {
+	res, err := c.Single(ctx, &client.OrganizationListOptions{Names: client.Filter{Values: []string{spec.Name}}})
+	if err != nil {
+		if clients.ErrorIsNotFound(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return res, nil
+}
+
+// GetOrgByGUID returns an organization by its GUID.
+func GetOrgByGUID(ctx context.Context, c Client, guid string) (*resource.Organization, error) {
+	return c.Get(ctx, guid)
 }
 
 // GenerateCreate generates the OrganizationCreate from an *OrgParameters
