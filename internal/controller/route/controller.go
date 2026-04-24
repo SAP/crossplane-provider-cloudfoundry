@@ -2,6 +2,7 @@ package route
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 
@@ -24,16 +25,20 @@ import (
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/domain"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/route"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
 type RouteService interface {
-	GetByIDOrSpec(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, error)
+	FindRouteBySpec(ctx context.Context, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, bool, error)
+
+	GetRouteByGUID(ctx context.Context, guid string) (*v1alpha1.RouteObservation, bool, error)
+
 	Create(ctx context.Context, forProvider v1alpha1.RouteParameters) (string, error)
 	Update(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) error
-	Delete(ctx context.Context, guid string) error
+	Delete(ctx context.Context, guid string) (string, error)
 }
 
 const (
@@ -114,7 +119,8 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
-	return &external{RouteService: route.NewClient(cf), kube: c.kube}, nil
+	routeClient, jobClient := route.NewClient(cf)
+	return &external{RouteService: routeClient, kube: c.kube, job: jobClient}, nil
 }
 
 // Disconnect implements the managed.ExternalClient interface
@@ -126,10 +132,9 @@ func (c *external) Disconnect(ctx context.Context) error {
 // An ExternalClient observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
-	// A 'client' used to connect to the external resource API. In practice this
-	// would be something like an AWS SDK client.
 	kube k8s.Client
 	RouteService
+	job job.Job
 }
 
 // Observe generates observation for Route's
@@ -139,33 +144,43 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errNotRoute)
 	}
 
+	resourceLateInitialized := false
+
+	if meta.GetExternalName(cr) == "" {
+		// Backwards compatibility: lookup by spec fields
+		observed, exists, err := c.FindRouteBySpec(ctx, cr.Spec.ForProvider)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, errGet)
+		}
+		if !exists {
+			return managed.ExternalObservation{ResourceExists: false}, nil
+		}
+		meta.SetExternalName(cr, observed.GUID)
+		resourceLateInitialized = true
+	}
+
 	guid := meta.GetExternalName(cr)
 
-	atProvider, err := c.GetByIDOrSpec(ctx, guid, cr.Spec.ForProvider)
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.New(fmt.Sprintf("external-name '%s' is not a valid GUID format", guid))
+	}
+
+	observed, exists, err := c.GetRouteByGUID(ctx, guid)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
 	}
-
-	if atProvider == nil {
+	if !exists {
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
-	cr.SetConditions(xpv1.Available())
-
-	lateInitialized := false
-	if atProvider.GUID != guid {
-		meta.SetExternalName(cr, atProvider.GUID)
-		lateInitialized = true
-	}
-
-	cr.Status.AtProvider = *atProvider
+	cr.Status.AtProvider = *observed
+	cr.Status.SetConditions(xpv1.Available())
 
 	return managed.ExternalObservation{
 		ResourceExists:          true,
-		ResourceUpToDate:        route.IsUpToDate(cr.Spec.ForProvider, *atProvider),
-		ResourceLateInitialized: lateInitialized,
+		ResourceUpToDate:        route.IsUpToDate(cr.Spec.ForProvider, *observed),
+		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
-
 }
 
 // Create a route
@@ -185,8 +200,6 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	meta.SetExternalName(cr, guid)
 
 	return managed.ExternalCreation{
-		// Optionally return any details that may be required to connect to the
-		// external resource. These will be stored as the connection secret.
 		ConnectionDetails: managed.ConnectionDetails{},
 	}, nil
 }
@@ -225,8 +238,16 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Deleting())
 
-	return managed.ExternalDelete{}, c.RouteService.Delete(ctx, meta.GetExternalName(cr))
+	if meta.GetExternalName(cr) == "" {
+		return managed.ExternalDelete{}, nil
+	}
 
+	jobGUID, err := c.RouteService.Delete(ctx, meta.GetExternalName(cr))
+	if err != nil {
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
+	}
+
+	return managed.ExternalDelete{}, job.PollJobComplete(ctx, c.job, jobGUID)
 }
 
 // ResolveReferences of this Route.

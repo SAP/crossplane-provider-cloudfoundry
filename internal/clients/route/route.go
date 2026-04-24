@@ -10,6 +10,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 )
 
 // Route is the interface that defines the methods that a Route client should implement.
@@ -25,36 +26,41 @@ type Client struct {
 	Route
 }
 
-// NewClient creates a new cf client and return interfaces for Route and RouteFeatures
-func NewClient(cf *client.Client) *Client {
+// NewClient creates a new cf client and returns the Route client and Job client.
+func NewClient(cf *client.Client) (*Client, job.Job) {
 	return &Client{
 		Route: cf.Routes,
-	}
+	}, cf.Jobs
 }
 
-// GetByIDOrSpec returns a Route by ID or by forProvider Spec.
-func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, error) {
-	var r *resource.Route
-	var err error
-	if clients.IsValidGUID(guid) {
-		r, err = c.Get(ctx, guid)
-	} else {
-		opts, e := FormatListOption(forProvider)
-		if e != nil {
-			return nil, e
-		}
-		r, err = c.Single(ctx, opts)
+// FindRouteBySpec looks up a route by spec fields (backwards compatibility).
+func (c *Client) FindRouteBySpec(ctx context.Context, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, bool, error) {
+	opts, err := FormatListOption(forProvider)
+	if err != nil {
+		return nil, false, err
 	}
+	r, err := c.Single(ctx, opts)
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
-			return nil, nil
+			return nil, false, nil
 		}
-		return nil, err
+		return nil, false, err
 	}
-
 	atProvider := GenerateObservation(r)
-	return &atProvider, nil
+	return &atProvider, true, nil
+}
 
+// GetRouteByGUID fetches a route by its GUID.
+func (c *Client) GetRouteByGUID(ctx context.Context, guid string) (*v1alpha1.RouteObservation, bool, error) {
+	r, err := c.Get(ctx, guid)
+	if err != nil {
+		if clients.ErrorIsNotFound(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	atProvider := GenerateObservation(r)
+	return &atProvider, true, nil
 }
 
 // Create creates a Route and returns the GUID or error
@@ -86,16 +92,19 @@ func (c *Client) Update(ctx context.Context, guid string, forProvider v1alpha1.R
 	return err
 }
 
-func (c *Client) Delete(ctx context.Context, guid string) error {
+func (c *Client) Delete(ctx context.Context, guid string) (string, error) {
 	if !clients.IsValidGUID(guid) {
-		return fmt.Errorf("invalid Route GUID")
+		return "", fmt.Errorf("invalid Route GUID")
 	}
 
-	_, err := c.Route.Delete(ctx, guid)
+	jobGUID, err := c.Route.Delete(ctx, guid)
 	if err != nil {
-		return err
+		if clients.ErrorIsNotFound(err) {
+			return "", nil
+		}
+		return "", err
 	}
-	return nil
+	return jobGUID, nil
 }
 
 // FormatListOption generates the list options for the client.

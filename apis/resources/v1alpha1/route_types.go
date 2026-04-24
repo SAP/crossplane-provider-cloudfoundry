@@ -104,6 +104,12 @@ type RouteStatus struct {
 	AtProvider        RouteObservation `json:"atProvider,omitempty"`
 }
 
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: Route GUID (UUID format)
+//   - How to find:
+//     - UI: Not available in the BTP Cockpit
+//     - CLI: Use CF CLI: `cf routes` and find the GUID in the output
 // +kubebuilder:object:root=true
 // +kubebuilder:storageversion
 
@@ -162,4 +168,9 @@ func (r *Route) GetCloudFoundryName() string {
 // implement DomainScoped interface
 func (r *Route) GetDomainRef() *DomainReference {
 	return &r.Spec.ForProvider.DomainReference
+}
+
+// implement SpaceScoped interface
+func (r *Route) GetSpaceRef() *SpaceReference {
+	return &r.Spec.ForProvider.SpaceReference
 }
