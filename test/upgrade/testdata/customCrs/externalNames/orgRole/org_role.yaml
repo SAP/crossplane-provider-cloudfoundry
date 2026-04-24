@@ -1,0 +1,17 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: OrgRole
+metadata:
+  name: upgrade-test-external-name-org-role
+  annotations:
+    crossplane.io/paused: "false"
+spec:
+  forProvider:
+    type: User
+    username: user1@example.com
+    orgRef:
+      name: upgrade-test-org
+      policy:
+        resolution: Required
+        resolve: Always
+  providerConfigRef:
+    name: default
