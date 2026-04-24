@@ -2,10 +2,13 @@ package space
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -19,10 +22,11 @@ import (
 )
 
 var (
-	errBoom = errors.New("boom")
-	name    = "my-space"
-	guid    = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
-	orgGuid = "3d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
+	errBoom     = errors.New("boom")
+	name        = "my-space"
+	guid        = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
+	orgGuid     = "3d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
+	invalidGuid = "not-a-valid-guid"
 )
 
 type modifier func(*v1alpha1.Space)
@@ -39,12 +43,6 @@ func withName(name string) modifier {
 	}
 }
 
-func withID(guid string) modifier {
-	return func(r *v1alpha1.Space) {
-		r.Status.AtProvider.ID = guid
-	}
-}
-
 func withAllowSSH(allowSSH bool) modifier {
 	return func(r *v1alpha1.Space) {
 		r.Spec.ForProvider.AllowSSH = allowSSH
@@ -55,6 +53,10 @@ func withOrg(org string) modifier {
 	return func(r *v1alpha1.Space) {
 		r.Spec.ForProvider.Org = &org
 	}
+}
+
+func withConditions(c ...xpv1.Condition) modifier {
+	return func(i *v1alpha1.Space) { i.Status.SetConditions(c...) }
 }
 
 func fakeSpace(m ...modifier) *v1alpha1.Space {
@@ -114,44 +116,13 @@ func TestObserve(t *testing.T) {
 				return &MockSpaceFeature{m, f}
 			},
 		},
-		"ExternalNameNotSet": {
-			args: args{
-				mg: fakeSpace(),
-			},
-			want: want{
-				mg: fakeSpace(),
-				obs: managed.ExternalObservation{
-					ResourceExists: false,
-				},
-				err: nil,
-			},
-			service: func() *MockSpaceFeature {
-				m := &fake.MockSpace{}
-				f := &fake.MockFeature{}
-
-				m.On("Get").Return(
-					fake.SpaceNil,
-					fake.ErrNoResultReturned,
-				)
-				m.On("Single").Return(
-					fake.SpaceNil,
-					fake.ErrNoResultReturned,
-				)
-
-				return &MockSpaceFeature{m, f}
-			},
-		},
 		// This tests whether the external API is reachable
 		"Boom!": {
 			args: args{
-				mg: fakeSpace(
-					withExternalName(guid),
-				),
+				mg: fakeSpace(withExternalName(guid)),
 			},
 			want: want{
-				mg: fakeSpace(
-					withExternalName(guid),
-				),
+				mg:  fakeSpace(withExternalName(guid)),
 				obs: managed.ExternalObservation{},
 				err: errors.Wrap(errBoom, errGet),
 			},
@@ -166,17 +137,85 @@ func TestObserve(t *testing.T) {
 				return &MockSpaceFeature{m, f}
 			},
 		},
-		"NotFound": {
+		"InvalidGUID": {
 			args: args{
-				mg: fakeSpace(
-					withExternalName(guid),
-				),
+				mg: fakeSpace(withExternalName(invalidGuid)),
 			},
 			want: want{
-				mg: fakeSpace(
-					withExternalName(guid),
-				),
-				obs: managed.ExternalObservation{ResourceExists: false},
+				mg:  fakeSpace(withExternalName(invalidGuid)),
+				obs: managed.ExternalObservation{},
+				err: errors.New(fmt.Sprintf("external-name '%s' is not a valid GUID format", invalidGuid)),
+			},
+			service: func() *MockSpaceFeature {
+				m := &fake.MockSpace{}
+				f := &fake.MockFeature{}
+
+				return &MockSpaceFeature{m, f}
+			},
+		},
+		"UnsetExternalNameNotFound": {
+			args: args{
+				mg: fakeSpace(),
+			},
+			want: want{
+				mg: fakeSpace(),
+				obs: managed.ExternalObservation{
+					ResourceExists: false,
+				},
+				err: nil,
+			},
+			service: func() *MockSpaceFeature {
+				m := &fake.MockSpace{}
+				f := &fake.MockFeature{}
+
+				m.On("Single").Return(
+					fake.SpaceNil,
+					fake.ErrNoResultReturned,
+				)
+
+				return &MockSpaceFeature{m, f}
+			},
+		},
+		"UnsetExternalNameSuccessful": {
+			args: args{
+				mg: fakeSpace(withName(name), withOrg(orgGuid)),
+			},
+			want: want{
+				mg:  fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withAllowSSH(false), withConditions(xpv1.Available())),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
+				err: nil,
+			},
+			service: func() *MockSpaceFeature {
+				m := &fake.MockSpace{}
+				f := &fake.MockFeature{}
+
+				m.On("Single").Return(
+					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).Space,
+					nil,
+				)
+
+				m.On("Get", guid).Return(
+					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).Space,
+					nil,
+				)
+
+				f.On("IsSSHEnabled").Return(
+					false,
+					nil,
+				)
+
+				return &MockSpaceFeature{m, f}
+			},
+		},
+		"SetExternalNameNotFound": {
+			args: args{
+				mg: fakeSpace(withExternalName(guid)),
+			},
+			want: want{
+				mg: fakeSpace(withExternalName(guid)),
+				obs: managed.ExternalObservation{
+					ResourceExists: false,
+				},
 				err: nil,
 			},
 			service: func() *MockSpaceFeature {
@@ -190,17 +229,39 @@ func TestObserve(t *testing.T) {
 
 				return &MockSpaceFeature{m, f}
 			},
-			kube: &test.MockClient{},
+		},
+		"SetExternalNameSuccessful": {
+			args: args{
+				mg: fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid)),
+			},
+			want: want{
+				mg:  fakeSpace(withName(name), withOrg(orgGuid), withAllowSSH(false), withExternalName(guid), withConditions(xpv1.Available())),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
+				err: nil,
+			},
+			service: func() *MockSpaceFeature {
+				m := &fake.MockSpace{}
+				f := &fake.MockFeature{}
+
+				m.On("Get", guid).Return(
+					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).Space,
+					nil,
+				)
+
+				f.On("IsSSHEnabled").Return(
+					false,
+					nil,
+				)
+				return &MockSpaceFeature{m, f}
+			},
 		},
 		"Should adopt and update external-name": {
 			args: args{
-				mg: fakeSpace(withName("existing-space"), withOrg(orgGuid)),
+				mg: fakeSpace(withExternalName(guid), withName("existing-space"), withOrg(orgGuid)),
 			},
 			want: want{
-				mg: fakeSpace(withName("existing-space"),
-					withExternalName(guid), withAllowSSH(false), withOrg(orgGuid),
-				),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
+				mg:  fakeSpace(withName("existing-space"), withExternalName(guid), withAllowSSH(false), withOrg(orgGuid), withConditions(xpv1.Available())),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
 				err: nil,
 			},
 			service: func() *MockSpaceFeature {
@@ -211,37 +272,9 @@ func TestObserve(t *testing.T) {
 					&fake.NewSpace().SetName("existing-space").SetGUID(guid).SetRelationships(orgGuid).Space,
 					nil,
 				)
-				f.On("IsSSHEnabled").Return(
-					false,
-					nil,
-				)
-
-				return &MockSpaceFeature{m, f}
-			},
-			kube: &test.MockClient{},
-		},
-		"Successful": {
-			args: args{
-				mg: fakeSpace(
-					withExternalName(guid), withName(name), withOrg(orgGuid),
-				),
-			},
-			want: want{
-				mg: fakeSpace(
-					withExternalName(guid),
-					withName(name),
-					withAllowSSH(false),
-					withOrg(orgGuid),
-				),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
-				err: nil,
-			},
-			service: func() *MockSpaceFeature {
-				m := &fake.MockSpace{}
-				f := &fake.MockFeature{}
 
 				m.On("Get", guid).Return(
-					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).Space,
+					&fake.NewSpace().SetName("existing-space").SetGUID(guid).SetRelationships(orgGuid).Space,
 					nil,
 				)
 
@@ -268,11 +301,6 @@ func TestObserve(t *testing.T) {
 
 			obs, err := c.Observe(context.Background(), tc.args.mg)
 
-			var space *v1alpha1.Space
-			if tc.args.mg != nil {
-				space, _ = tc.args.mg.(*v1alpha1.Space)
-			}
-
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
@@ -286,9 +314,8 @@ func TestObserve(t *testing.T) {
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
 			}
-			if space != nil && tc.want.mg != nil {
-
-				if diff := cmp.Diff(space.Spec, tc.want.mg.Spec); diff != "" {
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg, cmp.Options{cmpopts.IgnoreFields(v1alpha1.Space{}, "Status.AtProvider")}); diff != "" {
 					t.Errorf("Observe(...): -want, +got:\n%s", diff)
 				}
 			}
@@ -314,12 +341,12 @@ func TestCreate(t *testing.T) {
 		service service
 		kube    k8s.Client
 	}{
-		"Successful": {
+		"SuccessfulWithExternalName": {
 			args: args{
 				mg: fakeSpace(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeSpace(withExternalName(guid)),
+				mg:  fakeSpace(withExternalName(guid), withConditions(xpv1.Creating())),
 				obs: managed.ExternalCreation{ConnectionDetails: managed.ConnectionDetails{}},
 				err: nil,
 			},
@@ -336,12 +363,57 @@ func TestCreate(t *testing.T) {
 				return &MockSpaceFeature{m, f}
 			},
 		},
-		"AlreadyExist": {
+		"SuccessfulWithoutExternalName": {
+			args: args{
+				mg: fakeSpace(),
+			},
+			want: want{
+				mg:  fakeSpace(withExternalName(guid), withConditions(xpv1.Creating())),
+				obs: managed.ExternalCreation{ConnectionDetails: managed.ConnectionDetails{}},
+				err: nil,
+			},
+			service: func() *MockSpaceFeature {
+				m := &fake.MockSpace{}
+				f := &fake.MockFeature{}
+				m.On("Create").Return(
+					&fake.NewSpace().SetName(name).SetGUID(guid).Space,
+					nil,
+				)
+				f.On("EnableSSH").Return(
+					nil,
+				)
+				return &MockSpaceFeature{m, f}
+			},
+		},
+		"AlreadyExistWithExternalName": {
 			args: args{
 				mg: fakeSpace(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeSpace(withExternalName(guid)),
+				mg:  fakeSpace(withExternalName(guid), withConditions(xpv1.Creating())),
+				obs: managed.ExternalCreation{},
+				err: errors.Wrap(errBoom, errCreate),
+			},
+			service: func() *MockSpaceFeature {
+				m := &fake.MockSpace{}
+				f := &fake.MockFeature{}
+
+				m.On("Create").Return(
+					&fake.NewSpace().SetName(name).SetGUID(guid).Space,
+					errBoom,
+				)
+				f.On("EnableSSH").Return(
+					nil,
+				)
+				return &MockSpaceFeature{m, f}
+			},
+		},
+		"AlreadyExistWithoutExternalName": {
+			args: args{
+				mg: fakeSpace(),
+			},
+			want: want{
+				mg:  fakeSpace(withConditions(xpv1.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -378,15 +450,20 @@ func TestCreate(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Create(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Create(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Create(...): -want, +got:\n%s", diff)
+			}
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg, cmp.Options{cmpopts.IgnoreFields(v1alpha1.Space{}, "Status.AtProvider")}); diff != "" {
+					t.Errorf("Create(...): -want, +got:\n%s", diff)
+				}
 			}
 		})
 	}
@@ -412,10 +489,10 @@ func TestUpdate(t *testing.T) {
 	}{
 		"SuccessfulRename": {
 			args: args{
-				mg: fakeSpace(withExternalName(guid), withID(guid), withName(name)),
+				mg: fakeSpace(withExternalName(guid), withName(name)),
 			},
 			want: want{
-				mg:  fakeSpace(withExternalName(guid), withID(guid), withName(name)),
+				mg:  fakeSpace(withExternalName(guid), withName(name)),
 				obs: managed.ExternalUpdate{},
 				err: nil,
 			},
@@ -429,27 +506,12 @@ func TestUpdate(t *testing.T) {
 				return &MockSpaceFeature{m, f}
 			},
 		},
-		"IDNotSet": {
-			args: args{
-				mg: fakeSpace(withExternalName(guid)),
-			},
-			want: want{
-				mg:  fakeSpace(withExternalName(guid)),
-				obs: managed.ExternalUpdate{},
-				err: errors.New(errUpdate),
-			},
-			service: func() *MockSpaceFeature {
-				m := &fake.MockSpace{}
-				f := &fake.MockFeature{}
-				return &MockSpaceFeature{m, f}
-			},
-		},
 		"EnableSSH": {
 			args: args{
-				mg: fakeSpace(withExternalName(guid), withID(guid), withName(name), withAllowSSH(true)),
+				mg: fakeSpace(withExternalName(guid), withName(name), withAllowSSH(true)),
 			},
 			want: want{
-				mg:  fakeSpace(withExternalName(guid), withID(guid), withName(name), withAllowSSH(true)),
+				mg:  fakeSpace(withExternalName(guid), withName(name), withAllowSSH(true)),
 				obs: managed.ExternalUpdate{},
 				err: nil,
 			},
@@ -463,6 +525,22 @@ func TestUpdate(t *testing.T) {
 					&fake.NewSpace().SetName(name).SetGUID(guid).Space,
 					nil,
 				)
+				return &MockSpaceFeature{m, f}
+			},
+		},
+		"InvalidGUID": {
+			args: args{
+				mg: fakeSpace(withExternalName(invalidGuid)),
+			},
+			want: want{
+				mg:  fakeSpace(withExternalName(invalidGuid)),
+				obs: managed.ExternalUpdate{},
+				err: errors.Wrap(errors.New(errUpdate), fmt.Sprintf("external-name '%s' is not a valid GUID format", invalidGuid)),
+			},
+			service: func() *MockSpaceFeature {
+				m := &fake.MockSpace{}
+				f := &fake.MockFeature{}
+
 				return &MockSpaceFeature{m, f}
 			},
 		},
@@ -485,18 +563,20 @@ func TestUpdate(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Update(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Update(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Update(...): -want, +got:\n%s", diff)
 			}
-			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Update(...): -want, +got:\n%s", diff)
+				}
 			}
 		})
 	}
@@ -510,6 +590,7 @@ func TestDelete(t *testing.T) {
 
 	type want struct {
 		mg  resource.Managed
+		obs managed.ExternalDelete
 		err error
 	}
 
@@ -521,10 +602,11 @@ func TestDelete(t *testing.T) {
 	}{
 		"SuccessfulDelete": {
 			args: args{
-				mg: fakeSpace(withExternalName(guid), withID(guid)),
+				mg: fakeSpace(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeSpace(withExternalName(guid), withID(guid)),
+				mg:  fakeSpace(withExternalName(guid), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
 				err: nil,
 			},
 			service: func() *MockSpaceFeature {
@@ -537,13 +619,33 @@ func TestDelete(t *testing.T) {
 				return &MockSpaceFeature{m, f}
 			},
 		},
-		"IDNotSet": {
+		"404NotFound": {
 			args: args{
 				mg: fakeSpace(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeSpace(withExternalName(guid)),
-				err: errors.New(errDelete),
+				mg:  fakeSpace(withExternalName(guid), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *MockSpaceFeature {
+				m := &fake.MockSpace{}
+				f := &fake.MockFeature{}
+				m.On("Delete").Return(
+					"",
+					fake.ErrNoResultReturned,
+				)
+				return &MockSpaceFeature{m, f}
+			},
+		},
+		"InvalidGUID": {
+			args: args{
+				mg: fakeSpace(withExternalName(invalidGuid)),
+			},
+			want: want{
+				mg:  fakeSpace(withExternalName(invalidGuid), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: errors.Wrap(errors.New(errDelete), fmt.Sprintf("external-name '%s' is not a valid GUID format", invalidGuid)),
 			},
 			service: func() *MockSpaceFeature {
 				m := &fake.MockSpace{}
@@ -570,11 +672,16 @@ func TestDelete(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Delete(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Delete(...): want error != got error:\n%s", diff)
+				}
+			}
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Delete(...): -want, +got:\n%s", diff)
 				}
 			}
 		})
