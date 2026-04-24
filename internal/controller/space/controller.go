@@ -136,6 +136,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errNotSpace)
 	}
 
+	resourceLateInitialized := false
+
 	if meta.GetExternalName(cr) == "" {
 		s, err := space.GetBySpec(ctx, c.client, cr.Spec.ForProvider)
 		if err != nil {
@@ -145,6 +147,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 			return managed.ExternalObservation{ResourceExists: false}, errors.Wrap(err, errGet)
 		}
 		meta.SetExternalName(cr, s.GUID)
+		resourceLateInitialized = true
 	}
 
 	guid := meta.GetExternalName(cr)
@@ -169,8 +172,6 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		// new error message cannot get space feature
 		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
 	}
-
-	resourceLateInitialized := space.LateInitialize(cr, s, ssh)
 
 	cr.Status.AtProvider = space.GenerateObservation(s, ssh)
 	cr.SetConditions(xpv1.Available())
