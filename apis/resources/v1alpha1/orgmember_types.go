@@ -32,6 +32,14 @@ type OrgMembersStatus struct {
 // +kubebuilder:object:root=true
 
 // OrgMembers is the Schema for the OrgMembers API. Provides a Cloud Foundry Org users resource.
+//
+// External-Name Configuration:
+//   - Follows Standard: no (uses compound key <org-guid>/<role-type>, not a single GUID)
+//   - Format: <org-guid>/<role-type>
+//   - How to find:
+//   - UI: BTP Cockpit → Subaccounts → [Select Subaccount] → Cloud Foundry → Organization → Org ID + Settings → Org Members
+//   - CLI: cf org <ORG_NAME> --guid (field: guid) combined with spec.forProvider.roleType
+//
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"

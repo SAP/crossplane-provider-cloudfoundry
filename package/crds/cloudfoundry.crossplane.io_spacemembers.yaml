@@ -34,8 +34,15 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: SpaceMembers is the Schema for the SpaceMembers API. Provides
-          a Cloud Foundry Space users resource.
+        description: |-
+          SpaceMembers is the Schema for the SpaceMembers API. Provides a Cloud Foundry Space users resource.
+
+          External-Name Configuration:
+            - Follows Standard: no (uses compound key <space-guid>/<role-type>, not a single GUID)
+            - Format: <space-guid>/<role-type>
+            - How to find:
+            - UI: BTP Cockpit → Subaccounts → [Select Subaccount] → Cloud Foundry → Space → Space ID + Settings → Space Members
+            - CLI: cf space <SPACE_NAME> --guid (field: guid) combined with spec.forProvider.roleType
         properties:
           apiVersion:
             description: |-
