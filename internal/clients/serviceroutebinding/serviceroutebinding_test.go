@@ -604,7 +604,7 @@ func TestGetByID(t *testing.T) {
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			binding, err := GetByID(tc.args.ctx, tc.args.srbClient, tc.args.guid, tc.args.forProvider)
+			binding, err := GetByID(tc.args.ctx, tc.args.srbClient, tc.args.guid)
 
 			if tc.want.expectError {
 				if err == nil {

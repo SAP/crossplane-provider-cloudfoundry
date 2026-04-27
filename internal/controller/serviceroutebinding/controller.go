@@ -2,11 +2,10 @@ package serviceroutebinding
 
 import (
 	"context"
-	"errors"
 	"fmt"
-	"strings"
 
-	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/pkg/errors"
+
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
@@ -139,21 +138,29 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}
 
 	guid := meta.GetExternalName(cr)
+
 	// check if the external-name exists, if yes the user wants to import an existing resource
 	if guid == "" {
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
-	servicerouteBinding, err := srb.GetByID(ctx, e.srbClient, guid, cr.Spec.ForProvider)
-	if isNotFoundError(err) {
-		return managed.ExternalObservation{ResourceExists: false}, nil
-	} else if err != nil {
+
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, fmt.Errorf("external-name '%s' is not a valid GUID format", guid)
+	}
+
+	servicerouteBinding, err := srb.GetByID(ctx, e.srbClient, guid)
+
+	if err != nil {
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalObservation{ResourceExists: false}, nil
+		}
 		return managed.ExternalObservation{}, fmt.Errorf(errGet, err)
 	}
 
 	// detect if their should be parameters / if its a user-provided service instance (Is their a better way to detect this?)
 	paramMap := &runtime.RawExtension{}
 	if cr.Spec.ForProvider.Parameters.Raw != nil {
-		paramMap, err = srb.GetParameters(ctx, e.srbClient, servicerouteBinding.GUID)
+		paramMap, err = srb.GetParameters(ctx, e.srbClient, guid)
 		if err != nil {
 			return managed.ExternalObservation{}, fmt.Errorf(errExtractParams, err)
 		}
@@ -229,8 +236,8 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	guid := meta.GetExternalName(cr)
-	if guid == "" {
-		return managed.ExternalUpdate{}, nil
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalUpdate{}, errors.Wrap(fmt.Errorf("external-name '%s' is not a valid GUID format", guid), errUpdate)
 	}
 
 	// Update metadata (labels and annotations) - only supported fields for ServiceRouteBindings
@@ -251,14 +258,17 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Deleting())
 
-	err := srb.Delete(ctx, e.srbClient, meta.GetExternalName(cr))
-
-	if isNotFoundError(err) {
+	guid := meta.GetExternalName(cr)
+	if guid == "" {
 		return managed.ExternalDelete{}, nil
 	}
-	if err != nil && !errors.Is(err, cfclient.AsyncProcessTimeoutError) {
-		return managed.ExternalDelete{}, fmt.Errorf(errDelete, err)
-	} else if err != nil {
+
+	err := srb.Delete(ctx, e.srbClient, guid)
+
+	if err != nil {
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
 		return managed.ExternalDelete{}, fmt.Errorf(errDelete, err)
 	}
 	return managed.ExternalDelete{}, nil
@@ -348,21 +358,4 @@ func metadataMapEqual(desired, actual map[string]*string) bool {
 	}
 
 	return true
-}
-
-func isNotFoundError(err error) bool {
-	if err == nil {
-		return false
-	}
-	if errors.Is(err, cfclient.ErrNoResultsReturned) || errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) {
-		return true
-	}
-	msg := err.Error()
-	if strings.Contains(msg, "CF-ResourceNotFound") {
-		return true
-	}
-	if strings.Contains(strings.ToLower(msg), "service route binding not found") {
-		return true
-	}
-	return false
 }
