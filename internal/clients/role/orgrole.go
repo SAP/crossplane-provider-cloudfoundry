@@ -10,7 +10,6 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 )
 
 const ErrOrgNotSpecified = "org is not specified"
@@ -31,18 +30,13 @@ func OrgRoleType(roleType string) resource.OrganizationRoleType {
 	}
 }
 
-// GetOrgRole returns the role of a user in an organization by guid or by  matching the spec
-func GetOrgRole(ctx context.Context, client Role, guid string, spec v1alpha1.OrgRoleParameters) (*resource.Role, error) {
-
-	if clients.IsValidGUID(guid) {
-		return client.Get(ctx, guid)
-	}
-
-	return findOrgRole(ctx, client, spec)
+// GetOrgRole returns the role of a user in an organization by guid
+func GetOrgRole(ctx context.Context, client Role, guid string) (*resource.Role, error) {
+	return client.Get(ctx, guid)
 }
 
-// findOrgRole returns the role of a user in an organization if the role matches the spec
-func findOrgRole(ctx context.Context, client Role, spec v1alpha1.OrgRoleParameters) (*resource.Role, error) {
+// FindOrgRole returns the role of a user in an organization if the role matches the spec
+func FindOrgRole(ctx context.Context, client Role, spec v1alpha1.OrgRoleParameters) (*resource.Role, error) {
 	opts, err := NewOrgRoleListOptions(spec)
 	if err != nil {
 		return nil, err

@@ -1,0 +1,27 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  name: upgrade-test-org
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    # IMPORTANT: Change this to an org you have access to
+    # Run `cf orgs` to see available organizations
+    name: cf-ci-e2e # ← TODO: Change this to an existing org name
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  name: upgrade-test-import-space
+  annotations:
+    crossplane.io/paused: "false"
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: upgrade-test-space-donotdelete
+    orgRef:
+      name: upgrade-test-org  # ← References the imported org
+  providerConfigRef:
+    name: default
