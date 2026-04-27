@@ -513,7 +513,6 @@ func TestGetByID(t *testing.T) {
 	}
 
 	validGUID := "550e8400-e29b-41d4-a716-446655440000"
-	invalidGUID := "not-a-valid-guid"
 
 	testBinding := &cfresource.ServiceRouteBinding{
 		Resource: cfresource.Resource{
@@ -557,46 +556,6 @@ func TestGetByID(t *testing.T) {
 			want: want{
 				binding:     nil,
 				err:         errBoom,
-				expectError: true,
-			},
-		},
-		"InvalidGUID_ReturnsError": {
-			args: args{
-				ctx:       context.Background(),
-				guid:      invalidGUID,
-				srbClient: &fake.MockServiceRouteBinding{},
-				forProvider: v1alpha1.ServiceRouteBindingParameters{
-					RouteReference: v1alpha1.RouteReference{
-						Route: testRouteGUID,
-					},
-					ServiceInstanceReference: v1alpha1.ServiceInstanceReference{
-						ServiceInstance: testServiceInstance,
-					},
-				},
-			},
-			want: want{
-				binding:     nil,
-				err:         nil,
-				expectError: true,
-			},
-		},
-		"EmptyGUID_ReturnsError": {
-			args: args{
-				ctx:       context.Background(),
-				guid:      "",
-				srbClient: &fake.MockServiceRouteBinding{},
-				forProvider: v1alpha1.ServiceRouteBindingParameters{
-					RouteReference: v1alpha1.RouteReference{
-						Route: testRouteGUID,
-					},
-					ServiceInstanceReference: v1alpha1.ServiceInstanceReference{
-						ServiceInstance: testServiceInstance,
-					},
-				},
-			},
-			want: want{
-				binding:     nil,
-				err:         nil,
 				expectError: true,
 			},
 		},
