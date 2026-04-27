@@ -303,7 +303,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.Wrap(err, errRead)
 	}
 
-	if observed != nil {
+	if observed != nil && !meta.WasDeleted(cr) {
 		cr.Status.AtProvider.AssignedRoles = observed.AssignedRoles
 		cr.SetConditions(xpv1.Available())
 	}
