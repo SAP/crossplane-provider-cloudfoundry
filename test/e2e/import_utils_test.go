@@ -177,6 +177,12 @@ func (it *ImportTester[T]) BuildTestFeature(name string) *features.FeatureBuilde
 			resource := it.BaseResource.DeepCopyObject().(T)
 			MustGetResource(t, cfg, it.GetPrefixedName(), nil, resource)
 
+			// Switch to observe-only so teardown does not delete the shared external resource.
+			resource.SetManagementPolicies(xpv1.ManagementPolicies{xpv1.ManagementActionObserve})
+			if err := cfg.Client().Resources().Update(ctx, resource); err != nil {
+				t.Fatalf("Failed to switch imported resource to observe-only before teardown: %v", err)
+			}
+
 			log("Deleting imported resource", resource, func() {
 				AwaitResourceDeletionOrFail(ctx, t, cfg, resource, it.WaitDeletionTimeout)
 			})
