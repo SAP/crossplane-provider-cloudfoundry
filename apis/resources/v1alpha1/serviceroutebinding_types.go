@@ -10,6 +10,16 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
+
+// ServiceRouteBinding is the Schema for the ServiceRouteBindings API. Provides a Cloud Foundry resource for binding Cloud Foundry service instances to routes.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: Service Route Binding GUID (UUID format)
+//   - How to find:
+//   - UI: Not available in the BTP Cockpit
+//   - CLI: Use CF CLI: `cf <SERVICE_INSTANCE> -v` and find the GUID in the output.
+//
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
