@@ -267,7 +267,7 @@ When set, the `verbose` configuration parameter enables printing of *debug-level
 
 ### Login
 
-The `login` subcommand saves the [API URL](#api-url), [username](#username), and [password](#password) configuration values to the config file.
+The `login` subcommand saves the [API URL](#apiurl), [username](#username), and [password](#password) configuration values to the config file.
 
 For examples refer to [workflows chapter](#logging-in-using-username-and-password).
 
@@ -290,9 +290,9 @@ There are various ways to configure the authentication parameters in `xpcf`.
 
 The simplest approach is to use the `cf` CLI tool's<sup><a id="fnr.2" class="footref" href="#fn.2" role="doc-backlink">2</a></sup> `login` subcommand<sup><a id="fnr.3" class="footref" href="#fn.3" role="doc-backlink">3</a></sup>. This creates a configuration file with the *Cloud Foundry* API credentials, which can be reused by `xpcf` through the [`use-cf-login`](#use-cf-login) configuration parameter. See [use-cf-login](#use-cf-login) for details.
 
-The [API URL](#api-url), [username](#username), and [password](#password) for the *Cloud Foundry* environment can also be specified using configuration parameters via CLI flags, environment variables, or the configuration file.
+The [API URL](#apiurl), [username](#username), and [password](#password) for the *Cloud Foundry* environment can also be specified using configuration parameters via CLI flags, environment variables, or the configuration file.
 
-The `login` subcommand can be used to update the configuration file with the [API URL](#api-url), [username](#username), and [password](#password) values.
+The `login` subcommand can be used to update the configuration file with the [API URL](#apiurl), [username](#username), and [password](#password) values.
 
 
 <a id="apiurl"></a>
@@ -336,7 +336,7 @@ This configuration parameter specifies the password for authenticating with the 
 
 #### Configuration Parameters
 
-The `export` subcommand can be configured using the [API URL](#api-url), [username](#username), and [password](#password) configuration parameters. These parameters allow you to define the authentication details for the Cloud Foundry cluster from which resources are exported.
+The `export` subcommand can be configured using the [API URL](#apiurl), [username](#username), and [password](#password) configuration parameters. These parameters allow you to define the authentication details for the Cloud Foundry cluster from which resources are exported.
 
 Alternatively, it is more convenient to use the [login](#login) subcommand, which persists these parameters in the configuration file so you don't have to specify their values for each command.
 
@@ -462,7 +462,7 @@ When exporting *ServiceInstance* resource kinds, the `serviceinstance` parameter
 
 ## Logging in using username and password
 
-The [export](#export) subcommand accepts the [API URL](#api-url), [username](#username), and [password](#password) configuration parameters for authentication. If you prefer not to specify these parameters for each `export` invocation, you can store them in a [configuration file](#configuration-file).
+The [export](#export) subcommand accepts the [API URL](#apiurl), [username](#username), and [password](#password) configuration parameters for authentication. If you prefer not to specify these parameters for each `export` invocation, you can store them in a [configuration file](#configuration-file).
 
 The [login](#login) subcommand simplifies this process.
 
@@ -506,7 +506,7 @@ xpcf export --use-cf-login
 
 To export *Organization* resources, configure the following:
 
--   The credentials and API URL of the Cloud Foundry cluster ([username](#username), [password](#password), [apiurl](#api-url))
+-   The credentials and API URL of the Cloud Foundry cluster ([username](#username), [password](#password), [apiurl](#apiurl))
 -   The resource kind to export, which should be set to `organization` ([kind](#kind))
 -   A regular expression matching the organization name(s) to export ([org](#org))
 
@@ -523,7 +523,7 @@ The *Organization* names are selected interactively.
 
 This example demonstrates non-interactive export of all *Spaces* from all *Organizations*. Configure the following:
 
--   The credentials and API URL of the Cloud Foundry cluster ([username](#username), [password](#password), [apiurl](#api-url))
+-   The credentials and API URL of the Cloud Foundry cluster ([username](#username), [password](#password), [apiurl](#apiurl))
 -   The resource kind to export, which should be set to `space` ([kind](#kind))
 -   A regular expression matching the organization name(s) to include ([org](#org))
 -   A regular expression matching the space name(s) to include ([space](#space))
@@ -547,7 +547,7 @@ This example shows how to export all *ServiceInstance* resources from spaces con
 
 Configure the following:
 
--   The credentials and API URL of the Cloud Foundry cluster ([username](#username), [password](#password), [apiurl](#api-url))
+-   The credentials and API URL of the Cloud Foundry cluster ([username](#username), [password](#password), [apiurl](#apiurl))
 -   The resource kind to export, set to `serviceinstance` ([kind](#kind))
 -   A regular expression matching the organization names to include ([org](#org))
 -   A regular expression matching the space names to include ([space](#space))
@@ -573,7 +573,7 @@ This example shows how to interactively export a specific *ServiceInstance* reso
 
 Configure the following:
 
--   The credentials and API URL of the Cloud Foundry cluster ([username](#username), [password](#password), [apiurl](#api-url))
+-   The credentials and API URL of the Cloud Foundry cluster ([username](#username), [password](#password), [apiurl](#apiurl))
 -   The resource kind to export, set to `serviceinstance` ([kind](#kind))
 -   A regular expression matching the organization names to include ([org](#org))
 -   A regular expression matching the space names to include ([space](#space))
