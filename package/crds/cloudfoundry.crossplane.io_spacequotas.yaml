@@ -34,8 +34,15 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: SpaceQuota is the Schema for the SpaceQuotas API. Provides a
-          Cloud Foundry resource to manage space quota definitions.
+        description: |-
+          SpaceQuota is the Schema for the SpaceQuotas API. Provides a Cloud Foundry resource to manage space quota definitions.
+
+          External-Name Configuration:
+            - Follows Standard: yes
+            - Format: Space Quota GUID (UUID format)
+            - How to find:
+            - UI: Not available in the BTP Cockpit
+            - CLI: Use CF CLI: `cf space-quota <QUOTA-NAME> -v` and find the GUID in the output
         properties:
           apiVersion:
             description: |-
