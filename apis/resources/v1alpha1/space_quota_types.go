@@ -225,6 +225,14 @@ type SpaceQuotaStatus struct {
 // +kubebuilder:storageversion
 
 // SpaceQuota is the Schema for the SpaceQuotas API. Provides a Cloud Foundry resource to manage space quota definitions.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: Space Quota GUID (UUID format)
+//   - How to find:
+//   - UI: Not available in the BTP Cockpit
+//   - CLI: Use CF CLI: `cf space-quota <QUOTA-NAME> -v` and find the GUID in the output
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
