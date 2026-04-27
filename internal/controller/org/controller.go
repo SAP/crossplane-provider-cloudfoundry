@@ -22,6 +22,7 @@ import (
 	scv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	pcv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/org"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
@@ -35,6 +36,7 @@ const (
 	errGetClient         = "cannot create a client to talk to the API of" + externalSystem
 	errGetResource       = "cannot get " + externalSystem + " organization according to the specified parameters"
 	errCreate            = "cannot create " + externalSystem + " organization"
+	errDelete            = "cannot delete " + externalSystem + " organization"
 )
 
 // Setup adds a controller that reconciles Org resources.
@@ -98,7 +100,8 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errGetClient)
 	}
 
-	return &external{client: org.NewClient(cf), kube: c.kube}, nil
+	orgClient, jobClient := org.NewClient(cf)
+	return &external{client: orgClient, kube: c.kube, job: jobClient}, nil
 }
 
 // Disconnect implements the managed.ExternalClient interface
@@ -110,6 +113,7 @@ func (c *external) Disconnect(ctx context.Context) error {
 // An external is a managed.ExternalConnecter that is using the CloudFoundry API to observe and modify resources.
 type external struct {
 	client org.Client
+	job    job.Job
 	kube   k8s.Client
 }
 
@@ -212,10 +216,20 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	if !ok {
 		return managed.ExternalDelete{}, errors.New(errNotOrgKind)
 	}
+
 	cr.SetConditions(xpv1.Deleting())
 	if meta.GetExternalName(cr) == "" {
 		return managed.ExternalDelete{}, nil
 	}
-	// Do nothing else, as Org is observe-only
-	return managed.ExternalDelete{}, nil
+
+	jobGUID, err := c.client.Delete(ctx, meta.GetExternalName(cr))
+	if err != nil {
+		// ADR: 404 not found means already deleted - not considered as error case
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
+	}
+
+	return managed.ExternalDelete{}, job.PollJobComplete(ctx, c.job, jobGUID)
 }

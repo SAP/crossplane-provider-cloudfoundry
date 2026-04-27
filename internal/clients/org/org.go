@@ -6,6 +6,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
@@ -18,14 +19,15 @@ type Client interface {
 	Get(context.Context, string) (*resource.Organization, error)
 	Single(context.Context, *client.OrganizationListOptions) (*resource.Organization, error)
 	Create(context.Context, *resource.OrganizationCreate) (*resource.Organization, error)
+	Delete(context.Context, string) (string, error)
 }
 
 // Resource is the type that implements the resource.Resource interface for a Org.
 type Resource resource.Organization
 
-// NewClient creates a new client instance from a cfclient.ServiceInstance instance.
-func NewClient(cf *client.Client) Client {
-	return cf.Organizations
+// NewClient creates org and job clients from a cfclient.Client instance.
+func NewClient(cf *client.Client) (Client, job.Job) {
+	return cf.Organizations, cf.Jobs
 }
 
 // GetByIDOrName returns an organization by ID or Name.

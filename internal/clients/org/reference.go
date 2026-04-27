@@ -32,7 +32,7 @@ func ResolveByName(ctx context.Context, clientFn clients.ClientFn, mg resource.M
 	if err != nil {
 		return errors.Wrap(err, "Could not connect to Cloud Foundry")
 	}
-	orgClient := NewClient(cf)
+	orgClient, _ := NewClient(cf)
 	orgGUID, err := GetGUID(ctx, orgClient, *or.OrgName)
 	if err != nil {
 		return errors.Wrap(err, "Cannot resolve org reference by name")

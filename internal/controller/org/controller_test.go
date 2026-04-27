@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
@@ -36,6 +37,12 @@ func withExternalName(name string) modifier {
 func withName(name string) modifier {
 	return func(r *v1alpha1.Organization) {
 		r.Spec.ForProvider.Name = name
+	}
+}
+
+func withConditions(c ...xpv1.Condition) modifier {
+	return func(r *v1alpha1.Organization) {
+		r.Status.SetConditions(c...)
 	}
 }
 
@@ -374,6 +381,7 @@ func TestDelete(t *testing.T) {
 	}
 
 	type want struct {
+		mg  resource.Managed
 		del managed.ExternalDelete
 		err error
 	}
@@ -383,16 +391,58 @@ func TestDelete(t *testing.T) {
 		want    want
 		service service
 	}{
-		"Successful": {
+		"SuccessfulDelete": {
 			args: args{
 				mg: fakeOrg(withExternalName(guid)),
 			},
 			want: want{
+				mg:  fakeOrg(withExternalName(guid), withConditions(xpv1.Deleting())),
 				del: managed.ExternalDelete{},
 				err: nil,
 			},
 			service: func() *fake.MockOrganization {
-				return &fake.MockOrganization{}
+				m := &fake.MockOrganization{}
+				m.On("Delete").Return(
+					"job-guid-123",
+					nil,
+				)
+				return m
+			},
+		},
+		"NotFound": {
+			args: args{
+				mg: fakeOrg(withExternalName(guid)),
+			},
+			want: want{
+				mg:  fakeOrg(withExternalName(guid), withConditions(xpv1.Deleting())),
+				del: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockOrganization {
+				m := &fake.MockOrganization{}
+				m.On("Delete").Return(
+					"",
+					fake.ErrNoResultReturned,
+				)
+				return m
+			},
+		},
+		"Error": {
+			args: args{
+				mg: fakeOrg(withExternalName(guid)),
+			},
+			want: want{
+				mg:  fakeOrg(withExternalName(guid), withConditions(xpv1.Deleting())),
+				del: managed.ExternalDelete{},
+				err: errors.Wrap(errBoom, errDelete),
+			},
+			service: func() *fake.MockOrganization {
+				m := &fake.MockOrganization{}
+				m.On("Delete").Return(
+					"",
+					errBoom,
+				)
+				return m
 			},
 		},
 		"EmptyExternalName": {
@@ -411,11 +461,15 @@ func TestDelete(t *testing.T) {
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
+			mockJob := &fake.MockJob{}
+			mockJob.On("PollComplete").Return(nil)
+
 			c := &external{
 				kube: &test.MockClient{
 					MockUpdate: test.NewMockUpdateFn(nil),
 				},
 				client: tc.service(),
+				job:    mockJob,
 			}
 			del, err := c.Delete(context.Background(), tc.args.mg)
 
@@ -430,6 +484,11 @@ func TestDelete(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.del, del); diff != "" {
 				t.Errorf("Delete(...): -want, +got:\n%s", diff)
+			}
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Delete(...): -want, +got:\n%s", diff)
+				}
 			}
 		})
 	}

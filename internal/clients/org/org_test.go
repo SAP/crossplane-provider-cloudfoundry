@@ -23,6 +23,7 @@ type mockClient struct {
 	getFn    func(ctx context.Context, guid string) (*cfresource.Organization, error)
 	singleFn func(ctx context.Context, opt *cfclient.OrganizationListOptions) (*cfresource.Organization, error)
 	createFn func(ctx context.Context, opt *cfresource.OrganizationCreate) (*cfresource.Organization, error)
+	deleteFn func(ctx context.Context, guid string) (string, error)
 }
 
 func (m *mockClient) Get(ctx context.Context, guid string) (*cfresource.Organization, error) {
@@ -35,6 +36,10 @@ func (m *mockClient) Single(ctx context.Context, opt *cfclient.OrganizationListO
 
 func (m *mockClient) Create(ctx context.Context, opt *cfresource.OrganizationCreate) (*cfresource.Organization, error) {
 	return m.createFn(ctx, opt)
+}
+
+func (m *mockClient) Delete(ctx context.Context, guid string) (string, error) {
+	return m.deleteFn(ctx, guid)
 }
 
 func TestFindOrgBySpec(t *testing.T) {
