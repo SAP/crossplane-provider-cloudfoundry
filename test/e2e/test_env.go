@@ -27,7 +27,7 @@ var (
 )
 var (
 	testenv       env.Environment
-	testOrgName   = "nico-test-eu12"
+	testOrgName   = "cf-ci-e2e"
 	testDomain    = "e2e.orchestrator.io"
 	testAppDomain = "cfapps.eu12.hana.ondemand.com"
 	testSpaceName = "e2e-space"
