@@ -34,14 +34,14 @@ Now, we have everything in place to enable `CloudFoundry` in our selected `Subac
 
 
 ```yaml title="examples/cloudfoundry.yaml"
-apiVersion: environment.btp.sap.crossplane.io/v1alpha1  
+apiVersion: environment.btp.sap.crossplane.io/v1alpha1
 kind: CloudFoundryEnvironment
 metadata:
   name: cf-env
 spec:
   forProvider:
     initialOrgManagers:
-      - technical-user@example.com 
+      - technical-user@example.com
     landscape: cf-eu12
     orgName: test-eu12
     environmentName: cf-test-eu12
@@ -50,7 +50,7 @@ spec:
   subaccountRef:
     name: my-subaccount
   writeConnectionSecretToRef:
-    name: cf-environment-secret # Secret containing connection details including apiEnpoint of the created cloudfoundry environment. 
+    name: cf-environment-secret # Secret containing connection details including apiEnpoint of the created cloudfoundry environment.
     namespace: default
 ```
 
