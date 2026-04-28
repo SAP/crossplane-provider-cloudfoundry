@@ -236,6 +236,7 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	guid := meta.GetExternalName(cr)
+
 	if !clients.IsValidGUID(guid) {
 		return managed.ExternalUpdate{}, errors.Wrap(fmt.Errorf("external-name '%s' is not a valid GUID format", guid), errUpdate)
 	}
@@ -259,8 +260,9 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	cr.SetConditions(xpv1.Deleting())
 
 	guid := meta.GetExternalName(cr)
-	if guid == "" {
-		return managed.ExternalDelete{}, nil
+
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalDelete{}, errors.Wrap(fmt.Errorf("external-name '%s' is not a valid GUID format", guid), errDelete)
 	}
 
 	err := srb.Delete(ctx, e.srbClient, guid)

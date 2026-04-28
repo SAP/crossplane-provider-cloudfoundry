@@ -753,6 +753,19 @@ func TestDelete(t *testing.T) {
 				return m
 			},
 		},
+		"InvalidGUID": {
+			args: args{
+				mg: serviceRouteBinding(withExternalName(invalidGUID), withStatus(invalidGUID)),
+			},
+			want: want{
+				mg:  serviceRouteBinding(withExternalName(invalidGUID), withStatus(invalidGUID)),
+				err: errors.Wrap(fmt.Errorf("external-name '%s' is not a valid GUID format", invalidGUID), errDelete),
+			},
+			service: func() *fake.MockServiceRouteBinding {
+				m := &fake.MockServiceRouteBinding{}
+				return m
+			},
+		},
 	}
 
 	for n, tc := range cases {
