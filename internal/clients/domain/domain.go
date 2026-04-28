@@ -30,13 +30,11 @@ type ClientWrapper struct {
 	Client
 }
 
-// FindDomainBySpec looks up a domain by name (and optionally org) for backwards compatibility when external-name is empty.
+// FindDomainBySpec looks up a domain by name when external-name is empty.
+// Name-only lookup: shared domains have no org, so org filter would exclude them.
 func (c *ClientWrapper) FindDomainBySpec(ctx context.Context, spec v1alpha1.DomainParameters) (*resource.Domain, error) {
 	opts := &client.DomainListOptions{
 		Names: client.Filter{Values: []string{spec.Name}},
-	}
-	if spec.Org != nil {
-		opts.OrganizationGUIDs = client.Filter{Values: []string{*spec.Org}}
 	}
 	return c.Single(ctx, opts)
 }

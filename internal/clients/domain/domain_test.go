@@ -99,8 +99,7 @@ func TestClientWrapper_FindDomainBySpec_WithOrg(t *testing.T) {
 	}
 
 	mockClient.On("Single", ctx, &client.DomainListOptions{
-		Names:             client.Filter{Values: []string{"test-domain.com"}},
-		OrganizationGUIDs: client.Filter{Values: []string{"org-guid-789"}},
+		Names: client.Filter{Values: []string{"test-domain.com"}},
 	}).Return(expectedDomain, nil)
 
 	wrapper := &ClientWrapper{Client: mockClient}
