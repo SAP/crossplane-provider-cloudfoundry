@@ -149,6 +149,39 @@ In such cases, if service parameters are manually updated via the Cockpit or any
 
 :::
 
+#### Sharing service instances
+
+Some service offerings support [service instance sharing](https://docs.cloudfoundry.org/devguide/services/sharing-instances.html). One example is `alert-notification`.
+
+If you have the CF CLI and jq installed you can check if a service offering supports service instance sharing with the following command: `cf curl /v3/service_offerings | jq '.resources[] | select(.name == "<service-offering-name>") | .shareable'`
+
+The space the service instance was initially created in and all spaces it is shared with can be in different orgs, but must be in the same landscape.
+
+The user referenced in the [ProviderConfig](./configure-provider-cf.mdx#create-providerconfig) must have the `SpaceDeveloper` role in the space the service instance was initially created in and in all spaces it is shared with.
+
+```yaml title="Example: a shared service instance"
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: my-alert-notification-service
+spec:
+  forProvider:
+    type: managed
+    name: my-alert-notification-service
+    spaceRef:
+      name: my-space
+    servicePlan:
+      offering: alert-notification
+      plan: standard
+    sharedSpaces:
+      - spaceRef:
+          name: my-other-space
+```
+
+:::warning
+Unsharing a service instance deletes all service bindings to apps in the spaces it was shared with. This might cause apps to fail.
+:::
+
 #### Create Service Keys
 
 `ServiceKeys` are created to give external applications access to the service instance.
