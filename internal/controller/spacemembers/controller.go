@@ -137,6 +137,12 @@ func buildObservation(lateInitialized, exists bool, observed *v1alpha1.RoleAssig
 	}
 }
 
+// isLaxDeletionComplete returns true when the resource is being deleted under Lax
+// enforcement and all tracked roles have already been removed.
+func isLaxDeletionComplete(cr *v1alpha1.SpaceMembers) bool {
+	return meta.WasDeleted(cr) && cr.Spec.ForProvider.EnforcementPolicy != "Strict" && len(cr.Status.AtProvider.AssignedRoles) == 0
+}
+
 // Setup adds a controller that reconciles managed resources SpaceMembers.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
 	name := managed.ControllerName(v1alpha1.SpaceMembersGroupKind)
@@ -286,7 +292,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	observation := buildObservation(lateInitialized, exists, observed)
 
 	// Under Lax enforcement, once our tracked roles are removed during deletion, the external resource is gone
-	if meta.WasDeleted(cr) && cr.Spec.ForProvider.EnforcementPolicy != "Strict" && len(cr.Status.AtProvider.AssignedRoles) == 0 {
+	if isLaxDeletionComplete(cr) {
 		observation.ResourceExists = false
 	}
 
