@@ -8,9 +8,9 @@ import Badge, { READY,IN_PREVIEW, CONCEPT, IN_DEV, RESTRICTION, NA } from "@site
 
 # Deploy workload
 
-Finally, we want to deploy workload into our CloudFoundry environment. 
+Finally, we want to deploy workload into our CloudFoundry environment.
 
-Our sample application is a simple web application that uses `xsuaa` for authentication and `destination` service to connect to a backend system. The application is deployed as a docker image and exposed via a route. 
+Our sample application is a simple web application that uses `xsuaa` for authentication and `destination` service to connect to a backend system. The application is deployed as a docker image and exposed via a route.
 
 To deploy our sample application, we can either directly orchestrate all aspects (routes, services, app etc) using the `CloudFoundry` provider or use the `Multi-target Application` *(MTA)* to deploy in a bundle.
 - [Direct Deployment](#direct-deployment)
@@ -18,10 +18,10 @@ To deploy our sample application, we can either directly orchestrate all aspects
 
 ## Prerequisites: Application Runtime Quota
 
-Before we can deploy workload to Cloud Foundry, we need to first allocate **APPLICATION_RUNTIME** quota to our BTP `Subaccount`. We can use [`Entitlement`](https://doc.crds.dev/github.com/SAP/crossplane-provider-btp/account.btp.sap.crossplane.io/Entitlement/v1alpha1@v1.6.0) of the BTP provider for this. 
+Before we can deploy workload to Cloud Foundry, we need to first allocate **APPLICATION_RUNTIME** quota to our BTP `Subaccount`. We can use [`Entitlement`](https://doc.crds.dev/github.com/SAP/crossplane-provider-btp/account.btp.sap.crossplane.io/Entitlement/v1alpha1@v1.6.0) of the BTP provider for this.
 
 ```yaml title="examples/runtime-quota.yaml"
-apiVersion: account.btp.sap.crossplane.io/v1alpha1 
+apiVersion: account.btp.sap.crossplane.io/v1alpha1
 kind: Entitlement
 metadata:
   name: cf-quota
@@ -33,17 +33,17 @@ spec:
     subaccountRef:
       name: my-subaccount
 ```
-This will allocate 2GB of memory to the Cloud Foundry runtime, and allows to create up to 20 routes and 100 service instances in your entire Cloud Foundry Organization. You may first distribute this quota among different `Spaces` using the `SpaceQuota` managed resource. 
+This will allocate 2GB of memory to the Cloud Foundry runtime, and allows to create up to 20 routes and 100 service instances in your entire Cloud Foundry Organization. You may first distribute this quota among different `Spaces` using the `SpaceQuota` managed resource.
 
 
 ## Direct deployment
 
-In this approach, we orchestrate all resources required for our sample application directly using using the `CloudFoundry` provider. 
- 
+In this approach, we orchestrate all resources required for our sample application directly using using the `CloudFoundry` provider.
+
 
 ### Managing Services  <Badge isHeadline={true} type={IN_PREVIEW}/>
 
-Service instances are orchestrated using the `ServiceInstance` manages resources. All service instances are created in the orchestrated Space `my-space` we created in the previous step. 
+Service instances are orchestrated using the `ServiceInstance` manages resources. All service instances are created in the orchestrated Space `my-space` we created in the previous step.
 
 
 ```yaml title="Example: a destination service instance"
@@ -55,7 +55,7 @@ Service instances are orchestrated using the `ServiceInstance` manages resources
       forProvider:
         type: managed
         name: my-destination-service
-        spaceRef: 
+        spaceRef:
           name: my-space
         servicePlan:
           offering: destination
@@ -85,10 +85,10 @@ Service instances are orchestrated using the `ServiceInstance` manages resources
             }
 ```
 #### Configure Service Parameters
-Some service instances support configuration parameters, like the `xsuaa` service instance. You can provide these parameters in several ways: 
+Some service instances support configuration parameters, like the `xsuaa` service instance. You can provide these parameters in several ways:
 <Tabs>
   <TabItem value="forProvider.jsonParams" label="Plain JSON">
-    Use `spec.forProvider.jsonParams` to provide the parameters as a JSON string.  
+    Use `spec.forProvider.jsonParams` to provide the parameters as a JSON string.
 
     ```yaml title="Example: a xsuaa service instance with paramaters as JSON"
     spec:
@@ -140,13 +140,46 @@ Some service instances support configuration parameters, like the `xsuaa` servic
   </TabItem>
 </Tabs>
 
-:::note Service Parameter Drift Detection 
+:::note Service Parameter Drift Detection
 
-Some managed service instances, *for example `xsuaa`*, do not allow fetching the service parameters after the service instance is created. 
-In such cases, if service parameters are manually updated via the Cockpit or any other ways, the provider cannot detect the change and will do nothing. 
+Some managed service instances, *for example `xsuaa`*, do not allow fetching the service parameters after the service instance is created.
+In such cases, if service parameters are manually updated via the Cockpit or any other ways, the provider cannot detect the change and will do nothing.
 
 **Whenever service parameters are modified in the CR, the provider will apply the changes as usual**.
 
+:::
+
+#### Sharing service instances
+
+Some service offerings support [service instance sharing](https://docs.cloudfoundry.org/devguide/services/sharing-instances.html). One example is `alert-notification`.
+
+If you have the CF CLI and jq installed you can check if a service offering supports service instance sharing with the following command: `cf curl /v3/service_offerings | jq '.resources[] | select(.name == "<service-offering-name>") | .shareable'`
+
+The space the service instance was initially created in and all spaces it is shared with can be in different orgs, but must be in the same landscape.
+
+The user referenced in the [ProviderConfig](./configure-provider-cf.mdx#create-providerconfig) must have the `SpaceDeveloper` role in the space the service instance was initially created in and in all spaces it is shared with.
+
+```yaml title="Example: a shared service instance"
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: my-alert-notification-service
+spec:
+  forProvider:
+    type: managed
+    name: my-alert-notification-service
+    spaceRef:
+      name: my-space
+    servicePlan:
+      offering: alert-notification
+      plan: standard
+    sharedSpaces:
+      - spaceRef:
+          name: my-other-space
+```
+
+:::warning
+Unsharing a service instance deletes all service bindings to apps in the spaces it was shared with. This might cause apps to fail.
 :::
 
 #### Create Service Keys
@@ -156,8 +189,8 @@ In such cases, if service parameters are manually updated via the Cockpit or any
 They are credentials for **direct communication with specific service instances within the Cloud Foundry Environment**.
 
 ```yaml title="Example: a service key"
-apiVersion: cloudfoundry.crossplane.io/v1alpha1 
-kind: ServiceCredentialBinding 
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceCredentialBinding
 metadata:
   name: my-service-key
 spec:
@@ -181,8 +214,8 @@ Service keys (`ServiceCredentialBinding` of type `key`) support automatic key ro
 **Basic Rotation Configuration:**
 
 ```yaml title="Example: rotating service key"
-apiVersion: cloudfoundry.crossplane.io/v1alpha1 
-kind: ServiceCredentialBinding 
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceCredentialBinding
 metadata:
   name: my-rotating-service-key
 spec:
@@ -240,9 +273,9 @@ metadata:
 
 ### Configure `Route`  <Badge isHeadline={true} type={READY}/>
 
-A route is a unique address/URL that enables our end users to reach our sample applications. 
+A route is a unique address/URL that enables our end users to reach our sample applications.
 
-We first choose a `Domain` in which we want to create the route. Here we use the shared HTTP domain `cfapps.eu12.hana.ondemand.com`. This domain is deployed by default in the BTP Cloud Foundry environment. 
+We first choose a `Domain` in which we want to create the route. Here we use the shared HTTP domain `cfapps.eu12.hana.ondemand.com`. This domain is deployed by default in the BTP Cloud Foundry environment.
 
 ```yaml title="Example:import cfapps domain"
 apiVersion: cloudfoundry.crossplane.io/v1alpha1
@@ -252,14 +285,14 @@ metadata:
   name: cfapps-domain
 spec:
   forProvider:
-    name: cfapps.eu12.hana.ondemand.com 
+    name: cfapps.eu12.hana.ondemand.com
     orgRef:
       name: my-org
     internal: false
 
 ```
 
-We then create a route with the given `host` and `path` in the `cfapp-domain`.  The resulting URL will be `my-app.cfapps.eu12.hana.ondemand.com/hello`. 
+We then create a route with the given `host` and `path` in the `cfapp-domain`.  The resulting URL will be `my-app.cfapps.eu12.hana.ondemand.com/hello`.
 
 ```yaml title="Example: create my application route"
 apiVersion: cloudfoundry.crossplane.io/v1alpha1
@@ -283,16 +316,16 @@ spec:
 :::note Route with the same URL already exists
 Routes are unique URL/address . If a Route with a URL exist in another Space or Organization, you cannot create a Route with the same URL.
 
-Route subjects to quota limit set on the respective Space. If not set, the Subaccount quota limit applies. 
+Route subjects to quota limit set on the respective Space. If not set, the Subaccount quota limit applies.
 :::
 
-Currently, you can only create Routes under the default landscape domain `cfapps.<region>.hana.ondemand.com`. 
-It depends on the region of your BTP Subaccount, in the `eu10` region, the default domain is `cfapps.eu10.hana.ondemand.com`. 
+Currently, you can only create Routes under the default landscape domain `cfapps.<region>.hana.ondemand.com`.
+It depends on the region of your BTP Subaccount, in the `eu10` region, the default domain is `cfapps.eu10.hana.ondemand.com`.
 Use `spec.forProvider.domain.name` to specify the domain name directly.
 
 ### Deploy `App` <Badge isHeadline={true} type={IN_PREVIEW}/>
 
-The `App` resource lets you deploy a Docker image as an app. 
+The `App` resource lets you deploy a Docker image as an app.
 
 ```yaml title="examples/app.yaml"
 apiVersion: cloudfoundry.crossplane.io/v1alpha1
@@ -399,7 +432,7 @@ For `Apps` to consume `ServiceInstances` you can either bind them **using the de
 <details>
 <summary>How do I bind non-cloudfoundry service instances (e.g. using BTP Service Operator)</summary>
 
-    Let's assume we created [`ServiceInstance`](https://doc.crds.dev/github.com/SAP/crossplane-provider-btp/account.btp.sap.crossplane.io/ServiceInstance/v1alpha1@v1.6.0) and [`ServiceBinding`](https://doc.crds.dev/github.com/SAP/crossplane-provider-btp/account.btp.sap.crossplane.io/ServiceBinding/v1alpha1@v1.6.0). 
+    Let's assume we created [`ServiceInstance`](https://doc.crds.dev/github.com/SAP/crossplane-provider-btp/account.btp.sap.crossplane.io/ServiceInstance/v1alpha1@v1.6.0) and [`ServiceBinding`](https://doc.crds.dev/github.com/SAP/crossplane-provider-btp/account.btp.sap.crossplane.io/ServiceBinding/v1alpha1@v1.6.0).
     Note that this service is created outside of Cloud Foundry Environment.
 
     To bind it to a Cloud Foundry `App`, we first create a Cloud Foundry `ServiceInstance` of type `user-provided` called `my-ups`. It reads from the `Secret` of the `ServiceBinding` we created using BTP Service Operator.
@@ -407,7 +440,7 @@ For `Apps` to consume `ServiceInstances` you can either bind them **using the de
     Effectively this delivers `ServiceBinding` to the `VCAP_SERVICES` environment variables of the app.
 
     ```yaml title="examples/ups-svc.yaml"
-    apiVersion: cloudfoundry.crossplane.io/v1alpha1 
+    apiVersion: cloudfoundry.crossplane.io/v1alpha1
     kind: ServiceInstance
     metadata:
       namespace: default
@@ -418,11 +451,11 @@ For `Apps` to consume `ServiceInstances` you can either bind them **using the de
         name: my-ups
         routeServiceUrl: https://my-demo-route-service.example.com
         syslogDrainUrl: syslog-tls://example.log-aggregator.com:6514
-        spaceRef: 
+        spaceRef:
           name: my-space
           policy:
             resolve: Always
-        credentialsSecretRef: 
+        credentialsSecretRef:
             name: svc-secret ## Secret created from ServiceBinding via BTP Service Operator
             namespace: default
     ```
@@ -430,7 +463,7 @@ For `Apps` to consume `ServiceInstances` you can either bind them **using the de
 
 ## Multi-target Application
 
-In this scenario all aspects of the deployment are **orchestrated by the Multi-target Application _`MTA`_ approach** which spans over several tool and offers one application lifecycle. 
+In this scenario all aspects of the deployment are **orchestrated by the Multi-target Application _`MTA`_ approach** which spans over several tool and offers one application lifecycle.
 
 You can learn more about the `MTA` build tool [here](https://help.sap.com/docs/btp/sap-business-technology-platform/multitarget-applications-in-cloud-foundry-environment).
 
@@ -440,7 +473,7 @@ Coming soon...
 
 ### Existing pipelines <Badge isHeadline={true} type={READY}/>
 
-You can use any CloudFoundry landscape, orchestrated or manually created, and use traditional pipelines to deploy your [`MTA` or Non-`MTA` workload](https://www.project-piper.io/steps/cloudFoundryDeploy/). 
+You can use any CloudFoundry landscape, orchestrated or manually created, and use traditional pipelines to deploy your [`MTA` or Non-`MTA` workload](https://www.project-piper.io/steps/cloudFoundryDeploy/).
 
 
 
