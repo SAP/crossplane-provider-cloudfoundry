@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -52,6 +53,12 @@ func withStatus(guid, state string) modifier {
 
 	return func(r *v1alpha1.App) {
 		r.Status.AtProvider = o
+	}
+}
+
+func withRoutes(routes ...v1alpha1.AppRouteObservation) modifier {
+	return func(r *v1alpha1.App) {
+		r.Status.AtProvider.Routes = routes
 	}
 }
 
@@ -106,10 +113,11 @@ func TestObserve(t *testing.T) {
 	}
 
 	cases := map[string]struct {
-		args    args
-		want    want
-		service service
-		kube    k8s.Client
+		args         args
+		want         want
+		service      service
+		kube         k8s.Client
+		routeFetcher *fake.MockRouteFetcher
 	}{
 		"Nil": {
 			args: args{
@@ -238,6 +246,95 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
+		"RoutesPopulated": {
+			args: args{
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
+			},
+			want: want{
+				mg: newApp("docker",
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withRoutes(v1alpha1.AppRouteObservation{
+						URL:      "myapp.apps.example.com",
+						Host:     "myapp",
+						Path:     "",
+						Protocol: "http",
+					}),
+					withConditions(xpv1.Available())),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				m.On("Get", guid).Return(
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					nil,
+				)
+				return m
+			},
+			routeFetcher: func() *fake.MockRouteFetcher {
+				m := &fake.MockRouteFetcher{}
+				m.On("ListForAppAll", guid).Return(
+					[]*cfresource.Route{
+						{
+							URL:      "myapp.apps.example.com",
+							Host:     "myapp",
+							Path:     "",
+							Protocol: "http",
+						},
+					},
+					nil,
+				)
+				return m
+			}(),
+		},
+		"RouteFetchErrorNonFatal": {
+			args: args{
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID),
+					withRoutes(v1alpha1.AppRouteObservation{
+						URL:      "stale.apps.example.com",
+						Host:     "stale",
+						Protocol: "http",
+					})),
+			},
+			want: want{
+				mg: newApp("docker",
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withRoutes(v1alpha1.AppRouteObservation{
+						URL:      "stale.apps.example.com",
+						Host:     "stale",
+						Protocol: "http",
+					}),
+					withConditions(xpv1.Available())),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				m.On("Get", guid).Return(
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					nil,
+				)
+				return m
+			},
+			routeFetcher: func() *fake.MockRouteFetcher {
+				m := &fake.MockRouteFetcher{}
+				m.On("ListForAppAll", guid).Return(
+					([]*cfresource.Route)(nil),
+					errBoom,
+				)
+				return m
+			}(),
+		},
 	}
 
 	for n, tc := range cases {
@@ -251,6 +348,9 @@ func TestObserve(t *testing.T) {
 					AppClient:  tc.service(),
 					PushClient: newMockPush(),
 				},
+			}
+			if tc.routeFetcher != nil {
+				c.client.RouteFetcher = tc.routeFetcher
 			}
 
 			obs, err := c.Observe(context.Background(), tc.args.mg)
@@ -267,6 +367,15 @@ func TestObserve(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+			}
+
+			// Verify routes were written to the managed resource status.
+			gotApp, gotOk := tc.args.mg.(*v1alpha1.App)
+			wantApp, wantOk := tc.want.mg.(*v1alpha1.App)
+			if gotOk && wantOk {
+				if diff := cmp.Diff(wantApp.Status.AtProvider.Routes, gotApp.Status.AtProvider.Routes); diff != "" {
+					t.Errorf("status.atProvider.routes -want, +got:\n%s", diff)
+				}
 			}
 		})
 	}
