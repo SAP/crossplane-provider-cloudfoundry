@@ -49,7 +49,7 @@ func TestSpaceQuotaImportFlow(t *testing.T) {
 		spaceQuotaImportTestK8sResName,
 		WithWaitCreateTimeout[*v1alpha1.SpaceQuota](wait.WithTimeout(5*time.Minute)),
 		WithWaitDeletionTimeout[*v1alpha1.SpaceQuota](wait.WithTimeout(5*time.Minute)),
-		WithDependentResourceDirectory[*v1alpha1.SpaceQuota]("./crs/externalNamesImport"),
+		WithDependentResourceDirectory[*v1alpha1.SpaceQuota]("./crs/externalNamesImport/spaceQuota"),
 	)
 
 	importFeature := importTester.BuildTestFeature("CF SpaceQuota Import Flow").Feature()

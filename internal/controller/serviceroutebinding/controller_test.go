@@ -2,12 +2,14 @@ package serviceroutebinding
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"testing"
 
+	"github.com/pkg/errors"
+
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/mock"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -19,6 +21,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 )
 
@@ -26,6 +29,7 @@ var (
 	errBoom             = errors.New("boom")
 	name                = "my-service-route-binding"
 	guid                = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
+	invalidGUID         = "invalid-guid"
 	routeGUID           = "3d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 	serviceInstanceGUID = "4d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 	routeServiceURL     = "https://route-service.example.com"
@@ -116,13 +120,31 @@ func TestObserve(t *testing.T) {
 		err error
 	}
 
-	srb := serviceRouteBinding(withExternalName(guid), withRouteID(routeGUID), withServiceInstanceID(serviceInstanceGUID))
+	srb := serviceRouteBinding(
+		withExternalName(guid),
+		withRouteID(routeGUID),
+		withServiceInstanceID(serviceInstanceGUID),
+	)
+
 	srbAvailable := serviceRouteBinding(
 		withExternalName(guid),
 		withStatus(guid),
 		withRouteID(routeGUID),
 		withServiceInstanceID(serviceInstanceGUID),
-		withConditions(xpv1.Available()),
+		withConditions(xpv1.Available(), xpv1.ReconcileSuccess()),
+	)
+
+	srbInvalid := serviceRouteBinding(
+		withExternalName(invalidGUID),
+		withRouteID(routeGUID),
+		withServiceInstanceID(serviceInstanceGUID),
+	)
+
+	srbDeleted := serviceRouteBinding(
+		withExternalName(guid),
+		withRouteID(routeGUID),
+		withServiceInstanceID(serviceInstanceGUID),
+		withConditions(xpv1.Deleting()),
 	)
 
 	cfSucceeded := func() *cfresource.ServiceRouteBinding {
@@ -183,7 +205,10 @@ func TestObserve(t *testing.T) {
 				mg: srb.DeepCopy(),
 			},
 			want: want{
-				mg:  serviceRouteBinding(withExternalName(guid)),
+				mg: serviceRouteBinding(withExternalName(guid),
+					withRouteID(routeGUID),
+					withServiceInstanceID(serviceInstanceGUID),
+				),
 				obs: managed.ExternalObservation{},
 				err: fmt.Errorf(errGet, errBoom),
 			},
@@ -205,7 +230,10 @@ func TestObserve(t *testing.T) {
 				mg: srb.DeepCopy(),
 			},
 			want: want{
-				mg:  serviceRouteBinding(withExternalName(guid)),
+				mg: serviceRouteBinding(withExternalName(guid),
+					withRouteID(routeGUID),
+					withServiceInstanceID(serviceInstanceGUID),
+				),
 				obs: managed.ExternalObservation{ResourceExists: false},
 				err: nil,
 			},
@@ -253,7 +281,9 @@ func TestObserve(t *testing.T) {
 				mg: serviceRouteBinding(
 					withExternalName(guid),
 					withStatus(guid),
-					withConditions(xpv1.Unavailable()),
+					withRouteID(routeGUID),
+					withServiceInstanceID(serviceInstanceGUID),
+					withConditions(xpv1.Unavailable().WithMessage("create in progress")),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -281,7 +311,9 @@ func TestObserve(t *testing.T) {
 				mg: serviceRouteBinding(
 					withExternalName(guid),
 					withStatus(guid),
-					withConditions(xpv1.Unavailable()),
+					withRouteID(routeGUID),
+					withServiceInstanceID(serviceInstanceGUID),
+					withConditions(xpv1.Unavailable().WithMessage("create failed")),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
 				err: nil,
@@ -303,12 +335,14 @@ func TestObserve(t *testing.T) {
 		},
 		"DeleteSucceeded": {
 			args: args{
-				mg: srb.DeepCopy(),
+				mg: srbDeleted.DeepCopy(),
 			},
 			want: want{
 				mg: serviceRouteBinding(
 					withExternalName(guid),
 					withStatus(guid),
+					withRouteID(routeGUID),
+					withServiceInstanceID(serviceInstanceGUID),
 					withConditions(xpv1.Deleting()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
@@ -326,6 +360,24 @@ func TestObserve(t *testing.T) {
 					deleted,
 					nil,
 				)
+				return m
+			},
+		},
+		"InvalidGUID": {
+			args: args{
+				mg: srbInvalid.DeepCopy(),
+			},
+			want: want{
+				mg: serviceRouteBinding(withExternalName(invalidGUID),
+					withStatus(invalidGUID),
+					withRouteID(routeGUID),
+					withServiceInstanceID(serviceInstanceGUID),
+				),
+				obs: managed.ExternalObservation{},
+				err: fmt.Errorf("external-name '%s' is not a valid GUID format", invalidGUID),
+			},
+			service: func() *fake.MockServiceRouteBinding {
+				m := &fake.MockServiceRouteBinding{}
 				return m
 			},
 		},
@@ -353,6 +405,11 @@ func TestObserve(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+			}
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg, cmp.Options{cmpopts.IgnoreFields(v1alpha1.ServiceRouteBinding{}, "Status.AtProvider")}); diff != "" {
+					t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				}
 			}
 		})
 	}
@@ -382,7 +439,11 @@ func TestCreate(t *testing.T) {
 				mg: srb.DeepCopy(),
 			},
 			want: want{
-				mg:  serviceRouteBinding(withRouteID(routeGUID), withServiceInstanceID(serviceInstanceGUID), withExternalName(guid)),
+				mg: serviceRouteBinding(withRouteID(routeGUID),
+					withServiceInstanceID(serviceInstanceGUID),
+					withExternalName(guid),
+					withConditions(xpv1.Creating()),
+				),
 				obs: managed.ExternalCreation{},
 				err: nil,
 			},
@@ -478,6 +539,11 @@ func TestCreate(t *testing.T) {
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Create(...): -want, +got:\n%s", diff)
 			}
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Create(...): -want, +got:\n%s", diff)
+				}
+			}
 		})
 	}
 }
@@ -542,7 +608,7 @@ func TestUpdate(t *testing.T) {
 			want: want{
 				mg:  serviceRouteBinding(withServiceInstanceID(serviceInstanceGUID)),
 				obs: managed.ExternalUpdate{},
-				err: nil,
+				err: errors.Wrap(fmt.Errorf("external-name '%s' is not a valid GUID format", ""), errUpdate),
 			},
 			service: func() *fake.MockServiceRouteBinding {
 				m := &fake.MockServiceRouteBinding{}
@@ -610,6 +676,11 @@ func TestUpdate(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Update(...): -want, +got:\n%s", diff)
+			}
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Update(...): -want, +got:\n%s", diff)
+				}
 			}
 		})
 	}
@@ -679,6 +750,19 @@ func TestDelete(t *testing.T) {
 					"",
 					fake.ErrNoResultReturned,
 				)
+				return m
+			},
+		},
+		"InvalidGUID": {
+			args: args{
+				mg: serviceRouteBinding(withExternalName(invalidGUID), withStatus(invalidGUID)),
+			},
+			want: want{
+				mg:  serviceRouteBinding(withExternalName(invalidGUID), withStatus(invalidGUID)),
+				err: errors.Wrap(fmt.Errorf("external-name '%s' is not a valid GUID format", invalidGUID), errDelete),
+			},
+			service: func() *fake.MockServiceRouteBinding {
+				m := &fake.MockServiceRouteBinding{}
 				return m
 			},
 		},
@@ -848,10 +932,6 @@ func TestIsNotFoundError(t *testing.T) {
 			err:  errors.New("CF-ResourceNotFound: The resource could not be found"),
 			want: true,
 		},
-		"ServiceRouteBindingNotFound": {
-			err:  errors.New("service route binding not found"),
-			want: true,
-		},
 		"OtherError": {
 			err:  errBoom,
 			want: false,
@@ -860,9 +940,9 @@ func TestIsNotFoundError(t *testing.T) {
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			got := isNotFoundError(tc.err)
+			got := clients.ErrorIsNotFound(tc.err)
 			if diff := cmp.Diff(tc.want, got); diff != "" {
-				t.Errorf("isNotFoundError(...): -want, +got:\n%s", diff)
+				t.Errorf("ErrorIsNotFound(...): -want, +got:\n%s", diff)
 			}
 		})
 	}
