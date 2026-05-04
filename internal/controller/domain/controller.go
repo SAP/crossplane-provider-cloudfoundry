@@ -196,7 +196,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	// rename resource
 	if cr.Name != ptr.Deref(cr.Status.AtProvider.Name, "") {
-		_, err := c.client.Update(ctx, *cr.Status.AtProvider.ID, domain.GenerateUpdate(cr.Spec.ForProvider))
+		_, err := c.client.Update(ctx, *cr.Status.AtProvider.ID, domain.GenerateUpdate(cr, cr.Spec.ForProvider))
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 		}

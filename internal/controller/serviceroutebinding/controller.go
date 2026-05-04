@@ -243,7 +243,7 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	// Update metadata (labels and annotations) - only supported fields for ServiceRouteBindings
-	_, err := srb.Update(ctx, e.srbClient, guid, cr.Spec.ForProvider)
+	_, err := srb.Update(ctx, e.srbClient, guid, cr, cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalUpdate{}, fmt.Errorf(errUpdate, err)
 	}

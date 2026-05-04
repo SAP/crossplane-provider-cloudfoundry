@@ -68,10 +68,10 @@ func GenerateCreate(mg xpresource.Managed, spec v1alpha1.SpaceParameters) *resou
 }
 
 // GenerateUpdate generates the SpaceUpdate from an *SpaceParameters
-func GenerateUpdate(spec v1alpha1.SpaceParameters) *resource.SpaceUpdate {
+func GenerateUpdate(mg xpresource.Managed, spec v1alpha1.SpaceParameters) *resource.SpaceUpdate {
 	return &resource.SpaceUpdate{
 		Name:     spec.Name,
-		Metadata: &resource.Metadata{},
+		Metadata: metadata.BuildMetadata(mg, spec.Labels, spec.Annotations),
 	}
 }
 

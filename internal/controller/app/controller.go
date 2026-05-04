@@ -228,12 +228,12 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errSecret)
 		}
-		_, err = c.client.UpdateAndPush(ctx, guid, cr.Spec.ForProvider, dockerCredentials)
+		_, err = c.client.UpdateAndPush(ctx, guid, cr, cr.Spec.ForProvider, dockerCredentials)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
 		}
 	} else if changes.HasChanges() {
-		_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider)
+		_, err := c.client.Update(ctx, guid, cr, cr.Spec.ForProvider)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
 		}

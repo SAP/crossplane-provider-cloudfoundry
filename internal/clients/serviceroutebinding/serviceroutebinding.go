@@ -77,16 +77,11 @@ func createToListOptions(create *resource.ServiceRouteBindingCreate) *client.Ser
 	return opts
 }
 
-func Update(ctx context.Context, srbClient ServiceRouteBinding, guid string, forProvider v1alpha1.ServiceRouteBindingParameters) (*resource.ServiceRouteBinding, error) {
+func Update(ctx context.Context, srbClient ServiceRouteBinding, guid string, mg xpresource.Managed, forProvider v1alpha1.ServiceRouteBindingParameters) (*resource.ServiceRouteBinding, error) {
 	update := &resource.ServiceRouteBindingUpdate{}
 
 	// ServiceRouteBindings only support updating metadata (labels and annotations)
-	if forProvider.Labels != nil || forProvider.Annotations != nil {
-		update.Metadata = &resource.Metadata{
-			Labels:      forProvider.Labels,
-			Annotations: forProvider.Annotations,
-		}
-	}
+	update.Metadata = metadata.BuildMetadata(mg, forProvider.Labels, forProvider.Annotations)
 
 	return srbClient.Update(ctx, guid, update)
 }

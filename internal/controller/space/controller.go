@@ -242,7 +242,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	// rename
 	if cr.Spec.ForProvider.Name != cr.Status.AtProvider.Name {
-		_, err := c.client.Update(ctx, guid, space.GenerateUpdate(cr.Spec.ForProvider))
+		_, err := c.client.Update(ctx, guid, space.GenerateUpdate(cr, cr.Spec.ForProvider))
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 		}

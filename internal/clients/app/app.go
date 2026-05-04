@@ -90,8 +90,8 @@ func (c *Client) CreateAndPush(ctx context.Context, mg xpresource.Managed, spec 
 }
 
 // Update updates an app in the Cloud Foundry.
-func (c *Client) Update(ctx context.Context, guid string, spec v1alpha1.AppParameters) (*resource.App, error) {
-	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(spec))
+func (c *Client) Update(ctx context.Context, guid string, mg xpresource.Managed, spec v1alpha1.AppParameters) (*resource.App, error) {
+	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(mg, spec))
 	if err != nil {
 		return nil, err
 	}
@@ -99,13 +99,13 @@ func (c *Client) Update(ctx context.Context, guid string, spec v1alpha1.AppParam
 }
 
 // UpdateAndPush updates and pushes an app to the Cloud Foundry.
-func (c *Client) UpdateAndPush(ctx context.Context, guid string, spec v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
+func (c *Client) UpdateAndPush(ctx context.Context, guid string, mg xpresource.Managed, spec v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
 	manifest, err := newManifestFromSpec(spec, dockerCredentials)
 	if err != nil {
 		return nil, err
 	}
 
-	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(spec))
+	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(mg, spec))
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +290,7 @@ func newCreateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resour
 }
 
 // newUpdateOption map spec to AppCreate option
-func newUpdateOption(spec v1alpha1.AppParameters) *resource.AppUpdate {
+func newUpdateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resource.AppUpdate {
 	var lifecycle *resource.Lifecycle
 	switch spec.Lifecycle {
 	case "buildpack":
@@ -312,7 +312,7 @@ func newUpdateOption(spec v1alpha1.AppParameters) *resource.AppUpdate {
 	return &resource.AppUpdate{
 		Name:      spec.Name,
 		Lifecycle: lifecycle,
-		Metadata:  &resource.Metadata{},
+		Metadata:  metadata.BuildMetadata(mg, spec.Labels, spec.Annotations),
 	}
 }
 

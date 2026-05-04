@@ -226,7 +226,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	if externalName := meta.GetExternalName(cr); externalName != "" {
-		if _, err := scb.Update(ctx, c.scbClient, meta.GetExternalName(cr), cr.Spec.ForProvider); err != nil {
+		if _, err := scb.Update(ctx, c.scbClient, meta.GetExternalName(cr), cr, cr.Spec.ForProvider); err != nil {
 			return managed.ExternalUpdate{}, fmt.Errorf(errUpdate, err)
 		}
 	}

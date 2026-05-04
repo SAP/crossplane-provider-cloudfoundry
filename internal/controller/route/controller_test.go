@@ -40,7 +40,7 @@ func (m *Mock) Create(ctx context.Context, mg resource.Managed, forProvider v1al
 	return args.String(0), args.Error(1)
 }
 
-func (m *Mock) Update(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) error {
+func (m *Mock) Update(ctx context.Context, guid string, mg resource.Managed, forProvider v1alpha1.RouteParameters) error {
 	args := m.Called()
 	return args.Error(0)
 }

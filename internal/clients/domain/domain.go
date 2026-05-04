@@ -99,9 +99,9 @@ func GenerateObservation(o *resource.Domain) v1alpha1.DomainObservation {
 }
 
 // GenerateUpdate generates the DomainUpdate from an *DomainParameters. There is not really an option to update besides labels and annotations
-func GenerateUpdate(spec v1alpha1.DomainParameters) *resource.DomainUpdate {
+func GenerateUpdate(mg xpresource.Managed, spec v1alpha1.DomainParameters) *resource.DomainUpdate {
 	return &resource.DomainUpdate{
-		Metadata: &resource.Metadata{Labels: spec.Labels, Annotations: spec.Annotations},
+		Metadata: metadata.BuildMetadata(mg, spec.Labels, spec.Annotations),
 	}
 }
 

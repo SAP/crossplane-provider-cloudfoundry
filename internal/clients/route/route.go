@@ -80,12 +80,12 @@ func (c *Client) Create(ctx context.Context, mg xpresource.Managed, forProvider 
 }
 
 // Update updates a Route
-func (c *Client) Update(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) error {
+func (c *Client) Update(ctx context.Context, guid string, mg xpresource.Managed, forProvider v1alpha1.RouteParameters) error {
 	if !clients.IsValidGUID(guid) {
 		return fmt.Errorf("invalid Route GUID")
 	}
 
-	opts := FormatUpdateOption(forProvider)
+	opts := FormatUpdateOption(mg, forProvider)
 	if opts == nil {
 		return fmt.Errorf("invalid Route parameters")
 	}
@@ -159,10 +159,10 @@ func FormatCreateOption(mg xpresource.Managed, forProvider v1alpha1.RouteParamet
 }
 
 // FormatUpdateOption generates the RouteUpdate from an *RouteParameters
-func FormatUpdateOption(forProvider v1alpha1.RouteParameters) *resource.RouteUpdate {
+func FormatUpdateOption(mg xpresource.Managed, forProvider v1alpha1.RouteParameters) *resource.RouteUpdate {
 	// client supports only updating metadata
 	return &resource.RouteUpdate{
-		Metadata: &resource.Metadata{},
+		Metadata: metadata.BuildMetadata(mg, forProvider.Labels, forProvider.Annotations),
 	}
 }
 
