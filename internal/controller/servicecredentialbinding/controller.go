@@ -202,7 +202,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, fmt.Errorf(errExtractParams, err)
 	}
 
-	serviceBinding, err := scb.Create(ctx, c.scbClient, cr.Spec.ForProvider, params)
+	serviceBinding, err := scb.Create(ctx, c.scbClient, cr, cr.Spec.ForProvider, params)
 	if err != nil {
 		return managed.ExternalCreation{}, fmt.Errorf(errCreate, err)
 	}

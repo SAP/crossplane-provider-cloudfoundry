@@ -252,7 +252,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.Wrap(err, errSecret)
 	}
 
-	r, err := c.serviceinstance.Create(ctx, cr.Spec.ForProvider, creds)
+	r, err := c.serviceinstance.Create(ctx, cr, cr.Spec.ForProvider, creds)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}

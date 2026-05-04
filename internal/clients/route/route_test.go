@@ -313,7 +313,7 @@ func TestCreate(t *testing.T) {
 				Route: tc.service(),
 			}
 
-			id, err := c.Create(context.Background(), tc.args.forProvider)
+			id, err := c.Create(context.Background(), nil, tc.args.forProvider)
 
 			if tc.want.err != nil && err != nil {
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {

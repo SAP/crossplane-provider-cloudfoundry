@@ -6,9 +6,11 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/org"
 )
 
@@ -58,12 +60,14 @@ func GenerateListOption(spec v1alpha1.SpaceParameters) *client.SpaceListOptions 
 }
 
 // GenerateCreate generates the SpaceCreate from an *SpaceParameters
-func GenerateCreate(spec v1alpha1.SpaceParameters) *resource.SpaceCreate {
+func GenerateCreate(mg xpresource.Managed, spec v1alpha1.SpaceParameters) *resource.SpaceCreate {
 	org := ptr.Deref(spec.Org, "")
-	return resource.NewSpaceCreate(spec.Name, org)
+	create := resource.NewSpaceCreate(spec.Name, org)
+	create.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
+	return create
 }
 
-// GenerateUpdate generates the SpaceCreate from an *SpaceParameters
+// GenerateUpdate generates the SpaceUpdate from an *SpaceParameters
 func GenerateUpdate(spec v1alpha1.SpaceParameters) *resource.SpaceUpdate {
 	return &resource.SpaceUpdate{
 		Name:     spec.Name,
@@ -71,7 +75,7 @@ func GenerateUpdate(spec v1alpha1.SpaceParameters) *resource.SpaceUpdate {
 	}
 }
 
-// GenerateObservation takes an Space resource and returns *SpaceObservation.
+// GenerateObservation takes a Space resource and returns *SpaceObservation.
 func GenerateObservation(o *resource.Space, ssh bool) v1alpha1.SpaceObservation {
 	obs := v1alpha1.SpaceObservation{
 		ID:        o.GUID,
@@ -85,8 +89,8 @@ func GenerateObservation(o *resource.Space, ssh bool) v1alpha1.SpaceObservation 
 		obs.Quota = ptr.To(o.Relationships.Quota.Data.GUID)
 	}
 	if o.Metadata != nil {
-		obs.Annotations = o.Metadata.Annotations
 		obs.Labels = o.Metadata.Labels
+		obs.Annotations = o.Metadata.Annotations
 	}
 	return obs
 }

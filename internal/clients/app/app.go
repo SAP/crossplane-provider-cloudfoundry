@@ -9,11 +9,13 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/google/uuid"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
 )
 
@@ -74,13 +76,13 @@ func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, spec v1alpha1.A
 }
 
 // CreateAndPush creates and pushes an app to the Cloud Foundry.
-func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
+func (c *Client) CreateAndPush(ctx context.Context, mg xpresource.Managed, spec v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
 	manifest, err := newManifestFromSpec(spec, dockerCredentials)
 	if err != nil {
 		return nil, err
 	}
 
-	application, err := c.AppClient.Create(ctx, newCreateOption(spec))
+	application, err := c.AppClient.Create(ctx, newCreateOption(mg, spec))
 	if err != nil {
 		return nil, err
 	}
@@ -263,7 +265,7 @@ func newListOption(spec v1alpha1.AppParameters) *client.AppListOptions {
 }
 
 // newCreateOption maps spec to AppCreate option
-func newCreateOption(spec v1alpha1.AppParameters) *resource.AppCreate {
+func newCreateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resource.AppCreate {
 	name := spec.Name
 	space := ptr.Deref(spec.Space, "")
 	appCreate := resource.NewAppCreate(name, space)
@@ -283,6 +285,7 @@ func newCreateOption(spec v1alpha1.AppParameters) *resource.AppCreate {
 	default:
 		appCreate.Lifecycle = nil
 	}
+	appCreate.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
 	return appCreate
 }
 

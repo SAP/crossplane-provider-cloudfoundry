@@ -35,7 +35,7 @@ func (m *Mock) GetRouteByGUID(ctx context.Context, guid string) (*v1alpha1.Route
 	return args.Get(0).(*v1alpha1.RouteObservation), args.Bool(1), args.Error(2)
 }
 
-func (m *Mock) Create(ctx context.Context, forProvider v1alpha1.RouteParameters) (string, error) {
+func (m *Mock) Create(ctx context.Context, mg resource.Managed, forProvider v1alpha1.RouteParameters) (string, error) {
 	args := m.Called()
 	return args.String(0), args.Error(1)
 }

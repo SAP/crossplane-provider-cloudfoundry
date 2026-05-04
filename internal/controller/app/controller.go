@@ -197,7 +197,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Creating())
 
-	application, err := c.client.CreateAndPush(ctx, cr.Spec.ForProvider, dockerCredentials)
+	application, err := c.client.CreateAndPush(ctx, cr, cr.Spec.ForProvider, dockerCredentials)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreateResource)
 	}

@@ -192,7 +192,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Creating())
 
-	s, err := c.client.Create(ctx, space.GenerateCreate(cr.Spec.ForProvider))
+	s, err := c.client.Create(ctx, space.GenerateCreate(cr, cr.Spec.ForProvider))
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}

@@ -7,10 +7,12 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 )
 
 // Route is the interface that defines the methods that a Route client should implement.
@@ -64,8 +66,8 @@ func (c *Client) GetRouteByGUID(ctx context.Context, guid string) (*v1alpha1.Rou
 }
 
 // Create creates a Route and returns the GUID or error
-func (c *Client) Create(ctx context.Context, forProvider v1alpha1.RouteParameters) (string, error) {
-	opts, err := FormatCreateOption(forProvider)
+func (c *Client) Create(ctx context.Context, mg xpresource.Managed, forProvider v1alpha1.RouteParameters) (string, error) {
+	opts, err := FormatCreateOption(mg, forProvider)
 	if err != nil {
 		return "", err
 	}
@@ -133,7 +135,7 @@ func FormatListOption(forProvider v1alpha1.RouteParameters) (*client.RouteListOp
 }
 
 // FormatCreateOption generates the RouteCreate from the forProvider spec
-func FormatCreateOption(forProvider v1alpha1.RouteParameters) (*resource.RouteCreate, error) {
+func FormatCreateOption(mg xpresource.Managed, forProvider v1alpha1.RouteParameters) (*resource.RouteCreate, error) {
 	if forProvider.Space == nil || forProvider.Domain == nil {
 		return nil, fmt.Errorf("space and domain are required")
 	}
@@ -152,10 +154,11 @@ func FormatCreateOption(forProvider v1alpha1.RouteParameters) (*resource.RouteCr
 		opts.Port = forProvider.Port
 	}
 
+	opts.Metadata = metadata.BuildMetadata(mg, forProvider.Labels, forProvider.Annotations)
 	return opts, nil
 }
 
-// FormatUpdateOption generates the RouteCreate from an *RouteParameters
+// FormatUpdateOption generates the RouteUpdate from an *RouteParameters
 func FormatUpdateOption(forProvider v1alpha1.RouteParameters) *resource.RouteUpdate {
 	// client supports only updating metadata
 	return &resource.RouteUpdate{
@@ -165,12 +168,12 @@ func FormatUpdateOption(forProvider v1alpha1.RouteParameters) *resource.RouteUpd
 
 // GenerateObservation takes an Route resource and returns *RouteObservation.
 func GenerateObservation(o *resource.Route) v1alpha1.RouteObservation {
-	resource := v1alpha1.Resource{
+	res := v1alpha1.Resource{
 		GUID:      o.GUID,
 		CreatedAt: strToPtr(o.CreatedAt.Format(time.RFC3339)),
 		UpdatedAt: strToPtr(o.UpdatedAt.Format(time.RFC3339)),
 	}
-	obs := v1alpha1.RouteObservation{Resource: resource}
+	obs := v1alpha1.RouteObservation{Resource: res}
 
 	obs.URL = strToPtr(o.URL)
 	obs.Host = strToPtr(o.Host)

@@ -351,7 +351,7 @@ func TestNewCreateOption(t *testing.T) {
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			opt, err := newCreateOption(tc.args.forProvider, tc.args.params)
+			opt, err := newCreateOption(nil, tc.args.forProvider, tc.args.params)
 
 			if tc.want.err != nil && err != nil {
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {

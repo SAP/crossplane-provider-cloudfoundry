@@ -12,10 +12,12 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/google/uuid"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 )
 
 const (
@@ -64,8 +66,8 @@ func GetByIDOrSearch(ctx context.Context, scbClient ServiceCredentialBinding, gu
 }
 
 // Create creates a ServiceCredentialBinding resource
-func Create(ctx context.Context, scbClient ServiceCredentialBinding, forProvider v1alpha1.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBinding, error) {
-	opt, err := newCreateOption(forProvider, params)
+func Create(ctx context.Context, scbClient ServiceCredentialBinding, mg xpresource.Managed, forProvider v1alpha1.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBinding, error) {
+	opt, err := newCreateOption(mg, forProvider, params)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +152,7 @@ func newListOptions(forProvider v1alpha1.ServiceCredentialBindingParameters) (*c
 }
 
 // newCreateOption generates ServiceCredentialBindingCreate according to CR's ForProvider spec
-func newCreateOption(forProvider v1alpha1.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBindingCreate, error) {
+func newCreateOption(mg xpresource.Managed, forProvider v1alpha1.ServiceCredentialBindingParameters, params json.RawMessage) (*resource.ServiceCredentialBindingCreate, error) {
 	if forProvider.ServiceInstance == nil {
 		return nil, errors.New(ErrServiceInstanceMissing)
 	}
@@ -182,6 +184,7 @@ func newCreateOption(forProvider v1alpha1.ServiceCredentialBindingParameters, pa
 	if params != nil {
 		opt.WithJSONParameters(string(params))
 	}
+	opt.Metadata = metadata.BuildMetadata(mg, forProvider.Labels, forProvider.Annotations)
 	return opt, nil
 }
 

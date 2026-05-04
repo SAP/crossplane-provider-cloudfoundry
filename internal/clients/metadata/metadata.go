@@ -26,7 +26,10 @@ import (
 // not yet exist). On Update calls, include nil values for keys you want to
 // explicitly remove from the CF resource.
 func BuildMetadata(mg resource.Managed, userLabels, userAnnotations map[string]*string) *cfresource.Metadata {
-	tags := resource.GetExternalTags(mg)
+	var tags map[string]string
+	if mg != nil {
+		tags = resource.GetExternalTags(mg)
+	}
 	m := cfresource.NewMetadata()
 
 	// Set default labels from Crossplane (map[string]string -> map[string]*string)

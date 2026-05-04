@@ -23,6 +23,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 )
 
 var (
@@ -1095,7 +1096,7 @@ func TestIsMetadataUpToDate(t *testing.T) {
 					},
 				},
 			},
-			expected: false,
+			expected: true,
 		},
 		"SpecWithoutMetadataBindingHasLabels": {
 			spec: v1alpha1.ServiceRouteBindingParameters{},
@@ -1106,7 +1107,7 @@ func TestIsMetadataUpToDate(t *testing.T) {
 					},
 				},
 			},
-			expected: false,
+			expected: true,
 		},
 		"SpecHasLabelsBindingHasNoMetadata": {
 			spec: v1alpha1.ServiceRouteBindingParameters{
@@ -1125,9 +1126,14 @@ func TestIsMetadataUpToDate(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			result := isMetadataUpToDate(tc.spec, tc.binding)
+			var actualLabels, actualAnnotations map[string]*string
+			if tc.binding.Metadata != nil {
+				actualLabels = tc.binding.Metadata.Labels
+				actualAnnotations = tc.binding.Metadata.Annotations
+			}
+			result := metadata.IsMetadataUpToDate(tc.spec.Labels, tc.spec.Annotations, actualLabels, actualAnnotations)
 			if diff := cmp.Diff(tc.expected, result); diff != "" {
-				t.Errorf("isMetadataUpToDate(...): -want, +got:\n%s", diff)
+				t.Errorf("metadata.IsMetadataUpToDate(...): -want, +got:\n%s", diff)
 			}
 		})
 	}
@@ -1235,9 +1241,9 @@ func TestMetadataMapEqual(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			result := metadataMapEqual(tc.desired, tc.actual)
+			result := metadata.MetadataMapEqual(tc.desired, tc.actual)
 			if diff := cmp.Diff(tc.expected, result); diff != "" {
-				t.Errorf("metadataMapEqual(...): -want, +got:\n%s", diff)
+				t.Errorf("metadata.MetadataMapEqual(...): -want, +got:\n%s", diff)
 			}
 		})
 	}

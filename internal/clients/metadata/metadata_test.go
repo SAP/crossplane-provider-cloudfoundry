@@ -181,6 +181,20 @@ func TestBuildMetadata(t *testing.T) {
 			t.Errorf("expected nil (deletion marker) for crossplane-name, got %v", v)
 		}
 	})
+
+	t.Run("nil managed resource - no default labels", func(t *testing.T) {
+		m := BuildMetadata(nil, nil, nil)
+
+		if m == nil {
+			t.Fatal("expected non-nil metadata")
+		}
+		if len(m.Labels) != 0 {
+			t.Fatalf("expected 0 labels with nil mg, got %d", len(m.Labels))
+		}
+		if len(m.Annotations) != 0 {
+			t.Fatalf("expected 0 annotations with nil mg, got %d", len(m.Annotations))
+		}
+	})
 }
 
 func TestMetadataMapEqual(t *testing.T) {

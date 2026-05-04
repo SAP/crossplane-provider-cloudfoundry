@@ -7,10 +7,12 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 )
 
 type serviceRouteBinding interface {
@@ -40,8 +42,8 @@ func GetByID(ctx context.Context, srbClient ServiceRouteBinding, guid string) (*
 	return srbClient.Get(ctx, guid)
 }
 
-func Create(ctx context.Context, srbClient ServiceRouteBinding, forProvider v1alpha1.ServiceRouteBindingParameters, parametersFromSecret runtime.RawExtension) (*resource.ServiceRouteBinding, error) {
-	opt := newCreateOption(forProvider, parametersFromSecret)
+func Create(ctx context.Context, srbClient ServiceRouteBinding, mg xpresource.Managed, forProvider v1alpha1.ServiceRouteBindingParameters, parametersFromSecret runtime.RawExtension) (*resource.ServiceRouteBinding, error) {
+	opt := newCreateOption(mg, forProvider, parametersFromSecret)
 
 	jobGUID, binding, err := srbClient.Create(ctx, opt)
 	if err != nil {
@@ -56,7 +58,7 @@ func Create(ctx context.Context, srbClient ServiceRouteBinding, forProvider v1al
 	return srbClient.Single(ctx, createToListOptions(opt))
 }
 
-func newCreateOption(forProvider v1alpha1.ServiceRouteBindingParameters, parametersFromSecret runtime.RawExtension) *resource.ServiceRouteBindingCreate {
+func newCreateOption(mg xpresource.Managed, forProvider v1alpha1.ServiceRouteBindingParameters, parametersFromSecret runtime.RawExtension) *resource.ServiceRouteBindingCreate {
 	creationPayload := resource.NewServiceRouteBindingCreate(forProvider.Route, forProvider.ServiceInstance)
 
 	if forProvider.Parameters.Raw != nil {
@@ -64,6 +66,7 @@ func newCreateOption(forProvider v1alpha1.ServiceRouteBindingParameters, paramet
 	} else if parametersFromSecret.Raw != nil {
 		creationPayload.Parameters = (*json.RawMessage)(&parametersFromSecret.Raw)
 	}
+	creationPayload.Metadata = metadata.BuildMetadata(mg, forProvider.Labels, forProvider.Annotations)
 	return creationPayload
 }
 
