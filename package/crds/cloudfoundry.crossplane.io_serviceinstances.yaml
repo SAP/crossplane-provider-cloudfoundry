@@ -81,10 +81,9 @@ spec:
                   annotations:
                     additionalProperties:
                       type: string
-                    description: (Map of String) The annotations associated with Cloud
-                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The annotations associated with the
+                      resource. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
-                    x-kubernetes-map-type: granular
                   credentials:
                     description: |-
                       (Attributes) Arbitrary credentials as K8S runtime.RawExtension object, delivered to applications via VCAP_SERVICES environment variables.
@@ -118,6 +117,12 @@ spec:
                     description: (String) Same as `parameters`, supplied as arbitrary
                       JSON string. Ignored if `parameters` is set.
                     type: string
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: (Map of String) The labels associated with the resource.
+                      Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    type: object
                   maintenanceInfo:
                     description: (Attributes) Information about the version of this
                       service instance; only shown when `type` is `managed`.
@@ -586,10 +591,9 @@ spec:
                   annotations:
                     additionalProperties:
                       type: string
-                    description: (Map of String) The annotations associated with Cloud
-                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The annotations associated with the
+                      resource. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
-                    x-kubernetes-map-type: granular
                   createdAt:
                     description: (String) The date and time when the resource was
                       created in RFC3339 format.
@@ -609,10 +613,9 @@ spec:
                   labels:
                     additionalProperties:
                       type: string
-                    description: (Map of String) The labels associated with Cloud
-                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The labels associated with the resource.
+                      Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
-                    x-kubernetes-map-type: granular
                   lastAsyncJob:
                     description: (String) The job GUID of the last async operation
                       performed on the resource.
