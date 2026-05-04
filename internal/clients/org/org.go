@@ -7,9 +7,11 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/google/uuid"
 	"k8s.io/utils/ptr"
 )
@@ -62,14 +64,11 @@ func GetOrgByGUID(ctx context.Context, c Client, guid string) (*resource.Organiz
 }
 
 // GenerateCreate generates the OrganizationCreate from an *OrgParameters
-func GenerateCreate(spec v1alpha1.OrgParameters) *resource.OrganizationCreate {
-	// if external-name is not set, search by Name and Space
+func GenerateCreate(mg xpresource.Managed, spec v1alpha1.OrgParameters) *resource.OrganizationCreate {
 	create := &resource.OrganizationCreate{}
 	create.Name = spec.Name
 	create.Suspended = spec.Suspended
-
-	// TODO: ADD labels and annotations
-
+	create.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
 	return create
 }
 
@@ -83,8 +82,8 @@ func GenerateObservation(o *resource.Organization) v1alpha1.OrgObservation {
 	}
 
 	if o.Metadata != nil {
-		obs.Annotations = o.Metadata.Annotations
 		obs.Labels = o.Metadata.Labels
+		obs.Annotations = o.Metadata.Annotations
 	}
 
 	if o.Relationships.Quota.Data != nil {
@@ -103,7 +102,6 @@ func LateInitialize(spec *v1alpha1.OrgParameters, from *resource.Organization) {
 	if spec.Suspended == nil {
 		spec.Suspended = ptr.To(from.Suspended)
 	}
-	// TODO: ADD labels and annotations
 }
 
 // IsUpToDate checks whether current state is up-to-date compared to the given

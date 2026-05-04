@@ -180,7 +180,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errNotOrgKind)
 	}
 
-	o, err := c.client.Create(ctx, org.GenerateCreate(cr.Spec.ForProvider))
+	o, err := c.client.Create(ctx, org.GenerateCreate(cr, cr.Spec.ForProvider))
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}

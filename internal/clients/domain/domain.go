@@ -6,11 +6,13 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/google/uuid"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 )
 
 // Client is the interface that defines the methods that a Domain client should implement.
@@ -63,8 +65,7 @@ func GetByIDOrName(ctx context.Context, c Client, id, name string) (*resource.Do
 }
 
 // GenerateCreate generates the DomainCreate from an *DomainParameters.
-func GenerateCreate(spec v1alpha1.DomainParameters) *resource.DomainCreate {
-	// if external-name is not set, search by Name and Space
+func GenerateCreate(mg xpresource.Managed, spec v1alpha1.DomainParameters) *resource.DomainCreate {
 	create := &resource.DomainCreate{}
 	create.Name = spec.Name
 
@@ -88,7 +89,7 @@ func GenerateCreate(spec v1alpha1.DomainParameters) *resource.DomainCreate {
 		create.Relationships.SharedOrganizations = resource.NewToManyRelationships(sharedOrgs)
 	}
 
-	// TODO: ADD labels and annotations
+	create.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
 	return create
 }
 
@@ -111,14 +112,14 @@ func GenerateObservation(o *resource.Domain) v1alpha1.DomainObservation {
 	}
 
 	if o.Metadata != nil {
-		obs.Annotations = o.Metadata.Annotations
 		obs.Labels = o.Metadata.Labels
+		obs.Annotations = o.Metadata.Annotations
 	}
 
 	return obs
 }
 
-// GenerateUpdate generates the Domain from an *DomainParameters. There is not really an option to update besides labels and annotations
+// GenerateUpdate generates the DomainUpdate from an *DomainParameters. There is not really an option to update besides labels and annotations
 func GenerateUpdate(spec v1alpha1.DomainParameters) *resource.DomainUpdate {
 	return &resource.DomainUpdate{
 		Metadata: &resource.Metadata{Labels: spec.Labels, Annotations: spec.Annotations},
@@ -131,33 +132,6 @@ func GenerateUpdate(spec v1alpha1.DomainParameters) *resource.DomainUpdate {
 //nolint:gocyclo
 func IsUpToDate(spec v1alpha1.DomainParameters, observed *resource.Domain) bool {
 	// domain update does not support rename and change of many attributes, and can only update labels and annotations. we can safely return true for now
-
-	// if spec.Name != observed.Name {
-	// 	return false
-	// }
-
-	// if spec.Internal != nil && *spec.Internal != observed.Internal {
-	// 	return false
-	// }
-
-	// if spec.RouterGroup != nil && (observed.RouterGroup == nil || *spec.RouterGroup != observed.RouterGroup.GUID) {
-	// 	return false
-	// }
-
-	// // Some domains are not organization-scoped, it returns Relationships.Organization.Data nil. Since update of org is support, we can omit this checks
-	// // if spec.Org != nil && (observed.Relationships.Organization == nil || *spec.Org != observed.Relationships.Organization.Data.GUID) {
-	// //		return false
-	// //	}
-
-	// if observed.Relationships.SharedOrganizations != nil && len(spec.SharedOrgs) != len(observed.Relationships.SharedOrganizations.Data) {
-	// 	return false
-	// }
-
-	// for i, org := range spec.SharedOrgs {
-	// 	if *org != observed.Relationships.SharedOrganizations.Data[i].GUID {
-	// 		return false
-	// 	}
-	// }
 
 	return true
 }

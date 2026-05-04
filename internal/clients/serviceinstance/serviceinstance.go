@@ -8,11 +8,14 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 )
 
 // ServiceInstance defines interfaces to the ServiceInstance resource
@@ -154,20 +157,20 @@ func (c *Client) GetServiceCredentials(ctx context.Context, r *resource.ServiceI
 }
 
 // Create creates the external resource according to CR's ForProvider spec
-func (c *Client) Create(ctx context.Context, spec v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) Create(ctx context.Context, mg xpresource.Managed, spec v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
 	switch spec.Type {
 	case v1alpha1.ManagedService:
-		return c.createManaged(ctx, spec, creds)
+		return c.createManaged(ctx, mg, spec, creds)
 
 	case v1alpha1.UserProvidedService:
-		return c.createUserProvided(ctx, spec, creds)
+		return c.createUserProvided(ctx, mg, spec, creds)
 	default:
 		return nil, errors.New("unknown service instance type")
 	}
 }
 
 // createManaged creates a managed service instance according to CR's ForProvider spec
-func (c *Client) createManaged(ctx context.Context, spec v1alpha1.ServiceInstanceParameters, params json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) createManaged(ctx context.Context, mg xpresource.Managed, spec v1alpha1.ServiceInstanceParameters, params json.RawMessage) (*resource.ServiceInstance, error) {
 
 	// throw error if no space is provided
 	if spec.Space == nil {
@@ -175,6 +178,7 @@ func (c *Client) createManaged(ctx context.Context, spec v1alpha1.ServiceInstanc
 	}
 
 	opt := resource.NewServiceInstanceCreateManaged(*spec.Name, *spec.Space, *spec.ServicePlan.ID)
+	opt.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
 
 	if params != nil {
 		opt.Parameters = &params
@@ -193,13 +197,14 @@ func (c *Client) createManaged(ctx context.Context, spec v1alpha1.ServiceInstanc
 }
 
 // createUserProvided creates a user-provided service instance according to CR's ForProvider spec
-func (c *Client) createUserProvided(ctx context.Context, spec v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) createUserProvided(ctx context.Context, mg xpresource.Managed, spec v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
 	// throw error if no space is provided
 	if spec.Space == nil {
 		return nil, errors.New("no space reference provided")
 	}
 	// create the service instance
 	opt := resource.NewServiceInstanceCreateUserProvided(*spec.Name, *spec.Space)
+	opt.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
 	si, err := c.CreateUserProvided(ctx, opt)
 	if err != nil {
 		return nil, err

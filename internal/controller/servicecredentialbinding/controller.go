@@ -221,7 +221,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, fmt.Errorf(errExtractParams, err)
 	}
 
-	serviceBinding, err := scb.Create(ctx, c.scbClient, cr.Spec.ForProvider, params)
+	serviceBinding, err := scb.Create(ctx, c.scbClient, cr, cr.Spec.ForProvider, params)
 	if serviceBinding != nil && serviceBinding.GUID != "" {
 		// Capture the external name even if the job failed,
 		// as the binding was created in Cloud Foundry and we can manage it going forward.

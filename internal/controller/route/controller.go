@@ -33,10 +33,9 @@ import (
 
 type RouteService interface {
 	FindRouteBySpec(ctx context.Context, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, bool, error)
-
 	GetRouteByGUID(ctx context.Context, guid string) (*v1alpha1.RouteObservation, bool, error)
-
-	Create(ctx context.Context, forProvider v1alpha1.RouteParameters) (string, error)
+	GetByIDOrSpec(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, error)
+	Create(ctx context.Context, mg resource.Managed, forProvider v1alpha1.RouteParameters) (string, error)
 	Update(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) error
 	Delete(ctx context.Context, guid string) (string, error)
 }
@@ -192,7 +191,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Creating())
 
-	guid, err := c.RouteService.Create(ctx, cr.Spec.ForProvider)
+	guid, err := c.RouteService.Create(ctx, cr, cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
