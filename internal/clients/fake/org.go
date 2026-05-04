@@ -64,3 +64,18 @@ func (s *Organization) SetGUID(guid string) *Organization {
 	s.GUID = guid
 	return s
 }
+
+func (s *Organization) SetLabels(labels map[string]*string) *Organization {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Labels = labels
+	return s
+}
+func (s *Organization) SetAnnotations(annotations map[string]*string) *Organization {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Annotations = annotations
+	return s
+}

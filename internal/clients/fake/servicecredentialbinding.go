@@ -116,3 +116,18 @@ func (s *ServiceCredentialBinding) SetLastOperation(op, state string) *ServiceCr
 	}
 	return s
 }
+
+func (s *ServiceCredentialBinding) SetLabels(labels map[string]*string) *ServiceCredentialBinding {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Labels = labels
+	return s
+}
+func (s *ServiceCredentialBinding) SetAnnotations(annotations map[string]*string) *ServiceCredentialBinding {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Annotations = annotations
+	return s
+}

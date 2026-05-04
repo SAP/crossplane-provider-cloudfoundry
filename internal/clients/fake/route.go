@@ -43,7 +43,7 @@ func (m *MockRoute) Delete(ctx context.Context, guid string) (string, error) {
 	return args.Get(0).(string), args.Error(1)
 }
 
-// Route is a nil Route
+// RouteNil is a nil Route
 var (
 	RouteNil *resource.Route
 )
@@ -56,5 +56,29 @@ func FakeRoute(guid, url string) *resource.Route {
 		},
 		URL: url,
 	}
+	return r
+}
+
+type Route struct {
+	resource.Route
+}
+
+func NewRoute() *Route                      { return &Route{} }
+func (r *Route) SetHost(host string) *Route { r.Host = host; return r }
+func (r *Route) SetGUID(guid string) *Route { r.GUID = guid; return r }
+
+func (r *Route) SetLabels(labels map[string]*string) *Route {
+	if r.Metadata == nil {
+		r.Metadata = &resource.Metadata{}
+	}
+	r.Metadata.Labels = labels
+	return r
+}
+
+func (r *Route) SetAnnotations(annotations map[string]*string) *Route {
+	if r.Metadata == nil {
+		r.Metadata = &resource.Metadata{}
+	}
+	r.Metadata.Annotations = annotations
 	return r
 }
