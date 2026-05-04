@@ -328,8 +328,9 @@ func UpdateObservation(in *v1alpha1.ServiceInstanceObservation, r *resource.Serv
 	}
 }
 
-// IsUpToDate checks if the managed resource is in sync with CR.
-func IsUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.ServiceInstance) bool {
+// specUpToDate checks whether the spec fields (name, service plan, route service URL,
+// syslog drain URL) of a ServiceInstance are in sync with the observed CF resource.
+func specUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.ServiceInstance) bool {
 	if in.Name != nil && *in.Name != observed.Name {
 		return false
 	}
@@ -348,6 +349,21 @@ func IsUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.Servi
 		}
 	}
 	return true
+}
+
+// IsUpToDate checks if the managed resource is in sync with CR.
+func IsUpToDate(mg xpresource.Managed, in *v1alpha1.ServiceInstanceParameters, observed *resource.ServiceInstance) bool {
+	if !specUpToDate(in, observed) {
+		return false
+	}
+
+	desired := metadata.BuildMetadata(mg, in.Labels, in.Annotations)
+	var actualLabels, actualAnnotations map[string]*string
+	if observed.Metadata != nil {
+		actualLabels = observed.Metadata.Labels
+		actualAnnotations = observed.Metadata.Annotations
+	}
+	return metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, actualLabels, actualAnnotations)
 }
 
 // AreSharedSpacesUpToDate checks if the shared spaces of a service instance are in sync with the CR

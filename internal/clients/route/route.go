@@ -211,9 +211,10 @@ func GenerateObservation(o *resource.Route) v1alpha1.RouteObservation {
 
 // IsUpToDate checks whether current state is up-to-date compared to the given
 // set of parameters.
-func IsUpToDate(forProvider v1alpha1.RouteParameters, atProvider v1alpha1.RouteObservation) bool {
-	// Routes are mostly immutable, expect for metadata
-	return true
+func IsUpToDate(mg xpresource.Managed, forProvider v1alpha1.RouteParameters, atProvider v1alpha1.RouteObservation) bool {
+	// Routes are mostly immutable, except for metadata
+	desired := metadata.BuildMetadata(mg, forProvider.Labels, forProvider.Annotations)
+	return metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, atProvider.Labels, atProvider.Annotations)
 }
 
 func strToPtr(s string) *string {

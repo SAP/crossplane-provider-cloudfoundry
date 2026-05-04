@@ -181,7 +181,7 @@ func TestObserve(t *testing.T) {
 					withExternalName(guid),
 					withName(name),
 				),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
 			service: func() *fake.MockDomain {
@@ -206,7 +206,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeDomain(withName(name), withExternalName(guid)),
 				obs: managed.ExternalObservation{
 					ResourceExists:          true,
-					ResourceUpToDate:        true,
+					ResourceUpToDate:        false,
 					ResourceLateInitialized: true,
 				},
 				err: nil,

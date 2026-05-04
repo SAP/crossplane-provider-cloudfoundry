@@ -414,8 +414,8 @@ func TestIsUpToDate(t *testing.T) {
 		Resource: cfresource.Resource{GUID: testGUID},
 	}
 
-	// Currently always returns true as per implementation
-	result := IsUpToDate(context.Background(), forProvider, resource)
+	// With nil mg and no labels, metadata check returns true
+	result := IsUpToDate(context.Background(), nil, forProvider, resource)
 	if !result {
 		t.Errorf("IsUpToDate(...): expected true, got false")
 	}

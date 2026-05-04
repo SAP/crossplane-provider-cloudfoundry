@@ -103,10 +103,15 @@ func LateInitialize(cr *v1alpha1.Space, from *resource.Space, ssh bool) bool {
 
 // IsUpToDate checks whether current state is up-to-date compared to the given
 // set of parameters.
-func IsUpToDate(spec v1alpha1.SpaceParameters, observed *resource.Space, ssh bool) bool {
-	// rename or update ssh setting
-	return spec.Name == observed.Name && (spec.AllowSSH == ssh)
-
+func IsUpToDate(mg xpresource.Managed, spec v1alpha1.SpaceParameters, observed *resource.Space, ssh bool) bool {
+	upToDate := spec.Name == observed.Name && (spec.AllowSSH == ssh)
+	desired := metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
+	var actualLabels, actualAnnotations map[string]*string
+	if observed.Metadata != nil {
+		actualLabels = observed.Metadata.Labels
+		actualAnnotations = observed.Metadata.Annotations
+	}
+	return upToDate && metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, actualLabels, actualAnnotations)
 }
 
 // IsSSHEnabled checks whether SSH is enabled for the given space.

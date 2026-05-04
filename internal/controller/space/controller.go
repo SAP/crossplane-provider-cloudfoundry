@@ -178,7 +178,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	return managed.ExternalObservation{
 		ResourceExists:          true,
-		ResourceUpToDate:        space.IsUpToDate(cr.Spec.ForProvider, s, ssh),
+		ResourceUpToDate:        space.IsUpToDate(cr, cr.Spec.ForProvider, s, ssh),
 		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
 }

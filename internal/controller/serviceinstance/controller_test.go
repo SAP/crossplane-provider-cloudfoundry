@@ -262,7 +262,7 @@ func TestObserve(t *testing.T) {
 					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
 					withConditions(xpv1.Available()),
 				),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
 			service: func() *fake.MockServiceInstance {
@@ -297,7 +297,7 @@ func TestObserve(t *testing.T) {
 					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
 					withConditions(xpv1.Available()),
 				),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
 			service: func() *fake.MockServiceInstance {
@@ -504,7 +504,7 @@ func TestObserve(t *testing.T) {
 					withParameters("{\"foo\":\"bar\", \"baz\": 1}"),
 					withDriftDetection(false),
 				),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
 			service: func() *fake.MockServiceInstance {
@@ -540,7 +540,7 @@ func TestObserve(t *testing.T) {
 					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: iSha256([]byte(jsonCredentials))}),
 					withConditions(xpv1.Available()),
 				),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
 			service: func() *fake.MockServiceInstance {
@@ -582,7 +582,7 @@ func TestObserve(t *testing.T) {
 					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
 					withConditions(xpv1.Available()),
 				),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
 			service: func() *fake.MockServiceInstance {

@@ -214,12 +214,14 @@ func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) 
 	return changes, nil
 }
 
-func IsUpToDate(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (bool, error) {
+func IsUpToDate(mg xpresource.Managed, spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (bool, error) {
 	changes, err := DetectChanges(spec, status)
 	if err != nil {
 		return false, err
 	}
-	return !changes.HasChanges(), nil
+	desired := metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
+	metadataUpToDate := metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, status.Labels, status.Annotations)
+	return !changes.HasChanges() && metadataUpToDate, nil
 }
 
 // DiffServiceBindings checks whether current state is up-to-date compared to the given

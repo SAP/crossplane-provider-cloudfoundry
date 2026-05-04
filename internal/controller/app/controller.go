@@ -171,7 +171,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		cr.SetConditions(xpv1.Unavailable())
 	}
 
-	isUpToDate, err := app.IsUpToDate(cr.Spec.ForProvider, cr.Status.AtProvider)
+	isUpToDate, err := app.IsUpToDate(cr, cr.Spec.ForProvider, cr.Status.AtProvider)
 	if err != nil {
 		return managed.ExternalObservation{}, err
 	}

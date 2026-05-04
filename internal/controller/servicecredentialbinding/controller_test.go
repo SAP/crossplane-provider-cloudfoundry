@@ -230,7 +230,7 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  scbAvailable.DeepCopy(),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ConnectionDetails: managed.ConnectionDetails{}},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ConnectionDetails: managed.ConnectionDetails{}},
 				err: nil,
 			},
 			service: func() *fake.MockServiceCredentialBinding {
@@ -258,7 +258,7 @@ func TestObserve(t *testing.T) {
 			observationStateHandler: func() *MockObservationStateHandler {
 				m := &MockObservationStateHandler{}
 				m.On("HandleObservationState", cfSucceeded(), mock.Anything, mock.Anything).Return(
-					managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ConnectionDetails: managed.ConnectionDetails{}},
+					managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ConnectionDetails: managed.ConnectionDetails{}},
 					nil,
 				)
 				return m
@@ -270,7 +270,7 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  scb.DeepCopy(),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
 			service: func() *fake.MockServiceCredentialBinding {
@@ -293,7 +293,7 @@ func TestObserve(t *testing.T) {
 			observationStateHandler: func() *MockObservationStateHandler {
 				m := &MockObservationStateHandler{}
 				m.On("HandleObservationState", cfSucceeded(), mock.Anything, mock.Anything).Return(
-					managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+					managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 					nil,
 				)
 				return m
@@ -673,7 +673,7 @@ func TestHandleObservationState(t *testing.T) {
 			want: want{
 				obs: managed.ExternalObservation{
 					ResourceExists:    true,
-					ResourceUpToDate:  true, // Assuming IsUpToDate returns true and no expired keys
+					ResourceUpToDate:  false, // Metadata drift detected (mock has no metadata)
 					ConnectionDetails: managed.ConnectionDetails{},
 				},
 				err: nil,
