@@ -143,6 +143,11 @@ func GenerateObservation(res *resource.App) v1alpha1.AppObservation {
 	obs.CreatedAt = ptr.To(res.CreatedAt.Format(time.RFC3339))
 	obs.UpdatedAt = ptr.To(res.UpdatedAt.Format(time.RFC3339))
 
+	if res.Metadata != nil {
+		obs.Labels = res.Metadata.Labels
+		obs.Annotations = res.Metadata.Annotations
+	}
+
 	return obs
 }
 

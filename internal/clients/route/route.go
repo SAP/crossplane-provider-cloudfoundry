@@ -206,6 +206,11 @@ func GenerateObservation(o *resource.Route) v1alpha1.RouteObservation {
 
 		}
 	}
+
+	if o.Metadata != nil {
+		obs.Labels = o.Metadata.Labels
+		obs.Annotations = o.Metadata.Annotations
+	}
 	return obs
 }
 
