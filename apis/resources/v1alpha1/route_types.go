@@ -33,6 +33,8 @@ type RouteObservation struct {
 	// (List of Attributes) One or more route mappings that map this route to applications. Can be repeated to load balance route traffic among multiple applications.
 	// +kubebuilder:validation:Optional
 	Destinations []RouteDestination `json:"destinations,omitempty"`
+
+	ResourceMetadata `json:",inline"`
 }
 
 type RouteParameters struct {
@@ -55,6 +57,8 @@ type RouteParameters struct {
 	// (Attributes) The route options.
 	// +kubebuilder:validation:Optional
 	Options *RouteOptions `json:"options,omitempty"`
+
+	ResourceMetadata `json:",inline"`
 }
 
 type RouteOptions struct {

@@ -36,9 +36,11 @@ func convertSpaceResource(ctx context.Context, cfClient *client.Client, space *r
 			},
 			ForProvider: v1alpha1.SpaceParameters{
 				// AllowSSH:         false,
-				Annotations:      space.Metadata.Annotations,
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: space.Metadata.Annotations,
+					Labels:      space.Metadata.Labels,
+				},
 				IsolationSegment: new(string),
-				Labels:           space.Metadata.Labels,
 				Name:             space.Name,
 				OrgReference: v1alpha1.OrgReference{
 					Org: &space.Relationships.Organization.Data.GUID,
