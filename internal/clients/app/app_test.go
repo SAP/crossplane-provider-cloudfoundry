@@ -3,6 +3,8 @@ package app
 import (
 	"testing"
 
+	"k8s.io/utils/ptr"
+
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
@@ -174,6 +176,98 @@ func TestIsUpToDate(t *testing.T) {
 				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
 			},
 			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := IsUpToDate(nil, tt.spec, tt.status)
+			if err != nil {
+				t.Fatalf("IsUpToDate() error = %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("IsUpToDate() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsUpToDate_Metadata(t *testing.T) {
+	tests := []struct {
+		name     string
+		spec     v1alpha1.AppParameters
+		status   v1alpha1.AppObservation
+		expected bool
+	}{
+		{
+			name: "Label drift - spec has labels but observation does not",
+			spec: v1alpha1.AppParameters{
+				Name:      "test-app",
+				Lifecycle: "docker",
+				Docker:    &v1alpha1.DockerConfiguration{Image: "nginx:latest"},
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+			},
+			expected: false,
+		},
+		{
+			name: "Labels match",
+			spec: v1alpha1.AppParameters{
+				Name:      "test-app",
+				Lifecycle: "docker",
+				Docker:    &v1alpha1.DockerConfiguration{Image: "nginx:latest"},
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Annotation drift - spec has annotations but observation does not",
+			spec: v1alpha1.AppParameters{
+				Name:      "test-app",
+				Lifecycle: "docker",
+				Docker:    &v1alpha1.DockerConfiguration{Image: "nginx:latest"},
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+			},
+			expected: false,
+		},
+		{
+			name: "Annotations match",
+			spec: v1alpha1.AppParameters{
+				Name:      "test-app",
+				Lifecycle: "docker",
+				Docker:    &v1alpha1.DockerConfiguration{Image: "nginx:latest"},
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			expected: true,
 		},
 	}
 

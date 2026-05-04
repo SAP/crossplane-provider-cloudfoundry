@@ -466,3 +466,116 @@ func TestUpdateSharedSpaces(t *testing.T) {
 		})
 	}
 }
+
+func TestIsUpToDate_Metadata(t *testing.T) {
+	cases := map[string]struct {
+		in       *v1alpha1.ServiceInstanceParameters
+		observed *resource.ServiceInstance
+		want     bool
+	}{
+		"UpToDate no labels": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Type: v1alpha1.ManagedService,
+			},
+			observed: &resource.ServiceInstance{
+				Name: "test-si",
+				Type: "managed",
+			},
+			want: true,
+		},
+		"Label drift - spec has labels but observed does not": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Type: v1alpha1.ManagedService,
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			observed: &resource.ServiceInstance{
+				Name: "test-si",
+				Type: "managed",
+			},
+			want: false,
+		},
+		"Labels match": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Type: v1alpha1.ManagedService,
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			observed: &resource.ServiceInstance{
+				Name: "test-si",
+				Type: "managed",
+				Metadata: &resource.Metadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			want: true,
+		},
+		"Annotation drift - spec has annotations but observed does not": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Type: v1alpha1.ManagedService,
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			observed: &resource.ServiceInstance{
+				Name: "test-si",
+				Type: "managed",
+			},
+			want: false,
+		},
+		"Annotations match": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Type: v1alpha1.ManagedService,
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			observed: &resource.ServiceInstance{
+				Name: "test-si",
+				Type: "managed",
+				Metadata: &resource.Metadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			want: true,
+		},
+		"Observed nil metadata": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Type: v1alpha1.ManagedService,
+			},
+			observed: &resource.ServiceInstance{
+				Name: "test-si",
+				Type: "managed",
+			},
+			want: true,
+		},
+		"Spec name drift": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("new-name"),
+				Type: v1alpha1.ManagedService,
+			},
+			observed: &resource.ServiceInstance{
+				Name: "old-name",
+				Type: "managed",
+			},
+			want: false,
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			result := IsUpToDate(nil, tc.in, tc.observed)
+			if result != tc.want {
+				t.Errorf("IsUpToDate(...): want %v, got %v", tc.want, result)
+			}
+		})
+	}
+}

@@ -7,13 +7,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/go-cmp/cmp"
-	"github.com/stretchr/testify/mock"
-
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
+	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	"github.com/google/go-cmp/cmp"
+	"github.com/stretchr/testify/mock"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -438,4 +437,100 @@ func createMockClientWithDetails(credentials map[string]interface{}, err error) 
 	}
 
 	return mockClient
+}
+
+func TestIsUpToDate_Metadata(t *testing.T) {
+	cases := map[string]struct {
+		forProvider v1alpha1.ServiceCredentialBindingParameters
+		observed    cfresource.ServiceCredentialBinding
+		want        bool
+	}{
+		"UpToDate no labels": {
+			forProvider: v1alpha1.ServiceCredentialBindingParameters{
+				Type: "key",
+				Name: ptr.To("test-binding"),
+			},
+			observed: cfresource.ServiceCredentialBinding{
+				Resource: cfresource.Resource{GUID: testGUID},
+			},
+			want: true,
+		},
+		"Label drift - spec has labels but observed does not": {
+			forProvider: v1alpha1.ServiceCredentialBindingParameters{
+				Type: "key",
+				Name: ptr.To("test-binding"),
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			observed: cfresource.ServiceCredentialBinding{
+				Resource: cfresource.Resource{GUID: testGUID},
+			},
+			want: false,
+		},
+		"Labels match": {
+			forProvider: v1alpha1.ServiceCredentialBindingParameters{
+				Type: "key",
+				Name: ptr.To("test-binding"),
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			observed: cfresource.ServiceCredentialBinding{
+				Resource: cfresource.Resource{GUID: testGUID},
+				Metadata: &cfresource.Metadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			want: true,
+		},
+		"Annotation drift - spec has annotations but observed does not": {
+			forProvider: v1alpha1.ServiceCredentialBindingParameters{
+				Type: "key",
+				Name: ptr.To("test-binding"),
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			observed: cfresource.ServiceCredentialBinding{
+				Resource: cfresource.Resource{GUID: testGUID},
+			},
+			want: false,
+		},
+		"Annotations match": {
+			forProvider: v1alpha1.ServiceCredentialBindingParameters{
+				Type: "key",
+				Name: ptr.To("test-binding"),
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			observed: cfresource.ServiceCredentialBinding{
+				Resource: cfresource.Resource{GUID: testGUID},
+				Metadata: &cfresource.Metadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			want: true,
+		},
+		"Observed nil metadata": {
+			forProvider: v1alpha1.ServiceCredentialBindingParameters{
+				Type: "key",
+				Name: ptr.To("test-binding"),
+			},
+			observed: cfresource.ServiceCredentialBinding{
+				Resource: cfresource.Resource{GUID: testGUID},
+			},
+			want: true,
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			result := IsUpToDate(context.Background(), nil, tc.forProvider, tc.observed)
+			if result != tc.want {
+				t.Errorf("IsUpToDate(...): want %v, got %v", tc.want, result)
+			}
+		})
+	}
 }
