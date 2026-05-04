@@ -36,8 +36,8 @@ type RouteService interface {
 	GetRouteByGUID(ctx context.Context, guid string) (*v1alpha1.RouteObservation, bool, error)
 	GetByIDOrSpec(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, error)
 	Create(ctx context.Context, mg resource.Managed, forProvider v1alpha1.RouteParameters) (string, error)
-	Update(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) error
-	Delete(ctx context.Context, guid string) (string, error)
+	Update(ctx context.Context, guid string, mg resource.Managed, forProvider v1alpha1.RouteParameters) error
+	Delete(ctx context.Context, guid string) error
 }
 
 const (
@@ -211,7 +211,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	guid := meta.GetExternalName(cr)
-	err := c.RouteService.Update(ctx, guid, cr.Spec.ForProvider)
+	err := c.RouteService.Update(ctx, guid, cr, cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}

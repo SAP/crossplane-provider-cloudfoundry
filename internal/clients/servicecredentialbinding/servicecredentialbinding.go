@@ -95,8 +95,8 @@ func Create(ctx context.Context, scbClient ServiceCredentialBinding, mg xpresour
 }
 
 // Update updates labels and annotations of a ServiceCredentialBinding resource
-func Update(ctx context.Context, scbClient ServiceCredentialBinding, guid string, forProvider v1alpha1.ServiceCredentialBindingParameters) (*resource.ServiceCredentialBinding, error) {
-	opt := newUpdateOption(forProvider)
+func Update(ctx context.Context, scbClient ServiceCredentialBinding, guid string, mg xpresource.Managed, forProvider v1alpha1.ServiceCredentialBindingParameters) (*resource.ServiceCredentialBinding, error) {
+	opt := newUpdateOption(mg, forProvider)
 	return scbClient.Update(ctx, guid, opt)
 }
 
@@ -213,9 +213,9 @@ func createToListOptions(create *resource.ServiceCredentialBindingCreate) *clien
 }
 
 // newUpdateOption generates ServiceCredentialBindingUpdate according to CR's ForProvider spec
-func newUpdateOption(forProvider v1alpha1.ServiceCredentialBindingParameters) *resource.ServiceCredentialBindingUpdate {
+func newUpdateOption(mg xpresource.Managed, forProvider v1alpha1.ServiceCredentialBindingParameters) *resource.ServiceCredentialBindingUpdate {
 	opt := &resource.ServiceCredentialBindingUpdate{}
-	// TODO: implement update option. SCB support only updates for labels and annotations. No other fields can be updated. Labels and annotations are not supported yet, so for now we return an empty update option.
+	opt.Metadata = metadata.BuildMetadata(mg, forProvider.Labels, forProvider.Annotations)
 	return opt
 }
 

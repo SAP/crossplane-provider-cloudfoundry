@@ -251,7 +251,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	if changes.HasOtherChanges("docker_image", "environment") {
-		_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider)
+		_, err := c.client.Update(ctx, guid, cr, cr.Spec.ForProvider)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
 		}

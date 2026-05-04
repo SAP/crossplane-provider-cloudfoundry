@@ -324,7 +324,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.Wrap(err, errSecret)
 	}
 
-	if _, err := c.serviceinstance.Update(ctx, guid, &cr.Spec.ForProvider, creds); err != nil {
+	if _, err := c.serviceinstance.Update(ctx, guid, cr, &cr.Spec.ForProvider, creds); err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 

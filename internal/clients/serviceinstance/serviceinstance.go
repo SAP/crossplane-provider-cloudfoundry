@@ -222,23 +222,23 @@ func (c *Client) createUserProvided(ctx context.Context, mg xpresource.Managed, 
 }
 
 // Update updates the external resource to keep it in sync with CR's ForProvider spec
-func (c *Client) Update(ctx context.Context, guid string, desired *v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) Update(ctx context.Context, guid string, mg xpresource.Managed, desired *v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
 	observed, err := c.Get(ctx, guid)
 	if err != nil {
 		return nil, err
 	}
 	switch desired.Type {
 	case v1alpha1.ManagedService:
-		return c.updateManaged(ctx, observed, desired, creds)
+		return c.updateManaged(ctx, observed, mg, desired, creds)
 	case v1alpha1.UserProvidedService:
-		return c.updateUserProvided(ctx, observed, desired, creds)
+		return c.updateUserProvided(ctx, observed, mg, desired, creds)
 	default:
 		return nil, errors.New("unknown service instance type")
 	}
 }
 
 // updateManaged updates managed service instance according to CR's ForProvider spec
-func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceInstance, desired *v1alpha1.ServiceInstanceParameters, params json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceInstance, mg xpresource.Managed, desired *v1alpha1.ServiceInstanceParameters, params json.RawMessage) (*resource.ServiceInstance, error) {
 	upd := resource.NewServiceInstanceManagedUpdate()
 
 	if observed.Name != *desired.Name {
@@ -252,6 +252,8 @@ func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceIn
 	if params != nil {
 		upd.WithParameters(params)
 	}
+
+	upd.Metadata = metadata.BuildMetadata(mg, desired.Labels, desired.Annotations)
 
 	// Update the service instance
 	job, s, err := c.UpdateManaged(ctx, observed.GUID, upd)
@@ -272,7 +274,7 @@ func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceIn
 }
 
 // updateUserProvided updates user-provided service instance according to CR's ForProvider spec
-func (c *Client) updateUserProvided(ctx context.Context, observed *resource.ServiceInstance, desired *v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) updateUserProvided(ctx context.Context, observed *resource.ServiceInstance, mg xpresource.Managed, desired *v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
 	upd := resource.NewServiceInstanceUserProvidedUpdate()
 
 	if observed.Name != *desired.Name {
@@ -284,6 +286,8 @@ func (c *Client) updateUserProvided(ctx context.Context, observed *resource.Serv
 	}
 	upd.WithRouteServiceURL(desired.RouteServiceURL).
 		WithSyslogDrainURL(desired.SyslogDrainURL)
+
+	upd.Metadata = metadata.BuildMetadata(mg, desired.Labels, desired.Annotations)
 
 	return c.UpdateUserProvided(ctx, observed.GUID, upd)
 }
