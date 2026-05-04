@@ -158,3 +158,18 @@ func (s *ServiceInstance) SetLastOperation(op, state string) *ServiceInstance {
 	}
 	return s
 }
+
+func (s *ServiceInstance) SetLabels(labels map[string]*string) *ServiceInstance {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Labels = labels
+	return s
+}
+func (s *ServiceInstance) SetAnnotations(annotations map[string]*string) *ServiceInstance {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Annotations = annotations
+	return s
+}

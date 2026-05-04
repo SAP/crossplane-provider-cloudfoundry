@@ -99,3 +99,18 @@ func (s *Space) SetRelationships(guid string) *Space {
 	}
 	return s
 }
+
+func (s *Space) SetLabels(labels map[string]*string) *Space {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Labels = labels
+	return s
+}
+func (s *Space) SetAnnotations(annotations map[string]*string) *Space {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Annotations = annotations
+	return s
+}
