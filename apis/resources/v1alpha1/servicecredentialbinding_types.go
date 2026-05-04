@@ -19,6 +19,8 @@ type ServiceCredentialBindingObservation struct {
 	// If the binding is rotated, `retiredBindings` stores resources that have been rotated out but are still transitionally retained due to `rotation.ttl` setting
 	// +kubebuilder:validation:Optional
 	RetiredKeys []*SCBResource `json:"retiredKeys,omitempty"`
+
+	ResourceMetadata `json:",inline"`
 }
 
 type ServiceCredentialBindingParameters struct {
@@ -73,6 +75,8 @@ type ServiceCredentialBindingParameters struct {
 	// Rotation defines the parameters for rotating the service credential binding.
 	// +kubebuilder:validation:Optional
 	Rotation *RotationParameters `json:"rotation,omitempty"`
+
+	ResourceMetadata `json:",inline"`
 }
 
 type ServiceCredentialBindingSpec struct {

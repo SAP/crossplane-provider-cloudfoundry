@@ -83,10 +83,9 @@ spec:
                   annotations:
                     additionalProperties:
                       type: string
-                    description: (Map of String) The annotations associated with Cloud
-                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The annotations associated with the
+                      resource. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
-                    x-kubernetes-map-type: granular
                   domain:
                     description: (Deprecated) Domain part of full domain name. If
                       specified, the `subDomain` argument needs to be provided and
@@ -101,10 +100,9 @@ spec:
                   labels:
                     additionalProperties:
                       type: string
-                    description: (Map of String) The labels associated with Cloud
-                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The labels associated with the resource.
+                      Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
-                    x-kubernetes-map-type: granular
                   name:
                     description: (String) The name of the domain; must be between
                       3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035).
@@ -387,10 +385,9 @@ spec:
                   annotations:
                     additionalProperties:
                       type: string
-                    description: (Map of String) The annotations associated with Cloud
-                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The annotations associated with the
+                      resource. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
-                    x-kubernetes-map-type: granular
                   createdAt:
                     description: (String) The date and time when the resource was
                       created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
@@ -406,10 +403,9 @@ spec:
                   labels:
                     additionalProperties:
                       type: string
-                    description: (Map of String) The labels associated with Cloud
-                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The labels associated with the resource.
+                      Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
-                    x-kubernetes-map-type: granular
                   name:
                     description: (String) The name of the domain; must be between
                       3 ~ 253 characters and follow [RFC 1035](https://tools.ietf.org/html/rfc1035).

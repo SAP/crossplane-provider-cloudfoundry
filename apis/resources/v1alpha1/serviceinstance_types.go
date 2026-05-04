@@ -51,10 +51,9 @@ type ServiceInstanceParameters struct {
 	// +kubebuilder:validation:Optional
 	Tags []*string `json:"tags,omitempty" tf:"tags,omitempty"`
 
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Attributes) The metadata associated with the Cloud Foundry resource.
 	// +kubebuilder:validation:Optional
-	// +mapType=granular
-	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
+	ResourceMetadata `json:",inline"`
 
 	// (List of SpaceReference) List of references to Cloud Foundry spaces the service instance will be shared with.
 	// +kubebuilder:validation:Optional
@@ -147,13 +146,8 @@ type ServiceInstanceObservation struct {
 	// (String) The job GUID of the last async operation performed on the resource.
 	LastAsyncJob *string `json:"lastAsyncJob,omitempty"`
 
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +mapType=granular
-	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
-
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +mapType=granular
-	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
+	// (Attributes) The metadata associated with the Cloud Foundry resource.
+	ResourceMetadata `json:",inline"`
 
 	// (Attributes) The details of the last operation performed on the resource.
 	LastOperation `json:"lastOperation,omitempty" tf:"last_operation,omitempty"`

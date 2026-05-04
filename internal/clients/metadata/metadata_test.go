@@ -3,7 +3,6 @@ package metadata
 import (
 	"testing"
 
-	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -12,9 +11,9 @@ import (
 // mockManaged is a minimal resource.Managed implementation for testing.
 type mockManaged struct {
 	resource.Managed // embed to satisfy interface; override used methods
-	name           string
-	providerCfgRef *xpv1.Reference
-	gvk            schema.GroupVersionKind
+	name             string
+	providerCfgRef   *xpv1.Reference
+	gvk              schema.GroupVersionKind
 }
 
 func (m *mockManaged) GetName() string { return m.name }
@@ -356,68 +355,68 @@ func TestIsMetadataUpToDate(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		name              string
-		desiredLabels     map[string]*string
+		name               string
+		desiredLabels      map[string]*string
 		desiredAnnotations map[string]*string
-		actualLabels      map[string]*string
-		actualAnnotations map[string]*string
-		want              bool
+		actualLabels       map[string]*string
+		actualAnnotations  map[string]*string
+		want               bool
 	}{
 		{
-			name:              "all nil",
-			desiredLabels:     nil,
+			name:               "all nil",
+			desiredLabels:      nil,
 			desiredAnnotations: nil,
-			actualLabels:      nil,
-			actualAnnotations: nil,
-			want:              true,
+			actualLabels:       nil,
+			actualAnnotations:  nil,
+			want:               true,
 		},
 		{
-			name:              "labels match annotations nil",
-			desiredLabels:     map[string]*string{"key": ptrTo("val")},
+			name:               "labels match annotations nil",
+			desiredLabels:      map[string]*string{"key": ptrTo("val")},
 			desiredAnnotations: nil,
-			actualLabels:      map[string]*string{"key": ptrTo("val")},
-			actualAnnotations: nil,
-			want:              true,
+			actualLabels:       map[string]*string{"key": ptrTo("val")},
+			actualAnnotations:  nil,
+			want:               true,
 		},
 		{
-			name:              "labels match annotations mismatch",
-			desiredLabels:     map[string]*string{"key": ptrTo("val")},
+			name:               "labels match annotations mismatch",
+			desiredLabels:      map[string]*string{"key": ptrTo("val")},
 			desiredAnnotations: map[string]*string{"note": ptrTo("a")},
-			actualLabels:      map[string]*string{"key": ptrTo("val")},
-			actualAnnotations: map[string]*string{"note": ptrTo("b")},
-			want:              false,
+			actualLabels:       map[string]*string{"key": ptrTo("val")},
+			actualAnnotations:  map[string]*string{"note": ptrTo("b")},
+			want:               false,
 		},
 		{
-			name:              "labels mismatch",
-			desiredLabels:     map[string]*string{"key": ptrTo("a")},
+			name:               "labels mismatch",
+			desiredLabels:      map[string]*string{"key": ptrTo("a")},
 			desiredAnnotations: nil,
-			actualLabels:      map[string]*string{"key": ptrTo("b")},
-			actualAnnotations: nil,
-			want:              false,
+			actualLabels:       map[string]*string{"key": ptrTo("b")},
+			actualAnnotations:  nil,
+			want:               false,
 		},
 		{
-			name:              "both match",
-			desiredLabels:     map[string]*string{"key": ptrTo("val")},
+			name:               "both match",
+			desiredLabels:      map[string]*string{"key": ptrTo("val")},
 			desiredAnnotations: map[string]*string{"note": ptrTo("a")},
-			actualLabels:      map[string]*string{"key": ptrTo("val")},
-			actualAnnotations: map[string]*string{"note": ptrTo("a")},
-			want:              true,
+			actualLabels:       map[string]*string{"key": ptrTo("val")},
+			actualAnnotations:  map[string]*string{"note": ptrTo("a")},
+			want:               true,
 		},
 		{
-			name:              "actual has extra keys - still up to date",
-			desiredLabels:     map[string]*string{"key": ptrTo("val")},
+			name:               "actual has extra keys - still up to date",
+			desiredLabels:      map[string]*string{"key": ptrTo("val")},
 			desiredAnnotations: nil,
-			actualLabels:      map[string]*string{"key": ptrTo("val"), "system-label": ptrTo("system-val")},
-			actualAnnotations: map[string]*string{"system-annotation": ptrTo("data")},
-			want:              true,
+			actualLabels:       map[string]*string{"key": ptrTo("val"), "system-label": ptrTo("system-val")},
+			actualAnnotations:  map[string]*string{"system-annotation": ptrTo("data")},
+			want:               true,
 		},
 		{
-			name:              "desired key missing from actual",
-			desiredLabels:     map[string]*string{"key": ptrTo("val"), "missing": ptrTo("data")},
+			name:               "desired key missing from actual",
+			desiredLabels:      map[string]*string{"key": ptrTo("val"), "missing": ptrTo("data")},
 			desiredAnnotations: nil,
-			actualLabels:      map[string]*string{"key": ptrTo("val")},
-			actualAnnotations: nil,
-			want:              false,
+			actualLabels:       map[string]*string{"key": ptrTo("val")},
+			actualAnnotations:  nil,
+			want:               false,
 		},
 	}
 
@@ -607,9 +606,6 @@ func TestBuildMetadata_ProducesValidCFMetadata(t *testing.T) {
 	userAnnotations := map[string]*string{"note": ptrTo("test")}
 
 	m := BuildMetadata(mg, userLabels, userAnnotations)
-
-	// Verify the result is a valid *cfresource.Metadata
-	var _ *cfresource.Metadata = m
 
 	if len(m.Labels) != 4 {
 		t.Fatalf("expected 4 labels (3 default + 1 user), got %d", len(m.Labels))
