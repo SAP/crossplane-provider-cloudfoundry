@@ -7,7 +7,6 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	"github.com/google/uuid"
 	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -36,11 +35,7 @@ func NewClient(cfv3 *client.Client) ServiceRouteBinding {
 	}{cfv3.ServiceRouteBindings, cfv3.Jobs}
 }
 
-func GetByID(ctx context.Context, srbClient ServiceRouteBinding, guid string, forProvider v1alpha1.ServiceRouteBindingParameters) (*resource.ServiceRouteBinding, error) {
-
-	if err := uuid.Validate(guid); err != nil {
-		return nil, err
-	}
+func GetByID(ctx context.Context, srbClient ServiceRouteBinding, guid string) (*resource.ServiceRouteBinding, error) {
 	// try to find by GUID
 	return srbClient.Get(ctx, guid)
 }
