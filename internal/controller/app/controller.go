@@ -193,7 +193,16 @@ func (c *external) updateObservedStatus(ctx context.Context, cr *v1alpha1.App, r
 		cr.SetConditions(xpv1.Unavailable())
 	}
 
-	return app.IsUpToDate(cr.Spec.ForProvider, cr.Status.AtProvider)
+	isUpToDate, err := app.IsUpToDate(cr, cr.Spec.ForProvider, cr.Status.AtProvider)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
+
+	return managed.ExternalObservation{
+		ResourceExists:          true,
+		ResourceUpToDate:        isUpToDate,
+		ResourceLateInitialized: lateInitialized,
+	}, nil
 }
 
 // Create managed resource

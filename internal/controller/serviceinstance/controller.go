@@ -217,7 +217,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 			credentialsUpToDate = bytes.Equal(desiredHash, cr.Status.AtProvider.Credentials)
 		}
 		// Check if the credentials in the spec match the credentials in the external resource
-		upToDate := credentialsUpToDate && serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r)
+		upToDate := credentialsUpToDate && serviceinstance.IsUpToDate(cr, &cr.Spec.ForProvider, r)
 
 		// Check if shared spaces are up to date (only if field is explicitly set)
 		if cr.Spec.ForProvider.SharedSpaces != nil {

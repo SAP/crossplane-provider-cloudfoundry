@@ -269,16 +269,101 @@ func TestObserve(t *testing.T) {
 				mg: fakeDomain(withExternalName("a1b2c3d4-e5f6-7890-abcd-ef1234567890")),
 			},
 			want: want{
-				mg:  fakeDomain(withExternalName("a1b2c3d4-e5f6-7890-abcd-ef1234567890"), withConditions(xpv1.Available())),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				mg:  fakeDomain(withExternalName(guid)),
+				obs: managed.ExternalObservation{ResourceExists: false, ResourceLateInitialized: false},
 				err: nil,
 			},
-			service: func() *mockDomainService {
-				return &mockDomainService{
-					GetDomainByGUIDFunc: func(ctx context.Context, guid string) (*cfresource.Domain, error) {
-						return internalDomain, nil
-					},
-				}
+			service: func() *fake.MockDomain {
+				m := &fake.MockDomain{}
+				m.On("Get", guid).Return(
+					fake.DomainNil,
+					fake.ErrNoResultReturned,
+				)
+				m.On("Single").Return( // this should not be called
+					&fake.NewDomain().SetName(name).SetGUID(guid).Domain,
+					nil,
+				)
+				return m
+			},
+			kube: &test.MockClient{},
+		},
+		"NotFound by uuid is not provided and Domain with name is not found": {
+			args: args{
+				mg: fakeDomain(withName(name), withExternalName("not-a-uuid")),
+			},
+			want: want{
+				mg: fakeDomain(withName(name), withExternalName(guid)),
+				obs: managed.ExternalObservation{
+					ResourceExists: false,
+				},
+				err: nil,
+			},
+			service: func() *fake.MockDomain {
+				m := &fake.MockDomain{}
+				m.On("Get", "").Return( // this should be called
+					fake.DomainNil,
+					errBoom,
+				)
+				m.On("Single").Return(
+					fake.DomainNil,
+					fake.ErrNoResultReturned,
+				)
+				return m
+			},
+		},
+		"Successful when Domain with guid is found": {
+			args: args{
+				mg: fakeDomain(
+					withExternalName(guid),
+					withName(name),
+				),
+			},
+			want: want{
+				mg: fakeDomain(
+					withExternalName(guid),
+					withName(name),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				err: nil,
+			},
+			service: func() *fake.MockDomain {
+				m := &fake.MockDomain{}
+
+				m.On("Get", guid).Return(
+					&fake.NewDomain().SetName(name).SetGUID(guid).Domain,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewDomain().SetName(name).SetGUID(guid).Domain,
+					nil,
+				)
+				return m
+			},
+		},
+		"Successful when guid is not provided and Domain with name is found ": {
+			args: args{
+				mg: fakeDomain(withName(name)),
+			},
+			want: want{
+				mg: fakeDomain(withName(name), withExternalName(guid)),
+				obs: managed.ExternalObservation{
+					ResourceExists:          true,
+					ResourceUpToDate:        false,
+					ResourceLateInitialized: true,
+				},
+				err: nil,
+			},
+			service: func() *fake.MockDomain {
+				m := &fake.MockDomain{}
+				m.On("Get", "").Return(
+					fake.DomainNil,
+					fake.ErrNoResultReturned,
+				)
+				m.On("Single").Return(
+					&fake.NewDomain().SetName(name).SetGUID(guid).Domain,
+					nil,
+				)
+				return m
 			},
 		},
 	}

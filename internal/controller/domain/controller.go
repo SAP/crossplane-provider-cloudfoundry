@@ -171,8 +171,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	cr.SetConditions(xpv1.Available())
 
 	return managed.ExternalObservation{
-		ResourceExists:          true,
-		ResourceUpToDate:        domain.IsUpToDate(cr.Spec.ForProvider, d),
+		ResourceExists:          cr.Status.AtProvider.ID != nil,
+		ResourceUpToDate:        domain.IsUpToDate(cr, cr.Spec.ForProvider, d),
 		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
 }

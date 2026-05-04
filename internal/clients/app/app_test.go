@@ -237,7 +237,7 @@ func TestIsUpToDate(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := IsUpToDate(tt.spec, tt.status)
+			result, err := IsUpToDate(nil, tt.spec, tt.status)
 			if err != nil {
 				t.Fatalf("IsUpToDate() error = %v", err)
 			}

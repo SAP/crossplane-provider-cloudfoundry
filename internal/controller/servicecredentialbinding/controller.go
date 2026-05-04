@@ -345,7 +345,7 @@ func (c *external) HandleObservationState(serviceBinding *cfresource.ServiceCred
 
 		return managed.ExternalObservation{
 			ResourceExists:    true,
-			ResourceUpToDate:  scb.IsUpToDate(ctx, cr.Spec.ForProvider, *serviceBinding) && !c.keyRotator.HasExpiredKeys(cr),
+			ResourceUpToDate:  scb.IsUpToDate(ctx, cr, cr.Spec.ForProvider, *serviceBinding) && !c.keyRotator.HasExpiredKeys(cr),
 			ConnectionDetails: scb.GetConnectionDetails(ctx, c.scbClient, serviceBinding.GUID, cr.Spec.ConnectionDetailsAsJSON),
 		}, nil
 	}

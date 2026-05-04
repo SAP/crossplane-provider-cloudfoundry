@@ -130,10 +130,17 @@ func GenerateUpdate(mg xpresource.Managed, spec v1alpha1.DomainParameters) *reso
 // set of parameters.
 //
 //nolint:gocyclo
-func IsUpToDate(spec v1alpha1.DomainParameters, observed *resource.Domain) bool {
-	// domain update does not support rename and change of many attributes, and can only update labels and annotations. we can safely return true for now
-
-	return true
+func IsUpToDate(mg xpresource.Managed, spec v1alpha1.DomainParameters, observed *resource.Domain) bool {
+	if observed == nil {
+		return false
+	}
+	desired := metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
+	var observedLabels, observedAnnotations map[string]*string
+	if observed.Metadata != nil {
+		observedLabels = observed.Metadata.Labels
+		observedAnnotations = observed.Metadata.Annotations
+	}
+	return metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, observedLabels, observedAnnotations)
 }
 
 // convertToStringPtrSlice converts a slice of resource.Relationship to a slice of string pointers.

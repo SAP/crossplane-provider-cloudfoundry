@@ -230,7 +230,7 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceLateInitialized: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ResourceLateInitialized: true},
 				err: nil,
 			},
 			service: func() *fake.MockApp {
@@ -275,7 +275,7 @@ func TestObserve(t *testing.T) {
 					withAppManifest("applications:\n- name: "+name),
 					withConditions(xpv1.Available())),
 
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
 			service: func() *fake.MockApp {

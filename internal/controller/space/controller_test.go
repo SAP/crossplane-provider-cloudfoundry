@@ -182,7 +182,7 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withAllowSSH(false), withConditions(xpv1.Available())),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ResourceLateInitialized: true},
 				err: nil,
 			},
 			service: func() *MockSpaceFeature {
@@ -236,7 +236,7 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  fakeSpace(withName(name), withOrg(orgGuid), withAllowSSH(false), withExternalName(guid), withConditions(xpv1.Available())),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ResourceLateInitialized: false},
 				err: nil,
 			},
 			service: func() *MockSpaceFeature {
@@ -261,7 +261,7 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  fakeSpace(withName("existing-space"), withExternalName(guid), withAllowSSH(false), withOrg(orgGuid), withConditions(xpv1.Available())),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ResourceLateInitialized: false},
 				err: nil,
 			},
 			service: func() *MockSpaceFeature {

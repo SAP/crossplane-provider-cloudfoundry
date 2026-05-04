@@ -150,9 +150,55 @@ func TestObserve(t *testing.T) {
 				mg: fakeRoute(withHost(name)),
 			},
 			want: want{
+				mg: fakeRoute(withHost(name), withExternalName(guid)),
+				obs: managed.ExternalObservation{
+					ResourceExists: false,
+				},
+				err: nil,
+			},
+			service: func() *Mock {
+				m := &Mock{}
+				m.On("GetByIDOrSpec", "").Return( // this should be called
+					nilObservation,
+					nil,
+				)
+				return m
+			},
+		},
+		"Found with observation is returned": {
+			args: args{
+				mg: fakeRoute(
+					withExternalName(guid),
+					withHost(name),
+				),
+			},
+			want: want{
+				mg: fakeRoute(
+					withExternalName(guid),
+					withHost(name),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				err: nil,
+			},
+			service: func() *Mock {
+				m := &Mock{}
+
+				m.On("GetByIDOrSpec", guid).Return(
+					fakeRouteObservation(guid),
+					nil,
+				)
+				return m
+			},
+		},
+		"Adopt and set external-name ": {
+			args: args{
+				mg: fakeRoute(withHost(name)),
+			},
+			want: want{
+				mg: fakeRoute(withHost(name), withExternalName(guid)),
 				obs: managed.ExternalObservation{
 					ResourceExists:          true,
-					ResourceUpToDate:        true,
+					ResourceUpToDate:        false,
 					ResourceLateInitialized: true,
 				},
 				err: nil,

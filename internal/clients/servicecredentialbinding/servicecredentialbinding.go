@@ -232,9 +232,15 @@ func UpdateObservation(observation *v1alpha1.ServiceCredentialBindingObservation
 }
 
 // IsUpToDate checks whether the CR is up to date with the observed resource
-func IsUpToDate(ctx context.Context, forProvider v1alpha1.ServiceCredentialBindingParameters, r resource.ServiceCredentialBinding) bool {
-	// SCB support updates for labels and metadata only. This is to be implemented. For now return true
-	return true
+func IsUpToDate(ctx context.Context, mg xpresource.Managed, forProvider v1alpha1.ServiceCredentialBindingParameters, r resource.ServiceCredentialBinding) bool {
+	// SCB supports updates for labels and annotations only
+	desired := metadata.BuildMetadata(mg, forProvider.Labels, forProvider.Annotations)
+	var actualLabels, actualAnnotations map[string]*string
+	if r.Metadata != nil {
+		actualLabels = r.Metadata.Labels
+		actualAnnotations = r.Metadata.Annotations
+	}
+	return metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, actualLabels, actualAnnotations)
 }
 
 func randomName(name string) string {
