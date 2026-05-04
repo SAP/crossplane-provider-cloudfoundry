@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"k8s.io/utils/ptr"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -194,12 +193,9 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errUpdate)
 	}
 
-	// rename resource
-	if cr.Name != ptr.Deref(cr.Status.AtProvider.Name, "") {
-		_, err := c.client.Update(ctx, *cr.Status.AtProvider.ID, domain.GenerateUpdate(cr, cr.Spec.ForProvider))
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
-		}
+	_, err := c.client.Update(ctx, *cr.Status.AtProvider.ID, domain.GenerateUpdate(cr, cr.Spec.ForProvider))
+	if err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 
 	return managed.ExternalUpdate{

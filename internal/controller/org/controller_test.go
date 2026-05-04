@@ -116,7 +116,112 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
-		"UnsetExternalNameSuccessful": {
+		"NotFound if org with guid is not found. Match by name should not be called": {
+			args: args{
+				mg: fakeOrg(withExternalName(guid)),
+			},
+			want: want{
+				mg:  fakeOrg(withExternalName(guid)),
+				obs: managed.ExternalObservation{ResourceExists: false},
+				err: nil,
+			},
+			service: func() *fake.MockOrganization {
+				m := &fake.MockOrganization{}
+				m.On("Get", guid).Return(
+					fake.OrganizationNil,
+					fake.ErrNoResultReturned,
+				)
+				m.On("Single").Return( // this should not be called
+					&fake.NewOrganization().SetName(name).SetGUID(guid).Organization,
+					nil,
+				)
+				return m
+			},
+			kube: &test.MockClient{},
+		},
+		"NotFound by uuid is not provided and org with name is not found": {
+			args: args{
+				mg: fakeOrg(withName(name), withExternalName("not-a-uuid")),
+			},
+			want: want{
+				mg: fakeOrg(withName(name), withExternalName(guid)),
+				obs: managed.ExternalObservation{
+					ResourceExists: false,
+				},
+				err: nil,
+			},
+			service: func() *fake.MockOrganization {
+				m := &fake.MockOrganization{}
+				m.On("Get", "").Return( // this should be called
+					fake.OrganizationNil,
+					errBoom,
+				)
+				m.On("Single").Return(
+					fake.OrganizationNil,
+					fake.ErrNoResultReturned,
+				)
+				return m
+			},
+		},
+		"Successful when org with guid is found": {
+			args: args{
+				mg: fakeOrg(
+					withExternalName(guid),
+					withName(name),
+				),
+			},
+			want: want{
+				mg: fakeOrg(
+					withExternalName(guid),
+					withName(name),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				err: nil,
+			},
+			service: func() *fake.MockOrganization {
+				m := &fake.MockOrganization{}
+
+				m.On("Get", guid).Return(
+					&fake.NewOrganization().SetName(name).SetGUID(guid).Organization,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewOrganization().SetName(name).SetGUID(guid).Organization,
+					nil,
+				)
+				return m
+			},
+		},
+		"Successful when org with guid is found, even after rename": {
+			args: args{
+				mg: fakeOrg(
+					withExternalName(guid),
+					withName("not-my-org"),
+				),
+			},
+			want: want{
+				mg: fakeOrg(
+					withExternalName(guid),
+					withName("not-my-org"),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				err: nil,
+			},
+			service: func() *fake.MockOrganization {
+				m := &fake.MockOrganization{}
+
+				m.On("Get", guid).Return(
+					&fake.NewOrganization().SetName(name).SetGUID(guid).Organization,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewOrganization().SetName(name).SetGUID(guid).Organization,
+					nil,
+				)
+				return m
+			},
+		},
+		"Successful when guid is not provided and org with name is found ": {
 			args: args{
 				mg: fakeOrg(withName(name)),
 			},
@@ -190,7 +295,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeOrg(withExternalName(guid), withName(name)),
 				obs: managed.ExternalObservation{
 					ResourceExists:   true,
-					ResourceUpToDate: true,
+					ResourceUpToDate: false,
 				},
 				err: nil,
 			},
