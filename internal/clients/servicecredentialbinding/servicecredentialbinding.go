@@ -229,6 +229,11 @@ func UpdateObservation(observation *v1alpha1.ServiceCredentialBindingObservation
 		UpdatedAt:   r.LastOperation.UpdatedAt.String(),
 		CreatedAt:   r.LastOperation.CreatedAt.String(),
 	}
+
+	if r.Metadata != nil {
+		observation.Labels = r.Metadata.Labels
+		observation.Annotations = r.Metadata.Annotations
+	}
 }
 
 // IsUpToDate checks whether the CR is up to date with the observed resource

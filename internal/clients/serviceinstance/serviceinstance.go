@@ -331,6 +331,11 @@ func UpdateObservation(in *v1alpha1.ServiceInstanceObservation, r *resource.Serv
 	if r.Type == string(v1alpha1.ManagedService) {
 		in.ServicePlan = &r.Relationships.ServicePlan.Data.GUID
 	}
+
+	if r.Metadata != nil {
+		in.Labels = r.Metadata.Labels
+		in.Annotations = r.Metadata.Annotations
+	}
 }
 
 // specUpToDate checks whether the spec fields (name, service plan, route service URL,
