@@ -1,0 +1,14 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceRouteBinding
+metadata:
+  name: upgrade-test-external-name-service-route-binding
+spec:
+  forProvider:
+    routeRef:
+      name: upgrade-test-route
+      policy:
+        resolve: Always
+    serviceInstanceRef:
+      name: upgrade-test-serviceinstance
+      policy:
+        resolve: Always
