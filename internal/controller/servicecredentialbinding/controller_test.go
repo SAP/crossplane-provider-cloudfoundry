@@ -430,13 +430,13 @@ func TestUpdate(t *testing.T) {
 			want: want{
 				mg:  serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName(guid)),
 				obs: managed.ExternalUpdate{},
-				err: fmt.Errorf(errUpdate, errBoom),
+				err: fmt.Errorf(errUpdate, errCFClientError),
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Update", mock.Anything, guid, mock.Anything).Return(
 					(*cfresource.ServiceCredentialBinding)(nil),
-					errBoom,
+					errCFClientError,
 				)
 				return m
 			},
@@ -478,7 +478,7 @@ func TestUpdate(t *testing.T) {
 			want: want{
 				mg:  mgWithRetiredKeys.DeepCopy(),
 				obs: managed.ExternalUpdate{},
-				err: fmt.Errorf(errDeleteExpiredKeys, errBoom),
+				err: fmt.Errorf(errDeleteExpiredKeys, errCFClientError),
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
@@ -492,7 +492,7 @@ func TestUpdate(t *testing.T) {
 				m := &fake.MockKeyRotator{}
 				m.On("DeleteExpiredKeys", mock.Anything, mgWithRetiredKeys.DeepCopy()).Return(
 					[]*v1alpha1.SCBResource{},
-					errBoom,
+					errCFClientError,
 				)
 				return m
 			},
@@ -855,7 +855,7 @@ func TestCreate(t *testing.T) {
 					withServiceInstanceID(serviceInstanceGUID),
 				),
 				obs: managed.ExternalCreation{},
-				err: fmt.Errorf(errCreate, errBoom),
+				err: fmt.Errorf(errCreate, errCFClientError),
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
@@ -870,7 +870,7 @@ func TestCreate(t *testing.T) {
 					scbKey(),
 					nil,
 				)
-				m.On("PollComplete", mock.Anything, mock.Anything, mock.Anything).Return(errBoom)
+				m.On("PollComplete", mock.Anything, mock.Anything, mock.Anything).Return(errCFClientError)
 
 				return m
 			},
@@ -885,14 +885,14 @@ func TestCreate(t *testing.T) {
 					withServiceInstanceID(serviceInstanceGUID),
 				),
 				obs: managed.ExternalCreation{},
-				err: fmt.Errorf(errCreate, errBoom),
+				err: fmt.Errorf(errCreate, errCFClientError),
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Create", mock.Anything, mock.Anything).Return(
 					guid,
 					scbKey(),
-					errBoom,
+					errCFClientError,
 				)
 				m.On("Single", mock.Anything, mock.Anything).Return(
 					scbKey(),
@@ -990,11 +990,11 @@ func TestDelete(t *testing.T) {
 			},
 			want: want{
 				mg:  mgWant.DeepCopy(),
-				err: fmt.Errorf(errDelete, errBoom),
+				err: fmt.Errorf(errDelete, errCFClientError),
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
-				m.On("Delete", mock.Anything, guid).Return("", errBoom)
+				m.On("Delete", mock.Anything, guid).Return("", errCFClientError)
 				return m
 			},
 			keyRotator: func() *fake.MockKeyRotator {
@@ -1012,7 +1012,7 @@ func TestDelete(t *testing.T) {
 			},
 			want: want{
 				mg:  mgWant.DeepCopy(), // Should have Deleting condition set even if DeleteRetiredKeys fails
-				err: fmt.Errorf(errDeleteRetiredKeys, errBoom),
+				err: fmt.Errorf(errDeleteRetiredKeys, errCFClientError),
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
@@ -1024,7 +1024,7 @@ func TestDelete(t *testing.T) {
 				// The object will have Deleting condition set when DeleteRetiredKeys is called
 				m.On("DeleteRetiredKeys", mock.Anything, mock.MatchedBy(func(cr *v1alpha1.ServiceCredentialBinding) bool {
 					return cr.GetCondition(xpv1.TypeReady).Reason == xpv1.ReasonDeleting
-				})).Return(errBoom)
+				})).Return(errCFClientError)
 				return m
 			},
 		},
