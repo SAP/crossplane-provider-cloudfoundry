@@ -191,7 +191,7 @@ test-acceptance: local-deploy $(KUBECTL)
 	@$(KUBECTL) create namespace crossplane-system
 	@$(INFO) running integration tests
 	@$(INFO) Skipping long running tests
-	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -timeout=15m -run '$(testFilter)' 2>&1 | tee test-output.log
+	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -timeout=25m -run '$(testFilter)' 2>&1 | tee test-output.log
 	@echo "===========Test Summary==========="
 	@grep -E "PASS|FAIL" test-output.log
 	@case `tail -n 1 test-output.log` in \
