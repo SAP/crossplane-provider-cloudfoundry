@@ -151,6 +151,12 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}
 
 	if getCreateAttempts(cr) >= maxCreateAttempts {
+		// Allow deletion to proceed even when circuit breaker is tripped
+		if !cr.GetDeletionTimestamp().IsZero() {
+			return managed.ExternalObservation{
+				ResourceExists: false, // lets Delete() be called to clean up
+			}, nil
+		}
 		cr.SetConditions(xpv1.Unavailable().WithMessage(
 			fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
 		))
