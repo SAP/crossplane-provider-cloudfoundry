@@ -36,7 +36,6 @@ const (
 	errNewClient             = "cannot create a client for " + externalSystem + ": %w"
 	errWrongCRType           = "managed resource is not a " + resourceType
 	errGet                   = "cannot get " + resourceType + " in " + externalSystem + ": %w"
-	errFind                  = "cannot find " + resourceType + " in " + externalSystem
 	errCreate                = "cannot create " + resourceType + " in " + externalSystem + ": %w"
 	errUpdate                = "cannot update " + resourceType + " in " + externalSystem + ": %w"
 	errDelete                = "cannot delete " + resourceType + " in " + externalSystem + ": %w"
@@ -150,13 +149,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errWrongCRType)
 	}
 
-	if getCreateAttempts(cr) >= maxCreateAttempts {
-		// Allow deletion to proceed even when circuit breaker is tripped
-		if !cr.GetDeletionTimestamp().IsZero() {
-			return managed.ExternalObservation{
-				ResourceExists: false, // lets Delete() be called to clean up
-			}, nil
-		}
+	if isCircuitBreakerTripped(cr) {
 		cr.SetConditions(xpv1.Unavailable().WithMessage(
 			fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
 		))
@@ -335,4 +328,10 @@ func incrementCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) {
 
 func resetCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) {
 	meta.RemoveAnnotations(cr, createAttemptsAnnotation)
+}
+
+// isCircuitBreakerTripped returns true if the maximum number of create attempts has been reached.
+// If the resource is being deleted, the circuit breaker is bypassed to allow cleanup.
+func isCircuitBreakerTripped(cr *v1alpha1.ServiceCredentialBinding) bool {
+	return getCreateAttempts(cr) >= maxCreateAttempts && cr.GetDeletionTimestamp().IsZero()
 }
