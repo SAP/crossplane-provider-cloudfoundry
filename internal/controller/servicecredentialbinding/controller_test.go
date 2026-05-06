@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 	"testing"
 	"time"
 
@@ -25,7 +26,7 @@ import (
 )
 
 var (
-	errBoom                   = errors.New("boom")
+	errCFClientError          = errors.New("boom")
 	errServiceInstanceMissing = errors.New(servicecredentialbinding.ErrServiceInstanceMissing)
 	errAppMissing             = errors.New(servicecredentialbinding.ErrAppMissing)
 	name                      = "my-service-credential-binding"
@@ -170,24 +171,24 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
-		"Boom!": {
+		"CFClientError": {
 			args: args{
 				mg: scb.DeepCopy(),
 			},
 			want: want{
 				mg:  serviceCredentialBinding("key", withExternalName(guid)),
 				obs: managed.ExternalObservation{},
-				err: fmt.Errorf(errGet, errBoom),
+				err: fmt.Errorf(errGet, errCFClientError),
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Get", mock.Anything, guid).Return(
 					fake.ServiceCredentialBindingNil,
-					errBoom,
+					errCFClientError,
 				)
 				m.On("Single").Return(
 					fake.ServiceCredentialBindingNil,
-					errBoom,
+					errCFClientError,
 				)
 				return m
 			},
@@ -296,6 +297,28 @@ func TestObserve(t *testing.T) {
 					nil,
 				)
 				return m
+			},
+		},
+		"CircuitBreakerTripped": {
+			args: args{
+				mg: serviceCredentialBinding("key",
+					withExternalName(guid),
+					withServiceInstanceID(serviceInstanceGUID),
+					withCreateAttempts(maxCreateAttempts),
+				),
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists:   true,
+					ResourceUpToDate: true,
+				},
+				err: nil,
+			},
+			service: func() *fake.MockServiceCredentialBinding {
+				return &fake.MockServiceCredentialBinding{}
+			},
+			keyRotator: func() *fake.MockKeyRotator {
+				return &fake.MockKeyRotator{}
 			},
 		}}
 
@@ -620,7 +643,7 @@ func TestHandleObservationState(t *testing.T) {
 			},
 			want: want{
 				obs: managed.ExternalObservation{
-					ResourceExists:   false, // Create failed, so resource doesn't exist
+					ResourceExists:   true, // circuit breaker handles retry gating
 					ResourceUpToDate: true,
 				},
 				err: nil,
@@ -1050,6 +1073,14 @@ func TestDelete(t *testing.T) {
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
 				t.Errorf("Delete(...): -want, +got:\n%s", diff)
 			}
+		})
+	}
+}
+
+func withCreateAttempts(n int) modifier {
+	return func(r *v1alpha1.ServiceCredentialBinding) {
+		meta.AddAnnotations(r, map[string]string{
+			createAttemptsAnnotation: strconv.Itoa(n),
 		})
 	}
 }
