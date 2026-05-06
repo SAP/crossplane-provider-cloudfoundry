@@ -81,7 +81,7 @@ func TestClientWrapper_FindDomainBySpec(t *testing.T) {
 	mockClient.AssertExpectations(t)
 }
 
-func TestClientWrapper_FindDomainBySpec_WithOrg(t *testing.T) {
+func TestClientWrapper_FindDomainBySpec_OrgIsIgnored(t *testing.T) {
 	ctx := context.Background()
 	mockClient := new(MockClient)
 

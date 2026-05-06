@@ -229,7 +229,7 @@ func TestObserve(t *testing.T) {
 			service: func() *mockDomainService {
 				return &mockDomainService{
 					GetDomainByGUIDFunc: func(ctx context.Context, guid string) (*cfresource.Domain, error) {
-						return nil, errors.New("CF-ResourceNotFound: The domain was not found")
+						return nil, fake.ErrNoResultReturned
 					},
 				}
 			},
@@ -536,7 +536,7 @@ func TestDelete(t *testing.T) {
 			service: func() *mockDomainService {
 				return &mockDomainService{
 					DeleteFunc: func(ctx context.Context, guid string) (string, error) {
-						return "", errors.New("CF-ResourceNotFound: The domain was not found")
+						return "", fake.ErrNoResultReturned
 					},
 				}
 			},
