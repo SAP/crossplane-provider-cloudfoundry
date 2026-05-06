@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strconv"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
@@ -29,21 +30,23 @@ import (
 )
 
 const (
-	resourceType         = "ServiceCredentialBinding"
-	externalSystem       = "Cloud Foundry"
-	errTrackPCUsage      = "cannot track ProviderConfig usage: %w"
-	errNewClient         = "cannot create a client for " + externalSystem + ": %w"
-	errWrongCRType       = "managed resource is not a " + resourceType
-	errGet               = "cannot get " + resourceType + " in " + externalSystem + ": %w"
-	errFind              = "cannot find " + resourceType + " in " + externalSystem
-	errCreate            = "cannot create " + resourceType + " in " + externalSystem + ": %w"
-	errUpdate            = "cannot update " + resourceType + " in " + externalSystem + ": %w"
-	errDelete            = "cannot delete " + resourceType + " in " + externalSystem + ": %w"
-	errDeleteRetiredKeys = "cannot delete retired keys in " + externalSystem + ": %w"
-	errDeleteExpiredKeys = "cannot delete expired keys in " + externalSystem + ": %w"
-	errUpdateStatus      = "cannot update status after retiring binding: %w"
-	errExtractParams     = "cannot extract specified parameters: %w"
-	errUnknownState      = "unknown last operation state for " + resourceType + " in " + externalSystem
+	resourceType             = "ServiceCredentialBinding"
+	externalSystem           = "Cloud Foundry"
+	errTrackPCUsage          = "cannot track ProviderConfig usage: %w"
+	errNewClient             = "cannot create a client for " + externalSystem + ": %w"
+	errWrongCRType           = "managed resource is not a " + resourceType
+	errGet                   = "cannot get " + resourceType + " in " + externalSystem + ": %w"
+	errFind                  = "cannot find " + resourceType + " in " + externalSystem
+	errCreate                = "cannot create " + resourceType + " in " + externalSystem + ": %w"
+	errUpdate                = "cannot update " + resourceType + " in " + externalSystem + ": %w"
+	errDelete                = "cannot delete " + resourceType + " in " + externalSystem + ": %w"
+	errDeleteRetiredKeys     = "cannot delete retired keys in " + externalSystem + ": %w"
+	errDeleteExpiredKeys     = "cannot delete expired keys in " + externalSystem + ": %w"
+	errUpdateStatus          = "cannot update status after retiring binding: %w"
+	errExtractParams         = "cannot extract specified parameters: %w"
+	errUnknownState          = "unknown last operation state for " + resourceType + " in " + externalSystem
+	maxCreateAttempts        = 5
+	createAttemptsAnnotation = "crossplane-provider-cloudfoundry/create-attempts"
 )
 
 // Setup adds a controller that reconciles ServiceCredentialBinding CR.
@@ -147,6 +150,16 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errWrongCRType)
 	}
 
+	if getCreateAttempts(cr) >= maxCreateAttempts {
+		cr.SetConditions(xpv1.Unavailable().WithMessage(
+			fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
+		))
+		return managed.ExternalObservation{
+			ResourceExists:   true,
+			ResourceUpToDate: true,
+		}, nil
+	}
+
 	guid := meta.GetExternalName(cr)
 	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, cr.Spec.ForProvider)
 	if errors.Is(err, cfclient.ErrNoResultsReturned) ||
@@ -178,6 +191,11 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
+	}
+
+	incrementCreateAttempts(cr)
+	if err := c.kube.Update(ctx, cr); err != nil {
+		return managed.ExternalCreation{}, fmt.Errorf("cannot persist create attempt count: %w", err)
 	}
 
 	params, err := extractParameters(ctx, c.kube, cr.Spec.ForProvider)
@@ -272,10 +290,11 @@ func (c *external) HandleObservationState(serviceBinding *cfresource.ServiceCred
 	case v1alpha1.LastOperationFailed:
 		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
 		return managed.ExternalObservation{
-			ResourceExists:   serviceBinding.LastOperation.Type != v1alpha1.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
+			ResourceExists:   true,
 			ResourceUpToDate: serviceBinding.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
 		}, nil
 	case v1alpha1.LastOperationSucceeded:
+		resetCreateAttempts(cr)
 		cr.SetConditions(xpv1.Available())
 
 		return managed.ExternalObservation{
@@ -287,4 +306,27 @@ func (c *external) HandleObservationState(serviceBinding *cfresource.ServiceCred
 
 	// If the last operation is unknown, error out
 	return managed.ExternalObservation{}, errors.New(errUnknownState)
+}
+
+func getCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) int {
+	val := cr.GetAnnotations()[createAttemptsAnnotation]
+	if val == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+func incrementCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) {
+	n := getCreateAttempts(cr)
+	meta.AddAnnotations(cr, map[string]string{
+		createAttemptsAnnotation: strconv.Itoa(n + 1),
+	})
+}
+
+func resetCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) {
+	meta.RemoveAnnotations(cr, createAttemptsAnnotation)
 }
