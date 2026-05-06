@@ -771,6 +771,7 @@ func TestCreate(t *testing.T) {
 					"key",
 					withExternalName(guid),
 					withServiceInstanceID(serviceInstanceGUID),
+					withCreateAttempts(1),
 				),
 				obs: managed.ExternalCreation{},
 				err: nil,
@@ -795,7 +796,7 @@ func TestCreate(t *testing.T) {
 				mg: serviceCredentialBinding("key"),
 			},
 			want: want{
-				mg:  serviceCredentialBinding("key"),
+				mg:  serviceCredentialBinding("key", withCreateAttempts(1)),
 				obs: managed.ExternalCreation{},
 				err: fmt.Errorf(errCreate, errServiceInstanceMissing),
 			},
@@ -822,7 +823,7 @@ func TestCreate(t *testing.T) {
 				mg: serviceCredentialBinding("app", withServiceInstanceID(serviceInstanceGUID)),
 			},
 			want: want{
-				mg: serviceCredentialBinding("app", withServiceInstanceID(serviceInstanceGUID)),
+				mg: serviceCredentialBinding("app", withServiceInstanceID(serviceInstanceGUID), withCreateAttempts(1)),
 
 				obs: managed.ExternalCreation{},
 				err: fmt.Errorf(errCreate, errAppMissing),
@@ -853,6 +854,7 @@ func TestCreate(t *testing.T) {
 				mg: serviceCredentialBinding(
 					"key",
 					withServiceInstanceID(serviceInstanceGUID),
+					withCreateAttempts(1),
 				),
 				obs: managed.ExternalCreation{},
 				err: fmt.Errorf(errCreate, errCFClientError),
@@ -883,7 +885,9 @@ func TestCreate(t *testing.T) {
 				mg: serviceCredentialBinding(
 					"key",
 					withServiceInstanceID(serviceInstanceGUID),
+					withCreateAttempts(1),
 				),
+
 				obs: managed.ExternalCreation{},
 				err: fmt.Errorf(errCreate, errCFClientError),
 			},
