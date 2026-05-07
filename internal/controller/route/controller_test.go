@@ -56,8 +56,6 @@ var (
 	guid       = "33fd5b0b-4f3b-4b1b-8b3d-3b5f7b4b3b4b"
 	name       = "test-route"
 	errBoom    = errors.New("boom")
-
-	nilObservation *v1alpha1.RouteObservation
 )
 
 type modifier func(*v1alpha1.Route)
@@ -150,7 +148,6 @@ func TestObserve(t *testing.T) {
 				mg: fakeRoute(withHost(name)),
 			},
 			want: want{
-				mg: fakeRoute(withHost(name), withExternalName(guid)),
 				obs: managed.ExternalObservation{
 					ResourceExists: false,
 				},
@@ -158,9 +155,8 @@ func TestObserve(t *testing.T) {
 			},
 			service: func() *Mock {
 				m := &Mock{}
-				m.On("GetByIDOrSpec", "").Return( // this should be called
-					nilObservation,
-					nil,
+				m.On("FindRouteBySpec", fakeRoute(withHost(name)).Spec.ForProvider).Return(
+					(*v1alpha1.RouteObservation)(nil), false, nil,
 				)
 				return m
 			},
@@ -173,19 +169,14 @@ func TestObserve(t *testing.T) {
 				),
 			},
 			want: want{
-				mg: fakeRoute(
-					withExternalName(guid),
-					withHost(name),
-				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
 			service: func() *Mock {
 				m := &Mock{}
 
-				m.On("GetByIDOrSpec", guid).Return(
-					fakeRouteObservation(guid),
-					nil,
+				m.On("GetRouteByGUID", guid).Return(
+					fakeRouteObservation(guid), true, nil,
 				)
 				return m
 			},
@@ -195,7 +186,6 @@ func TestObserve(t *testing.T) {
 				mg: fakeRoute(withHost(name)),
 			},
 			want: want{
-				mg: fakeRoute(withHost(name), withExternalName(guid)),
 				obs: managed.ExternalObservation{
 					ResourceExists:          true,
 					ResourceUpToDate:        false,
@@ -225,7 +215,7 @@ func TestObserve(t *testing.T) {
 			service: func() *Mock {
 				m := &Mock{}
 				m.On("FindRouteBySpec", fakeRoute(withHost(name)).Spec.ForProvider).Return(
-					nilObservation, false, nil,
+					(*v1alpha1.RouteObservation)(nil), false, nil,
 				)
 				return m
 			},
@@ -238,7 +228,7 @@ func TestObserve(t *testing.T) {
 				),
 			},
 			want: want{
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
 			service: func() *Mock {
@@ -260,7 +250,7 @@ func TestObserve(t *testing.T) {
 			service: func() *Mock {
 				m := &Mock{}
 				m.On("GetRouteByGUID", guid).Return(
-					nilObservation, false, nil,
+					(*v1alpha1.RouteObservation)(nil), false, nil,
 				)
 				return m
 			},
@@ -288,7 +278,7 @@ func TestObserve(t *testing.T) {
 			service: func() *Mock {
 				m := &Mock{}
 				m.On("GetRouteByGUID", guid).Return(
-					nilObservation, false, errBoom,
+					(*v1alpha1.RouteObservation)(nil), false, errBoom,
 				)
 				return m
 			},

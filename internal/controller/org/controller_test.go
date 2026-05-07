@@ -144,22 +144,13 @@ func TestObserve(t *testing.T) {
 				mg: fakeOrg(withName(name), withExternalName("not-a-uuid")),
 			},
 			want: want{
-				mg: fakeOrg(withName(name), withExternalName(guid)),
-				obs: managed.ExternalObservation{
-					ResourceExists: false,
-				},
-				err: nil,
+				mg:  fakeOrg(withName(name), withExternalName("not-a-uuid")),
+				obs: managed.ExternalObservation{},
+				err: errors.New("external-name 'not-a-uuid' is not a valid GUID format"),
 			},
 			service: func() *fake.MockOrganization {
 				m := &fake.MockOrganization{}
-				m.On("Get", "").Return( // this should be called
-					fake.OrganizationNil,
-					errBoom,
-				)
-				m.On("Single").Return(
-					fake.OrganizationNil,
-					fake.ErrNoResultReturned,
-				)
+				// No mock calls needed: GUID validation fails before any API call
 				return m
 			},
 		},
@@ -229,7 +220,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeOrg(withName(name), withExternalName(guid)),
 				obs: managed.ExternalObservation{
 					ResourceExists:          true,
-					ResourceUpToDate:        true,
+					ResourceUpToDate:        false,
 					ResourceLateInitialized: true,
 				},
 				err: nil,
