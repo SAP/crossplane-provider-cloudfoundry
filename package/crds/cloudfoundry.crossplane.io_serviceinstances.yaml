@@ -139,6 +139,11 @@ spec:
                   parameters:
                     description: |-
                       (Attributes) Configuration parameters for the managed service instance, supplied as a K8S runtime.RawExtension object.
+
+                      A service offering may set arbitrary default parameters.
+                      These may change at any time for new service instances.
+                      It is recommended to explicitly specify all parameters.
+
                       The `parameters` field is NOT secret or secured in any way and should NEVER be used to hold sensitive information.
                       To set parameters that contain secret information, you should ALWAYS store that information in a Secret and use the `paramsSecretRef` field.
                     type: object
