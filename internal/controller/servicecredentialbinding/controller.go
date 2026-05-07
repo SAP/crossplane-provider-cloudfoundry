@@ -294,6 +294,11 @@ func (c *external) HandleObservationState(serviceBinding *cfresource.ServiceCred
 		}, nil
 	case v1alpha1.LastOperationSucceeded:
 		resetCreateAttempts(cr)
+
+		if err := c.kube.Update(ctx, cr); err != nil {
+			return managed.ExternalObservation{}, fmt.Errorf("cannot persist create attempt reset: %w", err)
+		}
+
 		cr.SetConditions(xpv1.Available())
 
 		return managed.ExternalObservation{

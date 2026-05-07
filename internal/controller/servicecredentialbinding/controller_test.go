@@ -606,6 +606,7 @@ func TestHandleObservationState(t *testing.T) {
 	cases := map[string]struct {
 		args args
 		want want
+		kube k8s.Client
 	}{
 		"LastOperationInitial": {
 			args: args{
@@ -694,14 +695,35 @@ func TestHandleObservationState(t *testing.T) {
 				err: errors.New(errUnknownState),
 			},
 		},
+		"LastOperationSucceeded_KubeUpdateFails": {
+			args: args{
+				serviceBinding: scbCreate(v1alpha1.LastOperationSucceeded),
+				ctx:            ctx,
+				cr:             cr.DeepCopy(),
+			},
+			kube: &test.MockClient{
+				MockUpdate: test.NewMockUpdateFn(errCFClientError),
+			},
+			want: want{
+				obs: managed.ExternalObservation{},
+				err: fmt.Errorf("cannot persist create attempt reset: %w", errCFClientError),
+			},
+		},
 	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
+			kube := tc.kube
+			if kube == nil {
+				kube = &test.MockClient{
+					MockUpdate: test.NewMockUpdateFn(nil),
+				}
+			}
 
 			// Create external with mocked dependencies
 			c := &external{
+				kube:       kube,
 				scbClient:  &fake.MockServiceCredentialBinding{},
 				keyRotator: &fake.MockKeyRotator{},
 			}
