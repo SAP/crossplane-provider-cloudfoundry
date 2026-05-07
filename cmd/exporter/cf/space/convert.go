@@ -7,6 +7,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/metadata"
 	"github.com/SAP/xp-clifford/cli/export"
 	"github.com/SAP/xp-clifford/erratt"
 	"github.com/SAP/xp-clifford/yaml"
@@ -38,7 +39,7 @@ func convertSpaceResource(ctx context.Context, cfClient *client.Client, space *r
 				// AllowSSH:         false,
 				ResourceMetadata: v1alpha1.ResourceMetadata{
 					Annotations: space.Metadata.Annotations,
-					Labels:      space.Metadata.Labels,
+					Labels:      metadata.StripDefaultLabels(space.Metadata.Labels),
 				},
 				IsolationSegment: new(string),
 				Name:             space.Name,
