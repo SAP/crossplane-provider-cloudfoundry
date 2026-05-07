@@ -699,7 +699,11 @@ func TestHandleObservationState(t *testing.T) {
 			args: args{
 				serviceBinding: scbCreate(v1alpha1.LastOperationSucceeded),
 				ctx:            ctx,
-				cr:             cr.DeepCopy(),
+				cr: serviceCredentialBinding("key",
+					withExternalName(guid),
+					withServiceInstanceID(serviceInstanceGUID),
+					withCreateAttempts(3), // needs non-zero counter to trigger the update
+				),
 			},
 			kube: &test.MockClient{
 				MockUpdate: test.NewMockUpdateFn(errCFClientError),

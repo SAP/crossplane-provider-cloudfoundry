@@ -293,10 +293,12 @@ func (c *external) HandleObservationState(serviceBinding *cfresource.ServiceCred
 			ResourceUpToDate: serviceBinding.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
 		}, nil
 	case v1alpha1.LastOperationSucceeded:
-		resetCreateAttempts(cr)
+		if getCreateAttempts(cr) > 0 {
+			resetCreateAttempts(cr)
 
-		if err := c.kube.Update(ctx, cr); err != nil {
-			return managed.ExternalObservation{}, fmt.Errorf("cannot persist create attempt reset: %w", err)
+			if err := c.kube.Update(ctx, cr); err != nil {
+				return managed.ExternalObservation{}, fmt.Errorf("cannot persist create attempt reset: %w", err)
+			}
 		}
 
 		cr.SetConditions(xpv1.Available())
