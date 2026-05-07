@@ -34,10 +34,9 @@ import (
 type RouteService interface {
 	FindRouteBySpec(ctx context.Context, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, bool, error)
 	GetRouteByGUID(ctx context.Context, guid string) (*v1alpha1.RouteObservation, bool, error)
-	GetByIDOrSpec(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, error)
 	Create(ctx context.Context, mg resource.Managed, forProvider v1alpha1.RouteParameters) (string, error)
 	Update(ctx context.Context, guid string, mg resource.Managed, forProvider v1alpha1.RouteParameters) error
-	Delete(ctx context.Context, guid string) error
+	Delete(ctx context.Context, guid string) (string, error)
 }
 
 const (
@@ -177,7 +176,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	return managed.ExternalObservation{
 		ResourceExists:          true,
-		ResourceUpToDate:        route.IsUpToDate(cr, cr.Spec.ForProvider, *atProvider),
+		ResourceUpToDate:        route.IsUpToDate(cr, cr.Spec.ForProvider, cr.Status.AtProvider),
 		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
 }
