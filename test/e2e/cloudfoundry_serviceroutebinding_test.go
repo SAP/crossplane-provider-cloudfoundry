@@ -5,7 +5,6 @@ package e2e
 
 import (
 	"context"
-	"encoding/json"
 	"os"
 	"testing"
 	"time"
@@ -133,10 +132,6 @@ func TestCloudFoundryServiceRouteBinding(t *testing.T) {
 				if err := cr.Get(ctx, "e2e-serviceroutebinding-binding", cfg.Namespace(), binding); err != nil {
 					return false, err
 				}
-				labelBytes, _ := json.MarshalIndent(binding.Status.AtProvider.Labels, "", " ")
-				annotationBytes, _ := json.MarshalIndent(binding.Status.AtProvider.Annotations, "", " ")
-				t.Logf("Current labels for %s: %s", binding.GetName(), string(labelBytes))
-				t.Logf("Current annotations for %s: %s", binding.GetName(), string(annotationBytes))
 				if err := AssertLabelsAndAnnotations(
 					binding.Status.AtProvider.Labels,
 					binding.Status.AtProvider.Annotations,
