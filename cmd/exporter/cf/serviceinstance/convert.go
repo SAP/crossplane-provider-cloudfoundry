@@ -5,9 +5,9 @@ import (
 	"log/slog"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/metadata"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/metadata"
 	"github.com/SAP/xp-clifford/cli/export"
 	"github.com/SAP/xp-clifford/erratt"
 	"github.com/SAP/xp-clifford/yaml"
