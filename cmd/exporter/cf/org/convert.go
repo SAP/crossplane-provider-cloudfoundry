@@ -5,6 +5,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/metadata"
 	"github.com/SAP/xp-clifford/yaml"
 	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,7 +34,7 @@ func convertOrgResource(org *res) *yaml.ResourceWithComment {
 				ForProvider: v1alpha1.OrgParameters{
 					ResourceMetadata: v1alpha1.ResourceMetadata{
 						Annotations: org.Metadata.Annotations,
-						Labels:      org.Metadata.Labels,
+						Labels:      metadata.StripDefaultLabels(org.Metadata.Labels),
 					},
 					Name:      org.Name,
 					Suspended: &org.Suspended,
