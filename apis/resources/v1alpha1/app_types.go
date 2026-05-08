@@ -24,30 +24,24 @@ type AppObservation struct {
 	AppManifest string `json:"appManifest,omitempty"`
 
 	// The list of routes currently mapped to the application.
-	// +kubebuilder:validation:Optional
 	Routes []AppRouteObservation `json:"routes,omitempty"`
 }
 
 // AppRouteObservation represents an observed route for the application.
 type AppRouteObservation struct {
 	// The full URL of the route (e.g. myapp.apps.example.com).
-	// +kubebuilder:validation:Optional
 	URL string `json:"url,omitempty"`
 
 	// The host name of the route.
-	// +kubebuilder:validation:Optional
 	Host string `json:"host,omitempty"`
 
 	// The path of the route.
-	// +kubebuilder:validation:Optional
 	Path string `json:"path,omitempty"`
 
 	// The protocol of the route.
-	// +kubebuilder:validation:Optional
 	Protocol string `json:"protocol,omitempty"`
 
 	// The port of the route (for TCP routes).
-	// +kubebuilder:validation:Optional
 	Port *int `json:"port,omitempty"`
 }
 

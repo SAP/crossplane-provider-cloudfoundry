@@ -15,6 +15,7 @@ import (
 	"github.com/docker/cli/cli/config/configfile"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -157,6 +158,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		cr.Status.AtProvider.Routes = routes
 	} else {
 		cr.Status.AtProvider.Routes = prevRoutes
+		klog.Warningf("failed to fetch routes for app %q, preserving previous observations: %v", res.GUID, err)
 	}
 
 	// Set condition according to app State
