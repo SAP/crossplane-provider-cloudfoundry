@@ -56,9 +56,13 @@ type ImportTester[T resource.Managed] struct {
 
 	// the timeout for waiting till resource get deleted (in setup and teardown)
 	WaitDeletionTimeout wait.Option
+
+	// optional custom teardown func that overrides default teardown func when set
+	CustomTeardown CustomTeardownFunc[T]
 }
 
 type ImportTesterOption[T resource.Managed] func(*ImportTester[T])
+type CustomTeardownFunc[T resource.Managed] func(*ImportTester[T], context.Context, *testing.T, *envconf.Config) context.Context
 
 func WithWaitDependentResourceTimeout[T resource.Managed](timeout wait.Option) ImportTesterOption[T] {
 	return func(it *ImportTester[T]) {
@@ -81,6 +85,12 @@ func WithWaitDeletionTimeout[T resource.Managed](timeout wait.Option) ImportTest
 func WithDependentResourceDirectory[T resource.Managed](path string) ImportTesterOption[T] {
 	return func(it *ImportTester[T]) {
 		it.DependentResourceDirectory = path
+	}
+}
+
+func WithCustomTeardown[T resource.Managed](teardown CustomTeardownFunc[T]) ImportTesterOption[T] {
+	return func(it *ImportTester[T]) {
+		it.CustomTeardown = teardown
 	}
 }
 
@@ -109,7 +119,7 @@ func (it *ImportTester[T]) GetPrefixedName() string {
 }
 
 func (it *ImportTester[T]) BuildTestFeature(name string) *features.FeatureBuilder {
-	return features.New(name).
+	tf := features.New(name).
 		Setup(
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 				r, _ := res.New(cfg.Client().RESTConfig())
@@ -172,7 +182,16 @@ func (it *ImportTester[T]) BuildTestFeature(name string) *features.FeatureBuilde
 			})
 			return ctx
 		},
-	).Teardown(
+	)
+
+	if it.CustomTeardown != nil {
+		tf.Teardown(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			return it.CustomTeardown(it, ctx, t, cfg)
+		})
+		return tf
+	}
+
+	tf.Teardown(
 		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			resource := it.BaseResource.DeepCopyObject().(T)
 			MustGetResource(t, cfg, it.GetPrefixedName(), nil, resource)
@@ -189,6 +208,7 @@ func (it *ImportTester[T]) BuildTestFeature(name string) *features.FeatureBuilde
 			return ctx
 		},
 	)
+	return tf
 }
 
 // log is a helper function to log the start and end of an operation on a managed resource with name and external name.
