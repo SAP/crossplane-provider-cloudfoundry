@@ -188,6 +188,22 @@ func (cd *ChangeDetection) HasField(field string) bool {
 	return ok
 }
 
+// envVarsChanged returns true if the spec environment variables differ from the current manifest.
+func envVarsChanged(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (bool, error) {
+	if spec.Environment == nil || spec.Environment.Raw == nil {
+		return false, nil
+	}
+	appManifest, err := getAppManifest(status.Name, status.AppManifest)
+	if err != nil {
+		return false, err
+	}
+	var specEnv map[string]string
+	if err := json.Unmarshal(spec.Environment.Raw, &specEnv); err != nil {
+		return false, errors.Wrap(err, "failed to unmarshal environment variables")
+	}
+	return !reflect.DeepEqual(specEnv, appManifest.Env), nil
+}
+
 // DetectChanges determines what fields have changed between spec and status
 func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (*ChangeDetection, error) {
 	changes := &ChangeDetection{
@@ -208,18 +224,12 @@ func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) 
 	}
 
 	// Check if environment variables changed
-	if spec.Environment != nil && spec.Environment.Raw != nil {
-		appManifest, err := getAppManifest(status.Name, status.AppManifest)
-		if err != nil {
-			return nil, err
-		}
-		var specEnv map[string]string
-		if err := json.Unmarshal(spec.Environment.Raw, &specEnv); err != nil {
-			return nil, errors.Wrap(err, "failed to unmarshal environment variables")
-		}
-		if !reflect.DeepEqual(specEnv, appManifest.Env) {
-			changes.ChangedFields["environment"] = struct{}{}
-		}
+	envChanged, err := envVarsChanged(spec, status)
+	if err != nil {
+		return nil, err
+	}
+	if envChanged {
+		changes.ChangedFields["environment"] = struct{}{}
 	}
 
 	// Check if name changed
