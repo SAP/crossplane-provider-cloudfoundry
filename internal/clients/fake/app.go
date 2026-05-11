@@ -55,6 +55,20 @@ func (m *MockApp) Delete(ctx context.Context, guid string) (string, error) {
 	return args.String(0), args.Error(1)
 }
 
+// MockRouteFetcher mocks the RouteFetcher interface.
+type MockRouteFetcher struct {
+	mock.Mock
+}
+
+// ListForAppAll mocks RouteFetcher.ListForAppAll
+func (m *MockRouteFetcher) ListForAppAll(ctx context.Context, appGUID string, opts *client.RouteListOptions) ([]*resource.Route, error) {
+	args := m.Called(appGUID)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).([]*resource.Route), args.Error(1)
+}
+
 // PollComplete mocks App.PollComplete
 func (m *MockApp) PollComplete(ctx context.Context, job string, opt *client.PollingOptions) error {
 	args := m.Called()

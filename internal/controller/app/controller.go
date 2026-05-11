@@ -15,6 +15,7 @@ import (
 	"github.com/docker/cli/cli/config/configfile"
 	"github.com/google/uuid"
 	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -139,11 +140,25 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		lateInitialized = true
 	}
 
+	// Preserve previously observed routes so they survive a transient
+	// failure from the Routes API.
+	prevRoutes := cr.Status.AtProvider.Routes
+
 	// Update the status of the resource
 	cr.Status.AtProvider = app.GenerateObservation(res)
 	appManifest, err := c.client.GenerateManifest(ctx, res.GUID)
 	if err == nil {
 		cr.Status.AtProvider.AppManifest = appManifest
+	}
+
+	// Fetch routes for the application. On success, update the status with
+	// the fresh data; on error, restore the previously observed routes so
+	// that a transient CF API failure does not erase known route information.
+	if routes, err := c.client.FetchRoutes(ctx, res.GUID); err == nil {
+		cr.Status.AtProvider.Routes = routes
+	} else {
+		cr.Status.AtProvider.Routes = prevRoutes
+		klog.Warningf("failed to fetch routes for app %q, preserving previous observations: %v", res.GUID, err)
 	}
 
 	// Set condition according to app State
