@@ -104,7 +104,7 @@ func LateInitialize(spec *v1alpha1.OrgParameters, from *resource.Organization) {
 	}
 
 	if len(spec.Labels) == 0 && from.Metadata != nil {
-		spec.Labels = from.Metadata.Labels
+		spec.Labels = metadata.StripDefaultLabels(from.Metadata.Labels)
 	}
 
 	if len(spec.Annotations) == 0 && from.Metadata != nil {

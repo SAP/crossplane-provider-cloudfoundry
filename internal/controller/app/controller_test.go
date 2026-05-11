@@ -15,7 +15,11 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
+	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/app"
@@ -133,6 +137,12 @@ func newMockPush() *fake.MockPush {
 		nil,
 	)
 	return m
+}
+
+func withDefaultMetadataLabels() modifier {
+	return func(r *v1alpha1.App) {
+		r.SetGroupVersionKind(v1alpha1.App_GroupVersionKind)
+	}
 }
 
 func TestObserve(t *testing.T) {
@@ -264,7 +274,7 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful": {
 			args: args{
-				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: newApp("docker",
@@ -275,13 +285,23 @@ func TestObserve(t *testing.T) {
 					withAppManifest("applications:\n- name: "+name),
 					withConditions(xpv1.Available())),
 
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).App,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).App,
 					nil,
 				)
 				return m
@@ -289,7 +309,7 @@ func TestObserve(t *testing.T) {
 		},
 		"RoutesPopulated": {
 			args: args{
-				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: newApp("docker",
@@ -311,7 +331,17 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).App,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).App,
 					nil,
 				)
 				return m
@@ -376,7 +406,7 @@ func TestObserve(t *testing.T) {
 		},
 		"RouteFetchErrorNonFatal": {
 			args: args{
-				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID),
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID), withDefaultMetadataLabels(),
 					withRoutes(v1alpha1.AppRouteObservation{
 						URL:      "stale.apps.example.com",
 						Host:     "stale",
@@ -402,7 +432,17 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).App,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).App,
 					nil,
 				)
 				return m
