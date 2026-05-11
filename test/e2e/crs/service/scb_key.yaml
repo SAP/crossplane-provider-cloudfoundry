@@ -14,6 +14,11 @@ spec:
     rotation:
       frequency: 1h
       ttl: 2h
+    labels:
+      environment: test
+      team: platform
+    annotations:
+      description: E2E test service credential binding
   connectionDetailsAsJSON: false
   writeConnectionSecretToRef:
     name: e2e-service-key

@@ -211,7 +211,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 			credentialsUpToDate = bytes.Equal(desiredHash, cr.Status.AtProvider.Credentials)
 		}
 		// Check if the credentials in the spec match the credentials in the external resource
-		upToDate := credentialsUpToDate && serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r)
+		upToDate := credentialsUpToDate && serviceinstance.IsUpToDate(cr, &cr.Spec.ForProvider, r)
 
 		// Check if shared spaces are up to date
 		sharedSpacesUpToDate, err := c.serviceinstance.AreSharedSpacesUpToDate(ctx, r.GUID, cr.Spec.ForProvider.SharedSpaces)
@@ -252,7 +252,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.Wrap(err, errSecret)
 	}
 
-	r, err := c.serviceinstance.Create(ctx, cr.Spec.ForProvider, creds)
+	r, err := c.serviceinstance.Create(ctx, cr, cr.Spec.ForProvider, creds)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
@@ -304,7 +304,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.Wrap(err, errSecret)
 	}
 
-	if _, err := c.serviceinstance.Update(ctx, *cr.Status.AtProvider.ID, &cr.Spec.ForProvider, creds); err != nil {
+	if _, err := c.serviceinstance.Update(ctx, *cr.Status.AtProvider.ID, cr, &cr.Spec.ForProvider, creds); err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 

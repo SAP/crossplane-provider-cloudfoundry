@@ -70,7 +70,6 @@ func TestCloudfoundry_App(t *testing.T) {
 				if err := cr.Get(ctx, ft.name, cfg.Namespace(), ft.obj); err != nil {
 					t.Errorf("error observing resource %s: %s", ft.obj.GetName(), err.Error())
 				}
-				//klog.InfoS("resourced details", "cr", ft.obj)
 				return ctx
 			}).Assess(name+":"+ft.name+" ready",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
@@ -80,6 +79,7 @@ func TestCloudfoundry_App(t *testing.T) {
 				if err := wait.For(ResourceReady(cfg, ft.obj), wait.WithTimeout(10*time.Minute)); err != nil {
 					t.Errorf("error waiting for resource %s to be ready: %s", ft.obj.GetName(), err.Error())
 				}
+				checkAppResourceLabelsAndAnnotations(ctx, t, cfg, ft.obj, name)
 				return ctx
 			})
 	}
@@ -197,4 +197,32 @@ func hosts(routes []v1alpha1.AppRouteObservation) []string {
 			yield(r.Host)
 		}
 	})
+}
+
+func checkAppResourceLabelsAndAnnotations(ctx context.Context, t *testing.T, cfg *envconf.Config, obj k8s.Object, stepName string) {
+	cr := cfg.Client().Resources()
+	switch v := obj.(type) {
+	case *v1alpha1.App:
+		if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), v); err != nil {
+			t.Errorf("error getting App for label check: %s", err.Error())
+			return
+		}
+		description := "E2E test app"
+		if stepName == "app-2" {
+			description = "E2E test app 2"
+		}
+		if err := AssertLabelsAndAnnotations(
+			v.Status.AtProvider.Labels,
+			v.Status.AtProvider.Annotations,
+			map[string]string{"environment": "test", "team": "platform"},
+			map[string]string{"description": description},
+			v.GetName(),
+			"app.cloudfoundry.crossplane.io",
+			v.GetProviderConfigReference().Name,
+		); err != nil {
+			t.Errorf("App %s labels/annotations check failed: %s", v.GetName(), err.Error())
+		}
+	default:
+		// Observe-only resources (Space, Domain, ServiceInstance, SCB) and other non-eligible types — skip
+	}
 }

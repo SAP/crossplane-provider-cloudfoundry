@@ -24,6 +24,7 @@ import (
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 	srb "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/serviceroutebinding"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
@@ -198,7 +199,7 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		parameterFromSecret = *parameters
 	}
 
-	binding, err := srb.Create(ctx, e.srbClient, cr.Spec.ForProvider, parameterFromSecret)
+	binding, err := srb.Create(ctx, e.srbClient, cr, cr.Spec.ForProvider, parameterFromSecret)
 	if err != nil {
 		return managed.ExternalCreation{}, fmt.Errorf(errCreate, err)
 	} else if binding == nil {
@@ -242,7 +243,7 @@ func (e *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	// Update metadata (labels and annotations) - only supported fields for ServiceRouteBindings
-	_, err := srb.Update(ctx, e.srbClient, guid, cr.Spec.ForProvider)
+	_, err := srb.Update(ctx, e.srbClient, guid, cr, cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalUpdate{}, fmt.Errorf(errUpdate, err)
 	}
@@ -306,58 +307,16 @@ func handleObservationState(binding *cfresource.ServiceRouteBinding, cr *v1alpha
 		cr.SetConditions(xpv1.Available(), xpv1.ReconcileSuccess())
 
 		// Check if metadata (labels/annotations) needs to be updated
-		upToDate := isMetadataUpToDate(cr.Spec.ForProvider, binding)
+		var actualLabels, actualAnnotations map[string]*string
+		if binding.Metadata != nil {
+			actualLabels = binding.Metadata.Labels
+			actualAnnotations = binding.Metadata.Annotations
+		}
+		desired := metadata.BuildMetadata(cr, cr.Spec.ForProvider.Labels, cr.Spec.ForProvider.Annotations)
+		upToDate := metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, actualLabels, actualAnnotations)
 
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
 	}
 
 	return managed.ExternalObservation{}, errors.New(errUnknownState)
-}
-
-// isMetadataUpToDate checks if labels and annotations match between desired state (spec) and actual state (CF).
-// Returns true if metadata is up-to-date, false if an update is needed.
-func isMetadataUpToDate(spec v1alpha1.ServiceRouteBindingParameters, binding *cfresource.ServiceRouteBinding) bool {
-	// If no metadata in CF resource, check if spec wants to set any
-	if binding.Metadata == nil {
-		return spec.Labels == nil && spec.Annotations == nil
-	}
-
-	if !metadataMapEqual(spec.Labels, binding.Metadata.Labels) {
-		return false
-	}
-
-	if !metadataMapEqual(spec.Annotations, binding.Metadata.Annotations) {
-		return false
-	}
-
-	return true
-}
-
-// metadataMapEqual compares two metadata maps (labels or annotations).
-func metadataMapEqual(desired, actual map[string]*string) bool {
-	// check if both are nil/empty
-	if len(desired) == 0 && len(actual) == 0 {
-		return true
-	}
-
-	if len(desired) != len(actual) {
-		return false
-	}
-
-	// Compare each key-value pair
-	for key, desiredVal := range desired {
-		actualVal, exists := actual[key]
-		if !exists {
-			return false
-		}
-
-		if (desiredVal == nil) != (actualVal == nil) {
-			return false
-		}
-		if desiredVal != nil && actualVal != nil && *desiredVal != *actualVal {
-			return false
-		}
-	}
-
-	return true
 }

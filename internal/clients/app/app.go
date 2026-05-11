@@ -9,11 +9,13 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	xpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/google/uuid"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
 )
 
@@ -74,13 +76,13 @@ func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, spec v1alpha1.A
 }
 
 // CreateAndPush creates and pushes an app to the Cloud Foundry.
-func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
+func (c *Client) CreateAndPush(ctx context.Context, mg xpresource.Managed, spec v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
 	manifest, err := newManifestFromSpec(spec, dockerCredentials)
 	if err != nil {
 		return nil, err
 	}
 
-	application, err := c.AppClient.Create(ctx, newCreateOption(spec))
+	application, err := c.AppClient.Create(ctx, newCreateOption(mg, spec))
 	if err != nil {
 		return nil, err
 	}
@@ -88,8 +90,8 @@ func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha1.AppParameters,
 }
 
 // Update updates an app in the Cloud Foundry.
-func (c *Client) Update(ctx context.Context, guid string, spec v1alpha1.AppParameters) (*resource.App, error) {
-	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(spec))
+func (c *Client) Update(ctx context.Context, guid string, mg xpresource.Managed, spec v1alpha1.AppParameters) (*resource.App, error) {
+	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(mg, spec))
 	if err != nil {
 		return nil, err
 	}
@@ -97,13 +99,13 @@ func (c *Client) Update(ctx context.Context, guid string, spec v1alpha1.AppParam
 }
 
 // UpdateAndPush updates and pushes an app to the Cloud Foundry.
-func (c *Client) UpdateAndPush(ctx context.Context, guid string, spec v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
+func (c *Client) UpdateAndPush(ctx context.Context, guid string, mg xpresource.Managed, spec v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
 	manifest, err := newManifestFromSpec(spec, dockerCredentials)
 	if err != nil {
 		return nil, err
 	}
 
-	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(spec))
+	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(mg, spec))
 	if err != nil {
 		return nil, err
 	}
@@ -140,6 +142,11 @@ func GenerateObservation(res *resource.App) v1alpha1.AppObservation {
 	obs.State = res.State
 	obs.CreatedAt = ptr.To(res.CreatedAt.Format(time.RFC3339))
 	obs.UpdatedAt = ptr.To(res.UpdatedAt.Format(time.RFC3339))
+
+	if res.Metadata != nil {
+		obs.Labels = res.Metadata.Labels
+		obs.Annotations = res.Metadata.Annotations
+	}
 
 	return obs
 }
@@ -212,12 +219,14 @@ func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) 
 	return changes, nil
 }
 
-func IsUpToDate(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (bool, error) {
+func IsUpToDate(mg xpresource.Managed, spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (bool, error) {
 	changes, err := DetectChanges(spec, status)
 	if err != nil {
 		return false, err
 	}
-	return !changes.HasChanges(), nil
+	desired := metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
+	metadataUpToDate := metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, status.Labels, status.Annotations)
+	return !changes.HasChanges() && metadataUpToDate, nil
 }
 
 // DiffServiceBindings checks whether current state is up-to-date compared to the given
@@ -263,7 +272,7 @@ func newListOption(spec v1alpha1.AppParameters) *client.AppListOptions {
 }
 
 // newCreateOption maps spec to AppCreate option
-func newCreateOption(spec v1alpha1.AppParameters) *resource.AppCreate {
+func newCreateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resource.AppCreate {
 	name := spec.Name
 	space := ptr.Deref(spec.Space, "")
 	appCreate := resource.NewAppCreate(name, space)
@@ -283,11 +292,12 @@ func newCreateOption(spec v1alpha1.AppParameters) *resource.AppCreate {
 	default:
 		appCreate.Lifecycle = nil
 	}
+	appCreate.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
 	return appCreate
 }
 
 // newUpdateOption map spec to AppCreate option
-func newUpdateOption(spec v1alpha1.AppParameters) *resource.AppUpdate {
+func newUpdateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resource.AppUpdate {
 	var lifecycle *resource.Lifecycle
 	switch spec.Lifecycle {
 	case "buildpack":
@@ -309,7 +319,7 @@ func newUpdateOption(spec v1alpha1.AppParameters) *resource.AppUpdate {
 	return &resource.AppUpdate{
 		Name:      spec.Name,
 		Lifecycle: lifecycle,
-		Metadata:  &resource.Metadata{},
+		Metadata:  metadata.BuildMetadata(mg, spec.Labels, spec.Annotations),
 	}
 }
 

@@ -5,16 +5,16 @@ import (
 	"testing"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
-	k8s "sigs.k8s.io/controller-runtime/pkg/client"
-
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
+	"github.com/google/go-cmp/cmp"
+	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
+	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/app"
@@ -100,6 +100,12 @@ func newMockPush() *fake.MockPush {
 
 }
 
+func withDefaultMetadataLabels() modifier {
+	return func(r *v1alpha1.App) {
+		r.SetGroupVersionKind(v1alpha1.App_GroupVersionKind)
+	}
+}
+
 func TestObserve(t *testing.T) {
 	type service func() *fake.MockApp
 	type args struct {
@@ -180,7 +186,7 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ResourceLateInitialized: true},
 				err: nil,
 			},
 			service: func() *fake.MockApp {
@@ -222,7 +228,7 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful": {
 			args: args{
-				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: newApp("docker",
@@ -236,11 +242,17 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).App,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).App,
 					nil,
 				)
 				return m
@@ -248,7 +260,7 @@ func TestObserve(t *testing.T) {
 		},
 		"RoutesPopulated": {
 			args: args{
-				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: newApp("docker",
@@ -267,11 +279,17 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).App,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).App,
 					nil,
 				)
 				return m
@@ -294,7 +312,7 @@ func TestObserve(t *testing.T) {
 		},
 		"RouteFetchErrorNonFatal": {
 			args: args{
-				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID),
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID), withDefaultMetadataLabels(),
 					withRoutes(v1alpha1.AppRouteObservation{
 						URL:      "stale.apps.example.com",
 						Host:     "stale",
@@ -317,11 +335,17 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).App,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).App,
 					nil,
 				)
 				return m

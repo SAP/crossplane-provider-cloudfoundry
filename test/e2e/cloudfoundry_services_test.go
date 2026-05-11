@@ -95,7 +95,6 @@ func TestCloudFoundryServices(t *testing.T) {
 				if err := cr.Get(ctx, ft.name, cfg.Namespace(), ft.obj); err != nil {
 					t.Errorf("error observing resource %s: %s", ft.obj.GetName(), err.Error())
 				}
-				//klog.InfoS("resourced details", "cr", ft.obj)
 				return ctx
 			}).Assess(name+":"+ft.name+" ready",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
@@ -105,6 +104,7 @@ func TestCloudFoundryServices(t *testing.T) {
 				if err := wait.For(ResourceReady(cfg, ft.obj), wait.WithTimeout(10*time.Minute)); err != nil {
 					t.Errorf("error waiting for resource %s to be ready: %s", ft.obj.GetName(), err.Error())
 				}
+				checkServiceResourceLabelsAndAnnotations(ctx, t, cfg, ft.obj, name)
 				return ctx
 			})
 	}
@@ -160,4 +160,60 @@ func TestCloudFoundryServices(t *testing.T) {
 	}
 
 	testenv.Test(t, feat.Feature())
+}
+
+func checkServiceResourceLabelsAndAnnotations(ctx context.Context, t *testing.T, cfg *envconf.Config, obj k8s.Object, stepName string) {
+	cr := cfg.Client().Resources()
+	switch v := obj.(type) {
+	case *v1alpha1.ServiceInstance:
+		if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), v); err != nil {
+			t.Errorf("error getting ServiceInstance for label check: %s", err.Error())
+			return
+		}
+		if stepName == "service_instance" {
+			// Managed SI with user labels in manifest
+			if err := AssertLabelsAndAnnotations(
+				v.Status.AtProvider.Labels,
+				v.Status.AtProvider.Annotations,
+				map[string]string{"environment": "test", "team": "platform"},
+				map[string]string{"description": "E2E test service instance"},
+				v.GetName(),
+				"serviceinstance.cloudfoundry.crossplane.io",
+				v.GetProviderConfigReference().Name,
+			); err != nil {
+				t.Errorf("ServiceInstance %s labels/annotations check failed: %s", v.GetName(), err.Error())
+			}
+		} else {
+			// UPS instances — no user labels in manifest, just check default labels
+			if err := AssertDefaultLabels(
+				v.Status.AtProvider.Labels,
+				v.GetName(),
+				"serviceinstance.cloudfoundry.crossplane.io",
+				v.GetProviderConfigReference().Name,
+			); err != nil {
+				t.Errorf("ServiceInstance %s default labels check failed: %s", v.GetName(), err.Error())
+			}
+		}
+	case *v1alpha1.ServiceCredentialBinding:
+		if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), v); err != nil {
+			t.Errorf("error getting SCB for label check: %s", err.Error())
+			return
+		}
+		if stepName == "scb_key" {
+			// SCB with user labels in manifest
+			if err := AssertLabelsAndAnnotations(
+				v.Status.AtProvider.Labels,
+				v.Status.AtProvider.Annotations,
+				map[string]string{"environment": "test", "team": "platform"},
+				map[string]string{"description": "E2E test service credential binding"},
+				v.GetName(),
+				"servicecredentialbinding.cloudfoundry.crossplane.io",
+				v.GetProviderConfigReference().Name,
+			); err != nil {
+				t.Errorf("SCB %s labels/annotations check failed: %s", v.GetName(), err.Error())
+			}
+		}
+	default:
+		// Observe-only resources (Space) and non-eligible types — skip
+	}
 }

@@ -9,10 +9,8 @@ import (
 	"testing"
 	"time"
 
-	meta "github.com/SAP/crossplane-provider-cloudfoundry/apis"
 	"sigs.k8s.io/e2e-framework/klient/decoder"
 	"sigs.k8s.io/e2e-framework/klient/k8s"
-	resources "sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/envfuncs"
@@ -83,26 +81,43 @@ func TestCloudFoundryServiceRouteBinding(t *testing.T) {
 				if err := wait.For(ResourceReady(cfg, ft.obj), wait.WithTimeout(10*time.Minute)); err != nil {
 					t.Errorf("error waiting for resource %s to be ready: %s", ft.obj.GetName(), err.Error())
 				}
+				checkSRBResourceLabelsAndAnnotations(ctx, t, cfg, ft.obj)
 				return ctx
 			})
 	}
 
-	// Test metadata update by applying updated manifest
+	// Test metadata update: decode updated manifest, then update the existing CR
 	feat.Assess("service_route_binding:e2e-serviceroutebinding-binding apply metadata update",
 		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			r, _ := resources.New(cfg.Client().RESTConfig())
-			_ = meta.AddToScheme(r.GetScheme())
-			r.WithNamespace(cfg.Namespace())
-
+			// Decode the updated manifest to get the desired labels/annotations
+			updated := &v1alpha1.ServiceRouteBinding{}
 			err := decoder.DecodeEachFile(
-				ctx, os.DirFS(dir), "serviceroutebinding-updated.yaml",
-				decoder.CreateIgnoreAlreadyExists(r),
+				ctx, os.DirFS(dir+"/updated"), "serviceroutebinding-updated.yaml",
+				func(ctx context.Context, obj k8s.Object) error {
+					updated = obj.(*v1alpha1.ServiceRouteBinding)
+					return nil
+				},
 				decoder.MutateNamespace(cfg.Namespace()),
 			)
 			if err != nil {
-				t.Errorf("error applying updated manifest: %s", err.Error())
+				t.Fatalf("error decoding updated manifest: %s", err.Error())
 			}
-			t.Logf("Applied updated metadata manifest")
+
+			// Get the existing CR (preserving resourceVersion)
+			existing := &v1alpha1.ServiceRouteBinding{}
+			cr := cfg.Client().Resources()
+			if err := cr.Get(ctx, "e2e-serviceroutebinding-binding", cfg.Namespace(), existing); err != nil {
+				t.Fatalf("error getting existing SRB: %s", err.Error())
+			}
+
+			// Apply updated labels/annotations from the manifest
+			existing.Spec.ForProvider.Labels = updated.Spec.ForProvider.Labels
+			existing.Spec.ForProvider.Annotations = updated.Spec.ForProvider.Annotations
+
+			if err := cr.Update(ctx, existing); err != nil {
+				t.Fatalf("error updating SRB with new labels: %s", err.Error())
+			}
+			t.Logf("Applied updated metadata to SRB")
 			return ctx
 		}).Assess("service_route_binding:e2e-serviceroutebinding-binding ready after metadata update",
 		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
@@ -112,6 +127,27 @@ func TestCloudFoundryServiceRouteBinding(t *testing.T) {
 			t.Logf("Waiting for resource to be ready after metadata update")
 			if err := wait.For(ResourceReady(cfg, binding), wait.WithTimeout(10*time.Minute)); err != nil {
 				t.Errorf("error waiting for resource to be ready after update: %s", err.Error())
+			}
+			// Poll until updated labels/annotations appear in status
+			if err := wait.For(func(ctx context.Context) (bool, error) {
+				cr := cfg.Client().Resources()
+				if err := cr.Get(ctx, "e2e-serviceroutebinding-binding", cfg.Namespace(), binding); err != nil {
+					return false, err
+				}
+				if err := AssertLabelsAndAnnotations(
+					binding.Status.AtProvider.Labels,
+					binding.Status.AtProvider.Annotations,
+					map[string]string{"environment": "production", "team": "operations"},
+					map[string]string{"description": "Updated metadata"},
+					binding.GetName(),
+					"serviceroutebinding.cloudfoundry.crossplane.io",
+					binding.GetProviderConfigReference().Name,
+				); err != nil {
+					return false, nil // not yet reconciled
+				}
+				return true, nil
+			}, wait.WithTimeout(5*time.Minute)); err != nil {
+				t.Errorf("SRB after update labels/annotations check failed: %s", err.Error())
 			}
 			return ctx
 		})
@@ -141,4 +177,57 @@ func TestCloudFoundryServiceRouteBinding(t *testing.T) {
 	}
 
 	testenv.Test(t, feat.Feature())
+}
+
+// checkSRBResourceLabelsAndAnnotations verifies default Crossplane labels
+// for all eligible resources in the SRB test, and user-provided labels/annotations
+// for resources that have them in their manifests.
+func checkSRBResourceLabelsAndAnnotations(ctx context.Context, t *testing.T, cfg *envconf.Config, obj k8s.Object) {
+	cr := cfg.Client().Resources()
+	switch v := obj.(type) {
+	case *v1alpha1.ServiceRouteBinding:
+		if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), v); err != nil {
+			t.Errorf("error getting SRB for label check: %s", err.Error())
+			return
+		}
+		if err := AssertLabelsAndAnnotations(
+			v.Status.AtProvider.Labels,
+			v.Status.AtProvider.Annotations,
+			map[string]string{"environment": "test", "team": "platform"},
+			map[string]string{"description": "Initial metadata"},
+			v.GetName(),
+			"serviceroutebinding.cloudfoundry.crossplane.io",
+			v.GetProviderConfigReference().Name,
+		); err != nil {
+			t.Errorf("SRB %s labels/annotations check failed: %s", v.GetName(), err.Error())
+		}
+	case *v1alpha1.ServiceInstance:
+		if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), v); err != nil {
+			t.Errorf("error getting SI for label check: %s", err.Error())
+			return
+		}
+		if err := AssertDefaultLabels(
+			v.Status.AtProvider.Labels,
+			v.GetName(),
+			"serviceinstance.cloudfoundry.crossplane.io",
+			v.GetProviderConfigReference().Name,
+		); err != nil {
+			t.Errorf("SI %s default labels check failed: %s", v.GetName(), err.Error())
+		}
+	case *v1alpha1.Route:
+		if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), v); err != nil {
+			t.Errorf("error getting Route for label check: %s", err.Error())
+			return
+		}
+		if err := AssertDefaultLabels(
+			v.Status.AtProvider.Labels,
+			v.GetName(),
+			"route.cloudfoundry.crossplane.io",
+			v.GetProviderConfigReference().Name,
+		); err != nil {
+			t.Errorf("Route %s default labels check failed: %s", v.GetName(), err.Error())
+		}
+	default:
+		// Observe-only resources (Space, Domain, Organization) and non-eligible types — skip
+	}
 }
