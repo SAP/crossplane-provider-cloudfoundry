@@ -7,7 +7,7 @@ metadata:
   name: e2e-space-org-ref
 spec:
   forProvider:
-    name: e2e-space
+    name: e2e-space-ref
     orgRef:
       name:  e2e-org
       policy:
@@ -26,7 +26,7 @@ metadata:
   name: e2e-space-org-name
 spec:
   forProvider:
-    name: e2e-space
+    name: e2e-space-name
     orgName: cf-ci-e2e
     labels:
       environment: staging
