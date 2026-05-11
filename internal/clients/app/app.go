@@ -4,12 +4,15 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"reflect"
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -168,6 +171,21 @@ func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) 
 			if spec.Docker.Image != appManifest.Docker.Image {
 				changes.ChangedFields["docker_image"] = struct{}{}
 			}
+		}
+	}
+
+	// Check if environment variables changed
+	if spec.Environment != nil && spec.Environment.Raw != nil {
+		appManifest, err := getAppManifest(status.Name, status.AppManifest)
+		if err != nil {
+			return nil, err
+		}
+		var specEnv map[string]string
+		if err := json.Unmarshal(spec.Environment.Raw, &specEnv); err != nil {
+			return nil, errors.Wrap(err, "failed to unmarshal environment variables")
+		}
+		if !reflect.DeepEqual(specEnv, appManifest.Env) {
+			changes.ChangedFields["environment"] = struct{}{}
 		}
 	}
 
