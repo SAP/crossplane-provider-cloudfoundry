@@ -4,20 +4,50 @@
 
 # Crossplane Provider for Cloud Foundry
 
-## About this project
+> **Manage Cloud Foundry resources the GitOps way** — declarative, version-controlled, and reconciled continuously by Crossplane.
 
-`crossplane-provider-cloudfoundry` is a [Crossplane](https://crossplane.io/) provider for [Cloud Foundry](https://docs.cloudfoundry.org/). The provider that is built from the source code in this repository can be installed into a Crossplane control plane and adds the following new functionality:
+`crossplane-provider-cloudfoundry` lets you define Cloud Foundry resources (Orgs, Spaces, Services, Applications, and more) as Kubernetes custom resources. Crossplane takes care of the rest: provisioning, drift detection, and reconciliation — no scripts, no manual clicks.
 
-- Custom Resource Definitions ([CRDs](https://doc.crds.dev/github.com/SAP/crossplane-provider-cloudfoundry)) that model Cloud Foundry resources (e.g. [Organization, Space, Services, Applications, etc.](https://doc.crds.dev/github.com/SAP/crossplane-provider-cloudfoundry))
-- Custom Controllers to provision these resources in a Cloud Foundry deployment based on the users desired state captured in [CRDs](https://doc.crds.dev/github.com/SAP/crossplane-provider-cloudfoundry) they create
+---
 
-## Roadmap
-We have a lot of exciting new features and improvements in our backlogs for you to expect and even contribute yourself! We will publish a detailed roadmap soon.
+## 🌍 Community
 
-## 📊 Installation
-> Crossplane v2 is NOT yet supported, please use Crossplane v1 for now.
+We're building this in the open and we'd love your involvement — whether you're using the provider in production, experimenting with it, or just curious about how it works.
 
-To install this provider in a kubernetes cluster running crossplane, you can use the provider custom resource, replacing the `<version>`placeholder with the current version of this provider (e.g. v0.3.0):
+---
+
+### 📞 Monthly Community Call
+
+We hold a community call on the **last Wednesday of every month at 4 pm CET**.
+
+- 👀 See what everyone's been working on
+- 💡 Share ideas and feedback
+- ❓ Ask questions — no question is too basic
+- 🔬 Dive into technical details together
+
+🔗 **Join:** : [Click Here](https://teams.microsoft.com/meet/38649588898748?p=ctg4uzLFVdSWRU2ZJQ)
+
+🎬 **Can't make it?** Recordings are shared after each call.
+
+---
+
+### 💬 Chat with us
+
+Join us on Slack: [**#provider-sap-cloudfoundry**](https://crossplane.slack.com/archives/C08NBTJ1J05) — for questions, ideas, or just to say hi.
+
+---
+
+## 🗺️ Roadmap
+
+We have a growing backlog of features and improvements. You can follow along — and pick something up! — on our [GitHub Issues](https://github.com/SAP/crossplane-provider-cloudfoundry/issues) and [Discussions](https://github.com/SAP/crossplane-provider-cloudfoundry/discussions).
+
+---
+
+## 📦 Installation
+
+> ⚠️ **Crossplane v2 is not yet supported but coming soon.** Please use **Crossplane v1** for now.
+
+To install the provider into a Kubernetes cluster running Crossplane, apply the following resource — replacing `<VERSION>` with the [latest release](https://github.com/SAP/crossplane-provider-cloudfoundry/releases):
 
 ```yaml
 apiVersion: pkg.crossplane.io/v1
@@ -28,93 +58,104 @@ spec:
   package: ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane/provider-cloudfoundry:<VERSION>
 ```
 
-Crossplane will take care to create a deployment for this provider. Once it becomes healthy, you can configure your provider using proper credentials and start orchestrating :rocket:.
+Crossplane will create a deployment for the provider. Once it's healthy, configure your credentials and start orchestrating. 🚀
+
+---
 
 ## 🔬 Developing
+
 ### Initial Setup
-The provider comes with some tooling to ease a local setup for development. As initial setup you can follow these steps:
-1. Clone the repository
-2. Run `make submodules` to initialize the "build" submodule provided by crossplane
-3. Run `make dev-debug` to create a kind cluster and install the CRDs
 
-:warning: Please note that you are required to have [kind](https://kind.sigs.k8s.io) and [docker](https://www.docker.com/get-started/) installed on your local machine in order to run dev debug.
+The provider includes tooling to get you up and running locally quickly.
 
-Those steps will leave you with a local cluster and your KUBECONFIG being configured to connect to it via e.g. [kubectl](https://kubernetes.io/docs/reference/kubectl/) or [k9s](https://k9scli.io). You can already apply manifests to that cluster at this point.
+**Prerequisites:** [kind](https://kind.sigs.k8s.io) and [Docker](https://www.docker.com/get-started/) must be installed.
+
+```bash
+# 1. Clone the repo
+git clone https://github.com/SAP/crossplane-provider-cloudfoundry
+
+# 2. Initialize the build submodule
+make submodules
+
+# 3. Spin up a local kind cluster with CRDs installed
+make dev-debug
+```
+
+This leaves you with a local cluster and your `KUBECONFIG` pointed at it — ready for `kubectl` or [k9s](https://k9scli.io).
 
 ### Running the Controller
-To run the controller locally, you can use the following command:
+
 ```bash
 make run
 ```
-This will compile your controller as executable and run it locally (outside of your cluster).
-It will connect to your cluster using your KUBECONFIG configuration and start watching for resources.
 
-### Cleaning up
-For deleting the cluster again, run
+Compiles and runs the controller locally (outside the cluster), watching for resources via your `KUBECONFIG`.
+
+### Cleaning Up
+
 ```bash
 make dev-clean
 ```
 
 ### E2E Tests
-The provider comes with a set of end-to-end tests that can be run locally. To run them, you can use the following command:
+
 ```bash
 make test-acceptance
 ```
-This will spin up a specific kind cluster which runs the provider as docker container in it. The e2e tests will run kubectl commands against that cluster to test the provider's functionality.
 
-Please note that when running multiple times you might want to delete the kind cluster again to avoid conflicts:
+Spins up a kind cluster, runs the provider as a container inside it, and fires `kubectl` commands to validate behavior end-to-end.
+
+If you run tests multiple times, clean up the kind cluster first to avoid conflicts:
+
 ```bash
 kind delete cluster <cluster-name>
 ```
 
 ### Upgrade Tests
 
-The provider comes with a set of upgrade tests that can be run locally. To learn more about it : [Upgrade Tests README](./docs/upgrade-testing.md).
+See the [Upgrade Tests README](./docs/upgrade-testing.md) for details.
 
-#### Required Configuration
-In order for the tests to perform successfully some configuration need to be present as environment variables:
+#### Required Environment Variables
 
-**CF_CREDENTIALS**
+| Variable | Description |
+|---|---|
+| `CF_CREDENTIALS` | CF admin user credentials as JSON: `{"email": "...", "username": "...", "password": "..."}` |
+| `CF_ENVIRONMENT` | CF API URL, e.g. `https://api.cf.eu12.hana.ondemand.com` |
 
-User credentials for a user that is Cloud Foundry Administrator in the configured environment, structure:
-```json
-{
-  "email": "email",
-  "username": "PuserId",
-  "password": "mypass"
-}
-```
+---
 
-**CF_ENVIRONMENT**
+## 🛠️ Export CLI
 
-Contains the CF server URL, for example:
-```
-https://api.cf.eu12.hana.ondemand.com
-```
+The provider ships an export CLI that generates managed resource definitions from an existing Cloud Foundry cluster's configuration.
 
-## Export CLI
+→ See the [User Guide](cmd/exporter/docs/USERGUIDE.md) for details.
 
-The provider includes an export CLI tool that generates managed resource definitions from the existing resource configurations of a Cloud Foundry cluster.
+---
 
-For more details, refer to the [user guide](cmd/exporter/docs/USERGUIDE.md).
+## 🤝 Contributing
 
-## 👐 Support, Feedback, Contributing
+Contributions are very welcome — from bug reports to new features to docs improvements. Here's how to get involved:
 
-If you have a question always feel free to reach out on our official crossplane slack channel:
+- 🐛 **Found a bug?** [Open an issue](https://github.com/SAP/crossplane-provider-cloudfoundry/issues)
+- 💡 **Have an idea?** Start a [Discussion](https://github.com/SAP/crossplane-provider-cloudfoundry/discussions) or drop by the community call
+- 🛠️ **Want to contribute code?** Check out the [CONTRIBUTING.md](CONTRIBUTING.md) and [DEVELOPER.md](DEVELOPER.md) guides
 
-:rocket: [**#provider-sap-cloudfoundry**](https://crossplane.slack.com/archives/C08NBTJ1J05).
+Not sure where to start? Come chat on [Slack](https://crossplane.slack.com/archives/C08NBTJ1J05) — we're happy to help you find something.
 
-This project is open to feature requests/suggestions, bug reports etc. via [GitHub issues](https://github.com/SAP/crossplane-provider-cloudfoundry/issues). Contribution and feedback are encouraged and always welcome.
+---
 
-If you are interested in contributing, please check out our [CONTRIBUTING.md](CONTRIBUTING.md) guide and [DEVELOPER.md](DEVELOPER.md) guide.
+## 🔒 Security
 
-## 🔒 Security / Disclosure
-If you find any bug that may be a security problem, please follow our instructions at [in our security policy](https://github.com/SAP/crossplane-provider-cloudfoundry/security/policy) on how to report it. Please do not create GitHub issues for security-related doubts or problems.
+If you discover a potential security vulnerability, please follow our [security policy](https://github.com/SAP/crossplane-provider-cloudfoundry/security/policy) — **do not open a public GitHub issue** for security concerns.
+
+---
 
 ## 🙆‍♀️ Code of Conduct
 
-We as members, contributors, and leaders pledge to make participation in our community a harassment-free experience for everyone. By participating in this project, you agree to abide by its [Code of Conduct](https://github.com/SAP/.github/blob/main/CODE_OF_CONDUCT.md) at all times.
+We're committed to a welcoming, harassment-free community for everyone. By participating in this project, you agree to our [Code of Conduct](https://github.com/SAP/.github/blob/main/CODE_OF_CONDUCT.md).
+
+---
 
 ## 📋 Licensing
 
-Copyright 2024 SAP SE or an SAP affiliate company and crossplane-provider-btp contributors. Please see our [LICENSE](LICENSE) for copyright and license information. Detailed information including third-party components and their licensing/copyright information is available [via the REUSE tool](https://api.reuse.software/info/github.com/SAP/crossplane-provider-btp).
+Copyright 2024 SAP SE or an SAP affiliate company and crossplane-provider-cloudfoundry contributors. See [LICENSE](LICENSE) for details. Third-party component licensing is available via the [REUSE tool](https://api.reuse.software/info/github.com/SAP/crossplane-provider-btp).
