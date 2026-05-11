@@ -223,7 +223,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource+": Failed to detect changes")
 	}
 
-	if changes.HasField("docker_image") {
+	if changes.HasField("docker_image") || changes.HasField("environment") {
 		dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errSecret)
