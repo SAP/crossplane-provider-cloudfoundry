@@ -15,6 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -56,6 +57,8 @@ var (
 	guid       = "33fd5b0b-4f3b-4b1b-8b3d-3b5f7b4b3b4b"
 	name       = "test-route"
 	errBoom    = errors.New("boom")
+
+	nilObservation *v1alpha1.RouteObservation
 )
 
 type modifier func(*v1alpha1.Route)
@@ -109,8 +112,17 @@ func fakeRouteObservation(id string) *v1alpha1.RouteObservation {
 	}
 	r := &v1alpha1.RouteObservation{
 		Resource: res,
+		ResourceMetadata: v1alpha1.ResourceMetadata{
+			Labels: map[string]*string{"crossplane-kind": ptr.To("route.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("test-route")},
+		},
 	}
 	return r
+}
+
+func withDefaultMetadataLabels() modifier {
+	return func(r *v1alpha1.Route) {
+		r.SetGroupVersionKind(v1alpha1.RouteGroupVersionKind)
+	}
 }
 
 func TestObserve(t *testing.T) {
@@ -156,7 +168,7 @@ func TestObserve(t *testing.T) {
 			service: func() *Mock {
 				m := &Mock{}
 				m.On("FindRouteBySpec", fakeRoute(withHost(name)).Spec.ForProvider).Return(
-					(*v1alpha1.RouteObservation)(nil), false, nil,
+					nilObservation, false, nil,
 				)
 				return m
 			},
@@ -166,10 +178,11 @@ func TestObserve(t *testing.T) {
 				mg: fakeRoute(
 					withExternalName(guid),
 					withHost(name),
+					withDefaultMetadataLabels(),
 				),
 			},
 			want: want{
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
 			service: func() *Mock {
@@ -183,12 +196,12 @@ func TestObserve(t *testing.T) {
 		},
 		"Adopt and set external-name ": {
 			args: args{
-				mg: fakeRoute(withHost(name)),
+				mg: fakeRoute(withHost(name), withDefaultMetadataLabels()),
 			},
 			want: want{
 				obs: managed.ExternalObservation{
 					ResourceExists:          true,
-					ResourceUpToDate:        false,
+					ResourceUpToDate:        true,
 					ResourceLateInitialized: true,
 				},
 				err: nil,
@@ -215,7 +228,7 @@ func TestObserve(t *testing.T) {
 			service: func() *Mock {
 				m := &Mock{}
 				m.On("FindRouteBySpec", fakeRoute(withHost(name)).Spec.ForProvider).Return(
-					(*v1alpha1.RouteObservation)(nil), false, nil,
+					nilObservation, false, nil,
 				)
 				return m
 			},
@@ -225,10 +238,11 @@ func TestObserve(t *testing.T) {
 				mg: fakeRoute(
 					withExternalName(guid),
 					withHost(name),
+					withDefaultMetadataLabels(),
 				),
 			},
 			want: want{
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
 			service: func() *Mock {
@@ -250,7 +264,7 @@ func TestObserve(t *testing.T) {
 			service: func() *Mock {
 				m := &Mock{}
 				m.On("GetRouteByGUID", guid).Return(
-					(*v1alpha1.RouteObservation)(nil), false, nil,
+					nilObservation, false, nil,
 				)
 				return m
 			},
@@ -278,7 +292,7 @@ func TestObserve(t *testing.T) {
 			service: func() *Mock {
 				m := &Mock{}
 				m.On("GetRouteByGUID", guid).Return(
-					(*v1alpha1.RouteObservation)(nil), false, errBoom,
+					nilObservation, false, errBoom,
 				)
 				return m
 			},

@@ -14,6 +14,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -65,6 +66,12 @@ func fakeDomain(m ...modifier) *v1alpha1.Domain {
 		rm(r)
 	}
 	return r
+}
+
+func withDefaultMetadataLabels() modifier {
+	return func(r *v1alpha1.Domain) {
+		r.SetGroupVersionKind(v1alpha1.Domain_GroupVersionKind)
+	}
 }
 
 func TestObserve(t *testing.T) {
@@ -174,6 +181,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeDomain(
 					withExternalName(guid),
 					withName(name),
+					withDefaultMetadataLabels(),
 				),
 			},
 			want: want{
@@ -181,18 +189,18 @@ func TestObserve(t *testing.T) {
 					withExternalName(guid),
 					withName(name),
 				),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
 			service: func() *fake.MockDomain {
 				m := &fake.MockDomain{}
 
 				m.On("Get", guid).Return(
-					&fake.NewDomain().SetName(name).SetGUID(guid).Domain,
+					&fake.NewDomain().SetName(name).SetGUID(guid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("domain.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("sap.my-domain.com")}).Domain,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewDomain().SetName(name).SetGUID(guid).Domain,
+					&fake.NewDomain().SetName(name).SetGUID(guid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("domain.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("sap.my-domain.com")}).Domain,
 					nil,
 				)
 				return m
@@ -200,13 +208,13 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful when guid is not provided and Domain with name is found ": {
 			args: args{
-				mg: fakeDomain(withName(name)),
+				mg: fakeDomain(withName(name), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: fakeDomain(withName(name), withExternalName(guid)),
 				obs: managed.ExternalObservation{
 					ResourceExists:          true,
-					ResourceUpToDate:        false,
+					ResourceUpToDate:        true,
 					ResourceLateInitialized: true,
 				},
 				err: nil,
@@ -218,7 +226,7 @@ func TestObserve(t *testing.T) {
 					fake.ErrNoResultReturned,
 				)
 				m.On("Single").Return(
-					&fake.NewDomain().SetName(name).SetGUID(guid).Domain,
+					&fake.NewDomain().SetName(name).SetGUID(guid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("domain.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("sap.my-domain.com")}).Domain,
 					nil,
 				)
 				return m
@@ -322,7 +330,7 @@ func TestCreate(t *testing.T) {
 					errBoom,
 				)
 				m.On("Single").Return(
-					&fake.NewDomain().SetName(name).SetGUID(guid).Domain,
+					&fake.NewDomain().SetName(name).SetGUID(guid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("domain.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("sap.my-domain.com")}).Domain,
 					nil,
 				)
 				return m

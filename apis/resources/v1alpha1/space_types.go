@@ -46,6 +46,7 @@ type SpaceObservation struct {
 type SpaceParameters struct {
 
 	// (Boolean) Allows SSH to application containers via the CF CLI.
+	// +kubebuilder:validation:Optional
 	// +kubebuilder:default=false
 	AllowSSH bool `json:"allowSsh,omitempty" tf:"allow_ssh,omitempty"`
 

@@ -19,6 +19,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -91,6 +92,12 @@ func serviceCredentialBinding(typ string, m ...modifier) *v1alpha1.ServiceCreden
 	}
 	return r
 }
+func withDefaultMetadataLabels() modifier {
+	return func(r *v1alpha1.ServiceCredentialBinding) {
+		r.SetGroupVersionKind(v1alpha1.ServiceCredentialBindingGroupVersionKind)
+	}
+}
+
 func TestObserve(t *testing.T) {
 	type service func() *fake.MockServiceCredentialBinding
 	type keyRotator func() *fake.MockKeyRotator
@@ -105,17 +112,18 @@ func TestObserve(t *testing.T) {
 		err error
 	}
 
-	scb := serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID))
+	scb := serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID), withDefaultMetadataLabels())
 	scbAvailable := serviceCredentialBinding(
 		"key",
 		withExternalName(guid),
 		withStatus(guid),
 		withServiceInstanceID(serviceInstanceGUID),
 		withConditions(xpv1.Available()),
+		withDefaultMetadataLabels(),
 	)
 
 	cfSucceeded := func() *cfresource.ServiceCredentialBinding {
-		return &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceCredentialBinding
+		return &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).SetLabels(map[string]*string{"crossplane-kind": ptr.To("servicecredentialbinding.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-service-credential-binding")}).ServiceCredentialBinding
 	}
 
 	cases := map[string]struct {
@@ -230,7 +238,7 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  scbAvailable.DeepCopy(),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ConnectionDetails: managed.ConnectionDetails{}},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ConnectionDetails: managed.ConnectionDetails{}},
 				err: nil,
 			},
 			service: func() *fake.MockServiceCredentialBinding {
@@ -258,7 +266,7 @@ func TestObserve(t *testing.T) {
 			observationStateHandler: func() *MockObservationStateHandler {
 				m := &MockObservationStateHandler{}
 				m.On("HandleObservationState", cfSucceeded(), mock.Anything, mock.Anything).Return(
-					managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ConnectionDetails: managed.ConnectionDetails{}},
+					managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ConnectionDetails: managed.ConnectionDetails{}},
 					nil,
 				)
 				return m
@@ -270,7 +278,7 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  scb.DeepCopy(),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
 			service: func() *fake.MockServiceCredentialBinding {
@@ -293,7 +301,7 @@ func TestObserve(t *testing.T) {
 			observationStateHandler: func() *MockObservationStateHandler {
 				m := &MockObservationStateHandler{}
 				m.On("HandleObservationState", cfSucceeded(), mock.Anything, mock.Anything).Return(
-					managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+					managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 					nil,
 				)
 				return m
@@ -597,10 +605,10 @@ func TestHandleObservationState(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	cr := serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID))
+	cr := serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID), withDefaultMetadataLabels())
 
 	scbCreate := func(lastOperation string) *cfresource.ServiceCredentialBinding {
-		return &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, lastOperation).ServiceCredentialBinding
+		return &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, lastOperation).SetLabels(map[string]*string{"crossplane-kind": ptr.To("servicecredentialbinding.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-service-credential-binding")}).ServiceCredentialBinding
 	}
 
 	cases := map[string]struct {
@@ -673,7 +681,7 @@ func TestHandleObservationState(t *testing.T) {
 			want: want{
 				obs: managed.ExternalObservation{
 					ResourceExists:    true,
-					ResourceUpToDate:  false, // Metadata drift detected (mock has no metadata)
+					ResourceUpToDate:  true, // Assuming IsUpToDate returns true and no expired keys
 					ConnectionDetails: managed.ConnectionDetails{},
 				},
 				err: nil,

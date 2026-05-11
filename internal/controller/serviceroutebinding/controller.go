@@ -312,7 +312,8 @@ func handleObservationState(binding *cfresource.ServiceRouteBinding, cr *v1alpha
 			actualLabels = binding.Metadata.Labels
 			actualAnnotations = binding.Metadata.Annotations
 		}
-		upToDate := metadata.IsMetadataUpToDate(cr.Spec.ForProvider.Labels, cr.Spec.ForProvider.Annotations, actualLabels, actualAnnotations)
+		desired := metadata.BuildMetadata(cr, cr.Spec.ForProvider.Labels, cr.Spec.ForProvider.Annotations)
+		upToDate := metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, actualLabels, actualAnnotations)
 
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
 	}
