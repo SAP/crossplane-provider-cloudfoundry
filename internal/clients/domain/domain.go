@@ -10,6 +10,7 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 )
 
 // Client is the interface that defines the methods that a Domain client should implement.
@@ -24,11 +25,31 @@ type Client interface {
 // Resource is the type that implements the resource.Resource interface for a Domain.
 type Resource resource.Domain
 
-// NewClient creates a new client instance from a cfclient.Domain instance.
-func NewClient(cf *client.Client) Client {
-	return cf.Domains
+// ClientWrapper wraps the domain Client.
+type ClientWrapper struct {
+	Client
 }
 
+// FindDomainBySpec looks up a domain by name when external-name is empty.
+// Name-only lookup: shared domains have no org, so org filter would exclude them.
+func (c *ClientWrapper) FindDomainBySpec(ctx context.Context, spec v1alpha1.DomainParameters) (*resource.Domain, error) {
+	opts := &client.DomainListOptions{
+		Names: client.Filter{Values: []string{spec.Name}},
+	}
+	return c.Single(ctx, opts)
+}
+
+// GetDomainByGUID fetches a domain by its GUID.
+func (c *ClientWrapper) GetDomainByGUID(ctx context.Context, guid string) (*resource.Domain, error) {
+	return c.Get(ctx, guid)
+}
+
+// NewClient creates a new client instance from a cfclient.Domain instance.
+func NewClient(cf *client.Client) (*ClientWrapper, job.Job) {
+	return &ClientWrapper{Client: cf.Domains}, cf.Jobs
+}
+
+// Deprecated: Use FindDomainBySpec or GetDomainByGUID instead.
 // GetByIDOrName returns a domain by ID or Name.
 func GetByIDOrName(ctx context.Context, c Client, id, name string) (*resource.Domain, error) {
 
