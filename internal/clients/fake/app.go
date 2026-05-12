@@ -55,6 +55,24 @@ func (m *MockApp) Delete(ctx context.Context, guid string) (string, error) {
 	return args.String(0), args.Error(1)
 }
 
+// SetEnvironmentVariables mocks App.SetEnvironmentVariables
+func (m *MockApp) SetEnvironmentVariables(ctx context.Context, guid string, envVars map[string]*string) (map[string]*string, error) {
+	args := m.Called(guid, envVars)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string]*string), args.Error(1)
+}
+
+// GetEnvironmentVariables mocks App.GetEnvironmentVariables
+func (m *MockApp) GetEnvironmentVariables(ctx context.Context, guid string) (map[string]*string, error) {
+	args := m.Called(guid)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string]*string), args.Error(1)
+}
+
 // MockRouteFetcher mocks the RouteFetcher interface.
 type MockRouteFetcher struct {
 	mock.Mock

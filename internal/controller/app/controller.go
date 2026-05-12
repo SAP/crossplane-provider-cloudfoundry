@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
@@ -223,7 +224,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource+": Failed to detect changes")
 	}
 
-	if changes.HasField("docker_image") || changes.HasField("environment") {
+	if changes.HasField("docker_image") {
 		dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errSecret)
@@ -232,7 +233,27 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
 		}
-	} else if changes.HasChanges() {
+	}
+
+	if changes.HasField("environment") {
+		envVars := map[string]*string{}
+		if cr.Spec.ForProvider.Environment != nil && cr.Spec.ForProvider.Environment.Raw != nil {
+			raw := map[string]string{}
+			if err := json.Unmarshal(cr.Spec.ForProvider.Environment.Raw, &raw); err != nil {
+				return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
+			}
+			for k, v := range raw {
+				v := v
+				envVars[k] = &v
+			}
+		}
+		_, err := c.client.SetEnvironmentVariables(ctx, guid, envVars)
+		if err != nil {
+			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
+		}
+	}
+
+	if changes.HasChanges() && !changes.HasField("docker_image") && !changes.HasField("environment") {
 		_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)

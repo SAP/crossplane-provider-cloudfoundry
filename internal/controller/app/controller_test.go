@@ -92,7 +92,7 @@ func newApp(typ string, m ...modifier) *v1alpha1.App {
 
 func newMockPush() *fake.MockPush {
 	m := &fake.MockPush{}
-	m.On("GenerateManifest", guid).Return("applicationmanifest", nil)
+	m.On("GenerateManifest", guid).Return("applications:\n- name: "+name, nil)
 	m.On("Push").Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
 		nil,
 	)
