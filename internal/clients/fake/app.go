@@ -55,6 +55,12 @@ func (m *MockApp) Delete(ctx context.Context, guid string) (string, error) {
 	return args.String(0), args.Error(1)
 }
 
+// SetEnvironmentVariables mocks App.SetEnvironmentVariables
+func (m *MockApp) SetEnvironmentVariables(ctx context.Context, guid string, envVars map[string]*string) (map[string]*string, error) {
+	args := m.Called(guid, envVars)
+	return args.Get(0).(map[string]*string), args.Error(1)
+}
+
 // PollComplete mocks App.PollComplete
 func (m *MockApp) PollComplete(ctx context.Context, job string, opt *client.PollingOptions) error {
 	args := m.Called()

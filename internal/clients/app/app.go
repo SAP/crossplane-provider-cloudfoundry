@@ -31,6 +31,7 @@ type AppClient interface {
 	Start(ctx context.Context, guid string) (*resource.App, error)
 	Stop(ctx context.Context, guid string) (*resource.App, error)
 	// Restart(ctx context.Context, guid string) (*resource.App, error)
+	SetEnvironmentVariables(ctx context.Context, guid string, envVars map[string]*string) (map[string]*string, error)
 }
 
 // ManifestClient defines the interface to communicate with Cloud Foundry Manifest resource.
@@ -156,19 +157,18 @@ func (cd *ChangeDetection) HasField(field string) bool {
 }
 
 // envVarsChanged returns true if the spec environment variables differ from the current manifest.
-func envVarsChanged(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (bool, error) {
-	if spec.Environment == nil || spec.Environment.Raw == nil {
-		return false, nil
+func envVarsChanged(spec v1alpha1.AppParameters, appManifest *operation.AppManifest) (bool, error) {
+	specEnv := map[string]string{}
+	if spec.Environment != nil && spec.Environment.Raw != nil {
+		if err := json.Unmarshal(spec.Environment.Raw, &specEnv); err != nil {
+			return false, errors.Wrap(err, "failed to unmarshal environment variables")
+		}
 	}
-	appManifest, err := getAppManifest(status.Name, status.AppManifest)
-	if err != nil {
-		return false, err
+	currentEnv := map[string]string{}
+	if appManifest.Env != nil {
+		currentEnv = appManifest.Env
 	}
-	var specEnv map[string]string
-	if err := json.Unmarshal(spec.Environment.Raw, &specEnv); err != nil {
-		return false, errors.Wrap(err, "failed to unmarshal environment variables")
-	}
-	return !reflect.DeepEqual(specEnv, appManifest.Env), nil
+	return !reflect.DeepEqual(specEnv, currentEnv), nil
 }
 
 // DetectChanges determines what fields have changed between spec and status
@@ -177,21 +177,25 @@ func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) 
 		ChangedFields: make(map[string]struct{}),
 	}
 
-	// Check if Docker image changed
-	if spec.Lifecycle == "docker" && spec.Docker != nil {
-		appManifest, err := getAppManifest(status.Name, status.AppManifest)
+	// Parse manifest once for all checks (treat missing manifest as empty)
+	appManifest := &operation.AppManifest{}
+	if status.AppManifest != "" {
+		m, err := getAppManifest(status.Name, status.AppManifest)
 		if err != nil {
 			return nil, err
 		}
-		if appManifest.Docker != nil {
-			if spec.Docker.Image != appManifest.Docker.Image {
-				changes.ChangedFields["docker_image"] = struct{}{}
-			}
+		appManifest = m
+	}
+
+	// Check if Docker image changed
+	if spec.Lifecycle == "docker" && spec.Docker != nil && appManifest.Docker != nil {
+		if spec.Docker.Image != appManifest.Docker.Image {
+			changes.ChangedFields["docker_image"] = struct{}{}
 		}
 	}
 
 	// Check if environment variables changed
-	envChanged, err := envVarsChanged(spec, status)
+	envChanged, err := envVarsChanged(spec, appManifest)
 	if err != nil {
 		return nil, err
 	}
