@@ -189,6 +189,20 @@ func (cd *ChangeDetection) HasField(field string) bool {
 	return ok
 }
 
+// HasOtherChanges returns true if there are changed fields other than the excluded ones.
+func (cd *ChangeDetection) HasOtherChanges(excluded ...string) bool {
+	excludeSet := make(map[string]struct{}, len(excluded))
+	for _, f := range excluded {
+		excludeSet[f] = struct{}{}
+	}
+	for f := range cd.ChangedFields {
+		if _, skip := excludeSet[f]; !skip {
+			return true
+		}
+	}
+	return false
+}
+
 // envVarsChanged returns true if the spec environment variables differ from the current manifest.
 func envVarsChanged(spec v1alpha1.AppParameters, appManifest *operation.AppManifest) (bool, error) {
 	specEnv := map[string]string{}
