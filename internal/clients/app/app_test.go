@@ -3,8 +3,9 @@ package app
 import (
 	"testing"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	runtime "k8s.io/apimachinery/pkg/runtime"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 func TestDetectChanges(t *testing.T) {

@@ -225,35 +225,18 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	if changes.HasField("docker_image") {
-		dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errSecret)
-		}
-		_, err = c.client.UpdateAndPush(ctx, guid, cr.Spec.ForProvider, dockerCredentials)
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
+		if err := c.updateDockerImage(ctx, guid, cr); err != nil {
+			return managed.ExternalUpdate{}, err
 		}
 	}
 
 	if changes.HasField("environment") {
-		envVars := map[string]*string{}
-		if cr.Spec.ForProvider.Environment != nil && cr.Spec.ForProvider.Environment.Raw != nil {
-			raw := map[string]string{}
-			if err := json.Unmarshal(cr.Spec.ForProvider.Environment.Raw, &raw); err != nil {
-				return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
-			}
-			for k, v := range raw {
-				v := v
-				envVars[k] = &v
-			}
-		}
-		_, err := c.client.SetEnvironmentVariables(ctx, guid, envVars)
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
+		if err := c.updateEnvVars(ctx, guid, cr); err != nil {
+			return managed.ExternalUpdate{}, err
 		}
 	}
 
-	if changes.HasChanges() && !changes.HasField("docker_image") && !changes.HasField("environment") {
+	if changes.HasOtherChanges("docker_image", "environment") {
 		_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
@@ -261,6 +244,33 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	return managed.ExternalUpdate{}, nil
+}
+
+// updateDockerImage pushes a new docker image for the app.
+func (c *external) updateDockerImage(ctx context.Context, guid string, cr *v1alpha1.App) error {
+	dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
+	if err != nil {
+		return errors.Wrap(err, errSecret)
+	}
+	_, err = c.client.UpdateAndPush(ctx, guid, cr.Spec.ForProvider, dockerCredentials)
+	return errors.Wrap(err, errUpdateResource)
+}
+
+// updateEnvVars updates the environment variables of the app via the CF API directly.
+func (c *external) updateEnvVars(ctx context.Context, guid string, cr *v1alpha1.App) error {
+	envVars := map[string]*string{}
+	if cr.Spec.ForProvider.Environment != nil && cr.Spec.ForProvider.Environment.Raw != nil {
+		raw := map[string]string{}
+		if err := json.Unmarshal(cr.Spec.ForProvider.Environment.Raw, &raw); err != nil {
+			return errors.Wrap(err, errUpdateResource)
+		}
+		for k, v := range raw {
+			v := v
+			envVars[k] = &v
+		}
+	}
+	_, err := c.client.SetEnvironmentVariables(ctx, guid, envVars)
+	return errors.Wrap(err, errUpdateResource)
 }
 
 // Delete managed resource
