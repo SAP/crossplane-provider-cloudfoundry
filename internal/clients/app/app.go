@@ -41,11 +41,17 @@ type ManifestClient interface {
 	ManifestDiff(ctx context.Context, spaceGUID string, manifest string) (*resource.ManifestDiff, error)
 }
 
+// RouteFetcher defines the interface to fetch routes for an application.
+type RouteFetcher interface {
+	ListForAppAll(ctx context.Context, appGUID string, opts *client.RouteListOptions) ([]*resource.Route, error)
+}
+
 type Client struct {
 	AppClient
 	PushClient
 	job.Job
 	servicecredentialbinding.ServiceCredentialBinding
+	RouteFetcher
 }
 
 // NewAppClient returns a new AppClient.
@@ -55,6 +61,7 @@ func NewAppClient(client *client.Client) *Client {
 		PushClient:               NewPushClient(client),
 		Job:                      client.Jobs,
 		ServiceCredentialBinding: servicecredentialbinding.NewClient(client),
+		RouteFetcher:             client.Routes,
 	}
 }
 
@@ -139,6 +146,32 @@ func GenerateObservation(res *resource.App) v1alpha1.AppObservation {
 	obs.UpdatedAt = ptr.To(res.UpdatedAt.Format(time.RFC3339))
 
 	return obs
+}
+
+// FetchRoutes fetches all routes mapped to the given application and converts
+// them to AppRouteObservation values. Errors from the CF API are returned
+// non-nil so the caller can decide whether to make them fatal.
+// If no RouteFetcher is configured, FetchRoutes returns an empty slice.
+func (c *Client) FetchRoutes(ctx context.Context, appGUID string) ([]v1alpha1.AppRouteObservation, error) {
+	if c.RouteFetcher == nil {
+		return nil, nil
+	}
+	routes, err := c.ListForAppAll(ctx, appGUID, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	obs := make([]v1alpha1.AppRouteObservation, 0, len(routes))
+	for _, r := range routes {
+		obs = append(obs, v1alpha1.AppRouteObservation{
+			URL:      r.URL,
+			Host:     r.Host,
+			Path:     r.Path,
+			Protocol: r.Protocol,
+			Port:     r.Port,
+		})
+	}
+	return obs, nil
 }
 
 // ChangeDetection represents what fields have changed

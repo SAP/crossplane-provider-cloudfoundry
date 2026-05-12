@@ -5,6 +5,7 @@ package e2e
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -83,6 +84,49 @@ func TestCloudfoundry_App(t *testing.T) {
 			})
 	}
 
+	// Verify that route observations are populated in App status.
+	feat.Assess("app:e2e-app routes observed in status",
+		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			app := &v1alpha1.App{}
+			cr := cfg.Client().Resources()
+			if err := cr.Get(ctx, "e2e-app", cfg.Namespace(), app); err != nil {
+				t.Fatalf("error getting app e2e-app: %s", err.Error())
+			}
+			if len(app.Status.AtProvider.Routes) == 0 {
+				t.Fatalf("expected at least one route in app status, got 0")
+			}
+			r, ok := findRouteByHost(app.Status.AtProvider.Routes, "app-route-host-domainref")
+			if !ok {
+				t.Fatalf("expected route with host %q in app status, not found among %v", "app-route-host-domainref", hosts(app.Status.AtProvider.Routes))
+			}
+			if r.URL == "" {
+				t.Errorf("expected route URL to be non-empty, got empty")
+			}
+			t.Logf("app e2e-app route observed: URL=%s Host=%s Protocol=%s", r.URL, r.Host, r.Protocol)
+			return ctx
+		},
+	).Assess("app:e2e-app-2 routes observed in status",
+		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			app := &v1alpha1.App{}
+			cr := cfg.Client().Resources()
+			if err := cr.Get(ctx, "e2e-app-2", cfg.Namespace(), app); err != nil {
+				t.Fatalf("error getting app e2e-app-2: %s", err.Error())
+			}
+			if len(app.Status.AtProvider.Routes) == 0 {
+				t.Fatalf("expected at least one route in app status, got 0")
+			}
+			r, ok := findRouteByHost(app.Status.AtProvider.Routes, "app-route-host-domainname")
+			if !ok {
+				t.Fatalf("expected route with host %q in app status, not found among %v", "app-route-host-domainname", hosts(app.Status.AtProvider.Routes))
+			}
+			if r.URL == "" {
+				t.Errorf("expected route URL to be non-empty, got empty")
+			}
+			t.Logf("app e2e-app-2 route observed: URL=%s Host=%s Protocol=%s", r.URL, r.Host, r.Protocol)
+			return ctx
+		},
+	)
+
 	for _, name := range steps {
 		ft, ok := feats[name]
 		if !ok {
@@ -134,4 +178,23 @@ func TestCloudfoundry_App(t *testing.T) {
 	}
 
 	testenv.Test(t, feat.Feature())
+}
+
+// findRouteByHost returns the first route matching the given host.
+func findRouteByHost(routes []v1alpha1.AppRouteObservation, host string) (v1alpha1.AppRouteObservation, bool) {
+	if i := slices.IndexFunc(routes, func(r v1alpha1.AppRouteObservation) bool {
+		return r.Host == host
+	}); i >= 0 {
+		return routes[i], true
+	}
+	return v1alpha1.AppRouteObservation{}, false
+}
+
+// hosts collects all host values from routes for diagnostic output.
+func hosts(routes []v1alpha1.AppRouteObservation) []string {
+	return slices.Collect(func(yield func(string) bool) {
+		for _, r := range routes {
+			yield(r.Host)
+		}
+	})
 }
