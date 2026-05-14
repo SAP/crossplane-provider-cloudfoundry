@@ -31,6 +31,7 @@ type AppClient interface {
 	Start(ctx context.Context, guid string) (*resource.App, error)
 	Stop(ctx context.Context, guid string) (*resource.App, error)
 	// Restart(ctx context.Context, guid string) (*resource.App, error)
+	GetEnvironmentVariables(ctx context.Context, guid string) (map[string]*string, error)
 	SetEnvironmentVariables(ctx context.Context, guid string, envVars map[string]*string) (map[string]*string, error)
 }
 
@@ -89,6 +90,11 @@ func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha1.AppParameters,
 		return nil, err
 	}
 	return c.Push(ctx, application, manifest, nil)
+}
+
+// GetEnvironmentVariables gets the environment variables for an app.
+func (c *Client) GetEnvironmentVariables(ctx context.Context, guid string) (map[string]*string, error) {
+	return c.AppClient.GetEnvironmentVariables(ctx, guid)
 }
 
 // Update updates an app in the Cloud Foundry.

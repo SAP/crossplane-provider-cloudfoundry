@@ -257,7 +257,9 @@ func (c *external) updateDockerImage(ctx context.Context, guid string, cr *v1alp
 }
 
 // updateEnvVars updates the environment variables of the app via the CF API directly.
+// It sets new/updated vars and sends nil for vars that exist in CF but were removed from spec.
 func (c *external) updateEnvVars(ctx context.Context, guid string, cr *v1alpha1.App) error {
+	// Build desired env vars from spec
 	envVars := map[string]*string{}
 	if cr.Spec.ForProvider.Environment != nil && cr.Spec.ForProvider.Environment.Raw != nil {
 		raw := map[string]string{}
@@ -269,7 +271,17 @@ func (c *external) updateEnvVars(ctx context.Context, guid string, cr *v1alpha1.
 			envVars[k] = &v
 		}
 	}
-	_, err := c.client.SetEnvironmentVariables(ctx, guid, envVars)
+	// Get current CF env vars and send nil for any that are no longer in spec
+	currentVars, err := c.client.GetEnvironmentVariables(ctx, guid)
+	if err != nil {
+		return errors.Wrap(err, errUpdateResource)
+	}
+	for k := range currentVars {
+		if _, exists := envVars[k]; !exists {
+			envVars[k] = nil
+		}
+	}
+	_, err = c.client.SetEnvironmentVariables(ctx, guid, envVars)
 	return errors.Wrap(err, errUpdateResource)
 }
 
