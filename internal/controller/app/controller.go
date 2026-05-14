@@ -3,6 +3,7 @@ package app
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
@@ -224,15 +225,18 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	if changes.HasField("docker_image") {
-		dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errSecret)
+		if err := c.updateDockerImage(ctx, guid, cr); err != nil {
+			return managed.ExternalUpdate{}, err
 		}
-		_, err = c.client.UpdateAndPush(ctx, guid, cr.Spec.ForProvider, dockerCredentials)
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
+	}
+
+	if changes.HasField("environment") {
+		if err := c.updateEnvVars(ctx, guid, cr); err != nil {
+			return managed.ExternalUpdate{}, err
 		}
-	} else if changes.HasChanges() {
+	}
+
+	if changes.HasOtherChanges("docker_image", "environment") {
 		_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
@@ -240,6 +244,45 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	return managed.ExternalUpdate{}, nil
+}
+
+// updateDockerImage pushes a new docker image for the app.
+func (c *external) updateDockerImage(ctx context.Context, guid string, cr *v1alpha1.App) error {
+	dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
+	if err != nil {
+		return errors.Wrap(err, errSecret)
+	}
+	_, err = c.client.UpdateAndPush(ctx, guid, cr.Spec.ForProvider, dockerCredentials)
+	return errors.Wrap(err, errUpdateResource)
+}
+
+// updateEnvVars updates the environment variables of the app via the CF API directly.
+// It sets new/updated vars and sends nil for vars that exist in CF but were removed from spec.
+func (c *external) updateEnvVars(ctx context.Context, guid string, cr *v1alpha1.App) error {
+	// Build desired env vars from spec
+	envVars := map[string]*string{}
+	if cr.Spec.ForProvider.Environment != nil && cr.Spec.ForProvider.Environment.Raw != nil {
+		raw := map[string]string{}
+		if err := json.Unmarshal(cr.Spec.ForProvider.Environment.Raw, &raw); err != nil {
+			return errors.Wrap(err, errUpdateResource)
+		}
+		for k, v := range raw {
+			v := v
+			envVars[k] = &v
+		}
+	}
+	// Get current CF env vars and send nil for any that are no longer in spec
+	currentVars, err := c.client.GetEnvironmentVariables(ctx, guid)
+	if err != nil {
+		return errors.Wrap(err, errUpdateResource)
+	}
+	for k := range currentVars {
+		if _, exists := envVars[k]; !exists {
+			envVars[k] = nil
+		}
+	}
+	_, err = c.client.SetEnvironmentVariables(ctx, guid, envVars)
+	return errors.Wrap(err, errUpdateResource)
 }
 
 // Delete managed resource

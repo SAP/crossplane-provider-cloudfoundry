@@ -4,12 +4,15 @@ package app
 
 import (
 	"context"
+	"encoding/json"
+	"reflect"
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/uuid"
+	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -28,6 +31,8 @@ type AppClient interface {
 	Start(ctx context.Context, guid string) (*resource.App, error)
 	Stop(ctx context.Context, guid string) (*resource.App, error)
 	// Restart(ctx context.Context, guid string) (*resource.App, error)
+	GetEnvironmentVariables(ctx context.Context, guid string) (map[string]*string, error)
+	SetEnvironmentVariables(ctx context.Context, guid string, envVars map[string]*string) (map[string]*string, error)
 }
 
 // ManifestClient defines the interface to communicate with Cloud Foundry Manifest resource.
@@ -85,6 +90,11 @@ func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha1.AppParameters,
 		return nil, err
 	}
 	return c.Push(ctx, application, manifest, nil)
+}
+
+// GetEnvironmentVariables gets the environment variables for an app.
+func (c *Client) GetEnvironmentVariables(ctx context.Context, guid string) (map[string]*string, error) {
+	return c.AppClient.GetEnvironmentVariables(ctx, guid)
 }
 
 // Update updates an app in the Cloud Foundry.
@@ -185,23 +195,65 @@ func (cd *ChangeDetection) HasField(field string) bool {
 	return ok
 }
 
+// HasOtherChanges returns true if there are changed fields other than the excluded ones.
+func (cd *ChangeDetection) HasOtherChanges(excluded ...string) bool {
+	excludeSet := make(map[string]struct{}, len(excluded))
+	for _, f := range excluded {
+		excludeSet[f] = struct{}{}
+	}
+	for f := range cd.ChangedFields {
+		if _, skip := excludeSet[f]; !skip {
+			return true
+		}
+	}
+	return false
+}
+
+// envVarsChanged returns true if the spec environment variables differ from the current manifest.
+func envVarsChanged(spec v1alpha1.AppParameters, appManifest *operation.AppManifest) (bool, error) {
+	specEnv := map[string]string{}
+	if spec.Environment != nil && spec.Environment.Raw != nil {
+		if err := json.Unmarshal(spec.Environment.Raw, &specEnv); err != nil {
+			return false, errors.Wrap(err, "failed to unmarshal environment variables")
+		}
+	}
+	currentEnv := map[string]string{}
+	if appManifest.Env != nil {
+		currentEnv = appManifest.Env
+	}
+	return !reflect.DeepEqual(specEnv, currentEnv), nil
+}
+
 // DetectChanges determines what fields have changed between spec and status
 func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (*ChangeDetection, error) {
 	changes := &ChangeDetection{
 		ChangedFields: make(map[string]struct{}),
 	}
 
-	// Check if Docker image changed
-	if spec.Lifecycle == "docker" && spec.Docker != nil {
-		appManifest, err := getAppManifest(status.Name, status.AppManifest)
+	// Parse manifest once for all checks (treat missing manifest as empty)
+	appManifest := &operation.AppManifest{}
+	if status.AppManifest != "" {
+		m, err := getAppManifest(status.Name, status.AppManifest)
 		if err != nil {
 			return nil, err
 		}
-		if appManifest.Docker != nil {
-			if spec.Docker.Image != appManifest.Docker.Image {
-				changes.ChangedFields["docker_image"] = struct{}{}
-			}
+		appManifest = m
+	}
+
+	// Check if Docker image changed
+	if spec.Lifecycle == "docker" && spec.Docker != nil && appManifest.Docker != nil {
+		if spec.Docker.Image != appManifest.Docker.Image {
+			changes.ChangedFields["docker_image"] = struct{}{}
 		}
+	}
+
+	// Check if environment variables changed
+	envChanged, err := envVarsChanged(spec, appManifest)
+	if err != nil {
+		return nil, err
+	}
+	if envChanged {
+		changes.ChangedFields["environment"] = struct{}{}
 	}
 
 	// Check if name changed

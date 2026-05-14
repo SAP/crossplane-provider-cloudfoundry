@@ -3,6 +3,8 @@ package app
 import (
 	"testing"
 
+	runtime "k8s.io/apimachinery/pkg/runtime"
+
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
@@ -83,6 +85,64 @@ func TestDetectChanges(t *testing.T) {
 				Name: "test-app",
 			},
 			expectedFields: []string{"name"},
+		},
+		{
+			name: "Env vars set in spec, same in CF - no drift",
+			spec: v1alpha1.AppParameters{
+				Name:        "test-app",
+				Environment: &runtime.RawExtension{Raw: []byte(`{"FOO":"bar"}`)},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  env:\n    FOO: bar",
+			},
+			expectedFields: []string{},
+		},
+		{
+			name: "Env vars set in spec, different in CF - drift detected",
+			spec: v1alpha1.AppParameters{
+				Name:        "test-app",
+				Environment: &runtime.RawExtension{Raw: []byte(`{"FOO":"newvalue"}`)},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  env:\n    FOO: bar",
+			},
+			expectedFields: []string{"environment"},
+		},
+		{
+			name: "Env vars set in spec, none in CF - drift detected",
+			spec: v1alpha1.AppParameters{
+				Name:        "test-app",
+				Environment: &runtime.RawExtension{Raw: []byte(`{"FOO":"bar"}`)},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app",
+			},
+			expectedFields: []string{"environment"},
+		},
+		{
+			name: "Env vars removed from spec, CF still has them - drift detected",
+			spec: v1alpha1.AppParameters{
+				Name: "test-app",
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  env:\n    FOO: bar",
+			},
+			expectedFields: []string{"environment"},
+		},
+		{
+			name: "Env vars nil in spec, none in CF - no drift",
+			spec: v1alpha1.AppParameters{
+				Name: "test-app",
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app",
+			},
+			expectedFields: []string{},
 		},
 	}
 

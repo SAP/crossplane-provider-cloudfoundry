@@ -109,7 +109,7 @@ type AppParameters struct {
 	// +kubebuilder:validation:Optional
 	// Sidecars []SidecarConfiguration `json:"sidecars,omitempty"`
 
-	// (NOT SUPPORTED YET) A key-value mapping of environment variables to be used for the app when running
+	// A key-value mapping of environment variables to be used for the app when running
 	// +kubebuilder:validation:Optional
 	Environment *runtime.RawExtension `json:"environment,omitempty"`
 
