@@ -15,6 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/app"
@@ -65,6 +66,24 @@ func withRoutes(routes ...v1alpha1.AppRouteObservation) modifier {
 func withImage(image string) modifier {
 	return func(r *v1alpha1.App) {
 		r.Spec.ForProvider.Docker = &v1alpha1.DockerConfiguration{Image: image}
+	}
+}
+
+func withEnvironment(envJSON string) modifier {
+	return func(r *v1alpha1.App) {
+		r.Spec.ForProvider.Environment = &runtime.RawExtension{Raw: []byte(envJSON)}
+	}
+}
+
+func withObservedName(n string) modifier {
+	return func(r *v1alpha1.App) {
+		r.Status.AtProvider.Name = n
+	}
+}
+
+func withAppManifest(manifest string) modifier {
+	return func(r *v1alpha1.App) {
+		r.Status.AtProvider.AppManifest = manifest
 	}
 }
 
@@ -568,6 +587,88 @@ func TestUpdate(t *testing.T) {
 					fake.AppNil,
 					errBoom,
 				)
+				return m
+			},
+		},
+
+		"EnvVarAdded": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(`{"MY_VAR":"hello"}`)),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(`{"MY_VAR":"hello"}`)),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				v := "hello"
+				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
+				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
+				return m
+			},
+		},
+
+		"EnvVarDeleted": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withAppManifest("applications:\n- name: "+name+"\n  env:\n    ANOTHER_VAR: world")),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withAppManifest("applications:\n- name: "+name+"\n  env:\n    ANOTHER_VAR: world")),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				world := "world"
+				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{"ANOTHER_VAR": &world}, nil)
+				m.On("SetEnvironmentVariables", guid, map[string]*string{"ANOTHER_VAR": (*string)(nil)}).Return(map[string]*string{}, nil)
+				return m
+			},
+		},
+
+		"EnvVarGetFails": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(`{"MY_VAR":"hello"}`)),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(`{"MY_VAR":"hello"}`)),
+				obs: managed.ExternalUpdate{},
+				err: errors.Wrap(errBoom, errUpdateResource),
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				m.On("GetEnvironmentVariables", guid).Return(nil, errBoom)
 				return m
 			},
 		},
