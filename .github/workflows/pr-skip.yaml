@@ -1,8 +1,6 @@
 # This workflow is triggered for pull requests that only modify markdown files (e.g., documentation changes).
 name: PullRequest Skip Checks for Docs
 
-permissions: {}
-
 on:
   pull_request:
     types:
