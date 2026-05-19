@@ -282,6 +282,14 @@ func (c *external) updateEnvVars(ctx context.Context, guid string, cr *v1alpha1.
 		}
 	}
 	_, err = c.client.SetEnvironmentVariables(ctx, guid, envVars)
+	if err != nil {
+		return errors.Wrap(err, errUpdateResource)
+	}
+	// Restart the app so the updated environment takes effect in the running process.
+	if _, err = c.client.Stop(ctx, guid); err != nil {
+		return errors.Wrap(err, errUpdateResource)
+	}
+	_, err = c.client.Start(ctx, guid)
 	return errors.Wrap(err, errUpdateResource)
 }
 

@@ -554,10 +554,6 @@ func TestUpdate(t *testing.T) {
 					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
 					nil,
 				)
-				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
-					nil,
-				)
 				return m
 			},
 		},
@@ -580,10 +576,6 @@ func TestUpdate(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Update", guid).Return(
-					fake.AppNil,
-					errBoom,
-				)
-				m.On("Get", guid).Return(
 					fake.AppNil,
 					errBoom,
 				)
@@ -615,6 +607,8 @@ func TestUpdate(t *testing.T) {
 				v := "hello"
 				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
 				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
+				m.On("Stop", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Start", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
 				return m
 			},
 		},
@@ -643,6 +637,8 @@ func TestUpdate(t *testing.T) {
 				world := "world"
 				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{"ANOTHER_VAR": &world}, nil)
 				m.On("SetEnvironmentVariables", guid, map[string]*string{"ANOTHER_VAR": (*string)(nil)}).Return(map[string]*string{}, nil)
+				m.On("Stop", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Start", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
 				return m
 			},
 		},
@@ -677,13 +673,14 @@ func TestUpdate(t *testing.T) {
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
+			mockApp := tc.service()
 			c := &external{
 				kube: &test.MockClient{
 					MockUpdate:       test.NewMockUpdateFn(nil),
 					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
 				},
 				client: &app.Client{
-					AppClient:  tc.service(),
+					AppClient:  mockApp,
 					PushClient: newMockPush(),
 				},
 			}
@@ -706,6 +703,7 @@ func TestUpdate(t *testing.T) {
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
 			}
+			mockApp.AssertExpectations(t)
 		})
 	}
 }
