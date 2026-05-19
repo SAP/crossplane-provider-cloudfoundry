@@ -1,4 +1,4 @@
-# Add to pr-test.yaml or a new file e.g. pr-skip.yaml
+# This workflow is triggered for pull requests that only modify markdown files (e.g., documentation changes).
 name: PullRequest Skip Checks for Docs
 
 on:
