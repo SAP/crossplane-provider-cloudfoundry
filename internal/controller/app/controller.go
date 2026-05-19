@@ -13,7 +13,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/docker/cli/cli/config/configfile"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -220,8 +219,8 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	guid := meta.GetExternalName(cr)
-	if _, err := uuid.Parse(guid); err != nil {
-		return managed.ExternalUpdate{}, errors.New(errUpdateResource + ": No valid GUID found for the App")
+	if guid == "" {
+		return managed.ExternalUpdate{}, nil
 	}
 
 	changes, err := app.DetectChanges(cr.Spec.ForProvider, cr.Status.AtProvider)
@@ -306,14 +305,17 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalDelete{}, errors.New(errWrongKind)
 	}
 
-	guid := meta.GetExternalName(cr)
-	if _, err := uuid.Parse(guid); err != nil {
-		return managed.ExternalDelete{}, errors.New(errDeleteResource + ": No valid GUID found for the App")
+	cr.SetConditions(xpv1.Deleting())
+
+	if meta.GetExternalName(cr) == "" {
+		return managed.ExternalDelete{}, nil
 	}
 
-	cr.SetConditions(xpv1.Deleting())
-	err := c.client.Delete(ctx, guid)
+	err := c.client.Delete(ctx, meta.GetExternalName(cr))
 	if err != nil {
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
 		return managed.ExternalDelete{}, errors.Wrap(err, errDeleteResource)
 	}
 
