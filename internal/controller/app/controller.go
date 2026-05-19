@@ -122,8 +122,21 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errWrongKind)
 	}
 
+	lateInitialized, exists, err := c.resolveExternalName(ctx, cr)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
+	if !exists {
+		return managed.ExternalObservation{ResourceExists: false}, nil
+	}
+
 	guid := meta.GetExternalName(cr)
-	res, err := c.client.GetByIDOrSpec(ctx, guid, cr.Spec.ForProvider)
+
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.Errorf("external-name '%s' is not a valid GUID format", guid)
+	}
+
+	res, err := c.client.AppClient.Get(ctx, guid)
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
@@ -132,15 +145,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.Wrap(err, errObserveResource)
 	}
 
-	lateInitialized := false
-
-	// Update external_name if it is not set or different
-	if guid != res.GUID {
-		meta.SetExternalName(cr, res.GUID)
-		lateInitialized = true
-	}
-
-	// Preserve previously observed routes so they survive transient API failures.
+	// Preserve previously observed routes so they survive a transient
+	// failure from the Routes API.
 	prevRoutes := cr.Status.AtProvider.Routes
 
 	// Update the status of the resource
@@ -318,6 +324,26 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 func (c *external) Disconnect(ctx context.Context) error {
 	// No cleanup needed for Cloud Foundry client
 	return nil
+}
+
+// resolveExternalName sets the external-name on the App CR if it is empty,
+// by looking up the app by spec (name and space).
+// Returns (lateInitialized, exists, error).
+func (c *external) resolveExternalName(ctx context.Context, cr *v1alpha1.App) (bool, bool, error) {
+	if meta.GetExternalName(cr) != "" {
+		return false, true, nil
+	}
+
+	res, err := c.client.GetBySpec(ctx, cr.Spec.ForProvider)
+	if err != nil {
+		if clients.ErrorIsNotFound(err) {
+			return false, false, nil
+		}
+		return false, false, errors.Wrap(err, errObserveResource)
+	}
+
+	meta.SetExternalName(cr, res.GUID)
+	return true, true, nil
 }
 
 // getDockerCredential extracts the Docker credentials from the secret

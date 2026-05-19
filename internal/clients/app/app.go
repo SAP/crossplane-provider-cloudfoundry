@@ -76,6 +76,11 @@ func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, spec v1alpha1.A
 	return c.AppClient.Single(ctx, newListOption(spec))
 }
 
+// GetBySpec gets an App by matching spec fields (name and space).
+func (c *Client) GetBySpec(ctx context.Context, spec v1alpha1.AppParameters) (*resource.App, error) {
+	return c.AppClient.Single(ctx, newListOption(spec))
+}
+
 // CreateAndPush creates and pushes an app to the Cloud Foundry.
 func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
 	manifest, err := newManifestFromSpec(spec, dockerCredentials)
