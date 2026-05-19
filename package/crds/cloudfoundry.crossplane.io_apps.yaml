@@ -119,8 +119,8 @@ spec:
                   environment:
                     additionalProperties:
                       type: string
-                    description: A key-value mapping of environment variables to
-                      be used for the app when running
+                    description: A key-value mapping of environment variables to be
+                      used for the app when running
                     type: object
                   labels:
                     additionalProperties:
