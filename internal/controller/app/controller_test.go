@@ -666,6 +666,70 @@ func TestUpdate(t *testing.T) {
 				return m
 			},
 		},
+
+		"EnvVarUpdated_AppStopped": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STOPPED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": "hello"})),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STOPPED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": "hello"})),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				v := "hello"
+				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
+				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
+				// No Stop/Start expected — app is already stopped
+				return m
+			},
+		},
+
+		"EnvVarAndDockerChanged": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withAppManifest("applications:\n- name: "+name+"\n  docker:\n    image: old-image:v1"),
+					withImage("new-image:v2"),
+					withEnvironment(map[string]string{"MY_VAR": "hello"})),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withAppManifest("applications:\n- name: "+name+"\n  docker:\n    image: old-image:v1"),
+					withImage("new-image:v2"),
+					withEnvironment(map[string]string{"MY_VAR": "hello"})),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				v := "hello"
+				// UpdateAndPush (docker image update) calls AppClient.Update
+				m.On("Update", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
+				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
+				// No Stop/Start expected — docker push already restarted the app
+				return m
+			},
+		},
 	}
 
 	for n, tc := range cases {

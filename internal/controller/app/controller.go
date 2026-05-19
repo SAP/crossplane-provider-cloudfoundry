@@ -230,7 +230,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	if changes.HasField("environment") {
-		if err := c.updateEnvVars(ctx, guid, cr); err != nil {
+		if err := c.updateEnvVars(ctx, guid, cr, changes.HasField("docker_image")); err != nil {
 			return managed.ExternalUpdate{}, err
 		}
 	}
@@ -257,7 +257,9 @@ func (c *external) updateDockerImage(ctx context.Context, guid string, cr *v1alp
 
 // updateEnvVars updates the environment variables of the app via the CF API directly.
 // It sets new/updated vars and sends nil for vars that exist in CF but were removed from spec.
-func (c *external) updateEnvVars(ctx context.Context, guid string, cr *v1alpha1.App) error {
+// If the app is currently STOPPED, the restart is skipped (env vars take effect on next start).
+// If dockerAlsoChanged is true, the restart is also skipped because the docker push already restarted the app.
+func (c *external) updateEnvVars(ctx context.Context, guid string, cr *v1alpha1.App, dockerAlsoChanged bool) error {
 	// Build desired env vars from spec
 	envVars := map[string]*string{}
 	for k, v := range cr.Spec.ForProvider.Environment {
@@ -279,6 +281,11 @@ func (c *external) updateEnvVars(ctx context.Context, guid string, cr *v1alpha1.
 		return errors.Wrap(err, errUpdateResource)
 	}
 	// Restart the app so the updated environment takes effect in the running process.
+	// Skip if the app is stopped (env vars take effect on next start) or if
+	// docker was also updated (the push already restarted the app).
+	if cr.Status.AtProvider.State == "STOPPED" || dockerAlsoChanged {
+		return nil
+	}
 	if _, err = c.client.Stop(ctx, guid); err != nil {
 		return errors.Wrap(err, errUpdateResource)
 	}
