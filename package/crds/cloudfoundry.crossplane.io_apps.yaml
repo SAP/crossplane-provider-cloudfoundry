@@ -117,10 +117,11 @@ spec:
                     - image
                     type: object
                   environment:
-                    description: A key-value mapping of environment variables to be
-                      used for the app when running
+                    additionalProperties:
+                      type: string
+                    description: A key-value mapping of environment variables to
+                      be used for the app when running
                     type: object
-                    x-kubernetes-preserve-unknown-fields: true
                   labels:
                     additionalProperties:
                       type: string

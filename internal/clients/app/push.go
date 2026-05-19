@@ -116,12 +116,8 @@ func newManifestFromSpec(forProvider v1alpha1.AppParameters, dockerCredentials *
 		manifest.LogRateLimitPerSecond = *forProvider.LogRateLimitPerSecond
 	}
 
-	if forProvider.Environment != nil && forProvider.Environment.Raw != nil {
-		var envVars map[string]string
-		if err := json.Unmarshal(forProvider.Environment.Raw, &envVars); err != nil {
-			return nil, errors.Wrap(err, "failed to unmarshal environment variables")
-		}
-		manifest.Env = envVars
+	if len(forProvider.Environment) > 0 {
+		manifest.Env = forProvider.Environment
 	}
 
 	return manifest, nil

@@ -9,17 +9,15 @@ import (
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/app"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/runtime"
-
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/app"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
 )
 
 var (
@@ -69,9 +67,9 @@ func withImage(image string) modifier {
 	}
 }
 
-func withEnvironment(envJSON string) modifier {
+func withEnvironment(env map[string]string) modifier {
 	return func(r *v1alpha1.App) {
-		r.Spec.ForProvider.Environment = &runtime.RawExtension{Raw: []byte(envJSON)}
+		r.Spec.ForProvider.Environment = env
 	}
 }
 
@@ -590,7 +588,7 @@ func TestUpdate(t *testing.T) {
 					withExternalName(guid),
 					withStatus(guid, "STARTED"),
 					withObservedName(name),
-					withEnvironment(`{"MY_VAR":"hello"}`)),
+					withEnvironment(map[string]string{"MY_VAR": "hello"})),
 			},
 			want: want{
 				mg: newApp("docker",
@@ -598,7 +596,7 @@ func TestUpdate(t *testing.T) {
 					withExternalName(guid),
 					withStatus(guid, "STARTED"),
 					withObservedName(name),
-					withEnvironment(`{"MY_VAR":"hello"}`)),
+					withEnvironment(map[string]string{"MY_VAR": "hello"})),
 				obs: managed.ExternalUpdate{},
 				err: nil,
 			},
@@ -650,7 +648,7 @@ func TestUpdate(t *testing.T) {
 					withExternalName(guid),
 					withStatus(guid, "STARTED"),
 					withObservedName(name),
-					withEnvironment(`{"MY_VAR":"hello"}`)),
+					withEnvironment(map[string]string{"MY_VAR": "hello"})),
 			},
 			want: want{
 				mg: newApp("docker",
@@ -658,7 +656,7 @@ func TestUpdate(t *testing.T) {
 					withExternalName(guid),
 					withStatus(guid, "STARTED"),
 					withObservedName(name),
-					withEnvironment(`{"MY_VAR":"hello"}`)),
+					withEnvironment(map[string]string{"MY_VAR": "hello"})),
 				obs: managed.ExternalUpdate{},
 				err: errors.Wrap(errBoom, errUpdateResource),
 			},

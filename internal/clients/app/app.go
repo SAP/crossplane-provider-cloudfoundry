@@ -4,7 +4,6 @@ package app
 
 import (
 	"context"
-	"encoding/json"
 	"reflect"
 	"time"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/uuid"
-	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -210,18 +208,16 @@ func (cd *ChangeDetection) HasOtherChanges(excluded ...string) bool {
 }
 
 // envVarsChanged returns true if the spec environment variables differ from the current manifest.
-func envVarsChanged(spec v1alpha1.AppParameters, appManifest *operation.AppManifest) (bool, error) {
-	specEnv := map[string]string{}
-	if spec.Environment != nil && spec.Environment.Raw != nil {
-		if err := json.Unmarshal(spec.Environment.Raw, &specEnv); err != nil {
-			return false, errors.Wrap(err, "failed to unmarshal environment variables")
-		}
+func envVarsChanged(spec v1alpha1.AppParameters, appManifest *operation.AppManifest) bool {
+	specEnv := spec.Environment
+	if specEnv == nil {
+		specEnv = map[string]string{}
 	}
-	currentEnv := map[string]string{}
-	if appManifest.Env != nil {
-		currentEnv = appManifest.Env
+	currentEnv := appManifest.Env
+	if currentEnv == nil {
+		currentEnv = map[string]string{}
 	}
-	return !reflect.DeepEqual(specEnv, currentEnv), nil
+	return !reflect.DeepEqual(specEnv, currentEnv)
 }
 
 // DetectChanges determines what fields have changed between spec and status
@@ -248,11 +244,7 @@ func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) 
 	}
 
 	// Check if environment variables changed
-	envChanged, err := envVarsChanged(spec, appManifest)
-	if err != nil {
-		return nil, err
-	}
-	if envChanged {
+	if envVarsChanged(spec, appManifest) {
 		changes.ChangedFields["environment"] = struct{}{}
 	}
 

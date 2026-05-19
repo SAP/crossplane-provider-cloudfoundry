@@ -3,7 +3,6 @@ package app
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
@@ -261,15 +260,9 @@ func (c *external) updateDockerImage(ctx context.Context, guid string, cr *v1alp
 func (c *external) updateEnvVars(ctx context.Context, guid string, cr *v1alpha1.App) error {
 	// Build desired env vars from spec
 	envVars := map[string]*string{}
-	if cr.Spec.ForProvider.Environment != nil && cr.Spec.ForProvider.Environment.Raw != nil {
-		raw := map[string]string{}
-		if err := json.Unmarshal(cr.Spec.ForProvider.Environment.Raw, &raw); err != nil {
-			return errors.Wrap(err, errUpdateResource)
-		}
-		for k, v := range raw {
-			v := v
-			envVars[k] = &v
-		}
+	for k, v := range cr.Spec.ForProvider.Environment {
+		v := v
+		envVars[k] = &v
 	}
 	// Get current CF env vars and send nil for any that are no longer in spec
 	currentVars, err := c.client.GetEnvironmentVariables(ctx, guid)

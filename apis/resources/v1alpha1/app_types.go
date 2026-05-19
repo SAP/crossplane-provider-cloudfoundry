@@ -111,7 +111,7 @@ type AppParameters struct {
 
 	// A key-value mapping of environment variables to be used for the app when running
 	// +kubebuilder:validation:Optional
-	Environment *runtime.RawExtension `json:"environment,omitempty"`
+	Environment map[string]string `json:"environment,omitempty"`
 
 	// The log rate limit for all instances of an app. This attribute requires a unit of measurement: B, K, KB, M, MB, G, or GB, in either uppercase or lowercase.
 	// +kubebuilder:validation:Optional

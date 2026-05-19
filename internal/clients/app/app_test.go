@@ -3,8 +3,6 @@ package app
 import (
 	"testing"
 
-	runtime "k8s.io/apimachinery/pkg/runtime"
-
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
@@ -90,7 +88,7 @@ func TestDetectChanges(t *testing.T) {
 			name: "Env vars set in spec, same in CF - no drift",
 			spec: v1alpha1.AppParameters{
 				Name:        "test-app",
-				Environment: &runtime.RawExtension{Raw: []byte(`{"FOO":"bar"}`)},
+				Environment: map[string]string{"FOO": "bar"},
 			},
 			status: v1alpha1.AppObservation{
 				Name:        "test-app",
@@ -102,7 +100,7 @@ func TestDetectChanges(t *testing.T) {
 			name: "Env vars set in spec, different in CF - drift detected",
 			spec: v1alpha1.AppParameters{
 				Name:        "test-app",
-				Environment: &runtime.RawExtension{Raw: []byte(`{"FOO":"newvalue"}`)},
+				Environment: map[string]string{"FOO": "newvalue"},
 			},
 			status: v1alpha1.AppObservation{
 				Name:        "test-app",
@@ -114,7 +112,7 @@ func TestDetectChanges(t *testing.T) {
 			name: "Env vars set in spec, none in CF - drift detected",
 			spec: v1alpha1.AppParameters{
 				Name:        "test-app",
-				Environment: &runtime.RawExtension{Raw: []byte(`{"FOO":"bar"}`)},
+				Environment: map[string]string{"FOO": "bar"},
 			},
 			status: v1alpha1.AppObservation{
 				Name:        "test-app",

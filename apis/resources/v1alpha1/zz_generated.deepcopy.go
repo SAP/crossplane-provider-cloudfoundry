@@ -21,7 +21,7 @@ limitations under the License.
 package v1alpha1
 
 import (
-	"github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 )
@@ -156,8 +156,10 @@ func (in *AppParameters) DeepCopyInto(out *AppParameters) {
 	in.ReadinessHealthCheckConfiguration.DeepCopyInto(&out.ReadinessHealthCheckConfiguration)
 	if in.Environment != nil {
 		in, out := &in.Environment, &out.Environment
-		*out = new(runtime.RawExtension)
-		(*in).DeepCopyInto(*out)
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
 	}
 	if in.LogRateLimitPerSecond != nil {
 		in, out := &in.LogRateLimitPerSecond, &out.LogRateLimitPerSecond
