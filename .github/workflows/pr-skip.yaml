@@ -1,0 +1,34 @@
+# Add to pr-test.yaml or a new file e.g. pr-skip.yaml
+name: PullRequest Skip Checks for Docs
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+    paths:
+      - '*.md'
+
+jobs:
+  run-go-license-check:
+    uses: ./.github/workflows/check-go-licenses.yaml
+
+  run-reuse-license-check:
+    uses: ./.github/workflows/reuse-scan.yaml
+
+  run-unit-test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Skipping unit tests for doc-only PR"
+
+  run-make-reviewable-and-check-diff:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Skipping reviewable check for doc-only PR"
+
+  run-e2e-test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "Skipping e2e for doc-only PR"
