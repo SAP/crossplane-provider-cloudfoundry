@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 )
 
@@ -18,6 +19,9 @@ var (
 )
 
 func TestAppImportFlow(t *testing.T) {
+	appImportTestSpace := appImportTestSpace
+	appImportTestOrg := appImportTestOrg
+
 	importTester := NewImportTester(
 		&v1alpha1.App{
 			Spec: v1alpha1.AppSpec{
@@ -30,6 +34,15 @@ func TestAppImportFlow(t *testing.T) {
 					},
 					Docker: &v1alpha1.DockerConfiguration{
 						Image: "loud/hello_co:latest",
+					},
+					Processes: []v1alpha1.ProcessConfiguration{
+						{
+							Type: ptr.To("web"),
+							HealthCheckConfiguration: v1alpha1.HealthCheckConfiguration{
+								HealthCheckType:         ptr.To("http"),
+								HealthCheckHTTPEndpoint: ptr.To("/"),
+							},
+						},
 					},
 				},
 			},
