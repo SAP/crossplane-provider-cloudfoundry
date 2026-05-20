@@ -204,8 +204,8 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					fake.AppNil,
-					fake.ErrNoResultReturned,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					nil,
 				)
 				m.On("Single").Return(
 					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
@@ -309,6 +309,41 @@ func TestObserve(t *testing.T) {
 				)
 				return m
 			}(),
+		},
+		"InvalidGUIDReturnsError": {
+			args: args{
+				mg: newApp("docker", withExternalName("not-a-guid"), withSpace(spaceGUID)),
+			},
+			want: want{
+				mg:  newApp("docker", withExternalName("not-a-guid"), withSpace(spaceGUID)),
+				obs: managed.ExternalObservation{},
+				err: errors.Errorf("external-name 'not-a-guid' is not a valid GUID format"),
+			},
+			service: func() *fake.MockApp {
+				return &fake.MockApp{}
+			},
+		},
+		"Drift": {
+			args: args{
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
+			},
+			want: want{
+				mg: newApp("docker",
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withConditions(xpv1.Available())),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				// CF has a different name than spec — drift detected
+				m.On("Get", guid).Return(
+					&fake.NewApp("docker").SetName("other-name").SetGUID(guid).App,
+					nil,
+				)
+				return m
+			},
 		},
 		"RouteFetchErrorNonFatal": {
 			args: args{
@@ -471,6 +506,24 @@ func TestCreate(t *testing.T) {
 					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
 					fake.ErrNoResultReturned,
 				)
+				return m
+			},
+		},
+
+		"CreateFails": {
+			args: args{
+				mg: newApp("docker", withSpace(spaceGUID), withImage("docker-image")),
+			},
+			want: want{
+				mg: newApp("docker", withImage("docker-image"),
+					withSpace(spaceGUID),
+					withConditions(xpv1.Creating())),
+				obs: managed.ExternalCreation{},
+				err: errors.Wrap(errBoom, errCreateResource),
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				m.On("Create").Return(fake.AppNil, errBoom)
 				return m
 			},
 		},
@@ -797,6 +850,21 @@ func TestUpdate(t *testing.T) {
 				return m
 			},
 		},
+
+		"EmptyGUID": {
+			args: args{
+				mg: newApp("docker", withSpace(spaceGUID)),
+			},
+			want: want{
+				mg:  newApp("docker", withSpace(spaceGUID)),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				// no calls expected — early return when external-name is empty
+				return &fake.MockApp{}
+			},
+		},
 	}
 
 	for n, tc := range cases {
@@ -839,6 +907,128 @@ func TestUpdate(t *testing.T) {
 			mockApp.AssertExpectations(t)
 			if tc.push != nil {
 				pushMock.AssertExpectations(t)
+			}
+		})
+	}
+}
+
+func TestDelete(t *testing.T) {
+	type args struct {
+		mg resource.Managed
+	}
+
+	type want struct {
+		obs managed.ExternalDelete
+		err error
+	}
+
+	cases := map[string]struct {
+		args    args
+		want    want
+		service func() *fake.MockApp
+		job     func() *fake.MockJob
+	}{
+		"Successful": {
+			args: args{
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
+			},
+			want: want{
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				m.On("Delete", guid).Return("job-guid", nil)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+
+		"NotFound": {
+			args: args{
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
+			},
+			want: want{
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				m.On("Delete", guid).Return("", fake.ErrNoResultReturned)
+				return m
+			},
+			job: func() *fake.MockJob {
+				return &fake.MockJob{}
+			},
+		},
+
+		"EmptyGUID": {
+			args: args{
+				mg: newApp("docker", withSpace(spaceGUID)),
+			},
+			want: want{
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				// no calls expected — early return when external-name is empty
+				return &fake.MockApp{}
+			},
+			job: func() *fake.MockJob {
+				return &fake.MockJob{}
+			},
+		},
+
+		"DeleteFails": {
+			args: args{
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
+			},
+			want: want{
+				obs: managed.ExternalDelete{},
+				err: errors.Wrap(errBoom, errDeleteResource),
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				m.On("Delete", guid).Return("", errBoom)
+				return m
+			},
+			job: func() *fake.MockJob {
+				return &fake.MockJob{}
+			},
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			t.Logf("Testing: %s", t.Name())
+			c := &external{
+				kube: &test.MockClient{
+					MockUpdate:       test.NewMockUpdateFn(nil),
+					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
+				},
+				client: &app.Client{
+					AppClient: tc.service(),
+					Job:       tc.job(),
+				},
+			}
+
+			obs, err := c.Delete(context.Background(), tc.args.mg)
+
+			if tc.want.err != nil && err != nil {
+				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
+					t.Errorf("Delete(...): want error string != got error string:\n%s", diff)
+				}
+			} else {
+				if diff := cmp.Diff(tc.want.err, err); diff != "" {
+					t.Errorf("Delete(...): want error != got error:\n%s", diff)
+				}
+			}
+			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
+				t.Errorf("Delete(...): -want, +got:\n%s", diff)
 			}
 		})
 	}
