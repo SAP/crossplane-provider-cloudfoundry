@@ -198,15 +198,11 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceLateInitialized: true},
 				err: nil,
 			},
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
-				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
-					nil,
-				)
 				m.On("Single").Return(
 					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
 					nil,

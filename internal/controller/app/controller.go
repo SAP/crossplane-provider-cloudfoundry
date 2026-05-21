@@ -128,6 +128,9 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	if !exists {
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
+	if lateInitialized {
+		return managed.ExternalObservation{ResourceExists: true, ResourceLateInitialized: true}, nil
+	}
 
 	guid := meta.GetExternalName(cr)
 
