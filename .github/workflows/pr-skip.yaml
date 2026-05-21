@@ -9,7 +9,7 @@ on:
       - synchronize
       - ready_for_review
     paths:
-      - '*.md'
+      - '**.md'
 
 permissions:
   contents: read
