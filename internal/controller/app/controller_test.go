@@ -170,6 +170,24 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
+		"AdoptionLookupFails": {
+			args: args{
+				mg: newApp("docker", withSpace(spaceGUID)),
+			},
+			want: want{
+				mg:  newApp("docker", withSpace(spaceGUID)),
+				obs: managed.ExternalObservation{},
+				err: errors.Wrap(errBoom, errObserveResource),
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				m.On("Single").Return(
+					fake.AppNil,
+					errBoom,
+				)
+				return m
+			},
+		},
 		"Boom!": {
 			args: args{
 				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
@@ -226,10 +244,6 @@ func TestObserve(t *testing.T) {
 					fake.AppNil,
 					fake.ErrNoResultReturned,
 				)
-				m.On("Single").Return(
-					fake.AppNil,
-					fake.ErrNoResultReturned,
-				)
 				return m
 			},
 			kube: &test.MockClient{},
@@ -250,10 +264,6 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
-					nil,
-				)
-				m.On("Single").Return(
 					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
 					nil,
 				)
@@ -281,10 +291,6 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
-					nil,
-				)
-				m.On("Single").Return(
 					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
 					nil,
 				)
@@ -366,10 +372,6 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
-					nil,
-				)
-				m.On("Single").Return(
 					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
 					nil,
 				)
