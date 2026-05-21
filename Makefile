@@ -206,6 +206,8 @@ generate-test-crs:
 
 .PHONY: test-acceptance
 test-acceptance: local-deploy $(KUBECTL) generate-test-crs
+	@# xp-testing puts the provider secret in crossplane-system; local-deploy installs UXP in upbound-system, so the namespace isn't created upstream.
+	@$(KUBECTL) get namespace crossplane-system >/dev/null 2>&1 || $(KUBECTL) create namespace crossplane-system
 	@$(INFO) running integration tests
 	@$(INFO) Skipping long running tests
 	@TEST_CRS_PATH=$(abspath $(TEST_CRS_RENDERED_PATH)) \
