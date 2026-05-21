@@ -1,4 +1,6 @@
-# This workflow is triggered for pull requests that only modify markdown files (e.g., documentation changes).
+# This workflow runs tests and pre-checks for pull requests that modify non-markdown files.
+# Markdown-only PRs are handled by pr-skip.yaml which satisfies the required checks with stubs.
+
 name: PullRequest Skip Checks for Docs
 
 on:
