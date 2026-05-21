@@ -80,13 +80,6 @@ func main() {
 	// Delete import test spaces (under cf-ci-e2e org)
 	logCleanupErr("e2e-test-space-import"+scopedSuffix, deleteSpace(ctx, cfClient, org.GUID, "e2e-test-space-import"+scopedSuffix))
 
-	// Delete import test roles (orgrole and spacerole import tests create
-	// BUILD_ID-scoped roles in cf-ci-e2e / import-test-space-donotdelete)
-	orgRoleUsername := "e2e-test-org-role-import" + scopedSuffix + "@example.com"
-	logCleanupErr("org-role/"+orgRoleUsername, deleteOrgRole(ctx, cfClient, org.GUID, orgRoleUsername))
-	spaceRoleUsername := "e2e-test-space-role-import" + scopedSuffix + "@example.com"
-	logCleanupErr("space-role/"+spaceRoleUsername, deleteSpaceRole(ctx, cfClient, org.GUID, spaceRoleUsername))
-
 	fmt.Println("Cleanup completed")
 }
 
@@ -196,59 +189,4 @@ func deleteQuota(ctx context.Context, cfClient *client.Client, orgID, name strin
 	}
 	_, err = cfClient.SpaceQuotas.Delete(ctx, q.GUID)
 	return err
-}
-
-const importTestSpaceName = "import-test-space-donotdelete" // must match spaceRoleImportTestSpaceName in cloudfoundry_spacerole_import_test.go
-
-func deleteOrgRole(ctx context.Context, cfClient *client.Client, orgGUID, username string) error {
-	user, err := cfClient.Users.Single(ctx, &client.UserListOptions{
-		UserNames: client.Filter{Values: []string{username}},
-	})
-	if err != nil {
-		return nil // user not found → no role to remove
-	}
-	roles, err := cfClient.Roles.ListAll(ctx, &client.RoleListOptions{
-		OrganizationGUIDs: client.Filter{Values: []string{orgGUID}},
-		Types:             client.Filter{Values: []string{"organization_user"}},
-		UserGUIDs:         client.Filter{Values: []string{user.GUID}},
-	})
-	if err != nil {
-		return err
-	}
-	for _, r := range roles {
-		if _, err := cfClient.Roles.Delete(ctx, r.GUID); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func deleteSpaceRole(ctx context.Context, cfClient *client.Client, orgGUID, username string) error {
-	user, err := cfClient.Users.Single(ctx, &client.UserListOptions{
-		UserNames: client.Filter{Values: []string{username}},
-	})
-	if err != nil {
-		return nil // user not found → no role to remove
-	}
-	space, err := cfClient.Spaces.Single(ctx, &client.SpaceListOptions{
-		OrganizationGUIDs: client.Filter{Values: []string{orgGUID}},
-		Names:             client.Filter{Values: []string{importTestSpaceName}},
-	})
-	if err != nil {
-		return nil
-	}
-	roles, err := cfClient.Roles.ListAll(ctx, &client.RoleListOptions{
-		SpaceGUIDs: client.Filter{Values: []string{space.GUID}},
-		Types:      client.Filter{Values: []string{"space_developer"}},
-		UserGUIDs:  client.Filter{Values: []string{user.GUID}},
-	})
-	if err != nil {
-		return err
-	}
-	for _, r := range roles {
-		if _, err := cfClient.Roles.Delete(ctx, r.GUID); err != nil {
-			return err
-		}
-	}
-	return nil
 }

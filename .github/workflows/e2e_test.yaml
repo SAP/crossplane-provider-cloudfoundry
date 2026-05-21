@@ -32,6 +32,13 @@ on:
 permissions:
   contents: read
 
+# Serialize all e2e runs globally: every run shares cf-ci-e2e, and the orgrole
+# and spacerole import tests assign roles to static usernames in sap.ids that
+# would race across concurrent runs.
+concurrency:
+  group: e2e-cf-ci-e2e
+  cancel-in-progress: false
+
 env:
   BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
 

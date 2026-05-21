@@ -13,7 +13,7 @@ import (
 var (
 	orgRoleImportTestK8sResName = "e2e-test-org-role-import"
 	orgRoleImportTestType       = "User"
-	orgRoleImportTestUsername   = runScopedName("e2e-test-org-role-import") + "@example.com"
+	orgRoleImportTestUsername   = "e2e-test-org-role-import@example.com"
 	orgRoleImportTestOrgName    = "cf-ci-e2e"
 )
 
