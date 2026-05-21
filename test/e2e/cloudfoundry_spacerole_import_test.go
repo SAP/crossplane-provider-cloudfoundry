@@ -13,7 +13,7 @@ import (
 var (
 	spaceRoleImportTestK8sResName = "e2e-test-space-role-import"
 	spaceRoleImportTestType       = "Developer"
-	spaceRoleImportTestUsername   = "e2e-test-space-role-import@example.com"
+	spaceRoleImportTestUsername   = runScopedName("e2e-test-space-role-import") + "@example.com"
 	spaceRoleImportTestOrgName    = "cf-ci-e2e"
 	spaceRoleImportTestSpaceName  = "import-test-space-donotdelete"
 )

@@ -12,7 +12,7 @@ import (
 
 var (
 	spaceImportTestK8sResName = "e2e-test-space-import"
-	SpaceImportTestSpaceName  = "e2e-test-space-import"
+	SpaceImportTestSpaceName  = runScopedName("e2e-test-space-import")
 	spaceImportTestOrgName    = "cf-ci-e2e"
 )
 

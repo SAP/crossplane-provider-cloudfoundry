@@ -9,7 +9,7 @@ spec:
       name: app-domain
       policy:
         resolve: Always
-    host: app-route-host-domainref
+    host: app-route-host-domainref-$BUILD_ID
     spaceRef:
       name: app-space
       policy:
@@ -24,7 +24,7 @@ metadata:
 spec:
   forProvider:
     domainName: v6.cfapps.eu12.hana.ondemand.com # reference domain name directly
-    host: app-route-host-domainname
+    host: app-route-host-domainname-$BUILD_ID
     spaceRef:
       name: app-space
       policy:

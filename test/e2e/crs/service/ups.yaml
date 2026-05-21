@@ -7,7 +7,7 @@ metadata:
 spec:
   forProvider:
     type: user-provided
-    name: e2e-ups
+    name: e2e-ups-$BUILD_ID
     routeServiceUrl: https://e2e-route-service.example.com
     syslogDrainUrl: syslog-tls://example.log-aggregator.com:6514
     spaceRef: 

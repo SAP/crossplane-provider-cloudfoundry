@@ -8,7 +8,7 @@ spec:
       name: e2e-route-import-domain
       policy:
         resolve: Always
-    host: route-import-e2e
+    host: route-import-e2e-$BUILD_ID
     spaceRef:
       name: e2e-route-import-space
       policy:

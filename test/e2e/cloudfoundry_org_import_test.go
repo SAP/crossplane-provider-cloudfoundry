@@ -28,7 +28,7 @@ func TestOrgImportFlow(t *testing.T) {
 			},
 		},
 		orgImportTestK8sResName,
-		WithDependentResourceDirectory[*v1alpha1.Organization]("./crs/org"),
+		WithDependentResourceDirectory[*v1alpha1.Organization](crsDir("org")),
 		WithWaitCreateTimeout[*v1alpha1.Organization](wait.WithTimeout(5*time.Minute)),
 		WithWaitDeletionTimeout[*v1alpha1.Organization](wait.WithTimeout(5*time.Minute)),
 		WithCustomTeardown(func(it *ImportTester[*v1alpha1.Organization], ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {

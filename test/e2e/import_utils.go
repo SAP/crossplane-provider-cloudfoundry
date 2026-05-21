@@ -130,6 +130,8 @@ func identifier(object k8s.Object) string {
 	return fmt.Sprintf("%s/%s", object.GetObjectKind().GroupVersionKind().String(), object.GetName())
 }
 
+// NewID constructs a scoped identifier as "oldId-buildId" (suffix convention).
+// This must align with the runScopedName convention in test_ids.go.
 func NewID(oldId string, buildId string) string {
-	return buildId + "-" + oldId
+	return oldId + "-" + buildId
 }

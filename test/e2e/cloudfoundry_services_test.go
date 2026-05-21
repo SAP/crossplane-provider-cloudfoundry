@@ -19,7 +19,7 @@ import (
 )
 
 func TestCloudFoundryServices(t *testing.T) {
-	var dir = "./crs/service"
+	var dir = crsDir("service")
 	var namespace = "service-test"
 
 	targetSpaceObj := &v1alpha1.Space{}
@@ -76,8 +76,6 @@ func TestCloudFoundryServices(t *testing.T) {
 		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			// ignore errors as most, if not all, resources should be deleted in the deletion tests.
 			_ = UnapplyResources(ctx, cfg, dir)
-
-			resetTestOrg(ctx, t)
 
 			return ctx
 		},

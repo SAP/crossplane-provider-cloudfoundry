@@ -10,9 +10,9 @@ import (
 	"github.com/crossplane-contrib/xp-testing/pkg/envvar"
 	"github.com/crossplane-contrib/xp-testing/pkg/logging"
 	"github.com/crossplane-contrib/xp-testing/pkg/resources"
+	"github.com/crossplane-contrib/xp-testing/pkg/xpenvfuncs"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/errors"
-	corev1 "k8s.io/api/core/v1"
 	kubeErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -55,7 +55,6 @@ type CFCredentials struct {
 }
 
 // SetupLogging configures klog and controller-runtime logging with the specified verbosity
-// TODO: Consider extracting to shared package - identical in BTP and CF providers
 func SetupLogging(verbosity int) {
 	logging.EnableVerboseLogging(&verbosity)
 	zl := zap.New(zap.UseDevMode(true))
@@ -71,7 +70,7 @@ func SetupLogging(verbosity int) {
 //   - CF_PASSWORD: Password for CF authentication
 //
 // Returns: map with "credentials" key containing JSON-encoded credentials
-func GetCFCredentialsOrPanic() map[string][]byte {
+func GetCFCredentialsOrPanic() map[string]string {
 	email := envvar.GetOrPanic("CF_EMAIL")
 	username := envvar.GetOrPanic("CF_USERNAME")
 	password := envvar.GetOrPanic("CF_PASSWORD")
@@ -87,9 +86,34 @@ func GetCFCredentialsOrPanic() map[string][]byte {
 		panic(fmt.Errorf("failed to marshal CF credentials: %w", err))
 	}
 
-	return map[string][]byte{
-		"credentials": credsJSON,
+	return map[string]string{
+		"credentials": string(credsJSON),
 	}
+}
+
+// ApplySecretInCrossplaneNamespace creates or updates a Kubernetes secret in the crossplane-system namespace.
+func ApplySecretInCrossplaneNamespace(name string, data map[string]string) env.Func {
+	return xpenvfuncs.Compose(
+		func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
+			r, err := res.New(cfg.Client().RESTConfig())
+			if err != nil {
+				klog.Error(err)
+				return ctx, err
+			}
+
+			secret := xpenvfuncs.SimpleSecret(name, xpenvfuncs.CrossplaneNamespace, data)
+
+			if err := r.Create(ctx, secret); err != nil {
+				if kubeErrors.IsAlreadyExists(err) {
+					return ctx, r.Update(ctx, secret)
+				}
+				klog.Error(err)
+				return ctx, err
+			}
+
+			return ctx, nil
+		},
+	)
 }
 
 func GetImagesFromJsonOrPanic(imagesJson string) (string, string) {
@@ -106,35 +130,6 @@ func GetImagesFromJsonOrPanic(imagesJson string) (string, string) {
 	uutController := imageMap[UUT_CONTROLLER_KEY]
 
 	return uutConfig, uutController
-}
-
-// ApplySecretInCrossplaneNamespace creates a secret in the crossplane-system namespace
-// This is used to store CloudFoundry credentials that the provider will use
-//
-// Parameters:
-//   - secretName: Name of the secret to create
-//   - data: Map of secret data (key -> value as bytes)
-//
-// Returns: An env.Func that can be used with testenv.Setup()
-func ApplySecretInCrossplaneNamespace(secretName string, data map[string][]byte) env.Func {
-	return func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
-		secret := &corev1.Secret{
-			ObjectMeta: metav1.ObjectMeta{
-				Name:      secretName,
-				Namespace: crossplaneSystemNamespace,
-			},
-			Data: data,
-		}
-
-		client := cfg.Client()
-		if err := client.Resources().Create(ctx, secret); err != nil {
-			return ctx, fmt.Errorf("failed to create secret %s in namespace %s: %w",
-				secretName, crossplaneSystemNamespace, err)
-		}
-
-		klog.V(4).Infof("created secret %s in namespace %s", secretName, crossplaneSystemNamespace)
-		return ctx, nil
-	}
 }
 
 func DeleteResourcesFromDirsGracefully(ctx context.Context, cfg *envconf.Config, resourceDirs []string, timeout wait.Option) error {

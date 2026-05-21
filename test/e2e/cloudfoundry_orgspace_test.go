@@ -18,7 +18,7 @@ import (
 )
 
 func TestCloudFoundryOrgSpace(t *testing.T) {
-	var dir = "./crs/orgspace"
+	var dir = crsDir("orgspace")
 	var namespace = "orgspace-test"
 	var feats = map[string]struct {
 		// name of the managed resource

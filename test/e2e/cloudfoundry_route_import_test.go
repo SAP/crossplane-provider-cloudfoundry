@@ -15,7 +15,7 @@ var (
 	routeImportTestDomainName = "cfapps.eu12.hana.ondemand.com"
 	routeImportTestSpaceName  = "import-test-space-donotdelete"
 	routeImportTestOrgName    = "cf-ci-e2e"
-	routeImportTestHost       = "route-import-e2e"
+	routeImportTestHost       = runScopedName("route-import-e2e")
 )
 
 func TestRouteImportFlow(t *testing.T) {
@@ -35,7 +35,7 @@ func TestRouteImportFlow(t *testing.T) {
 			},
 		},
 		routeImportTestK8sResName,
-		WithDependentResourceDirectory[*v1alpha1.Route]("./crs/route"),
+		WithDependentResourceDirectory[*v1alpha1.Route](crsDir("route")),
 		WithWaitCreateTimeout[*v1alpha1.Route](wait.WithTimeout(5*time.Minute)),
 		WithWaitDeletionTimeout[*v1alpha1.Route](wait.WithTimeout(5*time.Minute)),
 	)
