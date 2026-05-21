@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"k8s.io/utils/ptr"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -154,7 +153,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	return managed.ExternalObservation{
 		ResourceExists:          cr.Status.AtProvider.ID != nil,
-		ResourceUpToDate:        domain.IsUpToDate(cr.Spec.ForProvider, d),
+		ResourceUpToDate:        domain.IsUpToDate(cr, cr.Spec.ForProvider, d),
 		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
 }
@@ -168,7 +167,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Creating())
 
-	o, err := c.client.Create(ctx, domain.GenerateCreate(cr.Spec.ForProvider))
+	o, err := c.client.Create(ctx, domain.GenerateCreate(cr, cr.Spec.ForProvider))
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
@@ -194,12 +193,9 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errUpdate)
 	}
 
-	// rename resource
-	if cr.Name != ptr.Deref(cr.Status.AtProvider.Name, "") {
-		_, err := c.client.Update(ctx, *cr.Status.AtProvider.ID, domain.GenerateUpdate(cr.Spec.ForProvider))
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
-		}
+	_, err := c.client.Update(ctx, *cr.Status.AtProvider.ID, domain.GenerateUpdate(cr, cr.Spec.ForProvider))
+	if err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 
 	return managed.ExternalUpdate{

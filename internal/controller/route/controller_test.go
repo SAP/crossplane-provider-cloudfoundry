@@ -15,6 +15,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -35,12 +36,12 @@ func (m *Mock) GetRouteByGUID(ctx context.Context, guid string) (*v1alpha1.Route
 	return args.Get(0).(*v1alpha1.RouteObservation), args.Bool(1), args.Error(2)
 }
 
-func (m *Mock) Create(ctx context.Context, forProvider v1alpha1.RouteParameters) (string, error) {
+func (m *Mock) Create(ctx context.Context, mg resource.Managed, forProvider v1alpha1.RouteParameters) (string, error) {
 	args := m.Called()
 	return args.String(0), args.Error(1)
 }
 
-func (m *Mock) Update(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) error {
+func (m *Mock) Update(ctx context.Context, guid string, mg resource.Managed, forProvider v1alpha1.RouteParameters) error {
 	args := m.Called()
 	return args.Error(0)
 }
@@ -111,8 +112,17 @@ func fakeRouteObservation(id string) *v1alpha1.RouteObservation {
 	}
 	r := &v1alpha1.RouteObservation{
 		Resource: res,
+		ResourceMetadata: v1alpha1.ResourceMetadata{
+			Labels: map[string]*string{"crossplane-kind": ptr.To("route.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("test-route")},
+		},
 	}
 	return r
+}
+
+func withDefaultMetadataLabels() modifier {
+	return func(r *v1alpha1.Route) {
+		r.SetGroupVersionKind(v1alpha1.RouteGroupVersionKind)
+	}
 }
 
 func TestObserve(t *testing.T) {
@@ -148,6 +158,45 @@ func TestObserve(t *testing.T) {
 		"UnsetExternalNameSuccessful": {
 			args: args{
 				mg: fakeRoute(withHost(name)),
+			},
+			want: want{
+				obs: managed.ExternalObservation{
+					ResourceExists: false,
+				},
+				err: nil,
+			},
+			service: func() *Mock {
+				m := &Mock{}
+				m.On("FindRouteBySpec", fakeRoute(withHost(name)).Spec.ForProvider).Return(
+					nilObservation, false, nil,
+				)
+				return m
+			},
+		},
+		"Found with observation is returned": {
+			args: args{
+				mg: fakeRoute(
+					withExternalName(guid),
+					withHost(name),
+					withDefaultMetadataLabels(),
+				),
+			},
+			want: want{
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *Mock {
+				m := &Mock{}
+
+				m.On("GetRouteByGUID", guid).Return(
+					fakeRouteObservation(guid), true, nil,
+				)
+				return m
+			},
+		},
+		"Adopt and set external-name ": {
+			args: args{
+				mg: fakeRoute(withHost(name), withDefaultMetadataLabels()),
 			},
 			want: want{
 				obs: managed.ExternalObservation{
@@ -189,6 +238,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeRoute(
 					withExternalName(guid),
 					withHost(name),
+					withDefaultMetadataLabels(),
 				),
 			},
 			want: want{

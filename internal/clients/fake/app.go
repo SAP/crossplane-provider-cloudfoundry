@@ -103,3 +103,18 @@ func (a *App) SetGUID(guid string) *App {
 	a.GUID = guid
 	return a
 }
+
+func (s *App) SetLabels(labels map[string]*string) *App {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Labels = labels
+	return s
+}
+func (s *App) SetAnnotations(annotations map[string]*string) *App {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Annotations = annotations
+	return s
+}
