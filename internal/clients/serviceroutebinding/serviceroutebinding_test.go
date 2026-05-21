@@ -127,7 +127,7 @@ func TestNewCreateOption(t *testing.T) {
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			opt := newCreateOption(tc.args.forProvider, tc.args.parametersFromSecret)
+			opt := newCreateOption(nil, tc.args.forProvider, tc.args.parametersFromSecret)
 
 			if tc.want.opt != nil && opt != nil {
 				if opt.Relationships.Route.Data.GUID != tc.want.opt.Relationships.Route.Data.GUID {
@@ -874,7 +874,7 @@ func TestCreate(t *testing.T) {
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			binding, err := Create(tc.args.ctx, tc.args.srbClient, tc.args.forProvider, tc.args.parametersFromSecret)
+			binding, err := Create(tc.args.ctx, tc.args.srbClient, nil, tc.args.forProvider, tc.args.parametersFromSecret)
 
 			if tc.want.err != nil {
 				if err == nil {
