@@ -29,6 +29,22 @@ var (
 	envVarValue = "hello"
 )
 
+func assertErrAndObs[T any](t *testing.T, wantErr, gotErr error, wantObs, gotObs T) {
+	t.Helper()
+	if wantErr != nil && gotErr != nil {
+		if diff := cmp.Diff(wantErr.Error(), gotErr.Error()); diff != "" {
+			t.Errorf("want error string != got error string:\n%s", diff)
+		}
+	} else {
+		if diff := cmp.Diff(wantErr, gotErr); diff != "" {
+			t.Errorf("want error != got error:\n%s", diff)
+		}
+	}
+	if diff := cmp.Diff(wantObs, gotObs); diff != "" {
+		t.Errorf("-want, +got:\n%s", diff)
+	}
+}
+
 type modifier func(*v1alpha1.App)
 
 func withExternalName(name string) modifier {
@@ -406,19 +422,7 @@ func TestObserve(t *testing.T) {
 
 			obs, err := c.Observe(context.Background(), tc.args.mg)
 
-			if tc.want.err != nil && err != nil {
-				// the case where our mock server returns error.
-				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
-				}
-			} else {
-				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
-				}
-			}
-			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
-			}
+			assertErrAndObs(t, tc.want.err, err, tc.want.obs, obs)
 
 			// Verify routes were written to the managed resource status.
 			gotApp, gotOk := tc.args.mg.(*v1alpha1.App)
@@ -543,19 +547,7 @@ func TestCreate(t *testing.T) {
 
 			obs, err := c.Create(context.Background(), tc.args.mg)
 
-			if tc.want.err != nil && err != nil {
-				// the case where our mock server returns error.
-				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Create(...): want error string != got error string:\n%s", diff)
-				}
-			} else {
-				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Create(...): want error != got error:\n%s", diff)
-				}
-			}
-			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Create(...): -want, +got:\n%s", diff)
-			}
+			assertErrAndObs(t, tc.want.err, err, tc.want.obs, obs)
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
 				t.Errorf("Create(...): -want, +got:\n%s", diff)
 			}
@@ -886,19 +878,7 @@ func TestUpdate(t *testing.T) {
 
 			obs, err := c.Update(context.Background(), tc.args.mg)
 
-			if tc.want.err != nil && err != nil {
-				// the case where our mock server returns error.
-				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Update(...): want error string != got error string:\n%s", diff)
-				}
-			} else {
-				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Update(...): want error != got error:\n%s", diff)
-				}
-			}
-			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Update(...): -want, +got:\n%s", diff)
-			}
+			assertErrAndObs(t, tc.want.err, err, tc.want.obs, obs)
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
 				t.Errorf("Update(...): -want, +got:\n%s", diff)
 			}
@@ -1021,18 +1001,7 @@ func TestDelete(t *testing.T) {
 
 			obs, err := c.Delete(context.Background(), tc.args.mg)
 
-			if tc.want.err != nil && err != nil {
-				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Delete(...): want error string != got error string:\n%s", diff)
-				}
-			} else {
-				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Delete(...): want error != got error:\n%s", diff)
-				}
-			}
-			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Delete(...): -want, +got:\n%s", diff)
-			}
+			assertErrAndObs(t, tc.want.err, err, tc.want.obs, obs)
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
 				t.Errorf("Delete(...): -want mg, +got mg:\n%s", diff)
 			}
