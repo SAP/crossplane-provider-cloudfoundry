@@ -546,18 +546,18 @@ func TestCreate(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Create(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Create(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Create(...): -want, +got:\n%s", diff)
 			}
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Create(...): -want, +got:\n%s", diff)
 			}
 		})
 	}
@@ -889,18 +889,18 @@ func TestUpdate(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Update(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Update(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Update(...): -want, +got:\n%s", diff)
 			}
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Update(...): -want, +got:\n%s", diff)
 			}
 			mockApp.AssertExpectations(t)
 			if tc.push != nil {
@@ -916,6 +916,7 @@ func TestDelete(t *testing.T) {
 	}
 
 	type want struct {
+		mg  resource.Managed
 		obs managed.ExternalDelete
 		err error
 	}
@@ -931,6 +932,7 @@ func TestDelete(t *testing.T) {
 				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 			},
 			want: want{
+				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID), withConditions(xpv1.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -951,6 +953,7 @@ func TestDelete(t *testing.T) {
 				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 			},
 			want: want{
+				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID), withConditions(xpv1.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -969,6 +972,7 @@ func TestDelete(t *testing.T) {
 				mg: newApp("docker", withSpace(spaceGUID)),
 			},
 			want: want{
+				mg:  newApp("docker", withSpace(spaceGUID), withConditions(xpv1.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -986,6 +990,7 @@ func TestDelete(t *testing.T) {
 				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 			},
 			want: want{
+				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID), withConditions(xpv1.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: errors.Wrap(errBoom, errDeleteResource),
 			},
@@ -1027,6 +1032,9 @@ func TestDelete(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Delete(...): -want, +got:\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+				t.Errorf("Delete(...): -want mg, +got mg:\n%s", diff)
 			}
 		})
 	}
