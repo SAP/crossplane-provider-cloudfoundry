@@ -847,7 +847,6 @@ func TestUpdate(t *testing.T) {
 				err: nil,
 			},
 			service: func() *fake.MockApp {
-				// no calls expected — early return when external-name is empty
 				return &fake.MockApp{}
 			},
 		},
@@ -953,7 +952,6 @@ func TestDelete(t *testing.T) {
 				err: nil,
 			},
 			service: func() *fake.MockApp {
-				// no calls expected — early return when external-name is empty
 				return &fake.MockApp{}
 			},
 			job: func() *fake.MockJob {

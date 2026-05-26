@@ -3,12 +3,16 @@
 package e2e
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/e2e-framework/klient/wait"
+	"sigs.k8s.io/e2e-framework/pkg/envconf"
 )
 
 var (
@@ -19,9 +23,6 @@ var (
 )
 
 func TestAppImportFlow(t *testing.T) {
-	appImportTestSpace := appImportTestSpace
-	appImportTestOrg := appImportTestOrg
-
 	importTester := NewImportTester(
 		&v1alpha1.App{
 			Spec: v1alpha1.AppSpec{
@@ -52,7 +53,17 @@ func TestAppImportFlow(t *testing.T) {
 		WithWaitDeletionTimeout[*v1alpha1.App](wait.WithTimeout(5*time.Minute)),
 	)
 
-	importFeature := importTester.BuildTestFeature("CF App Import Flow").Feature()
+	importFeature := importTester.BuildTestFeature("CF App Import Flow").
+		Assess("External-name is a valid GUID after import", func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			resource := &v1alpha1.App{}
+			MustGetResource(t, cfg, importTester.GetPrefixedName(), nil, resource)
+			externalName := xpmeta.GetExternalName(resource)
+			if !clients.IsValidGUID(externalName) {
+				t.Errorf("expected GUID external-name after import, got %q", externalName)
+			}
+			return ctx
+		}).
+		Feature()
 
 	testenv.Test(t, importFeature)
 }
