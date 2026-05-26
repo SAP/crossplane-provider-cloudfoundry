@@ -40,12 +40,18 @@ func (m *MockApp) Update(ctx context.Context, guid string, opt *resource.AppUpda
 // Stop mocks App.Stop
 func (m *MockApp) Stop(ctx context.Context, guid string) (*resource.App, error) {
 	args := m.Called(guid)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*resource.App), args.Error(1)
 }
 
 // Start mocks App.Start
 func (m *MockApp) Start(ctx context.Context, guid string) (*resource.App, error) {
 	args := m.Called(guid)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*resource.App), args.Error(1)
 }
 

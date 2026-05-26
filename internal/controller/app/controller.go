@@ -140,19 +140,16 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		lateInitialized = true
 	}
 
-	// Preserve previously observed state so it survives transient API failures.
+	// Preserve previously observed routes so they survive transient API failures.
 	prevRoutes := cr.Status.AtProvider.Routes
-	prevAppManifest := cr.Status.AtProvider.AppManifest
 
 	// Update the status of the resource
 	cr.Status.AtProvider = app.GenerateObservation(res)
 	appManifest, err := c.client.GenerateManifest(ctx, res.GUID)
-	if err == nil {
-		cr.Status.AtProvider.AppManifest = appManifest
-	} else {
-		cr.Status.AtProvider.AppManifest = prevAppManifest
-		klog.Warningf("failed to generate manifest for app %q, preserving previous observation: %v", res.GUID, err)
+	if err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, errObserveResource)
 	}
+	cr.Status.AtProvider.AppManifest = appManifest
 
 	// Fetch routes for the application. On success, update the status with
 	// the fresh data; on error, restore the previously observed routes so

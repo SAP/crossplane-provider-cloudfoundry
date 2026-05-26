@@ -237,8 +237,8 @@ func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) 
 	}
 
 	// Check if Docker image changed
-	if spec.Lifecycle == "docker" && spec.Docker != nil && appManifest.Docker != nil {
-		if spec.Docker.Image != appManifest.Docker.Image {
+	if spec.Lifecycle == "docker" && spec.Docker != nil {
+		if appManifest.Docker == nil || spec.Docker.Image != appManifest.Docker.Image {
 			changes.ChangedFields["docker_image"] = struct{}{}
 		}
 	}
