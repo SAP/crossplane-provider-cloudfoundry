@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -147,17 +148,28 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.Wrap(err, errObserveResource)
 	}
 
+	isUpToDate, err := c.updateObservedStatus(ctx, cr, res)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
+
+	return managed.ExternalObservation{
+		ResourceExists:          true,
+		ResourceUpToDate:        isUpToDate,
+		ResourceLateInitialized: lateInitialized,
+	}, nil
+}
+
+func (c *external) updateObservedStatus(ctx context.Context, cr *v1alpha1.App, res *cfresource.App) (bool, error) {
 	// Preserve previously observed routes so they survive a transient
 	// failure from the Routes API.
 	prevRoutes := cr.Status.AtProvider.Routes
 
 	// Update the status of the resource
 	cr.Status.AtProvider = app.GenerateObservation(res)
-	appManifest, err := c.client.GenerateManifest(ctx, res.GUID)
-	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, errObserveResource)
+	if appManifest, err := c.client.GenerateManifest(ctx, res.GUID); err == nil {
+		cr.Status.AtProvider.AppManifest = appManifest
 	}
-	cr.Status.AtProvider.AppManifest = appManifest
 
 	// Fetch routes for the application. On success, update the status with
 	// the fresh data; on error, restore the previously observed routes so
@@ -179,16 +191,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		cr.SetConditions(xpv1.Unavailable())
 	}
 
-	isUpToDate, err := app.IsUpToDate(cr.Spec.ForProvider, cr.Status.AtProvider)
-	if err != nil {
-		return managed.ExternalObservation{}, err
-	}
-
-	return managed.ExternalObservation{
-		ResourceExists:          true,
-		ResourceUpToDate:        isUpToDate,
-		ResourceLateInitialized: lateInitialized,
-	}, nil
+	return app.IsUpToDate(cr.Spec.ForProvider, cr.Status.AtProvider)
 }
 
 // Create managed resource
