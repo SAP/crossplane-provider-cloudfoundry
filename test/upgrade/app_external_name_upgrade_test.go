@@ -15,10 +15,13 @@ import (
 
 	v1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/test"
+	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
 	"k8s.io/klog/v2"
 	res "sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 )
+
+type appPreUpgradeExternalNameKey struct{}
 
 var (
 	appExternalNameResourceDirectories = []string{
@@ -28,6 +31,7 @@ var (
 )
 
 func Test_App_External_Name(t *testing.T) {
+	// defined in ./testdata/customCrs/externalNames/app/app.yaml
 	const appName = "upgrade-test-app"
 
 	upgradeTest := NewCustomUpgradeTest("app-external-name-test").
@@ -41,63 +45,52 @@ func Test_App_External_Name(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Failed to create resource client: %v", err)
 				}
-
-				err = v1alpha1.SchemeBuilder.AddToScheme(r.GetScheme())
-				if err != nil {
+				if err = v1alpha1.SchemeBuilder.AddToScheme(r.GetScheme()); err != nil {
 					t.Fatalf("Failed to add CloudFoundry scheme: %v", err)
 				}
 
 				app := &v1alpha1.App{}
-				err = r.Get(ctx, appName, cfg.Namespace(), app)
-				if err != nil {
+				if err = r.Get(ctx, appName, cfg.Namespace(), app); err != nil {
 					t.Fatalf("Failed to get App resource: %v", err)
 				}
 
-				annotations := app.GetAnnotations()
-				externalName, exists := annotations["crossplane.io/external-name"]
-				if !exists {
-					t.Fatal("External name annotation does not exist")
+				externalName := xpmeta.GetExternalName(app)
+				if !test.UUIDRegex.MatchString(externalName) {
+					t.Fatalf("External name %q does not match expected UUID format", externalName)
 				}
 
 				klog.V(4).Infof("Pre-upgrade external name: %s", externalName)
-
-				if !test.UUIDRegex.MatchString(externalName) {
-					t.Fatalf("External name '%s' does not match expected UUID format", externalName)
-				}
-
-				return context.WithValue(ctx, "preUpgradeExternalName", externalName)
+				return context.WithValue(ctx, appPreUpgradeExternalNameKey{}, externalName)
 			},
 		).
 		WithCustomPostUpgradeAssessment(
 			"Verify external name after upgrade",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-				app := &v1alpha1.App{}
-				r := cfg.Client().Resources()
-
-				err := r.Get(ctx, appName, cfg.Namespace(), app)
+				r, err := res.New(cfg.Client().RESTConfig())
 				if err != nil {
+					t.Fatalf("Failed to create resource client: %v", err)
+				}
+				if err = v1alpha1.SchemeBuilder.AddToScheme(r.GetScheme()); err != nil {
+					t.Fatalf("Failed to add CloudFoundry scheme: %v", err)
+				}
+
+				app := &v1alpha1.App{}
+				if err = r.Get(ctx, appName, cfg.Namespace(), app); err != nil {
 					t.Fatalf("Failed to get App resource: %v", err)
 				}
 
-				annotations := app.GetAnnotations()
-				externalName, exists := annotations["crossplane.io/external-name"]
-				if !exists {
-					t.Fatal("External name annotation does not exist after upgrade")
-				}
-
-				klog.V(4).Infof("Post-upgrade external name: %s", externalName)
-
+				externalName := xpmeta.GetExternalName(app)
 				if !test.UUIDRegex.MatchString(externalName) {
-					t.Fatalf("External name '%s' does not match expected UUID format after upgrade", externalName)
+					t.Fatalf("External name %q does not match expected UUID format after upgrade", externalName)
 				}
 
-				preUpgradeExternalName, ok := ctx.Value("preUpgradeExternalName").(string)
+				preUpgradeExternalName, ok := ctx.Value(appPreUpgradeExternalNameKey{}).(string)
 				if !ok {
 					t.Fatal("Failed to retrieve pre-upgrade external name from context")
 				}
 
 				if externalName != preUpgradeExternalName {
-					t.Fatalf("External name changed during upgrade: before='%s', after='%s'",
+					t.Fatalf("External name changed during upgrade: before=%q, after=%q",
 						preUpgradeExternalName, externalName)
 				}
 
