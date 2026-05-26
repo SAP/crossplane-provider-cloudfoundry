@@ -83,8 +83,9 @@ type OrgStatus struct {
 //   - Follows Standard: yes
 //   - Format: Organization GUID (UUID format)
 //   - How to find:
-//     - UI: In the BTP Cockpit, navigate to your org and find the ID in the URL
-//     - CLI: Use `cf org <org-name> --guid`
+//   - UI: In the BTP Cockpit, navigate to your org and find the ID in the URL
+//   - CLI: Use `cf org <org-name> --guid`
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
