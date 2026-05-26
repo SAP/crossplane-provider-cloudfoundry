@@ -219,10 +219,6 @@ func TestObserve(t *testing.T) {
 					fake.AppNil,
 					errBoom,
 				)
-				m.On("Single").Return(
-					fake.AppNil,
-					errBoom,
-				)
 				return m
 			},
 		},
