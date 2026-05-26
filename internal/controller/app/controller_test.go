@@ -351,7 +351,6 @@ func TestObserve(t *testing.T) {
 			},
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
-				// CF has a different name than spec — drift detected
 				m.On("Get", guid).Return(
 					&fake.NewApp("docker").SetName("other-name").SetGUID(guid).App,
 					nil,

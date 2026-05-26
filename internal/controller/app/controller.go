@@ -225,6 +225,8 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	guid := meta.GetExternalName(cr)
+	// Observe validates GUID format before marking ResourceUpToDate:false, so
+	// Update is only called with a valid GUID.
 	if guid == "" {
 		return managed.ExternalUpdate{}, nil
 	}

@@ -285,8 +285,8 @@ type AppStatus struct {
 //   - Follows Standard: yes
 //   - Format: App GUID (UUID format)
 //   - How to find:
-//   - UI: In the BTP Cockpit, navigate to your app and find the ID after app/ in the URL
-//   - CLI: `cf app <APP_NAME> --guid`
+//     - UI: In the BTP Cockpit, navigate to your app and find the ID after app/ in the URL
+//     - CLI: `cf app <APP_NAME> --guid`
 //
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
