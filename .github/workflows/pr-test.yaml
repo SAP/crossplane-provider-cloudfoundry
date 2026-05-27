@@ -11,6 +11,9 @@ on:
     - ready_for_review
     paths-ignore:
       - '*.md'
+      
+permissions:
+  contents: read
 
 jobs:
   run-go-license-check:
