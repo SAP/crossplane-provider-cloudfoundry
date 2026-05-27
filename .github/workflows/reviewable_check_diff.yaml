@@ -6,6 +6,9 @@ on:
   workflow_dispatch:
   workflow_call:
 
+permissions:
+  contents: read
+
 env:
   GO_IMPORT_VERSION: 'v0.16.1'
 
