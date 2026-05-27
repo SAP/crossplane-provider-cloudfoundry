@@ -63,7 +63,8 @@ func main() {
 	} {
 		logCleanupErr(app, deleteApp(ctx, cfClient, org.GUID, app))
 	}
-
+	// Delete SRBs before SIs — a bound SRB blocks SI deletion.
+	logCleanupErr("srb-e2e-serviceroutebinding"+scopedSuffix, deleteSRBByServiceInstance(ctx, cfClient, org.GUID, "e2e-serviceroutebinding-serviceinstance"+scopedSuffix))
 	for _, si := range []string{
 		"e2e-service-instance" + scopedSuffix,
 		"e2e-ups" + scopedSuffix,
@@ -79,6 +80,15 @@ func main() {
 
 	// Delete import test spaces (under cf-ci-e2e org)
 	logCleanupErr("e2e-test-space-import"+scopedSuffix, deleteSpace(ctx, cfClient, org.GUID, "e2e-test-space-import"+scopedSuffix))
+	// Import-test quotas live under upgrade-test-org.
+	upgradeTestOrg, err := cfClient.Organizations.Single(ctx, &client.OrganizationListOptions{
+		Names: client.Filter{Values: []string{"upgrade-test-org"}},
+	})
+	if err != nil {
+		fmt.Printf("Org upgrade-test-org not found, skipping its quota cleanup: %v\n", err)
+	} else {
+		logCleanupErr("e2e-test-space-quota"+scopedSuffix, deleteQuota(ctx, cfClient, upgradeTestOrg.GUID, "e2e-test-space-quota"+scopedSuffix))
+	}
 
 	fmt.Println("Cleanup completed")
 }
@@ -113,7 +123,7 @@ func deleteSCB(ctx context.Context, cfClient *client.Client, name, serviceInstan
 		ServiceInstanceNames: client.Filter{Values: []string{serviceInstanceName}},
 	})
 	if err != nil {
-		return err
+		return nil
 	}
 	_, err = cfClient.ServiceCredentialBindings.Delete(ctx, scb.GUID)
 	return err
@@ -188,5 +198,23 @@ func deleteQuota(ctx context.Context, cfClient *client.Client, orgID, name strin
 		}
 	}
 	_, err = cfClient.SpaceQuotas.Delete(ctx, q.GUID)
+	return err
+}
+
+func deleteSRBByServiceInstance(ctx context.Context, cfClient *client.Client, orgID, serviceInstanceName string) error {
+	si, err := cfClient.ServiceInstances.Single(ctx, &client.ServiceInstanceListOptions{
+		OrganizationGUIDs: client.Filter{Values: []string{orgID}},
+		Names:             client.Filter{Values: []string{serviceInstanceName}},
+	})
+	if err != nil {
+		return nil
+	}
+	srb, err := cfClient.ServiceRouteBindings.Single(ctx, &client.ServiceRouteBindingListOptions{
+		ServiceInstanceGUIDs: client.Filter{Values: []string{si.GUID}},
+	})
+	if err != nil {
+		return nil
+	}
+	_, err = cfClient.ServiceRouteBindings.Delete(ctx, srb.GUID)
 	return err
 }
