@@ -90,11 +90,6 @@ func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha1.AppParameters,
 	return c.Push(ctx, application, manifest, nil)
 }
 
-// GetEnvironmentVariables gets the environment variables for an app.
-func (c *Client) GetEnvironmentVariables(ctx context.Context, guid string) (map[string]*string, error) {
-	return c.AppClient.GetEnvironmentVariables(ctx, guid)
-}
-
 // Update updates an app in the Cloud Foundry.
 func (c *Client) Update(ctx context.Context, guid string, spec v1alpha1.AppParameters) (*resource.App, error) {
 	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(spec))
