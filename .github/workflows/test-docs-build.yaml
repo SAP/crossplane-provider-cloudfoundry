@@ -9,6 +9,8 @@ on:
       - main
     paths:
       - 'docs/**'
+permissions:
+  contents: read
 
 jobs:
   test-docs-build-pr:
