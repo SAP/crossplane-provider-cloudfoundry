@@ -156,8 +156,10 @@ func (in *AppParameters) DeepCopyInto(out *AppParameters) {
 	in.ReadinessHealthCheckConfiguration.DeepCopyInto(&out.ReadinessHealthCheckConfiguration)
 	if in.Environment != nil {
 		in, out := &in.Environment, &out.Environment
-		*out = new(runtime.RawExtension)
-		(*in).DeepCopyInto(*out)
+		*out = make(map[string]string, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
 	}
 	if in.LogRateLimitPerSecond != nil {
 		in, out := &in.LogRateLimitPerSecond, &out.LogRateLimitPerSecond

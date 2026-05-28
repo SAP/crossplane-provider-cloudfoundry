@@ -140,16 +140,16 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		lateInitialized = true
 	}
 
-	// Preserve previously observed routes so they survive a transient
-	// failure from the Routes API.
+	// Preserve previously observed routes so they survive transient API failures.
 	prevRoutes := cr.Status.AtProvider.Routes
 
 	// Update the status of the resource
 	cr.Status.AtProvider = app.GenerateObservation(res)
 	appManifest, err := c.client.GenerateManifest(ctx, res.GUID)
-	if err == nil {
-		cr.Status.AtProvider.AppManifest = appManifest
+	if err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, errObserveResource)
 	}
+	cr.Status.AtProvider.AppManifest = appManifest
 
 	// Fetch routes for the application. On success, update the status with
 	// the fresh data; on error, restore the previously observed routes so
@@ -224,15 +224,18 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	if changes.HasField("docker_image") {
-		dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errSecret)
+		if err := c.updateDockerImage(ctx, guid, cr); err != nil {
+			return managed.ExternalUpdate{}, err
 		}
-		_, err = c.client.UpdateAndPush(ctx, guid, cr.Spec.ForProvider, dockerCredentials)
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
+	}
+
+	if changes.HasField("environment") {
+		if err := c.updateEnvVars(ctx, guid, cr, changes.HasField("docker_image")); err != nil {
+			return managed.ExternalUpdate{}, err
 		}
-	} else if changes.HasChanges() {
+	}
+
+	if changes.HasOtherChanges("docker_image", "environment") {
 		_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
@@ -240,6 +243,54 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	return managed.ExternalUpdate{}, nil
+}
+
+// updateDockerImage pushes a new docker image for the app.
+func (c *external) updateDockerImage(ctx context.Context, guid string, cr *v1alpha1.App) error {
+	dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
+	if err != nil {
+		return errors.Wrap(err, errSecret)
+	}
+	_, err = c.client.UpdateAndPush(ctx, guid, cr.Spec.ForProvider, dockerCredentials)
+	return errors.Wrap(err, errUpdateResource)
+}
+
+// updateEnvVars updates the environment variables of the app via the CF API directly.
+// It sets new/updated vars and sends nil for vars that exist in CF but were removed from spec.
+// If the app is currently STOPPED, the restart is skipped (env vars take effect on next start).
+// If dockerAlsoChanged is true, the restart is also skipped because the docker push already restarted the app.
+func (c *external) updateEnvVars(ctx context.Context, guid string, cr *v1alpha1.App, dockerAlsoChanged bool) error {
+	// Build desired env vars from spec
+	envVars := map[string]*string{}
+	for k, v := range cr.Spec.ForProvider.Environment {
+		v := v
+		envVars[k] = &v
+	}
+	// Get current CF env vars and send nil for any that are no longer in spec
+	currentVars, err := c.client.GetEnvironmentVariables(ctx, guid)
+	if err != nil {
+		return errors.Wrap(err, errUpdateResource)
+	}
+	for k := range currentVars {
+		if _, exists := envVars[k]; !exists {
+			envVars[k] = nil
+		}
+	}
+	_, err = c.client.SetEnvironmentVariables(ctx, guid, envVars)
+	if err != nil {
+		return errors.Wrap(err, errUpdateResource)
+	}
+	// Restart the app so the updated environment takes effect in the running process.
+	// Skip if the app is stopped (env vars take effect on next start) or if
+	// docker was also updated (the push already restarted the app).
+	if cr.Status.AtProvider.State == "STOPPED" || dockerAlsoChanged {
+		return nil
+	}
+	if _, err = c.client.Stop(ctx, guid); err != nil {
+		return errors.Wrap(err, errUpdateResource)
+	}
+	_, err = c.client.Start(ctx, guid)
+	return errors.Wrap(err, errUpdateResource)
 }
 
 // Delete managed resource
