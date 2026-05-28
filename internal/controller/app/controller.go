@@ -167,9 +167,11 @@ func (c *external) updateObservedStatus(ctx context.Context, cr *v1alpha1.App, r
 
 	// Update the status of the resource
 	cr.Status.AtProvider = app.GenerateObservation(res)
-	if appManifest, err := c.client.GenerateManifest(ctx, res.GUID); err == nil {
-		cr.Status.AtProvider.AppManifest = appManifest
+	appManifest, err := c.client.GenerateManifest(ctx, res.GUID)
+	if err != nil {
+		return false, errors.Wrap(err, errObserveResource)
 	}
+	cr.Status.AtProvider.AppManifest = appManifest
 
 	// Fetch routes for the application. On success, update the status with
 	// the fresh data; on error, restore the previously observed routes so
