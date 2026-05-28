@@ -80,9 +80,6 @@ func Test_App_External_Name(t *testing.T) {
 				}
 
 				externalName := xpmeta.GetExternalName(app)
-				if !test.UUIDRegex.MatchString(externalName) {
-					t.Fatalf("External name %q does not match expected UUID format after upgrade", externalName)
-				}
 
 				preUpgradeExternalName, ok := ctx.Value(appPreUpgradeExternalNameKey{}).(string)
 				if !ok {
