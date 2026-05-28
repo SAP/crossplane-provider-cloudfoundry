@@ -28,11 +28,9 @@ const (
 
 type ServiceInstanceParameters struct {
 	// (String) The name of the service instance
-	// +kubebuilder:validation:Required
 	Name *string `json:"name,omitempty" tf:"name,omitempty"`
 
 	// (String) Type of the service instance. Either managed or user-provided. Default is managed.
-	// +required
 	// +kubebuilder:default=managed
 	Type ServiceInstanceType `json:"type"`
 
@@ -57,6 +55,10 @@ type ServiceInstanceParameters struct {
 	// +kubebuilder:validation:Optional
 	// +mapType=granular
 	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
+
+	// (List of SpaceReference) List of references to Cloud Foundry spaces the service instance will be shared with.
+	// +kubebuilder:validation:Optional
+	SharedSpaces []SpaceReference `json:"sharedSpaces,omitempty"`
 }
 
 // Managed configuration for a managed service instance. Only used when `type` is `managed`.
@@ -67,6 +69,11 @@ type Managed struct {
 	ServicePlan *ServicePlanParameters `json:"servicePlan,omitempty"`
 
 	// (Attributes) Configuration parameters for the managed service instance, supplied as a K8S runtime.RawExtension object.
+	// 
+	// Default parameters applied by the BTP cockpit may differ from those
+	// applied via the CF API. It is recommended to explicitly specify all
+	// parameters to avoid unexpected behavior.
+    //
 	// The `parameters` field is NOT secret or secured in any way and should NEVER be used to hold sensitive information.
 	// To set parameters that contain secret information, you should ALWAYS store that information in a Secret and use the `paramsSecretRef` field.
 	// +kubebuilder:pruning:PreserveUnknownFields
@@ -78,7 +85,7 @@ type Managed struct {
 
 	// (Attributes) Same as `parameters`, supplied as a Secret reference. Ignored if `parameters` or `jsonParams` is set.
 	// +kubebuilder:validation:Optional
-	ParametersSecretRef *v1.SecretReference `json:"paramsSecretRef,omitempty" tf:"-"`
+	ParametersSecretRef *SecretKeySelector `json:"paramsSecretRef,omitempty" tf:"-"`
 
 	// (Attributes) Information about the version of this service instance; only shown when `type` is `managed`.
 	MaintenanceInfo MaintenanceInfo `json:"maintenanceInfo,omitempty"`
@@ -98,7 +105,7 @@ type UserProvided struct {
 
 	// (Attributes) Same as `credentials`, supplied as a Secret reference. Ignored if `credentials` or `jsonCredentials` is set.
 	// +kubebuilder:validation:Optional
-	CredentialsSecretRef *v1.SecretReference `json:"credentialsSecretRef,omitempty"`
+	CredentialsSecretRef *SecretKeySelector `json:"credentialsSecretRef,omitempty"`
 
 	// (String) URL to which requests for bound routes will be forwarded; only shown when `type` is `user-provided`.
 	// +kubebuilder:validation:Optional
@@ -107,6 +114,15 @@ type UserProvided struct {
 	// (String) URL to which logs for bound applications will be streamed; only shown when `type` is `user-provided`.
 	// +kubebuilder:validation:Optional
 	SyslogDrainURL string `json:"syslogDrainUrl,omitempty"`
+}
+
+// A SecretKeySelector is a reference to a secret key in an arbitrary namespace.
+type SecretKeySelector struct {
+	*v1.SecretReference `json:",inline"`
+
+	// The key to select.
+	// +kubebuilder:validation:Optional
+	Key string `json:"key,omitempty"`
 }
 
 type ServiceInstanceObservation struct {
@@ -230,12 +246,19 @@ type ServiceInstanceStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:storageversion
 
-// ServiceInstance is the Schema for the ServiceInstances API. Creates a service instance in a Cloud Foundry space. Further documentation: https://docs.cloudfoundry.org/devguide/services
+// ServiceInstance is the Schema for the ServiceInstances API. Provides a Cloud Foundry resource for managing service instances.
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.name)",message="name is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.type)",message="type is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || !(has(self.spec.forProvider.type) && self.spec.forProvider.type == 'managed') || has(self.spec.forProvider.servicePlan)",message="servicePlan is required when type is managed"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || !(has(self.spec.forProvider.type) && self.spec.forProvider.type == 'managed') || !has(self.spec.forProvider.servicePlan) || has(self.spec.forProvider.servicePlan.id) || (has(self.spec.forProvider.servicePlan.offering) && has(self.spec.forProvider.servicePlan.plan))",message="either id or offering and plan must be set on servicePlan"
+// +kubebuilder:validation:XValidation:rule="!(has(self.spec.forProvider.type) && self.spec.forProvider.type == 'user-provided') || [has(self.spec.forProvider.credentials), has(self.spec.forProvider.jsonCredentials), has(self.spec.forProvider.credentialsSecretRef)].filter(x, x).size() <= 1",message="CredentialsReference validation: only one of credentials, jsonCredentials, or credentialsSecretRef can be set"
+// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.parameters), has(self.spec.forProvider.jsonParams), has(self.spec.forProvider.paramsSecretRef )].filter(x, x).size() <= 1",message="ParamsReference validation: only one of parameters, jsonParams, or paramsSecretRef  can be set"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName) || has(self.spec.forProvider.spaceRef) || has(self.spec.forProvider.spaceSelector))",message="SpaceReference is required: exactly one of spaceName, spaceRef, or spaceSelector must be set"
 type ServiceInstance struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -270,6 +293,14 @@ func (r *ServiceInstance) GetCloudFoundryName() string {
 		return ""
 	}
 	return *r.Spec.ForProvider.Name
+}
+
+// GetID implements Referenceable interface (used by resources.ExternalID extractor)
+func (r *ServiceInstance) GetID() string {
+	if r.Status.AtProvider.ID == nil {
+		return ""
+	}
+	return *r.Status.AtProvider.ID
 }
 
 // GetSpaceRef returns the reference to the space

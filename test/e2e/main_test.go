@@ -8,10 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crossplane-contrib/xp-testing/pkg/images"
 	"github.com/crossplane-contrib/xp-testing/pkg/logging"
 	"github.com/crossplane-contrib/xp-testing/pkg/setup"
-	"github.com/crossplane-contrib/xp-testing/pkg/vendored"
 	"k8s.io/klog"
 
 	"sigs.k8s.io/e2e-framework/klient/decoder"
@@ -30,8 +28,6 @@ func TestMain(m *testing.M) {
 
 	namespace := envconf.RandomName("test-ns", 16)
 
-	img := images.GetImagesFromEnvironmentOrPanic(UUT_CONFIG_KEY, &UUT_CONTROLLER_KEY)
-
 	secretData := getProviderConfigSecretData()
 	secretName := "cf-provider-secret"
 
@@ -42,14 +38,8 @@ func TestMain(m *testing.M) {
 	// Enhance interface for one- based providers
 	clusterSetup := setup.ClusterSetup{
 		ProviderName:       "provider-cloudfoundry",
-		Images:             img,
 		ProviderCredential: &clusterCredentials,
 		CrossplaneSetup:    setup.CrossplaneSetup{Version: "1.16.0"},
-		ControllerConfig: &vendored.ControllerConfig{
-			Spec: vendored.ControllerConfigSpec{
-				Image: img.ControllerImage,
-			},
-		},
 	}
 
 	_ = clusterSetup.Configure(testenv, &kind.Cluster{})

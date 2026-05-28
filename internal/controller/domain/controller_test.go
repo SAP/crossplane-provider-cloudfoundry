@@ -29,7 +29,7 @@ type modifier func(*v1alpha1.Domain)
 
 func withExternalName(name string) modifier {
 	return func(r *v1alpha1.Domain) {
-		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
+		r.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
@@ -423,7 +423,7 @@ func TestDelete(t *testing.T) {
 				client: tc.service(),
 			}
 
-			err := c.Delete(context.Background(), tc.args.mg)
+			_, err := c.Delete(context.Background(), tc.args.mg)
 
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.

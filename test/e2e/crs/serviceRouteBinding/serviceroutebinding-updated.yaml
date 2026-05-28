@@ -1,0 +1,21 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceRouteBinding
+metadata:
+  name: e2e-serviceroutebinding-binding
+  namespace: service-test
+spec:
+  forProvider:
+    routeRef:
+      name: e2e-serviceroutebinding-route
+      policy:
+        resolve: Always
+    serviceInstanceRef:
+      name: e2e-serviceroutebinding-serviceinstance
+      policy:
+        resolve: Always
+    labels:
+      environment: production
+      managed-by: crossplane
+    annotations:
+      description: Updated metadata for testing updates
+      contact: team@example.com

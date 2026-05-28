@@ -4,6 +4,7 @@ package app
 
 import (
 	"context"
+	"reflect"
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -28,6 +29,8 @@ type AppClient interface {
 	Start(ctx context.Context, guid string) (*resource.App, error)
 	Stop(ctx context.Context, guid string) (*resource.App, error)
 	// Restart(ctx context.Context, guid string) (*resource.App, error)
+	GetEnvironmentVariables(ctx context.Context, guid string) (map[string]*string, error)
+	SetEnvironmentVariables(ctx context.Context, guid string, envVars map[string]*string) (map[string]*string, error)
 }
 
 // ManifestClient defines the interface to communicate with Cloud Foundry Manifest resource.
@@ -37,11 +40,17 @@ type ManifestClient interface {
 	ManifestDiff(ctx context.Context, spaceGUID string, manifest string) (*resource.ManifestDiff, error)
 }
 
+// RouteFetcher defines the interface to fetch routes for an application.
+type RouteFetcher interface {
+	ListForAppAll(ctx context.Context, appGUID string, opts *client.RouteListOptions) ([]*resource.Route, error)
+}
+
 type Client struct {
 	AppClient
 	PushClient
 	job.Job
 	servicecredentialbinding.ServiceCredentialBinding
+	RouteFetcher
 }
 
 // NewAppClient returns a new AppClient.
@@ -51,6 +60,7 @@ func NewAppClient(client *client.Client) *Client {
 		PushClient:               NewPushClient(client),
 		Job:                      client.Jobs,
 		ServiceCredentialBinding: servicecredentialbinding.NewClient(client),
+		RouteFetcher:             client.Routes,
 	}
 }
 
@@ -77,7 +87,7 @@ func (c *Client) CreateAndPush(ctx context.Context, spec v1alpha1.AppParameters,
 	if err != nil {
 		return nil, err
 	}
-	return c.PushClient.Push(ctx, application, manifest, nil)
+	return c.Push(ctx, application, manifest, nil)
 }
 
 // Update updates an app in the Cloud Foundry.
@@ -87,6 +97,20 @@ func (c *Client) Update(ctx context.Context, guid string, spec v1alpha1.AppParam
 		return nil, err
 	}
 	return application, nil
+}
+
+// UpdateAndPush updates and pushes an app to the Cloud Foundry.
+func (c *Client) UpdateAndPush(ctx context.Context, guid string, spec v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*resource.App, error) {
+	manifest, err := newManifestFromSpec(spec, dockerCredentials)
+	if err != nil {
+		return nil, err
+	}
+
+	application, err := c.AppClient.Update(ctx, guid, newUpdateOption(spec))
+	if err != nil {
+		return nil, err
+	}
+	return c.Push(ctx, application, manifest, nil)
 }
 
 // Delete deletes an app in the Cloud Foundry.
@@ -123,12 +147,116 @@ func GenerateObservation(res *resource.App) v1alpha1.AppObservation {
 	return obs
 }
 
-// IsUpToDate checks whether current state is up-to-date compared to the given
-// set of parameters.
-func IsUpToDate(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) bool {
-	// rename or update ssh setting
-	return spec.Name == status.Name
+// FetchRoutes fetches all routes mapped to the given application and converts
+// them to AppRouteObservation values. Errors from the CF API are returned
+// non-nil so the caller can decide whether to make them fatal.
+// If no RouteFetcher is configured, FetchRoutes returns an empty slice.
+func (c *Client) FetchRoutes(ctx context.Context, appGUID string) ([]v1alpha1.AppRouteObservation, error) {
+	if c.RouteFetcher == nil {
+		return nil, nil
+	}
+	routes, err := c.ListForAppAll(ctx, appGUID, nil)
+	if err != nil {
+		return nil, err
+	}
 
+	obs := make([]v1alpha1.AppRouteObservation, 0, len(routes))
+	for _, r := range routes {
+		obs = append(obs, v1alpha1.AppRouteObservation{
+			URL:      r.URL,
+			Host:     r.Host,
+			Path:     r.Path,
+			Protocol: r.Protocol,
+			Port:     r.Port,
+		})
+	}
+	return obs, nil
+}
+
+// ChangeDetection represents what fields have changed
+type ChangeDetection struct {
+	ChangedFields map[string]struct{}
+}
+
+func (cd *ChangeDetection) HasChanges() bool {
+	return len(cd.ChangedFields) > 0
+}
+
+// HasField checks if a specific field changed
+func (cd *ChangeDetection) HasField(field string) bool {
+	_, ok := cd.ChangedFields[field]
+	return ok
+}
+
+// HasOtherChanges returns true if there are changed fields other than the excluded ones.
+func (cd *ChangeDetection) HasOtherChanges(excluded ...string) bool {
+	excludeSet := make(map[string]struct{}, len(excluded))
+	for _, f := range excluded {
+		excludeSet[f] = struct{}{}
+	}
+	for f := range cd.ChangedFields {
+		if _, skip := excludeSet[f]; !skip {
+			return true
+		}
+	}
+	return false
+}
+
+// envVarsChanged returns true if the spec environment variables differ from the current manifest.
+func envVarsChanged(spec v1alpha1.AppParameters, appManifest *operation.AppManifest) bool {
+	specEnv := spec.Environment
+	if specEnv == nil {
+		specEnv = map[string]string{}
+	}
+	currentEnv := appManifest.Env
+	if currentEnv == nil {
+		currentEnv = map[string]string{}
+	}
+	return !reflect.DeepEqual(specEnv, currentEnv)
+}
+
+// DetectChanges determines what fields have changed between spec and status
+func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (*ChangeDetection, error) {
+	changes := &ChangeDetection{
+		ChangedFields: make(map[string]struct{}),
+	}
+
+	// Parse manifest once for all checks (treat missing manifest as empty)
+	appManifest := &operation.AppManifest{}
+	if status.AppManifest != "" {
+		m, err := getAppManifest(status.Name, status.AppManifest)
+		if err != nil {
+			return nil, err
+		}
+		appManifest = m
+	}
+
+	// Check if Docker image changed
+	if spec.Lifecycle == "docker" && spec.Docker != nil {
+		if appManifest.Docker == nil || spec.Docker.Image != appManifest.Docker.Image {
+			changes.ChangedFields["docker_image"] = struct{}{}
+		}
+	}
+
+	// Check if environment variables changed
+	if envVarsChanged(spec, appManifest) {
+		changes.ChangedFields["environment"] = struct{}{}
+	}
+
+	// Check if name changed
+	if spec.Name != status.Name {
+		changes.ChangedFields["name"] = struct{}{}
+	}
+
+	return changes, nil
+}
+
+func IsUpToDate(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (bool, error) {
+	changes, err := DetectChanges(spec, status)
+	if err != nil {
+		return false, err
+	}
+	return !changes.HasChanges(), nil
 }
 
 // DiffServiceBindings checks whether current state is up-to-date compared to the given

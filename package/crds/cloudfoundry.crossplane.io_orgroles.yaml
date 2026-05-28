@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.16.0
   name: orgroles.cloudfoundry.crossplane.io
 spec:
   group: cloudfoundry.crossplane.io
@@ -34,9 +34,15 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: OrgRole is the Schema for the OrgRoles API. Provides a Cloud
-          Foundry resource for assigning org roles.(Updating a role is not supported
-          according to the docs)
+        description: |-
+          OrgRole is the Schema for the OrgRoles API. Provides a Cloud Foundry resource for assigning org roles.(Updating a role is not supported according to the docs)
+
+          External-Name Configuration:
+            - Follows Standard: yes
+            - Format: Org Role GUID (UUID format)
+            - How to find:
+            - UI: Not available in the BTP Cockpit
+            - CLI: Use CF CLI: `cf org-users <ORG> -v` and find the GUID in the output
         properties:
           apiVersion:
             description: |-
@@ -432,6 +438,15 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: type is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.type)
+        - message: username is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.username)
+        - message: 'OrgReference is required: exactly one of orgName, orgRef, or orgSelector
+            must be set'
+          rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.orgName)
+            || has(self.spec.forProvider.orgRef) || has(self.spec.forProvider.orgSelector))
     served: true
     storage: true
     subresources:

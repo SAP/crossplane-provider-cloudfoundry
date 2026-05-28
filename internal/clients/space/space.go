@@ -9,7 +9,6 @@ import (
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/org"
 )
 
@@ -30,16 +29,16 @@ type Feature interface {
 
 // NewClient creates a new cf client and return interfaces for Space and SpaceFeatures
 func NewClient(cf *client.Client) (Space, Feature, org.Client) {
-
 	return cf.Spaces, cf.SpaceFeatures, cf.Organizations
 }
 
-// GetByIDOrSpec retrieves a Space by its GUID or by its specification.
-func GetByIDOrSpec(ctx context.Context, spaceClient Space, guid string, spec v1alpha1.SpaceParameters) (*resource.Space, error) {
-	if clients.IsValidGUID(guid) {
-		return spaceClient.Get(ctx, guid)
-	}
+// GetByID retrieves a Space by its GUID
+func GetByID(ctx context.Context, spaceClient Space, guid string) (*resource.Space, error) {
+	return spaceClient.Get(ctx, guid)
+}
 
+// GetBySpec retrieves a Space by its GUID
+func GetBySpec(ctx context.Context, spaceClient Space, spec v1alpha1.SpaceParameters) (*resource.Space, error) {
 	return spaceClient.Single(ctx, GenerateListOption(spec))
 }
 

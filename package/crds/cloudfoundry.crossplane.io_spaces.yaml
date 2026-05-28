@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.16.0
   name: spaces.cloudfoundry.crossplane.io
 spec:
   group: cloudfoundry.crossplane.io
@@ -34,8 +34,15 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Space is the Schema for the Spaces API. Provides a Cloud Foundry
-          resource for managing Cloud Foundry spaces within organizations.
+        description: |-
+          Space is the Schema for the Spaces API. Provides a Cloud Foundry resource for managing Cloud Foundry spaces within organizations.
+
+          External-Name Configuration:
+            - Follows Standard: yes
+            - Format: Space GUID (UUID format)
+            - How to find:
+            - UI: Global Account → Account Explorer → Subaccounts → Select Subaccount → Spaces → Select Space → View URL: `https://<cockpit_url>/cockpit#/globalaccount/<global_account_id>/subaccount/<subaccount_id>/org/<org_id>/space/<SPACE_ID>/applications`
+            - CLI: Use CF CLI: `cf space <SPACE> --guid`
         properties:
           apiVersion:
             description: |-
@@ -459,6 +466,13 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: name is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.name)
+        - message: 'OrgReference is required: exactly one of orgName, orgRef, or orgSelector
+            must be set'
+          rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.orgName)
+            || has(self.spec.forProvider.orgRef) || has(self.spec.forProvider.orgSelector))
     served: true
     storage: true
     subresources:

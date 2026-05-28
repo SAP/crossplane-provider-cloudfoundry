@@ -2,6 +2,7 @@ package spacequota
 
 import (
 	"context"
+	"fmt"
 	"slices"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
@@ -39,6 +40,7 @@ const (
 	errUpdate            = "cannot update cloudfoundry SpaceQuota"
 	errUpdateOrg         = "cannot update org of cloudfoundry SpaceQuota"
 	errDelete            = "cannot delete cloudfoundry SpaceQuota"
+	errExternalName      = "external-name annotation is not set"
 )
 
 // Setup adds a controller that reconciles space quota managed resources.
@@ -258,6 +260,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	return &external{client: spacequota.NewClient(cf), kube: c.kube, isUpToDate: isUpToDate}, nil
 }
 
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
 // An ExternalClient observes, then either creates, updates, or
 // deletes an external resource to ensure it reflects the managed
 // resource's desired state.
@@ -276,11 +284,17 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errUnexpectedObject)
 	}
 
-	if meta.GetExternalName(cr) == "" {
+	guid := meta.GetExternalName(cr)
+
+	if guid == "" {
 		return managed.ExternalObservation{}, nil
 	}
 
-	resp, err := e.client.Get(ctx, meta.GetExternalName(cr))
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.New(fmt.Sprintf("external-name '%s' is not a valid GUID format", guid))
+	}
+
+	resp, err := e.client.Get(ctx, guid)
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
@@ -335,25 +349,27 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errUnexpectedObject)
 	}
 
-	if cr.Status.AtProvider.ID == nil {
-		return managed.ExternalUpdate{}, errors.New(errUpdate)
+	guid := meta.GetExternalName(cr)
+
+	if guid == "" {
+		return managed.ExternalUpdate{}, errors.New(errUpdate + ": " + errExternalName)
 	}
 
-	resp, err := c.client.Update(ctx, *cr.Status.AtProvider.ID, GenerateUpdateSpaceQuota(cr))
+	resp, err := c.client.Update(ctx, guid, GenerateUpdateSpaceQuota(cr))
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 
 	sStatus := getSpaceStatus(cr)
 	if toCreate := sStatus.toCreate(); len(toCreate) > 0 {
-		_, err := c.client.Apply(ctx, *cr.Status.AtProvider.ID, toCreate)
+		_, err := c.client.Apply(ctx, guid, toCreate)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 		}
 	}
 	if toDelete := sStatus.toDelete(); len(toDelete) > 0 {
 		for i := range toDelete {
-			err := c.client.Remove(ctx, *cr.Status.AtProvider.ID, toDelete[i])
+			err := c.client.Remove(ctx, guid, toDelete[i])
 			if err != nil {
 				return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 			}
@@ -364,28 +380,33 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Delete deletes a space quota
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.SpaceQuota)
 	if !ok {
-		return errors.New(errUnexpectedObject)
+		return managed.ExternalDelete{}, errors.New(errUnexpectedObject)
 	}
 	cr.SetConditions(xpv1.Deleting())
 
-	// assert that ID is set
-	if cr.Status.AtProvider.ID == nil {
-		return errors.New(errDelete)
+	guid := meta.GetExternalName(cr)
+
+	// assert that external name is set
+	if guid == "" {
+		return managed.ExternalDelete{}, errors.New(errDelete + ": " + errExternalName)
 	}
 
 	for i := range cr.Status.AtProvider.Spaces {
-		err := c.client.Remove(ctx, *cr.Status.AtProvider.ID, *cr.Status.AtProvider.Spaces[i])
+		err := c.client.Remove(ctx, guid, *cr.Status.AtProvider.Spaces[i])
 		if err != nil {
-			return errors.Wrap(err, errDelete)
+			return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 		}
 	}
-	_, err := c.client.Delete(ctx, *cr.Status.AtProvider.ID)
+	_, err := c.client.Delete(ctx, guid)
 	if err != nil {
-		return errors.Wrap(err, errDelete)
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 
-	return nil
+	return managed.ExternalDelete{}, nil
 }

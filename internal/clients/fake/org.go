@@ -31,6 +31,12 @@ func (m *MockOrganization) Create(ctx context.Context, opt *resource.Organizatio
 	return args.Get(0).(*resource.Organization), args.Error(1)
 }
 
+// Delete mocks Organization.Delete
+func (m *MockOrganization) Delete(ctx context.Context, guid string) (string, error) {
+	args := m.Called()
+	return args.String(0), args.Error(1)
+}
+
 // Organization is a nil Organization
 var (
 	OrganizationNil *resource.Organization

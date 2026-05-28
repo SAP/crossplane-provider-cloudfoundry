@@ -1,0 +1,16 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: e2e-serviceroutebinding-serviceinstance
+  namespace: service-test
+spec:
+  providerConfigRef:
+    name: default
+  forProvider:
+    type: user-provided
+    name: e2e-serviceroutebinding-serviceinstance
+    spaceRef:
+      name: e2e-serviceroutebinding-space
+      policy:
+        resolve: Always
+    routeServiceUrl: https://example-route-service.local/forward

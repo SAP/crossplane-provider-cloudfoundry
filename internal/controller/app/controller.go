@@ -4,14 +4,6 @@ import (
 	"bytes"
 	"context"
 
-	"github.com/google/uuid"
-	"github.com/pkg/errors"
-
-	ctrl "sigs.k8s.io/controller-runtime"
-	k8s "sigs.k8s.io/controller-runtime/pkg/client"
-
-	"github.com/docker/cli/cli/config/configfile"
-
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -20,6 +12,12 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/docker/cli/cli/config/configfile"
+	"github.com/google/uuid"
+	"github.com/pkg/errors"
+	"k8s.io/klog/v2"
+	ctrl "sigs.k8s.io/controller-runtime"
+	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	scv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
@@ -57,6 +55,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 				usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
 			}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
+		managed.WithPollInterval(o.PollInterval),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
 		managed.WithInitializers(&spaceInitializer{
@@ -141,11 +140,25 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		lateInitialized = true
 	}
 
+	// Preserve previously observed routes so they survive transient API failures.
+	prevRoutes := cr.Status.AtProvider.Routes
+
 	// Update the status of the resource
 	cr.Status.AtProvider = app.GenerateObservation(res)
 	appManifest, err := c.client.GenerateManifest(ctx, res.GUID)
-	if err == nil {
-		cr.Status.AtProvider.AppManifest = appManifest
+	if err != nil {
+		return managed.ExternalObservation{}, errors.Wrap(err, errObserveResource)
+	}
+	cr.Status.AtProvider.AppManifest = appManifest
+
+	// Fetch routes for the application. On success, update the status with
+	// the fresh data; on error, restore the previously observed routes so
+	// that a transient CF API failure does not erase known route information.
+	if routes, err := c.client.FetchRoutes(ctx, res.GUID); err == nil {
+		cr.Status.AtProvider.Routes = routes
+	} else {
+		cr.Status.AtProvider.Routes = prevRoutes
+		klog.Warningf("failed to fetch routes for app %q, preserving previous observations: %v", res.GUID, err)
 	}
 
 	// Set condition according to app State
@@ -158,9 +171,14 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		cr.SetConditions(xpv1.Unavailable())
 	}
 
+	isUpToDate, err := app.IsUpToDate(cr.Spec.ForProvider, cr.Status.AtProvider)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
+
 	return managed.ExternalObservation{
 		ResourceExists:          true,
-		ResourceUpToDate:        app.IsUpToDate(cr.Spec.ForProvider, cr.Status.AtProvider),
+		ResourceUpToDate:        isUpToDate,
 		ResourceLateInitialized: lateInitialized,
 	}, nil
 }
@@ -189,7 +207,6 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Update managed resource
-// Only rename is supported for now
 func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.ExternalUpdate, error) {
 	cr, ok := mg.(*v1alpha1.App)
 	if !ok {
@@ -201,32 +218,105 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errUpdateResource + ": No valid GUID found for the App")
 	}
 
-	_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider)
+	changes, err := app.DetectChanges(cr.Spec.ForProvider, cr.Status.AtProvider)
 	if err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
+		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource+": Failed to detect changes")
+	}
+
+	if changes.HasField("docker_image") {
+		if err := c.updateDockerImage(ctx, guid, cr); err != nil {
+			return managed.ExternalUpdate{}, err
+		}
+	}
+
+	if changes.HasField("environment") {
+		if err := c.updateEnvVars(ctx, guid, cr, changes.HasField("docker_image")); err != nil {
+			return managed.ExternalUpdate{}, err
+		}
+	}
+
+	if changes.HasOtherChanges("docker_image", "environment") {
+		_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider)
+		if err != nil {
+			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
+		}
 	}
 
 	return managed.ExternalUpdate{}, nil
 }
 
+// updateDockerImage pushes a new docker image for the app.
+func (c *external) updateDockerImage(ctx context.Context, guid string, cr *v1alpha1.App) error {
+	dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
+	if err != nil {
+		return errors.Wrap(err, errSecret)
+	}
+	_, err = c.client.UpdateAndPush(ctx, guid, cr.Spec.ForProvider, dockerCredentials)
+	return errors.Wrap(err, errUpdateResource)
+}
+
+// updateEnvVars updates the environment variables of the app via the CF API directly.
+// It sets new/updated vars and sends nil for vars that exist in CF but were removed from spec.
+// If the app is currently STOPPED, the restart is skipped (env vars take effect on next start).
+// If dockerAlsoChanged is true, the restart is also skipped because the docker push already restarted the app.
+func (c *external) updateEnvVars(ctx context.Context, guid string, cr *v1alpha1.App, dockerAlsoChanged bool) error {
+	// Build desired env vars from spec
+	envVars := map[string]*string{}
+	for k, v := range cr.Spec.ForProvider.Environment {
+		v := v
+		envVars[k] = &v
+	}
+	// Get current CF env vars and send nil for any that are no longer in spec
+	currentVars, err := c.client.GetEnvironmentVariables(ctx, guid)
+	if err != nil {
+		return errors.Wrap(err, errUpdateResource)
+	}
+	for k := range currentVars {
+		if _, exists := envVars[k]; !exists {
+			envVars[k] = nil
+		}
+	}
+	_, err = c.client.SetEnvironmentVariables(ctx, guid, envVars)
+	if err != nil {
+		return errors.Wrap(err, errUpdateResource)
+	}
+	// Restart the app so the updated environment takes effect in the running process.
+	// Skip if the app is stopped (env vars take effect on next start) or if
+	// docker was also updated (the push already restarted the app).
+	if cr.Status.AtProvider.State == "STOPPED" || dockerAlsoChanged {
+		return nil
+	}
+	if _, err = c.client.Stop(ctx, guid); err != nil {
+		return errors.Wrap(err, errUpdateResource)
+	}
+	_, err = c.client.Start(ctx, guid)
+	return errors.Wrap(err, errUpdateResource)
+}
+
 // Delete managed resource
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.App)
 	if !ok {
-		return errors.New(errWrongKind)
+		return managed.ExternalDelete{}, errors.New(errWrongKind)
 	}
 
 	guid := meta.GetExternalName(cr)
 	if _, err := uuid.Parse(guid); err != nil {
-		return errors.New(errDeleteResource + ": No valid GUID found for the App")
+		return managed.ExternalDelete{}, errors.New(errDeleteResource + ": No valid GUID found for the App")
 	}
 
 	cr.SetConditions(xpv1.Deleting())
 	err := c.client.Delete(ctx, guid)
 	if err != nil {
-		return errors.Wrap(err, errDeleteResource)
+		return managed.ExternalDelete{}, errors.Wrap(err, errDeleteResource)
 	}
 
+	return managed.ExternalDelete{}, nil
+}
+
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
 	return nil
 }
 

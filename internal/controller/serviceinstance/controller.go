@@ -1,16 +1,10 @@
 package serviceinstance
 
 import (
+	"bytes"
 	"context"
-	"encoding/json"
+	"crypto/sha256"
 	"time"
-
-	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/nsf/jsondiff"
-	"github.com/pkg/errors"
-
-	ctrl "sigs.k8s.io/controller-runtime"
-	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
@@ -20,6 +14,11 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/google/uuid"
+	"github.com/nsf/jsondiff"
+	"github.com/pkg/errors"
+	ctrl "sigs.k8s.io/controller-runtime"
+	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
@@ -31,19 +30,22 @@ import (
 )
 
 const (
-	resourceType     = "ServiceInstance"
-	externalSystem   = "Cloud Foundry"
-	errTrackPCUsage  = "cannot track ProviderConfig usage"
-	errNewClient     = "cannot create a client for " + externalSystem
-	errWrongCRType   = "managed resource is not a " + resourceType
-	errUpdateCR      = "cannot update the managed resource"
-	errGet           = "cannot get " + resourceType + " in " + externalSystem
-	errCreate        = "cannot create " + resourceType + " in " + externalSystem
-	errUpdate        = "cannot update " + resourceType + " in " + externalSystem
-	errDelete        = "cannot delete " + resourceType + " in " + externalSystem
-	errCleanFailed   = "cannot delete failed service instance"
-	errSecret        = "cannot resolve secret reference"
-	errGetParameters = "cannot get parameters of the service instance for drift detection. Please check this is supported or set enableParameterDriftDetection to false."
+	resourceType          = "ServiceInstance"
+	externalSystem        = "Cloud Foundry"
+	errTrackPCUsage       = "cannot track ProviderConfig usage"
+	errNewClient          = "cannot create a client for " + externalSystem
+	errWrongCRType        = "managed resource is not a " + resourceType
+	errUpdateCR           = "cannot update the managed resource"
+	errGet                = "cannot get " + resourceType + " in " + externalSystem
+	errCreate             = "cannot create " + resourceType + " in " + externalSystem
+	errUpdate             = "cannot update " + resourceType + " in " + externalSystem
+	errDelete             = "cannot delete " + resourceType + " in " + externalSystem
+	errCleanFailed        = "cannot delete failed service instance"
+	errSecret             = "cannot resolve secret reference"
+	errGetParameters      = "cannot get parameters of the service instance for drift detection. Please check this is supported or set enableParameterDriftDetection to false."
+	errMissingServicePlan = "managed resource service instance requires a service plan"
+	errCheckSharedSpaces  = "cannot check shared spaces"
+	errUpdateSharedSpaces = "cannot update shared spaces"
 )
 
 // Setup adds a controller that reconciles ServiceInstance CR.
@@ -118,6 +120,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	}, nil
 }
 
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
 // An external service observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
@@ -134,8 +142,9 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	// Check if the external resource exists
 	guid := meta.GetExternalName(cr)
-	r, err := serviceinstance.GetByIDOrSpec(ctx, c.serviceinstance, guid, cr.Spec.ForProvider)
 
+	// Normal (non‑deletion) observe path.
+	r, err := serviceinstance.GetByIDOrSpec(ctx, c.serviceinstance, guid, cr.Spec.ForProvider)
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
@@ -156,6 +165,13 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	// Update atProvider from the retrieved the service instance
 	serviceinstance.UpdateObservation(&cr.Status.AtProvider, r)
 
+	// If the CR is marked for deletion we stop normal observe logic.
+	// We report "resource exists" so Crossplane will call Delete() next.
+	// (Delete() will handle a "not found" case safely, so we don't check again here.)
+	if meta.WasDeleted(mg) {
+		return managed.ExternalObservation{ResourceExists: true}, nil
+	}
+
 	switch r.LastOperation.State {
 	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
 		// Set the CR to unavailable and signal that the reconciler should not update the resource
@@ -172,9 +188,15 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 			ResourceExists:   r.LastOperation.Type != v1alpha1.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
 			ResourceUpToDate: r.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
 		}, nil
-	case v1alpha1.LastOperationSucceeded:
+	case v1alpha1.LastOperationSucceeded, "":
 		// If the last operation succeeded, set the CR to available
+		// Empty state is treated as succeeded (happens with user-provided services that have no async operations)
 		cr.SetConditions(xpv1.Available())
+		var credentialsUpToDate bool
+		desiredCredentials, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, errSecret)
+		}
 		// If parameter drift detection is enable, get actual credentials from the service instance
 		if cr.Spec.EnableParameterDriftDetection {
 			// Get the parameters of the service instance for drift detection
@@ -182,14 +204,21 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 			if err != nil {
 				return managed.ExternalObservation{ResourceExists: true}, errors.Wrap(err, errGetParameters)
 			}
-			cr.Status.AtProvider.Credentials = cred
+			cr.Status.AtProvider.Credentials = iSha256(cred)
+			credentialsUpToDate = jsonContain(cred, desiredCredentials)
+		} else {
+			desiredHash := iSha256(desiredCredentials)
+			credentialsUpToDate = bytes.Equal(desiredHash, cr.Status.AtProvider.Credentials)
 		}
 		// Check if the credentials in the spec match the credentials in the external resource
-		desiredCredentials, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
+		upToDate := credentialsUpToDate && serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r)
+
+		// Check if shared spaces are up to date
+		sharedSpacesUpToDate, err := c.serviceinstance.AreSharedSpacesUpToDate(ctx, r.GUID, cr.Spec.ForProvider.SharedSpaces)
 		if err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, errSecret)
+			return managed.ExternalObservation{ResourceExists: true}, errors.Wrap(err, errCheckSharedSpaces)
 		}
-		upToDate := serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r) && jsonContain(cr.Status.AtProvider.Credentials, desiredCredentials)
+		upToDate = upToDate && sharedSpacesUpToDate
 
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
 	default:
@@ -208,7 +237,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	// If the last operation is create and it failed, clean up the failed service instance before retry create
-	if cr.Status.AtProvider.LastOperation.Type == v1alpha1.LastOperationCreate && cr.Status.AtProvider.LastOperation.State == v1alpha1.LastOperationFailed {
+	if cr.Status.AtProvider.Type == v1alpha1.LastOperationCreate && cr.Status.AtProvider.State == v1alpha1.LastOperationFailed {
 		err := c.serviceinstance.Delete(ctx, cr)
 		if err != nil {
 			return managed.ExternalCreation{}, errors.Wrap(err, errCleanFailed)
@@ -228,21 +257,35 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
 
-	// Set the external name of the CR
-	meta.SetExternalName(cr, r.GUID)
-
-	// Update the CR before updating the status so that the status update is not lost.
-	if err = c.kube.Update(ctx, cr); err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, errUpdateCR)
-	}
-
-	// Save credentials in the status of the CR
-	cr.Status.AtProvider.Credentials = creds
-	if err = c.kube.Status().Update(ctx, cr); err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, errUpdateCR)
+	if err := c.postCreate(ctx, cr, r.GUID, creds); err != nil {
+		return managed.ExternalCreation{}, err
 	}
 
 	return managed.ExternalCreation{}, nil
+}
+
+// postCreate sets the external name, persists the CR and status, and reconciles shared spaces after a successful creation.
+func (c *external) postCreate(ctx context.Context, cr *v1alpha1.ServiceInstance, guid string, creds []byte) error {
+	meta.SetExternalName(cr, guid)
+
+	// Update the CR before updating the status so that the status update is not lost.
+	if err := c.kube.Update(ctx, cr); err != nil {
+		return errors.Wrap(err, errUpdateCR)
+	}
+
+	// Save hash value of credentials in the status of the CR
+	cr.Status.AtProvider.Credentials = iSha256(creds)
+	if err := c.kube.Status().Update(ctx, cr); err != nil {
+		return errors.Wrap(err, errUpdateCR)
+	}
+
+	if len(cr.Spec.ForProvider.SharedSpaces) > 0 {
+		if err := c.serviceinstance.UpdateSharedSpaces(ctx, guid, cr.Spec.ForProvider.SharedSpaces); err != nil {
+			return errors.Wrap(err, errUpdateSharedSpaces)
+		}
+	}
+
+	return nil
 }
 
 // Update attempts to update the external resource to reflect the managed resource's desired state.
@@ -265,33 +308,33 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 
-	if err := c.kube.Update(ctx, cr); err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateCR)
-	}
-
-	// Save credentials in the status of the CR
 	if creds != nil {
-		cr.Status.AtProvider.Credentials = creds
+		cr.Status.AtProvider.Credentials = iSha256(creds)
 		if err := c.kube.Status().Update(ctx, cr); err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateCR)
 		}
+	}
+
+	// Update shared spaces after successful update
+	if err := c.serviceinstance.UpdateSharedSpaces(ctx, *cr.Status.AtProvider.ID, cr.Spec.ForProvider.SharedSpaces); err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateSharedSpaces)
 	}
 
 	return managed.ExternalUpdate{}, nil
 }
 
 // Delete attempts to delete the external resource.
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
-		return errors.New(errWrongCRType)
+		return managed.ExternalDelete{}, errors.New(errWrongCRType)
 	}
 	cr.SetConditions(xpv1.Deleting())
 
 	if err := c.serviceinstance.Delete(ctx, cr); err != nil {
-		return errors.New(errDelete)
+		return managed.ExternalDelete{}, errors.New(errDelete)
 	}
-	return nil
+	return managed.ExternalDelete{}, nil
 }
 
 // extractCredentialSpec returns the parameters or credentials from the spec
@@ -305,7 +348,9 @@ func extractCredentialSpec(ctx context.Context, kube k8s.Client, spec v1alpha1.S
 			return []byte(*spec.JSONParams), nil
 		}
 
-		return clients.ExtractSecret(ctx, kube, spec.ParametersSecretRef, "")
+		if spec.ParametersSecretRef != nil {
+			return clients.ExtractSecret(ctx, kube, spec.ParametersSecretRef.SecretReference, spec.ParametersSecretRef.Key)
+		}
 	}
 
 	if spec.Type == v1alpha1.UserProvidedService {
@@ -316,7 +361,9 @@ func extractCredentialSpec(ctx context.Context, kube k8s.Client, spec v1alpha1.S
 		if spec.JSONCredentials != nil {
 			return []byte(*spec.JSONCredentials), nil
 		}
-		return clients.ExtractSecret(ctx, kube, spec.CredentialsSecretRef, "")
+		if spec.CredentialsSecretRef != nil {
+			return clients.ExtractSecret(ctx, kube, spec.CredentialsSecretRef.SecretReference, spec.CredentialsSecretRef.Key)
+		}
 	}
 	return nil, nil
 }
@@ -371,35 +418,38 @@ func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Mana
 		return nil
 	}
 
-	if cr.Spec.ForProvider.ServicePlan == nil {
-		// fallback on crossplane.io/external-data annotation for backward compatibility
-		sp := struct {
-			ServicePlan *v1alpha1.ServicePlanParameters `json:"service_plan"`
-		}{ServicePlan: &v1alpha1.ServicePlanParameters{}}
-
-		if data, ok := mg.GetAnnotations()["crossplane.io/external-data"]; ok {
-			if err := json.Unmarshal([]byte(data), &sp); err == nil {
-				cr.Spec.ForProvider.ServicePlan = sp.ServicePlan
-			}
+	if cr.Spec.ForProvider.ServicePlan != nil {
+		// When ServicePlan is set we either populate/update the service plan ID with the external resource GUID
+		// based on the specified offering and plan or we use the provided ID directly.
+		cf, err := clients.ClientFnBuilder(ctx, s.kube)(mg)
+		if err != nil {
+			return errors.Wrapf(err, errNewClient)
 		}
+
+		client := serviceinstance.NewClient(cf)
+		return client.ResolveServicePlan(ctx, s.kube, cr)
+
 	}
 
-	//  Lookup service plan during every reconciliation to detect an update service_plan of existing service.
-	cf, err := clients.ClientFnBuilder(ctx, s.kube)(mg)
-	if err != nil {
-		return errors.Wrapf(err, errNewClient)
-	}
-	opt := client.NewServicePlanListOptions()
-	opt.ServiceOfferingNames.EqualTo(*cr.Spec.ForProvider.ServicePlan.Offering)
-	opt.Names.EqualTo(*cr.Spec.ForProvider.ServicePlan.Plan)
+	// Service plan is not set
+	guid := meta.GetExternalName(cr)
 
-	// There must be exactly one matching service plan
-	sp, err := cf.ServicePlans.Single(ctx, opt)
-	if err != nil {
-		return errors.Wrapf(err, "Cannot initialize service plan using serviceName/servicePlanName: %s:%s`", *cr.Spec.ForProvider.ServicePlan.Offering, *cr.Spec.ForProvider.ServicePlan.Plan)
+	if _, err := uuid.Parse(guid); err == nil {
+		// We have a valid external-name annotation
+		return nil
 	}
 
-	cr.Spec.ForProvider.ServicePlan.ID = &sp.GUID
+	// No valid external-name annotation
+	return errors.New(errMissingServicePlan)
+}
 
-	return s.kube.Update(ctx, cr)
+// Small wrapper around sha256.Sum256()
+// info: if creds == nil, it will result in a hash value anyway (e3b0c44298...).
+// This should not be a security problem.
+func iSha256(data []byte) []byte {
+	if len(data) == 0 || string(data) == "{}" {
+		return nil
+	}
+	s := sha256.Sum256(data)
+	return s[:]
 }

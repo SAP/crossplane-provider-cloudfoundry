@@ -69,6 +69,30 @@ func (m *MockServiceInstance) Delete(ctx context.Context, guid string) (string, 
 	return args.String(0), args.Error(1)
 }
 
+// GetSharedSpaceRelationships mocks ServiceInstance.GetSharedSpaceRelationships
+func (m *MockServiceInstance) GetSharedSpaceRelationships(ctx context.Context, guid string) (*resource.ServiceInstanceSharedSpaceRelationships, error) {
+	args := m.Called(guid)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*resource.ServiceInstanceSharedSpaceRelationships), args.Error(1)
+}
+
+// ShareWithSpaces mocks ServiceInstance.ShareWithSpaces
+func (m *MockServiceInstance) ShareWithSpaces(ctx context.Context, guid string, spaceGUIDs []string) (*resource.ServiceInstanceSharedSpaceRelationships, error) {
+	args := m.Called(guid, spaceGUIDs)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(*resource.ServiceInstanceSharedSpaceRelationships), args.Error(1)
+}
+
+// UnShareWithSpaces mocks ServiceInstance.UnShareWithSpaces
+func (m *MockServiceInstance) UnShareWithSpaces(ctx context.Context, guid string, spaceGUIDs []string) error {
+	args := m.Called(guid, spaceGUIDs)
+	return args.Error(0)
+}
+
 // PollComplete mocks ServiceInstance.PollComplete
 func (m *MockServiceInstance) PollComplete(ctx context.Context, job string, opt *client.PollingOptions) error {
 	args := m.Called()

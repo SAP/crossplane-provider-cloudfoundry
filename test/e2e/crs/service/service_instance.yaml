@@ -9,10 +9,13 @@ spec:
   forProvider:
     type: managed
     name: e2e-service-instance
-    spaceRef: 
+    spaceRef:
       name: service-space
-      policy: 
+      policy:
         resolve: Always
     servicePlan:
-      offering: destination
-      plan: lite
+      offering: alert-notification
+      plan: standard
+    sharedSpaces:
+      - spaceRef:
+          name: service-space-shared

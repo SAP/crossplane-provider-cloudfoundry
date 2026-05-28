@@ -1,0 +1,16 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Route
+metadata:
+  name: e2e-serviceroutebinding-route
+  namespace: service-test
+spec:
+  forProvider:
+    domainRef:
+      name: e2e-serviceroutebinding-domain
+      policy:
+        resolve: Always
+    host: service-route-e2e
+    spaceRef:
+      name: e2e-serviceroutebinding-space
+      policy:
+        resolve: Always

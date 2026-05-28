@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.16.0
   name: orgmembers.cloudfoundry.crossplane.io
 spec:
   group: cloudfoundry.crossplane.io
@@ -34,8 +34,15 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: OrgMembers is the Schema for the OrgMembers API. Provides a Cloud
-          Foundry Org users resource.
+        description: |-
+          OrgMembers is the Schema for the OrgMembers API. Provides a Cloud Foundry Org users resource.
+
+          External-Name Configuration:
+            - Follows Standard: no (uses compound key <org-guid>/<role-type>, not a single GUID)
+            - Format: <org-guid>/<role-type>
+            - How to find:
+            - UI: BTP Cockpit → Subaccounts → [Select Subaccount] → Cloud Foundry → Organization → Org ID + Settings → Org Members
+            - CLI: cf org <ORG_NAME> --guid (field: guid) combined with spec.forProvider.roleType
         properties:
           apiVersion:
             description: |-
@@ -198,9 +205,6 @@ spec:
                     - Managers
                     - BillingManagers
                     type: string
-                required:
-                - members
-                - roleType
                 type: object
               managementPolicies:
                 default:
@@ -439,6 +443,16 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: roleType is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.roleType)
+        - message: 'OrgReference is required: exactly one of orgName, orgRef, or orgSelector
+            must be set'
+          rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.orgName)
+            || has(self.spec.forProvider.orgRef) || has(self.spec.forProvider.orgSelector))
+        - message: 'Members validation: at least one member must be set'
+          rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.members)
+            && self.spec.forProvider.members.size() >= 1)
     served: true
     storage: true
     subresources:

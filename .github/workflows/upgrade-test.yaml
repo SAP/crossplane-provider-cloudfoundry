@@ -1,0 +1,63 @@
+name: Upgrade Test Workflow
+
+permissions:
+  contents: read
+
+on:
+  workflow_dispatch:
+    inputs:
+      from_version:
+        description: "Version to upgrade FROM (e.g., v0.3.2 or 'local')"
+        required: true
+        default: "v0.3.2"
+      to_version:
+        description: "Version to upgrade TO (e.g., v0.3.3 or 'local')"
+        required: true
+        default: "local"
+
+jobs:
+  upgrade-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          submodules: true
+          fetch-depth: 0
+          
+      - name: Set up Go
+        uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version: "1.25"
+
+      - name: Parse CF credentials
+        run: |
+          echo "CF_EMAIL=$(echo '${{ secrets.CF_CREDENTIALS }}' | jq -r '.email')" >> "$GITHUB_ENV"
+          echo "CF_USERNAME=$(echo '${{ secrets.CF_CREDENTIALS }}' | jq -r '.username')" >> "$GITHUB_ENV"
+          echo "CF_PASSWORD=$(echo '${{ secrets.CF_CREDENTIALS }}' | jq -r '.password')" >> "$GITHUB_ENV"
+          echo "CF_ENDPOINT=${{ secrets.CF_ENVIRONMENT }}" >> "$GITHUB_ENV"
+
+      - name: Run upgrade tests
+        timeout-minutes: 60
+        env:
+          CF_EMAIL: ${{ env.CF_EMAIL }}
+          CF_USERNAME: ${{ env.CF_USERNAME }}
+          CF_PASSWORD: ${{ env.CF_PASSWORD }}
+          CF_ENDPOINT: ${{ env.CF_ENDPOINT }}
+          UPGRADE_TEST_FROM_TAG: ${{ github.event.inputs.from_version }}
+          UPGRADE_TEST_TO_TAG: ${{ github.event.inputs.to_version }}
+        run: make test-upgrade-with-version-crs
+
+      - name: Upload test logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upgrade-test-logs
+          path: |
+            test/upgrade/logs/
+            test-upgrade-output.log
+          retention-days: 7
+      
+      - name: Clean up after upgrade tests
+        if: always()
+        run: make test-upgrade-clean

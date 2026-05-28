@@ -70,7 +70,6 @@ type SpaceParameters struct {
 	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
 
 	// (String) The name of the space in Cloud Foundry.
-	// +kubebuilder:validation:Required
 	Name string `json:"name,omitempty" tf:"name,omitempty"`
 
 	// (Attributes) Reference to the organization in which to create the space.
@@ -94,11 +93,21 @@ type SpaceStatus struct {
 // +kubebuilder:storageversion
 
 // Space is the Schema for the Spaces API. Provides a Cloud Foundry resource for managing Cloud Foundry spaces within organizations.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: Space GUID (UUID format)
+//   - How to find:
+//   - UI: Global Account → Account Explorer → Subaccounts → Select Subaccount → Spaces → Select Space → View URL: `https://<cockpit_url>/cockpit#/globalaccount/<global_account_id>/subaccount/<subaccount_id>/org/<org_id>/space/<SPACE_ID>/applications`
+//   - CLI: Use CF CLI: `cf space <SPACE> --guid`
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.name)",message="name is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.orgName) || has(self.spec.forProvider.orgRef) || has(self.spec.forProvider.orgSelector))",message="OrgReference is required: exactly one of orgName, orgRef, or orgSelector must be set"
 type Space struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

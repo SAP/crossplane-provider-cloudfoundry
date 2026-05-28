@@ -66,6 +66,14 @@ make run
 
 This runs the controller locally.
 
+## Local Kind Build
+
+If you want to run the controller component and the CrossPlane controller in the same local kind cluster, run:
+
+```console
+make local-deploy
+```
+
 ## Local e2e test
 
 Build, push, and install:
@@ -78,6 +86,14 @@ Build binary:
 
 ```console
 make build
+```
+
+To start the local e2e test:
+
+```console
+export CF_ENVIRONMENT=https://cf-environment.com
+export CF_CREDENTIALS={"user": "someuserEmail", "email": "useremailaddress@s.e", "password": "supersecretPassword"}
+make test-acceptance
 ```
 
 ## Report a Bug

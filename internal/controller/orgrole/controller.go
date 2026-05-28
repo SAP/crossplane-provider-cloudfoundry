@@ -2,6 +2,7 @@ package orgrole
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 
@@ -53,6 +54,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
+		managed.WithPollInterval(o.PollInterval),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
 		managed.WithConnectionPublishers(cps...),
 		managed.WithInitializers(&orgInitializer{
@@ -104,6 +106,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	return &external{role: role, kube: c.kube, job: job}, nil
 }
 
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
 // An external is a managed.ExternalConnecter that is using the CloudFoundry API to observe and modify resources.
 type external struct {
 	role role.Role
@@ -118,9 +126,34 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errWrongKind)
 	}
 
-	// Fetch the role object using the CloudFoundry API by guid or according to the specified parameters
+	resourceLateInitialized := false
+
+	// ADR Step 1: Check if external-name is empty
+	if meta.GetExternalName(cr) == "" {
+		// Backwards compatibility required as previously lookup by spec was supported
+		r, err := role.FindOrgRole(ctx, c.role, cr.Spec.ForProvider)
+		if err != nil {
+			if clients.ErrorIsNotFound(err) {
+				return managed.ExternalObservation{ResourceExists: false}, nil
+			}
+			return managed.ExternalObservation{}, errors.Wrap(err, errGet)
+		}
+		if r == nil {
+			return managed.ExternalObservation{ResourceExists: false}, nil
+		}
+		meta.SetExternalName(cr, r.GUID)
+		resourceLateInitialized = true
+	}
+
 	guid := meta.GetExternalName(cr)
-	r, err := role.GetOrgRole(ctx, c.role, guid, cr.Spec.ForProvider)
+
+	// ADR Step 2: External-name is set, check its format (must be valid GUID)
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.New(fmt.Sprintf("external-name '%s' is not a valid GUID format", guid))
+	}
+
+	// ADR Step 3: Build the Get API Request from the external-name (using GUID directly)
+	r, err := role.GetOrgRole(ctx, c.role, guid)
 
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
@@ -132,17 +165,11 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
-	resourceLateInitialized := false
-	if guid != r.GUID {
-		meta.SetExternalName(cr, r.GUID)
-		resourceLateInitialized = true
-	}
-
 	cr.Status.AtProvider = role.GenerateOrgRoleObservation(r)
 	cr.Status.SetConditions(xpv1.Available())
 
 	return managed.ExternalObservation{
-		ResourceExists:          cr.Status.AtProvider.ID != nil,
+		ResourceExists:          true,
 		ResourceUpToDate:        true,
 		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
@@ -191,25 +218,29 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Delete managed resource OrgRole
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.OrgRole)
 	if !ok {
-		return errors.New(errWrongKind)
+		return managed.ExternalDelete{}, errors.New(errWrongKind)
 	}
 	// TODO
 
 	cr.SetConditions(xpv1.Deleting())
-	if cr.Status.AtProvider.ID == nil {
-		return nil
+	if meta.GetExternalName(cr) == "" {
+		return managed.ExternalDelete{}, nil
 	}
 
 	// Delete is async and we need to implement wait for deletion
-	jobGUID, err := c.role.Delete(ctx, *cr.Status.AtProvider.ID)
+	jobGUID, err := c.role.Delete(ctx, meta.GetExternalName(cr))
 	if err != nil {
-		return errors.Wrap(err, errDelete)
+		// ADR: 404 not found means already deleted - not considered as error case
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 
-	return job.PollJobComplete(ctx, c.job, jobGUID)
+	return managed.ExternalDelete{}, job.PollJobComplete(ctx, c.job, jobGUID)
 }
 
 type initializer struct {

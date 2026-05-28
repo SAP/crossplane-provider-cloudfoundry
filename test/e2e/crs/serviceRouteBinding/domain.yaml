@@ -1,0 +1,15 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Domain
+metadata:
+  namespace: service-test
+  name: e2e-serviceroutebinding-domain
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    name: cfapps.eu12.hana.ondemand.com
+    orgRef:
+      name: e2e-serviceroutebinding-org
+      policy:
+        resolve: Always
+    internal: false

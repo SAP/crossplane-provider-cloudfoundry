@@ -1,0 +1,17 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: OrgMembers
+metadata:
+  name: upgrade-test-org-members
+  annotations:
+    crossplane.io/paused: "false"
+spec:
+  forProvider:
+    roleType: Managers
+    members:
+    - username: upgrade-test-org-member-user1@example.com
+    - username: upgrade-test-org-member-user2@example.com
+    orgRef:
+      name: upgrade-test-org
+      policy:
+        resolve: Always
+    enforcementPolicy: Lax

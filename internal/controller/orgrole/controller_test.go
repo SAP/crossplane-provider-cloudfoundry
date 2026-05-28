@@ -8,6 +8,7 @@ import (
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -26,8 +27,8 @@ var (
 	errBoom            = errors.New("boom")
 	errOrgNotSpecified = errors.New(role.ErrOrgNotSpecified)
 	resourceName       = "my-org-roles"
-	guidOrg            = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69u"
-	guidRole           = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69r"
+	guidOrg            = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a"
+	guidRole           = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69b"
 
 	guidNoRefUser   = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 	guidHealthyUser = "1d1b0d04-d537-4e4e-8c6f-f09ca0e7f11f"
@@ -91,12 +92,18 @@ func withOrigin(origin string) modifier {
 
 func withExternalName(name string) modifier {
 	return func(r *v1alpha1.OrgRole) {
-		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
+		r.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
 func withConditions(c ...xpv1.Condition) modifier {
 	return func(i *v1alpha1.OrgRole) { i.Status.SetConditions(c...) }
+}
+
+func withID(id string) modifier {
+	return func(r *v1alpha1.OrgRole) {
+		r.Status.AtProvider.ID = ptr.To(id)
+	}
 }
 
 func fakeOrgRole(m ...modifier) *v1alpha1.OrgRole {
@@ -194,12 +201,20 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
-		"Successful": {
+		"UnsetExternalNameSuccesful": {
 			args: args{
-				mg: fakeOrgRole(withOrg(guidOrg), withUsername("user1"), withType(v1alpha1.OrgManager)),
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withUsername("user1"),
+					withType(v1alpha1.OrgManager)),
 			},
 			want: want{
-				mg:  fakeOrgRole(withOrg(guidOrg), withUsername("user1"), withExternalName(guidRole), withType(v1alpha1.OrgManager)),
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withUsername("user1"),
+					withType(v1alpha1.OrgManager),
+					withExternalName(guidRole),
+					withConditions(xpv1.Available())),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
@@ -211,7 +226,101 @@ func TestObserve(t *testing.T) {
 					[]*cfresource.User{healthyUser},
 					nil,
 				)
+
+				m.On("Get", guidRole).Return(
+					healthyRole,
+					nil,
+				)
 				return m
+			},
+		},
+		"UnsetExternalNameNotFound": {
+			args: args{
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withUsername("user1"),
+					withType(v1alpha1.OrgManager)),
+			},
+			want: want{
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withUsername("user1"),
+					withType(v1alpha1.OrgManager)),
+				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: false, ResourceLateInitialized: false},
+				err: nil,
+			},
+			service: func() *fake.MockOrgRole {
+				m := &fake.MockOrgRole{}
+				var emptyRoles []*cfresource.Role
+				var emptyUsers []*cfresource.User
+				m.On("ListIncludeUsersAll").Return(emptyRoles, emptyUsers, nil)
+				return m
+			},
+		},
+		"SetExternalNameSuccesful": {
+			args: args{
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withUsername("user1"),
+					withType(v1alpha1.OrgManager),
+					withExternalName(guidRole)),
+			},
+			want: want{
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withUsername("user1"),
+					withType(v1alpha1.OrgManager),
+					withExternalName(guidRole),
+					withConditions(xpv1.Available())),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
+				err: nil,
+			},
+			service: func() *fake.MockOrgRole {
+				m := &fake.MockOrgRole{}
+				m.On("Get", guidRole).Return(
+					healthyRole,
+					nil,
+				)
+				return m
+			},
+		},
+		"SetExternalNameNotFound": {
+			args: args{
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withUsername("user1"),
+					withType(v1alpha1.OrgManager),
+					withExternalName(guidRole)),
+			},
+			want: want{
+				mg: fakeOrgRole(
+					withOrg(guidOrg),
+					withUsername("user1"),
+					withType(v1alpha1.OrgManager),
+					withExternalName(guidRole)),
+				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: false, ResourceLateInitialized: false},
+				err: nil,
+			},
+			service: func() *fake.MockOrgRole {
+				m := &fake.MockOrgRole{}
+				m.On("Get", guidRole).Return(
+					fake.OrganizationRoleNil,
+					errors.New("CF-ResourceNotFound: The role was not found"),
+				)
+				return m
+			},
+		},
+		"SetExternalNameInvalidFormat": {
+			args: args{
+				mg: fakeOrgRole(withExternalName("not-a-valid-guid")),
+			},
+			want: want{
+				mg:  fakeOrgRole(withExternalName("not-a-valid-guid")),
+				obs: managed.ExternalObservation{},
+				err: errors.New("external-name 'not-a-valid-guid' is not a valid GUID format"),
+			},
+			service: func() *fake.MockOrgRole {
+				return &fake.MockOrgRole{}
 			},
 		},
 	}
@@ -239,6 +348,11 @@ func TestObserve(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+			}
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg, cmp.Options{cmpopts.IgnoreFields(v1alpha1.OrgRole{}, "Status.AtProvider")}); diff != "" {
+					t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				}
 			}
 		})
 	}
@@ -276,7 +390,7 @@ func TestCreate(t *testing.T) {
 					withType(v1alpha1.OrgManager),
 					withUsername("user1@test.com"),
 					withOrg("my-org"),
-					withOrigin("my-origin"),
+					withOrigin("sap.ids"),
 					withExternalName(guidOrg),
 				),
 				obs: managed.ExternalCreation{ConnectionDetails: managed.ConnectionDetails{}},
@@ -285,7 +399,15 @@ func TestCreate(t *testing.T) {
 			service: func() *fake.MockOrgRole {
 				m := &fake.MockOrgRole{}
 				m.On("CreateOrganizationRoleWithUsername").Return(
-					&fake.NewOrgRole().SetType("organization_manager").SetGUID(guidOrg).SetRelationships(cfresource.RoleSpaceUserOrganizationRelationships{User: cfresource.ToOneRelationship{Data: &cfresource.Relationship{GUID: guidHealthyUser}}, Org: cfresource.ToOneRelationship{Data: &cfresource.Relationship{GUID: guidOrg}}}).Role,
+					&fake.NewOrgRole().
+						SetType("organization_manager").
+						SetGUID(guidOrg).
+						SetRelationships(cfresource.RoleSpaceUserOrganizationRelationships{
+							User: cfresource.ToOneRelationship{
+								Data: &cfresource.Relationship{GUID: guidHealthyUser}},
+							Org: cfresource.ToOneRelationship{
+								Data: &cfresource.Relationship{GUID: guidOrg}},
+						}).Role,
 					nil,
 				)
 
@@ -308,7 +430,7 @@ func TestCreate(t *testing.T) {
 					withUsername("user1@test.com"),
 					withOrgName("my-org"),
 					withOrg("my-org"),
-					withOrigin("my-origin"),
+					withOrigin("sap.ids"),
 					withExternalName(guidOrg),
 				),
 				obs: managed.ExternalCreation{ConnectionDetails: managed.ConnectionDetails{}},
@@ -317,7 +439,15 @@ func TestCreate(t *testing.T) {
 			service: func() *fake.MockOrgRole {
 				m := &fake.MockOrgRole{}
 				m.On("CreateOrganizationRoleWithUsername").Return(
-					&fake.NewOrgRole().SetType("organization_manager").SetGUID(guidOrg).SetRelationships(cfresource.RoleSpaceUserOrganizationRelationships{User: cfresource.ToOneRelationship{Data: &cfresource.Relationship{GUID: guidHealthyUser}}, Org: cfresource.ToOneRelationship{Data: &cfresource.Relationship{GUID: guidOrg}}}).Role,
+					&fake.NewOrgRole().
+						SetType("organization_manager").
+						SetGUID(guidOrg).
+						SetRelationships(cfresource.RoleSpaceUserOrganizationRelationships{
+							User: cfresource.ToOneRelationship{
+								Data: &cfresource.Relationship{GUID: guidHealthyUser}},
+							Org: cfresource.ToOneRelationship{
+								Data: &cfresource.Relationship{GUID: guidOrg}},
+						}).Role,
 					nil,
 				)
 
@@ -458,15 +588,20 @@ func TestCreate(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Create(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Create(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Create(...): -want, +got:\n%s", diff)
+			}
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Create(...): -want, +got:\n%s", diff)
+				}
 			}
 		})
 	}
@@ -480,7 +615,7 @@ func TestDelete(t *testing.T) {
 
 	type want struct {
 		mg  resource.Managed
-		obs managed.ExternalUpdate
+		obs managed.ExternalDelete
 		err error
 	}
 
@@ -497,6 +632,8 @@ func TestDelete(t *testing.T) {
 					withUsername("user1@test.com"),
 					withOrg("my-org"),
 					withOrigin("sap.ids"),
+					withID("my-id"),
+					withExternalName(guidRole),
 				),
 			},
 			want: want{
@@ -505,9 +642,46 @@ func TestDelete(t *testing.T) {
 					withUsername("user1@test.com"),
 					withOrg("my-org"),
 					withOrigin("sap.ids"),
+					withExternalName(guidRole),
+					withID("my-id"),
 					withConditions(xpv1.Deleting()),
 				),
-				obs: managed.ExternalUpdate{},
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockOrgRole {
+				m := &fake.MockOrgRole{}
+
+				m.On("Delete").Return(
+					"job-guid-123",
+					nil,
+				)
+
+				return m
+			},
+		},
+		"404NotFound": {
+			args: args{
+				mg: fakeOrgRole(
+					withType(v1alpha1.OrgManager),
+					withUsername("user1@test.com"),
+					withOrg("my-org"),
+					withOrigin("sap.ids"),
+					withExternalName(guidRole),
+					withID("my-id"),
+				),
+			},
+			want: want{
+				mg: fakeOrgRole(
+					withType(v1alpha1.OrgManager),
+					withUsername("user1@test.com"),
+					withOrg("my-org"),
+					withOrigin("sap.ids"),
+					withExternalName(guidRole),
+					withID("my-id"),
+					withConditions(xpv1.Deleting()),
+				),
+				obs: managed.ExternalDelete{},
 				err: nil,
 			},
 			service: func() *fake.MockOrgRole {
@@ -515,9 +689,42 @@ func TestDelete(t *testing.T) {
 
 				m.On("Delete").Return(
 					"",
-					nil,
+					errors.New("CF-ResourceNotFound: The role was not found"),
 				)
+				return m
+			},
+		},
+		"Error": {
+			args: args{
+				mg: fakeOrgRole(
+					withType(v1alpha1.OrgManager),
+					withUsername("user1@test.com"),
+					withOrg("my-org"),
+					withOrigin("sap.ids"),
+					withExternalName(guidRole),
+					withID("my-id"),
+				),
+			},
+			want: want{
+				mg: fakeOrgRole(
+					withType(v1alpha1.OrgManager),
+					withUsername("user1@test.com"),
+					withOrg("my-org"),
+					withOrigin("sap.ids"),
+					withExternalName(guidRole),
+					withID("my-id"),
+					withConditions(xpv1.Deleting()),
+				),
+				obs: managed.ExternalDelete{},
+				err: errors.Wrap(errors.New("CF-ResourceNotDeleted: The role could not be deleted"), errDelete),
+			},
+			service: func() *fake.MockOrgRole {
+				m := &fake.MockOrgRole{}
 
+				m.On("Delete").Return(
+					"",
+					errors.New("CF-ResourceNotDeleted: The role could not be deleted"),
+				)
 				return m
 			},
 		},
@@ -526,29 +733,36 @@ func TestDelete(t *testing.T) {
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
+			mockJob := &fake.MockJob{}
+			mockJob.On("PollComplete").Return(nil)
+
 			c := &external{
 				kube: &test.MockClient{
-					MockUpdate:       test.NewMockUpdateFn(nil),
-					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
+					MockDelete: test.NewMockDeleteFn(nil),
 				},
-				job:  nil,
+				job:  mockJob,
 				role: tc.service(),
 			}
 
-			err := c.Delete(context.Background(), tc.args.mg)
+			obs, err := c.Delete(context.Background(), tc.args.mg)
 
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Delete(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Delete(...): want error != got error:\n%s", diff)
 				}
 			}
-			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
+				t.Errorf("Delete(...): -want, +got:\n%s", diff)
+			}
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Delete(...): -want, +got:\n%s", diff)
+				}
 			}
 		})
 	}

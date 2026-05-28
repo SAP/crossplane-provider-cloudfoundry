@@ -1,0 +1,17 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceQuota
+metadata:
+  name: upgrade-test-external-name-space-quota
+  annotations:
+    crossplane.io/paused: "false"
+spec:
+  forProvider:
+    name: external-name-space-quota
+    allowPaidServicePlans: false
+    spacesRefs:
+      - name: upgrade-test-import-space
+        policy:
+          resolution: Required
+          resolve: Always
+    orgRef:
+      name: upgrade-test-org
