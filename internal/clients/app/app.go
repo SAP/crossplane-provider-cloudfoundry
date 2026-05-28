@@ -10,7 +10,6 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	"github.com/google/uuid"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -66,13 +65,8 @@ func NewAppClient(client *client.Client) *Client {
 
 type DockerCredentials resource.DockerCredentials
 
-// GetByIDOrSpec gets the App by GUID or spec.
-func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, spec v1alpha1.AppParameters) (*resource.App, error) {
-	_, err := uuid.Parse(guid)
-	if err == nil {
-		return c.AppClient.Get(ctx, guid)
-	}
-
+// GetBySpec gets an App by matching spec fields (name and space).
+func (c *Client) GetBySpec(ctx context.Context, spec v1alpha1.AppParameters) (*resource.App, error) {
 	return c.AppClient.Single(ctx, newListOption(spec))
 }
 

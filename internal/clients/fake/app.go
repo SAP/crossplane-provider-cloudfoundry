@@ -127,3 +127,9 @@ func (a *App) SetGUID(guid string) *App {
 	a.GUID = guid
 	return a
 }
+
+// SetState assigns App state
+func (a *App) SetState(state string) *App {
+	a.State = state
+	return a
+}

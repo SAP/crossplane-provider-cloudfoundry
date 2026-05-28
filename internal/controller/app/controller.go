@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/pkg/connection"
 	"github.com/crossplane/crossplane-runtime/pkg/controller"
@@ -13,7 +14,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/docker/cli/cli/config/configfile"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -122,8 +122,24 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errWrongKind)
 	}
 
+	lateInitialized, exists, err := c.resolveExternalName(ctx, cr)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
+	if !exists {
+		return managed.ExternalObservation{ResourceExists: false}, nil
+	}
+	if lateInitialized {
+		return managed.ExternalObservation{ResourceExists: true, ResourceLateInitialized: true}, nil
+	}
+
 	guid := meta.GetExternalName(cr)
-	res, err := c.client.GetByIDOrSpec(ctx, guid, cr.Spec.ForProvider)
+
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.Errorf("external-name '%s' is not a valid GUID format", guid)
+	}
+
+	res, err := c.client.AppClient.Get(ctx, guid)
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
@@ -132,22 +148,28 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.Wrap(err, errObserveResource)
 	}
 
-	lateInitialized := false
-
-	// Update external_name if it is not set or different
-	if guid != res.GUID {
-		meta.SetExternalName(cr, res.GUID)
-		lateInitialized = true
+	isUpToDate, err := c.updateObservedStatus(ctx, cr, res)
+	if err != nil {
+		return managed.ExternalObservation{}, err
 	}
 
-	// Preserve previously observed routes so they survive transient API failures.
+	return managed.ExternalObservation{
+		ResourceExists:          true,
+		ResourceUpToDate:        isUpToDate,
+		ResourceLateInitialized: lateInitialized,
+	}, nil
+}
+
+func (c *external) updateObservedStatus(ctx context.Context, cr *v1alpha1.App, res *cfresource.App) (bool, error) {
+	// Preserve previously observed routes so they survive a transient
+	// failure from the Routes API.
 	prevRoutes := cr.Status.AtProvider.Routes
 
 	// Update the status of the resource
 	cr.Status.AtProvider = app.GenerateObservation(res)
 	appManifest, err := c.client.GenerateManifest(ctx, res.GUID)
 	if err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, errObserveResource)
+		return false, errors.Wrap(err, errObserveResource)
 	}
 	cr.Status.AtProvider.AppManifest = appManifest
 
@@ -171,16 +193,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		cr.SetConditions(xpv1.Unavailable())
 	}
 
-	isUpToDate, err := app.IsUpToDate(cr.Spec.ForProvider, cr.Status.AtProvider)
-	if err != nil {
-		return managed.ExternalObservation{}, err
-	}
-
-	return managed.ExternalObservation{
-		ResourceExists:          true,
-		ResourceUpToDate:        isUpToDate,
-		ResourceLateInitialized: lateInitialized,
-	}, nil
+	return app.IsUpToDate(cr.Spec.ForProvider, cr.Status.AtProvider)
 }
 
 // Create managed resource
@@ -213,10 +226,12 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errWrongKind)
 	}
 
-	guid := meta.GetExternalName(cr)
-	if _, err := uuid.Parse(guid); err != nil {
-		return managed.ExternalUpdate{}, errors.New(errUpdateResource + ": No valid GUID found for the App")
+	// Observe validates GUID format before marking ResourceUpToDate:false, so
+	// Update is only called with a valid GUID.
+	if meta.GetExternalName(cr) == "" {
+		return managed.ExternalUpdate{}, nil
 	}
+	guid := meta.GetExternalName(cr)
 
 	changes, err := app.DetectChanges(cr.Spec.ForProvider, cr.Status.AtProvider)
 	if err != nil {
@@ -300,14 +315,17 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalDelete{}, errors.New(errWrongKind)
 	}
 
-	guid := meta.GetExternalName(cr)
-	if _, err := uuid.Parse(guid); err != nil {
-		return managed.ExternalDelete{}, errors.New(errDeleteResource + ": No valid GUID found for the App")
+	cr.SetConditions(xpv1.Deleting())
+
+	if meta.GetExternalName(cr) == "" {
+		return managed.ExternalDelete{}, nil
 	}
 
-	cr.SetConditions(xpv1.Deleting())
-	err := c.client.Delete(ctx, guid)
+	err := c.client.Delete(ctx, meta.GetExternalName(cr))
 	if err != nil {
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
 		return managed.ExternalDelete{}, errors.Wrap(err, errDeleteResource)
 	}
 
@@ -318,6 +336,26 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 func (c *external) Disconnect(ctx context.Context) error {
 	// No cleanup needed for Cloud Foundry client
 	return nil
+}
+
+// resolveExternalName sets the external-name on the App CR if it is empty,
+// by looking up the app by spec (name and space).
+// Returns (lateInitialized, exists, error).
+func (c *external) resolveExternalName(ctx context.Context, cr *v1alpha1.App) (bool, bool, error) {
+	if meta.GetExternalName(cr) != "" {
+		return false, true, nil
+	}
+
+	res, err := c.client.GetBySpec(ctx, cr.Spec.ForProvider)
+	if err != nil {
+		if clients.ErrorIsNotFound(err) {
+			return false, false, nil
+		}
+		return false, false, errors.Wrap(err, errObserveResource)
+	}
+
+	meta.SetExternalName(cr, res.GUID)
+	return true, true, nil
 }
 
 // getDockerCredential extracts the Docker credentials from the secret
