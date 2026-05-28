@@ -152,6 +152,7 @@ func TestObserve(t *testing.T) {
 		service      service
 		kube         k8s.Client
 		routeFetcher *fake.MockRouteFetcher
+		push         func() *fake.MockPush
 	}{
 		"Nil": {
 			args: args{
@@ -345,6 +346,7 @@ func TestObserve(t *testing.T) {
 				mg: newApp("docker",
 					withExternalName(guid),
 					withStatus(guid, "STARTED"),
+					withObservedName("other-name"),
 					withConditions(xpv1.Available())),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
@@ -355,6 +357,11 @@ func TestObserve(t *testing.T) {
 					&fake.NewApp("docker").SetName("other-name").SetGUID(guid).App,
 					nil,
 				)
+				return m
+			},
+			push: func() *fake.MockPush {
+				m := &fake.MockPush{}
+				m.On("GenerateManifest", guid).Return("applications:\n- name: other-name", nil)
 				return m
 			},
 		},
@@ -407,8 +414,13 @@ func TestObserve(t *testing.T) {
 					MockUpdate: test.NewMockUpdateFn(nil),
 				},
 				client: &app.Client{
-					AppClient:  tc.service(),
-					PushClient: newMockPush(),
+					AppClient: tc.service(),
+					PushClient: func() *fake.MockPush {
+						if tc.push != nil {
+							return tc.push()
+						}
+						return newMockPush()
+					}(),
 				},
 			}
 			if tc.routeFetcher != nil {
