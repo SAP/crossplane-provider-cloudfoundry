@@ -40,12 +40,18 @@ func (m *MockApp) Update(ctx context.Context, guid string, opt *resource.AppUpda
 // Stop mocks App.Stop
 func (m *MockApp) Stop(ctx context.Context, guid string) (*resource.App, error) {
 	args := m.Called(guid)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*resource.App), args.Error(1)
 }
 
 // Start mocks App.Start
 func (m *MockApp) Start(ctx context.Context, guid string) (*resource.App, error) {
 	args := m.Called(guid)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
 	return args.Get(0).(*resource.App), args.Error(1)
 }
 
@@ -53,6 +59,24 @@ func (m *MockApp) Start(ctx context.Context, guid string) (*resource.App, error)
 func (m *MockApp) Delete(ctx context.Context, guid string) (string, error) {
 	args := m.Called(guid)
 	return args.String(0), args.Error(1)
+}
+
+// SetEnvironmentVariables mocks App.SetEnvironmentVariables
+func (m *MockApp) SetEnvironmentVariables(ctx context.Context, guid string, envVars map[string]*string) (map[string]*string, error) {
+	args := m.Called(guid, envVars)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string]*string), args.Error(1)
+}
+
+// GetEnvironmentVariables mocks App.GetEnvironmentVariables
+func (m *MockApp) GetEnvironmentVariables(ctx context.Context, guid string) (map[string]*string, error) {
+	args := m.Called(guid)
+	if args.Get(0) == nil {
+		return nil, args.Error(1)
+	}
+	return args.Get(0).(map[string]*string), args.Error(1)
 }
 
 // MockRouteFetcher mocks the RouteFetcher interface.

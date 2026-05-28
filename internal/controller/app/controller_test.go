@@ -22,10 +22,11 @@ import (
 )
 
 var (
-	errBoom   = errors.New("boom")
-	name      = "my-app"
-	spaceGUID = "a46808d1-d09a-4eef-add1-30872dec82f7"
-	guid      = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
+	errBoom     = errors.New("boom")
+	name        = "my-app"
+	spaceGUID   = "a46808d1-d09a-4eef-add1-30872dec82f7"
+	guid        = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
+	envVarValue = "hello"
 )
 
 type modifier func(*v1alpha1.App)
@@ -68,6 +69,24 @@ func withImage(image string) modifier {
 	}
 }
 
+func withEnvironment(env map[string]string) modifier {
+	return func(r *v1alpha1.App) {
+		r.Spec.ForProvider.Environment = env
+	}
+}
+
+func withObservedName(n string) modifier {
+	return func(r *v1alpha1.App) {
+		r.Status.AtProvider.Name = n
+	}
+}
+
+func withAppManifest(manifest string) modifier {
+	return func(r *v1alpha1.App) {
+		r.Status.AtProvider.AppManifest = manifest
+	}
+}
+
 func newApp(typ string, m ...modifier) *v1alpha1.App {
 	r := &v1alpha1.App{
 
@@ -92,12 +111,11 @@ func newApp(typ string, m ...modifier) *v1alpha1.App {
 
 func newMockPush() *fake.MockPush {
 	m := &fake.MockPush{}
-	m.On("GenerateManifest", guid).Return("applicationmanifest", nil)
+	m.On("GenerateManifest", guid).Return("applications:\n- name: "+name, nil)
 	m.On("Push").Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
 		nil,
 	)
 	return m
-
 }
 
 func TestObserve(t *testing.T) {
@@ -511,6 +529,7 @@ func TestUpdate(t *testing.T) {
 		args    args
 		want    want
 		service service
+		push    func() *fake.MockPush
 		job
 		kube k8s.Client
 	}{
@@ -532,10 +551,6 @@ func TestUpdate(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Update", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
-					nil,
-				)
-				m.On("Get", guid).Return(
 					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
 					nil,
 				)
@@ -564,10 +579,221 @@ func TestUpdate(t *testing.T) {
 					fake.AppNil,
 					errBoom,
 				)
-				m.On("Get", guid).Return(
-					fake.AppNil,
-					errBoom,
-				)
+				return m
+			},
+		},
+
+		"EnvVarAdded": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue})),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue})),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				v := envVarValue
+				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
+				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
+				m.On("Stop", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Start", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				return m
+			},
+		},
+
+		"EnvVarDeleted": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withAppManifest("applications:\n- name: "+name+"\n  env:\n    ANOTHER_VAR: world")),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withAppManifest("applications:\n- name: "+name+"\n  env:\n    ANOTHER_VAR: world")),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				world := "world"
+				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{"ANOTHER_VAR": &world}, nil)
+				m.On("SetEnvironmentVariables", guid, map[string]*string{"ANOTHER_VAR": (*string)(nil)}).Return(map[string]*string{}, nil)
+				m.On("Stop", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Start", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				return m
+			},
+		},
+
+		"EnvVarGetFails": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue})),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue})),
+				obs: managed.ExternalUpdate{},
+				err: errors.Wrap(errBoom, errUpdateResource),
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				m.On("GetEnvironmentVariables", guid).Return(nil, errBoom)
+				return m
+			},
+		},
+
+		"EnvVarUpdated_AppStopped": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STOPPED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue})),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STOPPED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue})),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				v := envVarValue
+				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
+				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
+				// No Stop/Start expected — app is already stopped
+				return m
+			},
+		},
+
+		"EnvVarAndDockerChanged": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withAppManifest("applications:\n- name: "+name+"\n  docker:\n    image: old-image:v1"),
+					withImage("new-image:v2"),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue})),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withAppManifest("applications:\n- name: "+name+"\n  docker:\n    image: old-image:v1"),
+					withImage("new-image:v2"),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue})),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			push: func() *fake.MockPush {
+				m := &fake.MockPush{}
+				// Push is called during UpdateAndPush; return the app with the new image applied
+				m.On("Push").Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				return m
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				v := envVarValue
+				// UpdateAndPush (docker image update) calls AppClient.Update
+				m.On("Update", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
+				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
+				// No Stop/Start expected — docker push already restarted the app
+				return m
+			},
+		},
+
+		"EnvVarUpdate_StopFails": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue})),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue})),
+				obs: managed.ExternalUpdate{},
+				err: errors.Wrap(errBoom, errUpdateResource),
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				v := envVarValue
+				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
+				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
+				m.On("Stop", guid).Return(nil, errBoom)
+				return m
+			},
+		},
+
+		"EnvVarUpdate_StartFails": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue})),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue})),
+				obs: managed.ExternalUpdate{},
+				err: errors.Wrap(errBoom, errUpdateResource),
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				v := envVarValue
+				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
+				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
+				m.On("Stop", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Start", guid).Return(nil, errBoom)
 				return m
 			},
 		},
@@ -576,14 +802,19 @@ func TestUpdate(t *testing.T) {
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
+			mockApp := tc.service()
+			pushMock := newMockPush()
+			if tc.push != nil {
+				pushMock = tc.push()
+			}
 			c := &external{
 				kube: &test.MockClient{
 					MockUpdate:       test.NewMockUpdateFn(nil),
 					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
 				},
 				client: &app.Client{
-					AppClient:  tc.service(),
-					PushClient: newMockPush(),
+					AppClient:  mockApp,
+					PushClient: pushMock,
 				},
 			}
 
@@ -604,6 +835,10 @@ func TestUpdate(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+			}
+			mockApp.AssertExpectations(t)
+			if tc.push != nil {
+				pushMock.AssertExpectations(t)
 			}
 		})
 	}
