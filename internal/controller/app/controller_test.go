@@ -6,6 +6,7 @@ import (
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -210,7 +211,7 @@ func TestObserve(t *testing.T) {
 				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 			},
 			want: want{
-				mg:  newApp("docker", withExternalName(guid)),
+				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 				obs: managed.ExternalObservation{},
 				err: errors.Wrap(errBoom, errObserveResource),
 			},
@@ -247,7 +248,7 @@ func TestObserve(t *testing.T) {
 				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 			},
 			want: want{
-				mg:  newApp("docker", withExternalName(guid)),
+				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 				obs: managed.ExternalObservation{ResourceExists: false},
 				err: nil,
 			},
@@ -268,7 +269,10 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: newApp("docker",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withAppManifest("applications:\n- name: "+name),
 					withConditions(xpv1.Available())),
 
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -277,7 +281,7 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").App,
 					nil,
 				)
 				return m
@@ -290,7 +294,10 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: newApp("docker",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withAppManifest("applications:\n- name: "+name),
 					withRoutes(v1alpha1.AppRouteObservation{
 						URL:      "myapp.apps.example.com",
 						Host:     "myapp",
@@ -304,7 +311,7 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").App,
 					nil,
 				)
 				return m
@@ -345,8 +352,10 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: newApp("docker",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withStatus(guid, "STARTED"),
 					withObservedName("other-name"),
+					withAppManifest("applications:\n- name: other-name"),
 					withConditions(xpv1.Available())),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
@@ -354,7 +363,7 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName("other-name").SetGUID(guid).App,
+					&fake.NewApp("docker").SetName("other-name").SetGUID(guid).SetState("STARTED").App,
 					nil,
 				)
 				return m
@@ -377,7 +386,10 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: newApp("docker",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withAppManifest("applications:\n- name: "+name),
 					withRoutes(v1alpha1.AppRouteObservation{
 						URL:      "stale.apps.example.com",
 						Host:     "stale",
@@ -390,7 +402,7 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").App,
 					nil,
 				)
 				return m
@@ -431,13 +443,10 @@ func TestObserve(t *testing.T) {
 
 			assertErrAndObs(t, tc.want.err, err, tc.want.obs, obs)
 
-			// Verify routes were written to the managed resource status.
-			gotApp, gotOk := tc.args.mg.(*v1alpha1.App)
-			wantApp, wantOk := tc.want.mg.(*v1alpha1.App)
-			if gotOk && wantOk {
-				if diff := cmp.Diff(wantApp.Status.AtProvider.Routes, gotApp.Status.AtProvider.Routes); diff != "" {
-					t.Errorf("status.atProvider.routes -want, +got:\n%s", diff)
-				}
+			if diff := cmp.Diff(tc.want.mg, tc.args.mg,
+				cmpopts.IgnoreFields(v1alpha1.Resource{}, "CreatedAt", "UpdatedAt"),
+			); diff != "" {
+				t.Errorf("Observe(...): -want mg, +got mg:\n%s", diff)
 			}
 		})
 	}
