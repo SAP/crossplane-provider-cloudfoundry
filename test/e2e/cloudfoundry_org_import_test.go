@@ -15,7 +15,7 @@ import (
 
 var (
 	orgImportTestK8sResName = "e2e-test-org-import"
-	orgImportTestOrgName    = "cf-ci-e2e"
+	orgImportTestOrgName    = testOrgName
 )
 
 func TestOrgImportFlow(t *testing.T) {

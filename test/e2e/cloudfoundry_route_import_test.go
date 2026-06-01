@@ -14,7 +14,7 @@ var (
 	routeImportTestK8sResName = "e2e-test-route-import"
 	routeImportTestDomainName = "cfapps.eu12.hana.ondemand.com"
 	routeImportTestSpaceName  = "import-test-space-donotdelete"
-	routeImportTestOrgName    = "cf-ci-e2e"
+	routeImportTestOrgName    = testOrgName
 	routeImportTestHost       = runScopedName("route-import-e2e")
 )
 

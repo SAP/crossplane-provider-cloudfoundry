@@ -10,6 +10,7 @@ import (
 const (
 	buildIDEnvKey      = "BUILD_ID"
 	defaultTestBuildID = "0000"
+	testOrgName        = "cf-ci-e2e"
 )
 
 func testBuildID() string {
