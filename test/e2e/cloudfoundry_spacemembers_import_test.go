@@ -19,8 +19,8 @@ import (
 const spaceMembersExternalNameAnnotation = "crossplane.io/external-name"
 
 func TestSpaceMembersImport(t *testing.T) {
-	const (
-		dir                = "./crs/spacemembers"
+	var (
+		dir                = crsDir("spacemembers")
 		namespace          = "spacemembers-import-test"
 		orgName            = "spacemembers-import-org"
 		spaceName          = "spacemembers-import-space"

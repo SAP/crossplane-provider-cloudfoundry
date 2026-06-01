@@ -14,7 +14,7 @@ var (
 	spaceRoleImportTestK8sResName = "e2e-test-space-role-import"
 	spaceRoleImportTestType       = "Developer"
 	spaceRoleImportTestUsername   = "e2e-test-space-role-import@example.com"
-	spaceRoleImportTestOrgName    = "cf-ci-e2e"
+	spaceRoleImportTestOrgName    = testOrgName
 	spaceRoleImportTestSpaceName  = "import-test-space-donotdelete"
 )
 

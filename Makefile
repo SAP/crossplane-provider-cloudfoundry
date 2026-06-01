@@ -1,3 +1,5 @@
+SHELL := /bin/bash
+
 # ====================================================================================
 # Setup Project
 BASE_NAME := cloudfoundry
@@ -185,19 +187,36 @@ e2e: local-deploy uptest
 export E2E_REUSE_CLUSTER = $(KIND_CLUSTER_NAME)
 export E2E_CLUSTER_NAME = $(KIND_CLUSTER_NAME)
 
+export BUILD_ID ?= $(shell date +"%H%M%S")
+
+TEST_CRS_PATH ?= test/e2e/crs
+TEST_CRS_RENDERED_PATH ?= .work/rendered-crs
+E2E_TEST_RUN_ARG := $(if $(testFilter),-run '^$(testFilter)$$',)
+
+.PHONY: generate-test-crs
+generate-test-crs:
+	@$(INFO) Generating CRS into $(TEST_CRS_RENDERED_PATH)
+	@rm -rf $(TEST_CRS_RENDERED_PATH)
+	@mkdir -p $(TEST_CRS_RENDERED_PATH)
+	@cp -R $(TEST_CRS_PATH)/. $(TEST_CRS_RENDERED_PATH)/
+	@for template in $$(find $(TEST_CRS_RENDERED_PATH) -type f -name "*.yaml"); do \
+		envsubst '$$BUILD_ID' < $$template > $$template.tmp && mv $$template.tmp $$template; \
+	done
+	@$(OK) CRS generated
+
 .PHONY: test-acceptance
-test-acceptance: local-deploy $(KUBECTL)
-	@echo "Creating crossplane-system namespace"
-	@$(KUBECTL) create namespace crossplane-system
+test-acceptance: local-deploy $(KUBECTL) generate-test-crs
+	@# xp-testing puts the provider secret in crossplane-system; local-deploy installs UXP in upbound-system, so the namespace isn't created upstream.
+	@$(KUBECTL) get namespace crossplane-system >/dev/null 2>&1 || $(KUBECTL) create namespace crossplane-system
 	@$(INFO) running integration tests
 	@$(INFO) Skipping long running tests
-	go test -v  $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -timeout=25m -run '$(testFilter)' 2>&1 | tee test-output.log
-	@echo "===========Test Summary==========="
-	@grep -E "PASS|FAIL" test-output.log
-	@case `tail -n 1 test-output.log` in \
-		*FAIL*) echo "❌ Error: Test failed"; exit 1 ;; \
-		*) echo "✅ All tests passed"; $(OK) integration tests passed ;; \
-	esac
+	@TEST_CRS_PATH=$(abspath $(TEST_CRS_RENDERED_PATH)) \
+		go test -v $(PROJECT_REPO)/test/e2e -tags=e2e -short -count=1 -test.v -timeout=25m $(E2E_TEST_RUN_ARG) 2>&1 | tee test-output.log; \
+		TEST_EXIT=$${PIPESTATUS[0]}; \
+		echo "===========Test Summary==========="; \
+		grep -E "PASS|FAIL" test-output.log; \
+		if [ "$$TEST_EXIT" -ne 0 ]; then echo "❌ Error: Test failed"; exit $$TEST_EXIT; fi; \
+		echo "✅ All tests passed"; $(OK) integration tests passed
 .PHONY: cobertura submodules fallthrough run crds.clean dev-debug dev-clean demo-cluster demo-install demo-clean demo-debug
 
 # ====================================================================================

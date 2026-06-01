@@ -8,7 +8,7 @@ spec:
     name: default
   forProvider:
     type: user-provided
-    name: e2e-serviceroutebinding-serviceinstance
+    name: e2e-serviceroutebinding-serviceinstance-$BUILD_ID
     spaceRef:
       name: e2e-serviceroutebinding-space
       policy:

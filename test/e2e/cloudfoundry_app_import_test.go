@@ -17,7 +17,7 @@ import (
 
 var (
 	appImportTestK8sResName = "e2e-test-app-import"
-	appImportTestAppName    = "e2e-test-app-import"
+	appImportTestAppName    = runScopedName("e2e-test-app-import")
 	appImportTestSpace      = "space-donotdelete"
 	appImportTestOrg        = testOrgName
 )

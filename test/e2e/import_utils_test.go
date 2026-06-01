@@ -28,8 +28,6 @@ var importManagementPolicies = []xpv1.ManagementAction{
 	xpv1.ManagementActionLateInitialize,
 }
 
-var UUT_BUILD_ID_KEY = "BUILD_ID"
-
 const (
 	importFeatureContextKey = "importExternalName"
 )
@@ -105,17 +103,18 @@ func NewImportTester[T resource.Managed](baseResource T, baseName string, o ...I
 		WaitCreateTimeout:            wait.WithTimeout(3 * time.Minute),
 		WaitDeletionTimeout:          wait.WithTimeout(3 * time.Minute),
 	}
-	it.BaseResource.SetName(it.GetPrefixedName())
 
 	for _, opt := range o {
 		opt(it)
 	}
 
+	it.BaseResource.SetName(it.GetPrefixedName())
+
 	return it
 }
 
 func (it *ImportTester[T]) GetPrefixedName() string {
-	return NewID(it.BaseName, envvar.GetOrDefault(UUT_BUILD_ID_KEY, "0000"))
+	return "id-" + NewID(it.BaseName, envvar.GetOrDefault(buildIDEnvKey, defaultTestBuildID))
 }
 
 func (it *ImportTester[T]) BuildTestFeature(name string) *features.FeatureBuilder {

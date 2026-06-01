@@ -19,7 +19,7 @@ import (
 )
 
 func TestCloudfoundry_App(t *testing.T) {
-	var dir = "./crs/app"
+	var dir = crsDir("app")
 	var namespace = "app-test"
 	var feats = map[string]struct {
 		// name of the managed resource
@@ -95,9 +95,10 @@ func TestCloudfoundry_App(t *testing.T) {
 			if len(app.Status.AtProvider.Routes) == 0 {
 				t.Fatalf("expected at least one route in app status, got 0")
 			}
-			r, ok := findRouteByHost(app.Status.AtProvider.Routes, "app-route-host-domainref")
+			expectedHost := runScopedName("app-route-host-domainref")
+			r, ok := findRouteByHost(app.Status.AtProvider.Routes, expectedHost)
 			if !ok {
-				t.Fatalf("expected route with host %q in app status, not found among %v", "app-route-host-domainref", hosts(app.Status.AtProvider.Routes))
+				t.Fatalf("expected route with host %q in app status, not found among %v", expectedHost, hosts(app.Status.AtProvider.Routes))
 			}
 			if r.URL == "" {
 				t.Errorf("expected route URL to be non-empty, got empty")
@@ -115,9 +116,10 @@ func TestCloudfoundry_App(t *testing.T) {
 			if len(app.Status.AtProvider.Routes) == 0 {
 				t.Fatalf("expected at least one route in app status, got 0")
 			}
-			r, ok := findRouteByHost(app.Status.AtProvider.Routes, "app-route-host-domainname")
+			expectedHost := runScopedName("app-route-host-domainname")
+			r, ok := findRouteByHost(app.Status.AtProvider.Routes, expectedHost)
 			if !ok {
-				t.Fatalf("expected route with host %q in app status, not found among %v", "app-route-host-domainname", hosts(app.Status.AtProvider.Routes))
+				t.Fatalf("expected route with host %q in app status, not found among %v", expectedHost, hosts(app.Status.AtProvider.Routes))
 			}
 			if r.URL == "" {
 				t.Errorf("expected route URL to be non-empty, got empty")
