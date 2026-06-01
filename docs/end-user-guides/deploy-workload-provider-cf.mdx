@@ -335,9 +335,9 @@ metadata:
 spec:
   forProvider:
     name: my-app
-        name: my-app
     docker:
      image: cloudfoundry/test-app
+    lifecycle: docker
     spaceRef:
       name: my-space
     routes:
