@@ -340,10 +340,11 @@ spec:
     lifecycle: docker
     spaceRef:
       name: my-space
-    routes:
-    - routeRef:
-        name: my-route
-        lifecycle: docker
+    # Routes are not supported yet in the current version
+    # routes:
+    # - routeRef:
+    #     name: my-route
+    #     lifecycle: docker
     processes:
     - type: web
       diskQuota: "512MB"
