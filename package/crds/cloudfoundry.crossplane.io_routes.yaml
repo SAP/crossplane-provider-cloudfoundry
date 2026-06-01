@@ -34,8 +34,15 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Route is the Schema for the Routes API. Provides a Cloud Foundry
-          route resource.
+        description: |-
+          Route is the Schema for the Routes API. Provides a Cloud Foundry route resource.
+
+          External-Name Configuration:
+            - Follows Standard: yes
+            - Format: Route GUID (UUID format)
+            - How to find:
+            - UI: Not available in the BTP Cockpit
+            - CLI: Use CF CLI: `cf routes` and find the GUID in the output
         properties:
           apiVersion:
             description: |-

@@ -280,6 +280,14 @@ type AppStatus struct {
 // +kubebuilder:storageversion
 
 // App is the Schema for the Apps API. Provides a Cloud Foundry resource to manage applications.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: App GUID (UUID format)
+//   - How to find:
+//   - UI: In the BTP Cockpit, navigate to your app and find the ID after app/ in the URL
+//   - CLI: `cf app <APP_NAME> --guid`
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"

@@ -104,16 +104,18 @@ type RouteStatus struct {
 	AtProvider        RouteObservation `json:"atProvider,omitempty"`
 }
 
-// External-Name Configuration:
-//   - Follows Standard: yes
-//   - Format: Route GUID (UUID format)
-//   - How to find:
-//     - UI: Not available in the BTP Cockpit
-//     - CLI: Use CF CLI: `cf routes` and find the GUID in the output
 // +kubebuilder:object:root=true
 // +kubebuilder:storageversion
 
 // Route is the Schema for the Routes API. Provides a Cloud Foundry route resource.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: Route GUID (UUID format)
+//   - How to find:
+//   - UI: Not available in the BTP Cockpit
+//   - CLI: Use CF CLI: `cf routes` and find the GUID in the output
+//
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"

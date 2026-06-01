@@ -34,8 +34,15 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: App is the Schema for the Apps API. Provides a Cloud Foundry
-          resource to manage applications.
+        description: |-
+          App is the Schema for the Apps API. Provides a Cloud Foundry resource to manage applications.
+
+          External-Name Configuration:
+            - Follows Standard: yes
+            - Format: App GUID (UUID format)
+            - How to find:
+            - UI: In the BTP Cockpit, navigate to your app and find the ID after app/ in the URL
+            - CLI: `cf app <APP_NAME> --guid`
         properties:
           apiVersion:
             description: |-
