@@ -26,8 +26,11 @@ jobs:
     with:
       checkout-ref: ${{ github.event.pull_request.head.sha }}
       environment: ${{ github.event_name == 'pull_request_target' && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association) && 'pr-e2e-no-approval' || 'pr-e2e-approval' }}
-    secrets:
-      CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
-      CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
+    secrets: inherit
+      # The secrets are inherited from the repository, but we need to explicitly allowlist them here. See https://docs.github.com/en/actions/security-guides/automatic-token-authentication#permissions-for-the-github_token for details.
+    
+    # secrets:
+      # CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
+      #CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
       # USER_WHERE_ROLES_GET_ASSIGNED_EMAIL: ${{ secrets.USER_WHERE_ROLES_GET_ASSIGNED_EMAIL }}
       # TECHNICAL_USER_EMAIL: ${{ secrets.TECHNICAL_USER_EMAIL }}
