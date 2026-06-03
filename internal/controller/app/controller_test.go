@@ -111,6 +111,12 @@ func withObservedLabels(labels map[string]*string) modifier {
 	}
 }
 
+func withLabels(labels map[string]*string) modifier {
+	return func(r *v1alpha1.App) {
+		r.Spec.ForProvider.Labels = labels
+	}
+}
+
 func newApp(typ string, m ...modifier) *v1alpha1.App {
 	r := &v1alpha1.App{
 		TypeMeta: metav1.TypeMeta{
@@ -823,6 +829,37 @@ func TestUpdate(t *testing.T) {
 				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
 				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
 				// No Stop/Start expected — app is already stopped
+				return m
+			},
+		},
+
+		"MetadataOnly": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withLabels(map[string]*string{"env": ptr.To("prod")}),
+					withObservedLabels(map[string]*string{"env": ptr.To("dev")})),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withLabels(map[string]*string{"env": ptr.To("prod")}),
+					withObservedLabels(map[string]*string{"env": ptr.To("dev")})),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				m.On("Update", guid).Return(
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					nil,
+				)
 				return m
 			},
 		},

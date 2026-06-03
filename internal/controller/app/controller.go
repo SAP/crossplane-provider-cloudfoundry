@@ -238,26 +238,33 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource+": Failed to detect changes")
 	}
 
-	if changes.HasField("docker_image") {
+	if err := c.applyAppUpdates(ctx, guid, cr, changes); err != nil {
+		return managed.ExternalUpdate{}, err
+	}
+
+	return managed.ExternalUpdate{}, nil
+}
+
+func (c *external) applyAppUpdates(ctx context.Context, guid string, cr *v1alpha1.App, changes *app.ChangeDetection) error {
+	dockerChanged := changes.HasField("docker_image")
+	if dockerChanged {
 		if err := c.updateDockerImage(ctx, guid, cr); err != nil {
-			return managed.ExternalUpdate{}, err
+			return err
 		}
 	}
 
 	if changes.HasField("environment") {
-		if err := c.updateEnvVars(ctx, guid, cr, changes.HasField("docker_image")); err != nil {
-			return managed.ExternalUpdate{}, err
+		if err := c.updateEnvVars(ctx, guid, cr, dockerChanged); err != nil {
+			return err
 		}
 	}
 
-	if changes.HasOtherChanges("docker_image", "environment") {
+	if changes.HasOtherChanges("docker_image", "environment") || !changes.HasChanges() {
 		_, err := c.client.Update(ctx, guid, cr, cr.Spec.ForProvider)
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
-		}
+		return errors.Wrap(err, errUpdateResource)
 	}
 
-	return managed.ExternalUpdate{}, nil
+	return nil
 }
 
 // updateDockerImage pushes a new docker image for the app.
