@@ -9,17 +9,15 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/connection"
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
-	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	scv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	pcv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
@@ -43,20 +41,14 @@ const (
 func Setup(mgr ctrl.Manager, o controller.Options) error {
 	name := managed.ControllerName(v1alpha1.Org_GroupKind)
 
-	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
-	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
-		cps = append(cps, connection.NewDetailsManager(mgr.GetClient(), scv1alpha1.StoreConfigGroupVersionKind))
-	}
-
 	options := []managed.ReconcilerOption{
-		managed.WithExternalConnecter(&connector{
+		managed.WithExternalConnector(&connector{
 			kube:  mgr.GetClient(),
-			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
+			usage: resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithPollInterval(o.PollInterval),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-		managed.WithConnectionPublishers(cps...),
 		managed.WithInitializers(),
 	}
 
@@ -78,7 +70,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 // A connector supplies a function for the Reconciler to create a client to the external CloudFoundry resources.
 type connector struct {
 	kube  k8s.Client
-	usage resource.Tracker
+	usage resource.LegacyTracker
 }
 
 // Connect typically produces an ExternalClient by:
@@ -91,7 +83,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.New(errNotOrgKind)
 	}
 
-	if err := c.usage.Track(ctx, mg); err != nil {
+	if err := c.usage.Track(ctx, mg.(resource.LegacyManaged)); err != nil {
 		return nil, errors.Wrap(err, errTrackUsage)
 	}
 
@@ -110,7 +102,7 @@ func (c *external) Disconnect(ctx context.Context) error {
 	return nil
 }
 
-// An external is a managed.ExternalConnecter that is using the CloudFoundry API to observe and modify resources.
+// An external is a managed.ExternalConnector that is using the CloudFoundry API to observe and modify resources.
 type external struct {
 	client org.Client
 	job    job.Job

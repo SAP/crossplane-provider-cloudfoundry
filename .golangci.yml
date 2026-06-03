@@ -86,6 +86,14 @@ linters:
       - linters:
           - staticcheck
         text: 'SA3000:'
+      # SA1019 deprecation warnings for APIs we are forced to use because
+      # crossplane-runtime/v2 still exposes them in public function signatures
+      # (e.g. event.NewAPIRecorder takes the legacy record.EventRecorder, and
+      # usage.Track requires resource.LegacyManaged). Until upstream provides
+      # non-deprecated alternatives we must keep using these symbols.
+      - linters:
+          - staticcheck
+        text: 'SA1019:.*(LegacyManaged|GetEventRecorderFor|WithExternalConnecter|ExternalConnecter)'
       - linters:
           - gosec
         text: 'G101:'

@@ -15,7 +15,7 @@ import (
 
 	v1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/test"
-	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
+	xpmeta "github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"k8s.io/klog/v2"
 	res "sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"

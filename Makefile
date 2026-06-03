@@ -105,8 +105,9 @@ XPKG_REG_ORGS ?= ghcr.io/sap/crossplane-provider-cloudfoundry/crossplane
 -include build/makelib/xpkg.mk
 
 # NOTE(hasheddan): we force image building to happen prior to xpkg build so that
-# we ensure image is present in daemon.
-xpkg.build.crossplane-provider-cloudfoundry: do.build.images
+# we ensure image is present in daemon. The target name must match $(XPKGS) above
+# (provider-cloudfoundry), not the project name (crossplane-provider-cloudfoundry).
+xpkg.build.provider-cloudfoundry: do.build.images
 
 # NOTE: the build submodule currently overrides XDG_CACHE_HOME in order to
 # force the Helm 3 to use the .work/helm directory. This causes Go on Linux

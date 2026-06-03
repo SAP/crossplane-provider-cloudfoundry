@@ -1,7 +1,7 @@
 package v1alpha1
 
 import (
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 )
 
 // SpaceReference defines a reference to a Cloud Foundry space.

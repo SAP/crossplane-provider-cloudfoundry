@@ -11,7 +11,7 @@ import (
 	"github.com/SAP/xp-clifford/erratt"
 	"github.com/SAP/xp-clifford/yaml"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
