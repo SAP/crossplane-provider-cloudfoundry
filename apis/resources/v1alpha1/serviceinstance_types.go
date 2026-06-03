@@ -69,6 +69,11 @@ type Managed struct {
 	ServicePlan *ServicePlanParameters `json:"servicePlan,omitempty"`
 
 	// (Attributes) Configuration parameters for the managed service instance, supplied as a K8S runtime.RawExtension object.
+	// 
+	// Default parameters applied by the BTP cockpit may differ from those
+	// applied via the CF API. It is recommended to explicitly specify all
+	// parameters to avoid unexpected behavior.
+    //
 	// The `parameters` field is NOT secret or secured in any way and should NEVER be used to hold sensitive information.
 	// To set parameters that contain secret information, you should ALWAYS store that information in a Secret and use the `paramsSecretRef` field.
 	// +kubebuilder:pruning:PreserveUnknownFields

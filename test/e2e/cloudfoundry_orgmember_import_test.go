@@ -19,8 +19,8 @@ import (
 const orgMembersExternalNameAnnotation = "crossplane.io/external-name"
 
 func TestOrgMembersImport(t *testing.T) {
-	const (
-		dir                = "./crs/orgmembers"
+	var (
+		dir                = crsDir("orgmembers")
 		namespace          = "orgmembers-import-test"
 		orgName            = "orgmembers-import-org"
 		orgMembersName     = "e2e-org-members-import"

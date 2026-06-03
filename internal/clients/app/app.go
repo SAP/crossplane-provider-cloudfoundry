@@ -4,12 +4,12 @@ package app
 
 import (
 	"context"
+	"reflect"
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	"github.com/google/uuid"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -28,6 +28,8 @@ type AppClient interface {
 	Start(ctx context.Context, guid string) (*resource.App, error)
 	Stop(ctx context.Context, guid string) (*resource.App, error)
 	// Restart(ctx context.Context, guid string) (*resource.App, error)
+	GetEnvironmentVariables(ctx context.Context, guid string) (map[string]*string, error)
+	SetEnvironmentVariables(ctx context.Context, guid string, envVars map[string]*string) (map[string]*string, error)
 }
 
 // ManifestClient defines the interface to communicate with Cloud Foundry Manifest resource.
@@ -37,11 +39,17 @@ type ManifestClient interface {
 	ManifestDiff(ctx context.Context, spaceGUID string, manifest string) (*resource.ManifestDiff, error)
 }
 
+// RouteFetcher defines the interface to fetch routes for an application.
+type RouteFetcher interface {
+	ListForAppAll(ctx context.Context, appGUID string, opts *client.RouteListOptions) ([]*resource.Route, error)
+}
+
 type Client struct {
 	AppClient
 	PushClient
 	job.Job
 	servicecredentialbinding.ServiceCredentialBinding
+	RouteFetcher
 }
 
 // NewAppClient returns a new AppClient.
@@ -51,18 +59,14 @@ func NewAppClient(client *client.Client) *Client {
 		PushClient:               NewPushClient(client),
 		Job:                      client.Jobs,
 		ServiceCredentialBinding: servicecredentialbinding.NewClient(client),
+		RouteFetcher:             client.Routes,
 	}
 }
 
 type DockerCredentials resource.DockerCredentials
 
-// GetByIDOrSpec gets the App by GUID or spec.
-func (c *Client) GetByIDOrSpec(ctx context.Context, guid string, spec v1alpha1.AppParameters) (*resource.App, error) {
-	_, err := uuid.Parse(guid)
-	if err == nil {
-		return c.AppClient.Get(ctx, guid)
-	}
-
+// GetBySpec gets an App by matching spec fields (name and space).
+func (c *Client) GetBySpec(ctx context.Context, spec v1alpha1.AppParameters) (*resource.App, error) {
 	return c.AppClient.Single(ctx, newListOption(spec))
 }
 
@@ -137,6 +141,32 @@ func GenerateObservation(res *resource.App) v1alpha1.AppObservation {
 	return obs
 }
 
+// FetchRoutes fetches all routes mapped to the given application and converts
+// them to AppRouteObservation values. Errors from the CF API are returned
+// non-nil so the caller can decide whether to make them fatal.
+// If no RouteFetcher is configured, FetchRoutes returns an empty slice.
+func (c *Client) FetchRoutes(ctx context.Context, appGUID string) ([]v1alpha1.AppRouteObservation, error) {
+	if c.RouteFetcher == nil {
+		return nil, nil
+	}
+	routes, err := c.ListForAppAll(ctx, appGUID, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	obs := make([]v1alpha1.AppRouteObservation, 0, len(routes))
+	for _, r := range routes {
+		obs = append(obs, v1alpha1.AppRouteObservation{
+			URL:      r.URL,
+			Host:     r.Host,
+			Path:     r.Path,
+			Protocol: r.Protocol,
+			Port:     r.Port,
+		})
+	}
+	return obs, nil
+}
+
 // ChangeDetection represents what fields have changed
 type ChangeDetection struct {
 	ChangedFields map[string]struct{}
@@ -152,23 +182,59 @@ func (cd *ChangeDetection) HasField(field string) bool {
 	return ok
 }
 
+// HasOtherChanges returns true if there are changed fields other than the excluded ones.
+func (cd *ChangeDetection) HasOtherChanges(excluded ...string) bool {
+	excludeSet := make(map[string]struct{}, len(excluded))
+	for _, f := range excluded {
+		excludeSet[f] = struct{}{}
+	}
+	for f := range cd.ChangedFields {
+		if _, skip := excludeSet[f]; !skip {
+			return true
+		}
+	}
+	return false
+}
+
+// envVarsChanged returns true if the spec environment variables differ from the current manifest.
+func envVarsChanged(spec v1alpha1.AppParameters, appManifest *operation.AppManifest) bool {
+	specEnv := spec.Environment
+	if specEnv == nil {
+		specEnv = map[string]string{}
+	}
+	currentEnv := appManifest.Env
+	if currentEnv == nil {
+		currentEnv = map[string]string{}
+	}
+	return !reflect.DeepEqual(specEnv, currentEnv)
+}
+
 // DetectChanges determines what fields have changed between spec and status
 func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (*ChangeDetection, error) {
 	changes := &ChangeDetection{
 		ChangedFields: make(map[string]struct{}),
 	}
 
-	// Check if Docker image changed
-	if spec.Lifecycle == "docker" && spec.Docker != nil {
-		appManifest, err := getAppManifest(status.Name, status.AppManifest)
+	// Parse manifest once for all checks (treat missing manifest as empty)
+	appManifest := &operation.AppManifest{}
+	if status.AppManifest != "" {
+		m, err := getAppManifest(status.Name, status.AppManifest)
 		if err != nil {
 			return nil, err
 		}
-		if appManifest.Docker != nil {
-			if spec.Docker.Image != appManifest.Docker.Image {
-				changes.ChangedFields["docker_image"] = struct{}{}
-			}
+		appManifest = m
+	}
+
+	// Check if Docker image changed
+	if spec.Lifecycle == "docker" && spec.Docker != nil {
+		if appManifest.Docker == nil || spec.Docker.Image != appManifest.Docker.Image {
+			changes.ChangedFields["docker_image"] = struct{}{}
 		}
+	}
+
+	// Check if environment variables changed
+	if envVarsChanged(spec, appManifest) {
+		changes.ChangedFields["environment"] = struct{}{}
 	}
 
 	// Check if name changed

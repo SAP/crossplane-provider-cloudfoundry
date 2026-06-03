@@ -28,32 +28,65 @@ on:
       CF_ENVIRONMENT:
         description: contains the URL of the CF API endpoint
         required: true
-      # USER_WHERE_ROLES_GET_ASSIGNED_EMAIL:
-      #   description: contains the email of a technical user (different to TECHNICAL_USER_EMAIL)
-      #   required: true
-      # TECHNICAL_USER_EMAIL:
-      #   description: contains the email of the BTP_TECHNICAL_USER
-      #   required: true
 
 permissions:
   contents: read
 
+# Serialize all e2e runs globally: every run shares cf-ci-e2e, and the orgrole
+# and spacerole import tests assign roles to static usernames in sap.ids that
+# would race across concurrent runs.
+concurrency:
+  group: e2e-cf-ci-e2e
+  cancel-in-progress: false
+
+env:
+  BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+
 jobs:
-  e2e-tests:
+  prepare-matrix:
     runs-on: ubuntu-latest
     environment: ${{ inputs.environment }}
+    outputs:
+      test-names: ${{ steps.set-matrix.outputs.test-names }}
     steps:
       - name: checkout repo
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          #use inputs.checkout-ref to be able to call it from a pull_request_target workflow, since there it needs to be github.event.pull_request.head.sha and not the default
+          ref: ${{ inputs.checkout-ref }}
+
+      - name: Set matrix with test names
+        id: set-matrix
+        run: |
+          names="$(grep -rh --include='*_test.go' -o -E 'func (Test[A-Za-z0-9_]+)\(t \*testing.T\)' test/e2e | sed 's/func //;s/(t \*testing.T)//' | jq -R . | jq -cs .)"
+          count="$(echo "$names" | jq 'length')"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No Test* functions discovered under test/e2e — refusing to render an empty matrix"
+            exit 1
+          fi
+          echo "test-names=$names" >> "$GITHUB_OUTPUT"
+
+      - name: Print test names
+        run: |
+          echo "Test names: ${{ steps.set-matrix.outputs.test-names }}"
+
+  e2e-test:
+    runs-on: ubuntu-latest
+    needs: prepare-matrix
+    strategy:
+      fail-fast: false
+      matrix:
+        testName: ${{ fromJson(needs.prepare-matrix.outputs.test-names) }}
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
           ref: ${{ inputs.checkout-ref }}
           submodules: true
 
       - name: Set up Go
         uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
         with:
-          go-version: '1.25'
+          go-version-file: 'go.mod'
 
       - name: Install Helm
         run: |
@@ -66,14 +99,51 @@ jobs:
       - name: Install gettext for envsubst
         run: sudo apt-get update && sudo apt-get install -y gettext
 
-      - name: Set BUILD_ID
-        run: echo "BUILD_ID=${{ github.run_number }}" >> $GITHUB_ENV
-
       - name: Run build and e2e test
-        run: make test-acceptance
+        run: make test-acceptance testFilter=${{ matrix.testName }}
         env:
           CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
           CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
-          BUILD_ID: ${{ env.BUILD_ID }}
-          # USER_WHERE_ROLES_GET_ASSIGNED_EMAIL: ${{ secrets.USER_WHERE_ROLES_GET_ASSIGNED_EMAIL }}
-          # TECHNICAL_USER_EMAIL: ${{ secrets.TECHNICAL_USER_EMAIL }}
+
+  cleanup-e2e:
+    runs-on: ubuntu-latest
+    needs: [prepare-matrix, e2e-test]
+    if: always() && needs.prepare-matrix.result == 'success' # intentional: workflow cancellation skips cleanup; resources will persist until the next run
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.base_ref || github.sha }}
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Clean up CF resources
+        run: |
+          go run .github/workflows/cleanup.go
+        env:
+          CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
+          CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
+
+  e2e-test-success:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare-matrix
+      - e2e-test
+    timeout-minutes: 1
+    if: always()
+    steps:
+      - name: Fail for failed prepare-matrix job
+        if: |
+          needs.prepare-matrix.result == 'failure' ||
+          needs.prepare-matrix.result == 'cancelled'
+        run: exit 1
+      - name: Fail for failed matrix jobs
+        if: |
+          needs.e2e-test.result == 'failure' ||
+          needs.e2e-test.result == 'cancelled' ||
+          needs.e2e-test.result == 'skipped'
+        run: exit 1

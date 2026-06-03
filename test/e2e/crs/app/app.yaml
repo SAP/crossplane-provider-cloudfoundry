@@ -5,7 +5,7 @@ metadata:
   name: e2e-app
 spec:
   forProvider:
-    name: e2e-app
+    name: e2e-app-$BUILD_ID
     spaceRef:
       name: app-space
       policy:
@@ -31,7 +31,7 @@ metadata:
   name: e2e-app-2
 spec:
   forProvider:
-    name: e2e-app-2
+    name: e2e-app-2-$BUILD_ID
     spaceRef:
       name: app-space
       policy:

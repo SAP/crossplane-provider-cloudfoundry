@@ -10,7 +10,10 @@ on:
     - synchronize
     - ready_for_review
     paths-ignore:
-      - '*.md'
+      - '**.md'
+
+permissions:
+  contents: read
 
 jobs:
   run-go-license-check:

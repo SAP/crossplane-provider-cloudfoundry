@@ -47,7 +47,7 @@ func TestServiceRouteBindingImportFlow(t *testing.T) {
 		srbImportTestK8sResName,
 		WithWaitCreateTimeout[*v1alpha1.ServiceRouteBinding](wait.WithTimeout(5*time.Minute)),
 		WithWaitDeletionTimeout[*v1alpha1.ServiceRouteBinding](wait.WithTimeout(5*time.Minute)),
-		WithDependentResourceDirectory[*v1alpha1.ServiceRouteBinding]("./crs/externalNamesImport/serviceRouteBinding"),
+		WithDependentResourceDirectory[*v1alpha1.ServiceRouteBinding](crsDir("externalNamesImport/serviceRouteBinding")),
 	)
 
 	importFeature := importTester.BuildTestFeature("CF ServiceRouteBinding Import Flow").Feature()

@@ -6,7 +6,7 @@ metadata:
   name: e2e-space-quota
 spec:
   forProvider:
-    name: e2e-space-quota
+    name: e2e-space-quota-$BUILD_ID
     orgRef:
       name: e2e-org
     allowPaidServicePlans: false

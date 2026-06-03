@@ -14,7 +14,7 @@ import (
 
 var (
 	spaceQuotaImportTestK8sResName  = "e2e-test-space-quota-import"
-	spaceQuotaImportTestName        = "e2e-test-space-quota"
+	spaceQuotaImportTestName        = runScopedName("e2e-test-space-quota")
 	spaceQuotaImportTestOrgName     = "upgrade-test-org"
 	spaceQuotaImportTestSpaceName   = "upgrade-test-import-space"
 	SpaceQuotaAllowPaidServicePlans = false
@@ -49,7 +49,7 @@ func TestSpaceQuotaImportFlow(t *testing.T) {
 		spaceQuotaImportTestK8sResName,
 		WithWaitCreateTimeout[*v1alpha1.SpaceQuota](wait.WithTimeout(5*time.Minute)),
 		WithWaitDeletionTimeout[*v1alpha1.SpaceQuota](wait.WithTimeout(5*time.Minute)),
-		WithDependentResourceDirectory[*v1alpha1.SpaceQuota]("./crs/externalNamesImport/spaceQuota"),
+		WithDependentResourceDirectory[*v1alpha1.SpaceQuota](crsDir("externalNamesImport/spaceQuota")),
 	)
 
 	importFeature := importTester.BuildTestFeature("CF SpaceQuota Import Flow").Feature()

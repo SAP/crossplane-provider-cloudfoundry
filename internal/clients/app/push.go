@@ -115,6 +115,11 @@ func newManifestFromSpec(forProvider v1alpha1.AppParameters, dockerCredentials *
 	if forProvider.LogRateLimitPerSecond != nil {
 		manifest.LogRateLimitPerSecond = *forProvider.LogRateLimitPerSecond
 	}
+
+	if len(forProvider.Environment) > 0 {
+		manifest.Env = forProvider.Environment
+	}
+
 	return manifest, nil
 }
 

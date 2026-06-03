@@ -22,6 +22,27 @@ type AppObservation struct {
 
 	// The yaml representation of the environment variables.
 	AppManifest string `json:"appManifest,omitempty"`
+
+	// The list of routes currently mapped to the application.
+	Routes []AppRouteObservation `json:"routes,omitempty"`
+}
+
+// AppRouteObservation represents an observed route for the application.
+type AppRouteObservation struct {
+	// The full URL of the route (e.g. myapp.apps.example.com).
+	URL string `json:"url,omitempty"`
+
+	// The host name of the route.
+	Host string `json:"host,omitempty"`
+
+	// The path of the route.
+	Path string `json:"path,omitempty"`
+
+	// The protocol of the route.
+	Protocol string `json:"protocol,omitempty"`
+
+	// The port of the route (for TCP routes).
+	Port *int `json:"port,omitempty"`
 }
 
 type AppParameters struct {
@@ -88,9 +109,9 @@ type AppParameters struct {
 	// +kubebuilder:validation:Optional
 	// Sidecars []SidecarConfiguration `json:"sidecars,omitempty"`
 
-	// (NOT SUPPORTED YET) A key-value mapping of environment variables to be used for the app when running
+	// A key-value mapping of environment variables to be used for the app when running
 	// +kubebuilder:validation:Optional
-	Environment *runtime.RawExtension `json:"environment,omitempty"`
+	Environment map[string]string `json:"environment,omitempty"`
 
 	// The log rate limit for all instances of an app. This attribute requires a unit of measurement: B, K, KB, M, MB, G, or GB, in either uppercase or lowercase.
 	// +kubebuilder:validation:Optional
@@ -259,6 +280,14 @@ type AppStatus struct {
 // +kubebuilder:storageversion
 
 // App is the Schema for the Apps API. Provides a Cloud Foundry resource to manage applications.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: App GUID (UUID format)
+//   - How to find:
+//   - UI: In the BTP Cockpit, navigate to your app and find the ID after app/ in the URL
+//   - CLI: `cf app <APP_NAME> --guid`
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"

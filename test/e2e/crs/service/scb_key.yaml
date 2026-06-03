@@ -5,7 +5,7 @@ metadata:
   namespace: service-test
 spec:
   forProvider:
-    name: e2e-scb-key
+    name: e2e-scb-key-$BUILD_ID
     type: key
     serviceInstanceRef:
       name: e2e-service-instance
@@ -16,5 +16,5 @@ spec:
       ttl: 2h
   connectionDetailsAsJSON: false
   writeConnectionSecretToRef:
-    name: e2e-service-key
+    name: e2e-service-key-$BUILD_ID
     namespace: default # keep it default, changing it to service-test will cause the test to hang
