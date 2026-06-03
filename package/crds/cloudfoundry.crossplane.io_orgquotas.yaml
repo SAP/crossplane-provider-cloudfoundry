@@ -35,14 +35,14 @@ spec:
     schema:
       openAPIV3Schema:
         description: |-
+          OrgQuota is the Schema for the OrgQuotas API. Provides a Cloud Foundry resource to manage org quota definitions.
+
           External-Name Configuration:
             - Follows Standard: yes
             - Format: GUID (UUID v4)
             - How to find:
             - UI: Cloud Foundry > Quota Definitions > <quota name> (GUID in URL or details)
             - CLI: cf curl /v3/organization_quotas?names=<name> (field: guid)
-
-          OrgQuota is the Schema for the OrgQuotas API. Provides a Cloud Foundry resource to manage org quota definitions.
         properties:
           apiVersion:
             description: |-
