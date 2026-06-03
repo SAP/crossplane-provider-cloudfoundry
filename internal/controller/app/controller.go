@@ -193,16 +193,7 @@ func (c *external) updateObservedStatus(ctx context.Context, cr *v1alpha1.App, r
 		cr.SetConditions(xpv1.Unavailable())
 	}
 
-	isUpToDate, err := app.IsUpToDate(cr, cr.Spec.ForProvider, cr.Status.AtProvider)
-	if err != nil {
-		return managed.ExternalObservation{}, err
-	}
-
-	return managed.ExternalObservation{
-		ResourceExists:          true,
-		ResourceUpToDate:        isUpToDate,
-		ResourceLateInitialized: lateInitialized,
-	}, nil
+	return app.IsUpToDate(cr, cr.Spec.ForProvider, cr.Status.AtProvider)
 }
 
 // Create managed resource
@@ -275,7 +266,7 @@ func (c *external) updateDockerImage(ctx context.Context, guid string, cr *v1alp
 	if err != nil {
 		return errors.Wrap(err, errSecret)
 	}
-	_, err = c.client.UpdateAndPush(ctx, guid, cr.Spec.ForProvider, dockerCredentials)
+	_, err = c.client.UpdateAndPush(ctx, guid, cr, cr.Spec.ForProvider, dockerCredentials)
 	return errors.Wrap(err, errUpdateResource)
 }
 

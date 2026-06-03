@@ -15,11 +15,8 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
-	"github.com/google/go-cmp/cmp"
-	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
-	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/app"
@@ -108,9 +105,18 @@ func withAppManifest(manifest string) modifier {
 	}
 }
 
+func withObservedLabels(labels map[string]*string) modifier {
+	return func(r *v1alpha1.App) {
+		r.Status.AtProvider.Labels = labels
+	}
+}
+
 func newApp(typ string, m ...modifier) *v1alpha1.App {
 	r := &v1alpha1.App{
-
+		TypeMeta: metav1.TypeMeta{
+			Kind:       v1alpha1.App_Kind,
+			APIVersion: v1alpha1.CRDGroupVersion.String(),
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Finalizers:  []string{},
@@ -137,6 +143,7 @@ func newMockPush() *fake.MockPush {
 		nil,
 	)
 	return m
+
 }
 
 func withDefaultMetadataLabels() modifier {
@@ -240,11 +247,15 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ResourceLateInitialized: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceLateInitialized: true},
 				err: nil,
 			},
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
+				m.On("Get", guid).Return(
+					fake.AppNil,
+					fake.ErrNoResultReturned,
+				)
 				m.On("Single").Return(
 					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
 					nil,
@@ -268,6 +279,10 @@ func TestObserve(t *testing.T) {
 					fake.AppNil,
 					fake.ErrNoResultReturned,
 				)
+				m.On("Single").Return(
+					fake.AppNil,
+					fake.ErrNoResultReturned,
+				)
 				return m
 			},
 			kube: &test.MockClient{},
@@ -283,7 +298,12 @@ func TestObserve(t *testing.T) {
 					withStatus(guid, "STARTED"),
 					withObservedName(name),
 					withAppManifest("applications:\n- name: "+name),
-					withConditions(xpv1.Available())),
+					withConditions(xpv1.Available()),
+					withObservedLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}),
+				),
 
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -291,17 +311,17 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").SetLabels(map[string]*string{
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
 						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
 						"crossplane-name": ptr.To("my-app"),
-					}).App,
+					}).SetState("STARTED").App,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").SetLabels(map[string]*string{
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
 						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
 						"crossplane-name": ptr.To("my-app"),
-					}).App,
+					}).SetState("STARTED").App,
 					nil,
 				)
 				return m
@@ -324,24 +344,29 @@ func TestObserve(t *testing.T) {
 						Path:     "",
 						Protocol: "http",
 					}),
-					withConditions(xpv1.Available())),
+					withConditions(xpv1.Available()),
+					withObservedLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}),
+				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").SetLabels(map[string]*string{
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
 						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
 						"crossplane-name": ptr.To("my-app"),
-					}).App,
+					}).SetState("STARTED").App,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").SetLabels(map[string]*string{
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
 						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
 						"crossplane-name": ptr.To("my-app"),
-					}).App,
+					}).SetState("STARTED").App,
 					nil,
 				)
 				return m
@@ -425,24 +450,29 @@ func TestObserve(t *testing.T) {
 						Host:     "stale",
 						Protocol: "http",
 					}),
-					withConditions(xpv1.Available())),
+					withConditions(xpv1.Available()),
+					withObservedLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}),
+				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").SetLabels(map[string]*string{
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
 						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
 						"crossplane-name": ptr.To("my-app"),
-					}).App,
+					}).SetState("STARTED").App,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").SetLabels(map[string]*string{
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
 						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
 						"crossplane-name": ptr.To("my-app"),
-					}).App,
+					}).SetState("STARTED").App,
 					nil,
 				)
 				return m
