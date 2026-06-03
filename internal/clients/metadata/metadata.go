@@ -100,6 +100,9 @@ func MetadataMapContains(desired, actual map[string]*string) bool {
 	for key, desiredVal := range desired {
 		actualVal, exists := actual[key]
 		if !exists {
+			if desiredVal == nil {
+				continue
+			}
 			return false
 		}
 		if (desiredVal == nil) != (actualVal == nil) {

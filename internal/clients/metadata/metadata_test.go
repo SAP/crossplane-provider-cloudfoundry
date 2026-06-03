@@ -342,6 +342,12 @@ func TestMetadataMapContains(t *testing.T) {
 			want:    true,
 		},
 		{
+			name:    "nil pointer deletion marker already absent",
+			desired: map[string]*string{"key": nil},
+			actual:  map[string]*string{"extra": ptrTo("data")},
+			want:    true,
+		},
+		{
 			name:    "nil pointer vs non-nil pointer",
 			desired: map[string]*string{"key": nil},
 			actual:  map[string]*string{"key": ptrTo("")},
