@@ -173,10 +173,13 @@ jobs:
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: provider-image
-          path: .
+          path: ${{ runner.temp }}/artifacts/provider-image
+
+      - name: Validate provider image artifact
+        run: test -f "${{ runner.temp }}/artifacts/provider-image/provider-image.tar"
 
       - name: Load provider image
-        run: docker load -i provider-image.tar
+        run: docker load -i "${{ runner.temp }}/artifacts/provider-image/provider-image.tar"
 
       - name: Install Helm
         uses: azure/setup-helm@v4
