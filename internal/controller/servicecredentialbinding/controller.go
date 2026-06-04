@@ -144,6 +144,14 @@ type external struct {
 	observationStateHandler ObservationStateHandler
 }
 
+// isBindingNotFoundError returns true if the error indicates the binding was not found
+func isBindingNotFoundError(err error) bool {
+	return errors.Is(err, cfclient.ErrNoResultsReturned) ||
+		errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
+		cfresource.IsResourceNotFoundError(err) ||
+		cfresource.IsServiceBindingNotFoundError(err)
+}
+
 // Observe checks the observed state of the resource and updates the managed resource's status.
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
 	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
@@ -163,12 +171,10 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	guid := meta.GetExternalName(cr)
 	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, cr.Spec.ForProvider)
-	if errors.Is(err, cfclient.ErrNoResultsReturned) ||
-		errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
-		cfresource.IsResourceNotFoundError(err) ||
-		cfresource.IsServiceBindingNotFoundError(err) {
+	if isBindingNotFoundError(err) {
 		return managed.ExternalObservation{ResourceExists: false}, nil
-	} else if err != nil {
+	}
+	if err != nil {
 		return managed.ExternalObservation{}, fmt.Errorf(errGet, err)
 	}
 
@@ -235,7 +241,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errWrongCRType)
 	}
 
-	if externalName := meta.GetExternalName(cr); externalName != "" && uuid.Validate(externalName) == nil {
+	if externalName := meta.GetExternalName(cr); externalName != "" && isValidUUID(externalName) {
 		if _, err := scb.Update(ctx, c.scbClient, externalName, cr.Spec.ForProvider); err != nil {
 			return managed.ExternalUpdate{}, fmt.Errorf(errUpdate, err)
 		}
@@ -266,13 +272,12 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	externalName := meta.GetExternalName(cr)
-	if uuid.Validate(externalName) != nil {
+	if !isValidUUID(externalName) {
 		// External name is not a valid UUID; nothing to delete in CF
 		return managed.ExternalDelete{}, nil
 	}
 
-	err := scb.Delete(ctx, c.scbClient, externalName)
-	if err := clients.IgnoreNotFoundErr(err); err != nil {
+	if err := clients.IgnoreNotFoundErr(scb.Delete(ctx, c.scbClient, externalName)); err != nil {
 		return managed.ExternalDelete{}, fmt.Errorf(errDelete, err)
 	}
 
@@ -351,6 +356,11 @@ func incrementCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) {
 
 func resetCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) {
 	meta.RemoveAnnotations(cr, createAttemptsAnnotation)
+}
+
+// isValidUUID returns true if the given string is a valid UUID
+func isValidUUID(s string) bool {
+	return uuid.Validate(s) == nil
 }
 
 // isCircuitBreakerTripped returns true if the maximum number of create attempts has been reached.
