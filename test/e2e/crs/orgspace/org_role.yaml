@@ -24,4 +24,3 @@ spec:
     type: Auditor
     username: co-test-user-2@example.com
     orgName: cf-ci-e2e
-

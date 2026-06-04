@@ -28,8 +28,6 @@ var importManagementPolicies = []xpv1.ManagementAction{
 	xpv1.ManagementActionLateInitialize,
 }
 
-var UUT_BUILD_ID_KEY = "BUILD_ID"
-
 const (
 	importFeatureContextKey = "importExternalName"
 )
@@ -56,9 +54,13 @@ type ImportTester[T resource.Managed] struct {
 
 	// the timeout for waiting till resource get deleted (in setup and teardown)
 	WaitDeletionTimeout wait.Option
+
+	// optional custom teardown func that overrides default teardown func when set
+	CustomTeardown CustomTeardownFunc[T]
 }
 
 type ImportTesterOption[T resource.Managed] func(*ImportTester[T])
+type CustomTeardownFunc[T resource.Managed] func(*ImportTester[T], context.Context, *testing.T, *envconf.Config) context.Context
 
 func WithWaitDependentResourceTimeout[T resource.Managed](timeout wait.Option) ImportTesterOption[T] {
 	return func(it *ImportTester[T]) {
@@ -84,6 +86,12 @@ func WithDependentResourceDirectory[T resource.Managed](path string) ImportTeste
 	}
 }
 
+func WithCustomTeardown[T resource.Managed](teardown CustomTeardownFunc[T]) ImportTesterOption[T] {
+	return func(it *ImportTester[T]) {
+		it.CustomTeardown = teardown
+	}
+}
+
 // NewImportTester creates an ImportTester for the given managed resource and base name.
 // The base name will be prefixed with BUILD_ID to ensure uniqueness.
 // Additional options can be provided to customize timeouts using ImportTesterOption.
@@ -95,21 +103,22 @@ func NewImportTester[T resource.Managed](baseResource T, baseName string, o ...I
 		WaitCreateTimeout:            wait.WithTimeout(3 * time.Minute),
 		WaitDeletionTimeout:          wait.WithTimeout(3 * time.Minute),
 	}
-	it.BaseResource.SetName(it.GetPrefixedName())
 
 	for _, opt := range o {
 		opt(it)
 	}
 
+	it.BaseResource.SetName(it.GetPrefixedName())
+
 	return it
 }
 
 func (it *ImportTester[T]) GetPrefixedName() string {
-	return NewID(it.BaseName, envvar.GetOrDefault(UUT_BUILD_ID_KEY, "0000"))
+	return "id-" + NewID(it.BaseName, envvar.GetOrDefault(buildIDEnvKey, defaultTestBuildID))
 }
 
 func (it *ImportTester[T]) BuildTestFeature(name string) *features.FeatureBuilder {
-	return features.New(name).
+	tf := features.New(name).
 		Setup(
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 				r, _ := res.New(cfg.Client().RESTConfig())
@@ -172,16 +181,19 @@ func (it *ImportTester[T]) BuildTestFeature(name string) *features.FeatureBuilde
 			})
 			return ctx
 		},
-	).Teardown(
+	)
+
+	if it.CustomTeardown != nil {
+		tf.Teardown(func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			return it.CustomTeardown(it, ctx, t, cfg)
+		})
+		return tf
+	}
+
+	tf.Teardown(
 		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			resource := it.BaseResource.DeepCopyObject().(T)
 			MustGetResource(t, cfg, it.GetPrefixedName(), nil, resource)
-
-			// Switch to observe-only so teardown does not delete the shared external resource.
-			resource.SetManagementPolicies(xpv1.ManagementPolicies{xpv1.ManagementActionObserve})
-			if err := cfg.Client().Resources().Update(ctx, resource); err != nil {
-				t.Fatalf("Failed to switch imported resource to observe-only before teardown: %v", err)
-			}
 
 			log("Deleting imported resource", resource, func() {
 				AwaitResourceDeletionOrFail(ctx, t, cfg, resource, it.WaitDeletionTimeout)
@@ -195,6 +207,7 @@ func (it *ImportTester[T]) BuildTestFeature(name string) *features.FeatureBuilde
 			return ctx
 		},
 	)
+	return tf
 }
 
 // log is a helper function to log the start and end of an operation on a managed resource with name and external name.

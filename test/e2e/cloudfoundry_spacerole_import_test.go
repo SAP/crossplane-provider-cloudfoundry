@@ -13,8 +13,8 @@ import (
 var (
 	spaceRoleImportTestK8sResName = "e2e-test-space-role-import"
 	spaceRoleImportTestType       = "Developer"
-	spaceRoleImportTestUsername   = "user1@example.com"
-	spaceRoleImportTestOrgName    = "cf-ci-e2e"
+	spaceRoleImportTestUsername   = "e2e-test-space-role-import@example.com"
+	spaceRoleImportTestOrgName    = testOrgName
 	spaceRoleImportTestSpaceName  = "import-test-space-donotdelete"
 )
 

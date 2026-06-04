@@ -8,7 +8,7 @@ metadata:
 spec:
   forProvider:
     type: managed
-    name: e2e-service-instance
+    name: e2e-service-instance-$BUILD_ID
     spaceRef:
       name: service-space
       policy:

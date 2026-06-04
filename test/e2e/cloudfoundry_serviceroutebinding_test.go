@@ -22,7 +22,7 @@ import (
 )
 
 func TestCloudFoundryServiceRouteBinding(t *testing.T) {
-	var dir = "./crs/serviceRouteBinding"
+	var dir = crsDir("serviceRouteBinding")
 	var namespace = "service-test"
 	var feats = map[string]struct {
 		// name of the managed resource
@@ -55,8 +55,6 @@ func TestCloudFoundryServiceRouteBinding(t *testing.T) {
 		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 			// ignore errors as most, if not all, resources should be deleted in the deletion tests.
 			_ = UnapplyResources(ctx, cfg, dir)
-
-			resetTestOrg(ctx, t)
 
 			return ctx
 		},

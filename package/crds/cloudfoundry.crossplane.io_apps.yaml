@@ -34,8 +34,15 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: App is the Schema for the Apps API. Provides a Cloud Foundry
-          resource to manage applications.
+        description: |-
+          App is the Schema for the Apps API. Provides a Cloud Foundry resource to manage applications.
+
+          External-Name Configuration:
+            - Follows Standard: yes
+            - Format: App GUID (UUID format)
+            - How to find:
+            - UI: In the BTP Cockpit, navigate to your app and find the ID after app/ in the URL
+            - CLI: `cf app <APP_NAME> --guid`
         properties:
           apiVersion:
             description: |-
@@ -117,10 +124,11 @@ spec:
                     - image
                     type: object
                   environment:
-                    description: (NOT SUPPORTED YET) A key-value mapping of environment
-                      variables to be used for the app when running
+                    additionalProperties:
+                      type: string
+                    description: A key-value mapping of environment variables to be
+                      used for the app when running
                     type: object
-                    x-kubernetes-preserve-unknown-fields: true
                   labels:
                     additionalProperties:
                       type: string
@@ -705,6 +713,29 @@ spec:
                   name:
                     description: The `name` of the application.
                     type: string
+                  routes:
+                    description: The list of routes currently mapped to the application.
+                    items:
+                      description: AppRouteObservation represents an observed route
+                        for the application.
+                      properties:
+                        host:
+                          description: The host name of the route.
+                          type: string
+                        path:
+                          description: The path of the route.
+                          type: string
+                        port:
+                          description: The port of the route (for TCP routes).
+                          type: integer
+                        protocol:
+                          description: The protocol of the route.
+                          type: string
+                        url:
+                          description: The full URL of the route (e.g. myapp.apps.example.com).
+                          type: string
+                      type: object
+                    type: array
                   state:
                     description: the `state` of the application.
                     type: string

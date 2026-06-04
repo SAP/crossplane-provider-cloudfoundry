@@ -9,7 +9,7 @@ spec:
       name: e2e-serviceroutebinding-domain
       policy:
         resolve: Always
-    host: service-route-e2e
+    host: service-route-e2e-$BUILD_ID
     spaceRef:
       name: e2e-serviceroutebinding-space
       policy:

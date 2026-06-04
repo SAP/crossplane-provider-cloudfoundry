@@ -13,8 +13,8 @@ import (
 var (
 	orgRoleImportTestK8sResName = "e2e-test-org-role-import"
 	orgRoleImportTestType       = "User"
-	orgRoleImportTestUsername   = "user1@example.com"
-	orgRoleImportTestOrgName    = "cf-ci-e2e"
+	orgRoleImportTestUsername   = "e2e-test-org-role-import@example.com"
+	orgRoleImportTestOrgName    = testOrgName
 )
 
 func TestOrgRoleImportFlow(t *testing.T) {
