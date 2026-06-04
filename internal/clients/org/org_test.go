@@ -237,5 +237,39 @@ func TestGetOrgByGUID(t *testing.T) {
 	}
 }
 
+func TestLateInitialize(t *testing.T) {
+	labels := map[string]*string{"team": ptr.To("platform")}
+	annotations := map[string]*string{"note": ptr.To("managed-elsewhere")}
+
+	spec := &v1alpha1.OrgParameters{}
+	from := &cfresource.Organization{
+		Name:      testOrgName,
+		Suspended: true,
+		Metadata: &cfresource.Metadata{
+			Labels: map[string]*string{
+				"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"),
+				"crossplane-name": ptr.To("my-org"),
+				"team":            labels["team"],
+			},
+			Annotations: annotations,
+		},
+	}
+
+	LateInitialize(spec, from)
+
+	if spec.Name != testOrgName {
+		t.Fatalf("LateInitialize(...): expected Name %q, got %q", testOrgName, spec.Name)
+	}
+	if spec.Suspended == nil || !*spec.Suspended {
+		t.Fatalf("LateInitialize(...): expected Suspended to be true, got %#v", spec.Suspended)
+	}
+	if spec.Labels != nil {
+		t.Fatalf("LateInitialize(...): expected Labels to remain nil, got %#v", spec.Labels)
+	}
+	if spec.Annotations != nil {
+		t.Fatalf("LateInitialize(...): expected Annotations to remain nil, got %#v", spec.Annotations)
+	}
+}
+
 // Ensure mockClient satisfies the Client interface
 var _ Client = &mockClient{}

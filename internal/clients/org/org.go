@@ -103,13 +103,6 @@ func LateInitialize(spec *v1alpha1.OrgParameters, from *resource.Organization) {
 		spec.Suspended = ptr.To(from.Suspended)
 	}
 
-	if len(spec.Labels) == 0 && from.Metadata != nil {
-		spec.Labels = metadata.StripDefaultLabels(from.Metadata.Labels)
-	}
-
-	if len(spec.Annotations) == 0 && from.Metadata != nil {
-		spec.Annotations = from.Metadata.Annotations
-	}
 }
 
 // IsUpToDate checks whether current state is up-to-date compared to the given
