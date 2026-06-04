@@ -14,6 +14,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/google/uuid"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -44,6 +45,7 @@ const (
 	errUpdateStatus          = "cannot update status after retiring binding: %w"
 	errExtractParams         = "cannot extract specified parameters: %w"
 	errUnknownState          = "unknown last operation state for " + resourceType + " in " + externalSystem
+	errUpdateCR              = "cannot update managed resource"
 	maxCreateAttempts        = 5
 	createAttemptsAnnotation = "crossplane-provider-cloudfoundry/create-attempts"
 )
@@ -170,6 +172,14 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, fmt.Errorf(errGet, err)
 	}
 
+	// Adoption: if the external-name doesn't match the discovered GUID, update it
+	if guid != serviceBinding.GUID {
+		meta.SetExternalName(cr, serviceBinding.GUID)
+		if err := c.kube.Update(ctx, cr); err != nil {
+			return managed.ExternalObservation{}, fmt.Errorf("%s: %w", errUpdateCR, err)
+		}
+	}
+
 	cr.Status.AtProvider.GUID = serviceBinding.GUID
 	cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: serviceBinding.CreatedAt}
 
@@ -225,8 +235,8 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errWrongCRType)
 	}
 
-	if externalName := meta.GetExternalName(cr); externalName != "" {
-		if _, err := scb.Update(ctx, c.scbClient, meta.GetExternalName(cr), cr.Spec.ForProvider); err != nil {
+	if externalName := meta.GetExternalName(cr); externalName != "" && uuid.Validate(externalName) == nil {
+		if _, err := scb.Update(ctx, c.scbClient, externalName, cr.Spec.ForProvider); err != nil {
 			return managed.ExternalUpdate{}, fmt.Errorf(errUpdate, err)
 		}
 	}
@@ -255,8 +265,14 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalDelete{}, fmt.Errorf(errDeleteRetiredKeys, err)
 	}
 
-	err := scb.Delete(ctx, c.scbClient, cr.GetID())
-	if err != nil {
+	externalName := meta.GetExternalName(cr)
+	if uuid.Validate(externalName) != nil {
+		// External name is not a valid UUID; nothing to delete in CF
+		return managed.ExternalDelete{}, nil
+	}
+
+	err := scb.Delete(ctx, c.scbClient, externalName)
+	if err := clients.IgnoreNotFoundErr(err); err != nil {
 		return managed.ExternalDelete{}, fmt.Errorf(errDelete, err)
 	}
 

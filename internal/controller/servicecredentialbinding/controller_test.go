@@ -320,6 +320,66 @@ func TestObserve(t *testing.T) {
 			keyRotator: func() *fake.MockKeyRotator {
 				return &fake.MockKeyRotator{}
 			},
+		},
+		"InvalidGUIDFormat_FallsBackToSpecSearch": {
+			args: args{
+				mg: serviceCredentialBinding("key", withExternalName("not-a-uuid"), withServiceInstanceID(serviceInstanceGUID)),
+			},
+			want: want{
+				mg:  serviceCredentialBinding("key", withExternalName("not-a-uuid"), withServiceInstanceID(serviceInstanceGUID)),
+				obs: managed.ExternalObservation{ResourceExists: false},
+				err: nil,
+			},
+			service: func() *fake.MockServiceCredentialBinding {
+				m := &fake.MockServiceCredentialBinding{}
+				m.On("Single", mock.Anything, mock.Anything).Return(
+					fake.ServiceCredentialBindingNil,
+					fake.ErrNoResultReturned,
+				)
+				return m
+			},
+			keyRotator: func() *fake.MockKeyRotator {
+				m := &fake.MockKeyRotator{}
+				return m
+			},
+		},
+		"Adoption_ExternalNameUpdatedToGUID": {
+			args: args{
+				mg: serviceCredentialBinding("key", withExternalName("my-key-name"), withServiceInstanceID(serviceInstanceGUID)),
+			},
+			want: want{
+				mg:  serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID)),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceCredentialBinding {
+				m := &fake.MockServiceCredentialBinding{}
+				m.On("Get", mock.Anything, "my-key-name").Return(
+					fake.ServiceCredentialBindingNil,
+					fake.ErrNoResultReturned,
+				)
+				m.On("Single", mock.Anything, mock.Anything).Return(
+					cfSucceeded(),
+					nil,
+				)
+				return m
+			},
+			kube: &test.MockClient{
+				MockUpdate: test.NewMockUpdateFn(nil),
+			},
+			keyRotator: func() *fake.MockKeyRotator {
+				m := &fake.MockKeyRotator{}
+				m.On("RetireBinding", mock.Anything, mock.Anything).Return(false)
+				return m
+			},
+			observationStateHandler: func() *MockObservationStateHandler {
+				m := &MockObservationStateHandler{}
+				m.On("HandleObservationState", cfSucceeded(), mock.Anything, mock.Anything).Return(
+					managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+					nil,
+				)
+				return m
+			},
 		}}
 
 	for n, tc := range cases {
@@ -329,10 +389,14 @@ func TestObserve(t *testing.T) {
 			if tc.observationStateHandler != nil {
 				obsHandler = tc.observationStateHandler()
 			}
-			c := &external{
-				kube: &test.MockClient{
+			kubeClient := tc.kube
+			if kubeClient == nil {
+				kubeClient = &test.MockClient{
 					MockUpdate: test.NewMockUpdateFn(nil),
-				},
+				}
+			}
+			c := &external{
+				kube:                    kubeClient,
 				scbClient:               tc.service(),
 				keyRotator:              tc.keyRotator(),
 				observationStateHandler: obsHandler,
@@ -494,6 +558,25 @@ func TestUpdate(t *testing.T) {
 					[]*v1alpha1.SCBResource{},
 					errCFClientError,
 				)
+				return m
+			},
+		},
+		"InvalidUUID_SkipsUpdate": {
+			args: args{
+				mg: serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName("my-key-name")),
+			},
+			want: want{
+				mg:  serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName("my-key-name")),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceCredentialBinding {
+				m := &fake.MockServiceCredentialBinding{}
+				// No Update mock registered — if Update is called, testify will panic
+				return m
+			},
+			keyRotator: func() *fake.MockKeyRotator {
+				m := &fake.MockKeyRotator{}
 				return m
 			},
 		},
@@ -1055,6 +1138,48 @@ func TestDelete(t *testing.T) {
 				m.On("DeleteRetiredKeys", mock.Anything, mock.MatchedBy(func(cr *v1alpha1.ServiceCredentialBinding) bool {
 					return cr.GetCondition(xpv1.TypeReady).Reason == xpv1.ReasonDeleting
 				})).Return(errCFClientError)
+				return m
+			},
+		},
+		"NotFound_IgnoredOnDelete": {
+			args: args{
+				mg: mgArg.DeepCopy(),
+			},
+			want: want{
+				mg:  mgWant.DeepCopy(),
+				err: nil,
+			},
+			service: func() *fake.MockServiceCredentialBinding {
+				m := &fake.MockServiceCredentialBinding{}
+				m.On("Delete", mock.Anything, guid).Return("", fake.ErrNoResultReturned)
+				return m
+			},
+			keyRotator: func() *fake.MockKeyRotator {
+				m := &fake.MockKeyRotator{}
+				m.On("DeleteRetiredKeys", mock.Anything, mock.MatchedBy(func(cr *v1alpha1.ServiceCredentialBinding) bool {
+					return cr.GetCondition(xpv1.TypeReady).Reason == xpv1.ReasonDeleting
+				})).Return(nil)
+				return m
+			},
+		},
+		"InvalidUUID_SkipsDelete": {
+			args: args{
+				mg: serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName("my-key-name"), withStatus(guid)),
+			},
+			want: want{
+				mg:  serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName("my-key-name"), withStatus(guid), withConditions(xpv1.Deleting())),
+				err: nil,
+			},
+			service: func() *fake.MockServiceCredentialBinding {
+				m := &fake.MockServiceCredentialBinding{}
+				// No Delete mock — if Delete is called, testify will panic
+				return m
+			},
+			keyRotator: func() *fake.MockKeyRotator {
+				m := &fake.MockKeyRotator{}
+				m.On("DeleteRetiredKeys", mock.Anything, mock.MatchedBy(func(cr *v1alpha1.ServiceCredentialBinding) bool {
+					return cr.GetCondition(xpv1.TypeReady).Reason == xpv1.ReasonDeleting
+				})).Return(nil)
 				return m
 			},
 		},

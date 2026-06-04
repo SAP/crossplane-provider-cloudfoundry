@@ -1,0 +1,14 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: upgrade-test-scb-serviceinstance
+spec:
+  providerConfigRef:
+    name: default
+  forProvider:
+    type: user-provided
+    name: upgrade-test-scb-serviceinstance
+    spaceRef:
+      name: upgrade-test-import-space
+      policy:
+        resolve: Always
