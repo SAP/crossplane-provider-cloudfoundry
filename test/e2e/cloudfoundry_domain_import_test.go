@@ -15,7 +15,7 @@ import (
 
 var (
 	domainImportTestK8sResName = "e2e-test-domain-import"
-	domainImportTestName       = "cf-ci-e2e.eu12.hana.ondemand.com"
+	domainImportTestName       = runScopedName("e2e-test-domain-import") + ".eu12.hana.ondemand.com"
 	domainImportTestOrgName    = "upgrade-test-org"
 )
 
@@ -40,7 +40,7 @@ func TestDomainImportFlow(t *testing.T) {
 		domainImportTestK8sResName,
 		WithWaitCreateTimeout[*v1alpha1.Domain](wait.WithTimeout(5*time.Minute)),
 		WithWaitDeletionTimeout[*v1alpha1.Domain](wait.WithTimeout(5*time.Minute)),
-		WithDependentResourceDirectory[*v1alpha1.Domain]("./crs/externalNamesImport"),
+		WithDependentResourceDirectory[*v1alpha1.Domain](crsDir("externalNamesImport/domain")),
 	)
 
 	importFeature := importTester.BuildTestFeature("CF Domain Import Flow").Feature()
