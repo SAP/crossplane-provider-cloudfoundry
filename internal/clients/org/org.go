@@ -107,15 +107,6 @@ func LateInitialize(spec *v1alpha1.OrgParameters, from *resource.Organization) {
 
 // IsUpToDate checks whether current state is up-to-date compared to the given
 // set of parameters.
-func IsUpToDate(mg xpresource.Managed, spec v1alpha1.OrgParameters, observed *resource.Organization) bool {
-	if spec.Name != observed.Name {
-		return false
-	}
-	desired := metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
-	var actualLabels, actualAnnotations map[string]*string
-	if observed.Metadata != nil {
-		actualLabels = observed.Metadata.Labels
-		actualAnnotations = observed.Metadata.Annotations
-	}
-	return metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, actualLabels, actualAnnotations)
+func IsUpToDate(_ xpresource.Managed, spec v1alpha1.OrgParameters, observed *resource.Organization) bool {
+	return spec.Name == observed.Name
 }

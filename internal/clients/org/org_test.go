@@ -271,5 +271,45 @@ func TestLateInitialize(t *testing.T) {
 	}
 }
 
+func TestIsUpToDate(t *testing.T) {
+	cases := map[string]struct {
+		spec     v1alpha1.OrgParameters
+		observed *cfresource.Organization
+		want     bool
+	}{
+		"NameMatchesMetadataIgnored": {
+			spec: v1alpha1.OrgParameters{
+				Name: testOrgName,
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels:      map[string]*string{"team": ptr.To("platform")},
+					Annotations: map[string]*string{"note": ptr.To("managed-by-user")},
+				},
+			},
+			observed: &cfresource.Organization{
+				Name: testOrgName,
+				Metadata: &cfresource.Metadata{
+					Labels:      map[string]*string{"team": ptr.To("other-team")},
+					Annotations: map[string]*string{"note": ptr.To("managed-elsewhere")},
+				},
+			},
+			want: true,
+		},
+		"NameDrift": {
+			spec:     v1alpha1.OrgParameters{Name: testOrgName},
+			observed: &cfresource.Organization{Name: "renamed-org"},
+			want:     false,
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			result := IsUpToDate(nil, tc.spec, tc.observed)
+			if result != tc.want {
+				t.Errorf("IsUpToDate(...): want %v, got %v", tc.want, result)
+			}
+		})
+	}
+}
+
 // Ensure mockClient satisfies the Client interface
 var _ Client = &mockClient{}
