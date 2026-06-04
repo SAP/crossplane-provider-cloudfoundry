@@ -133,6 +133,7 @@ func IsMetadataUpToDate(desiredLabels, desiredAnnotations, actualLabels, actualA
 // It only processes keys that are present in desired:
 //   - Keys in desired that are missing or different in actual are included
 //   - Keys with nil pointer values in desired are included as deletion markers
+//     only when the key exists in actual
 //   - Keys in actual but absent from desired are NOT included (left unchanged
 //     on the CF server, per merge-patch convention)
 //
@@ -145,6 +146,9 @@ func diffMap(desired, actual map[string]*string) map[string]*string {
 	for k, desiredVal := range desired {
 		actualVal, exists := actual[k]
 		if !exists {
+			if desiredVal == nil {
+				continue
+			}
 			result[k] = desiredVal
 			continue
 		}
@@ -164,7 +168,8 @@ func diffMap(desired, actual map[string]*string) map[string]*string {
 }
 
 // DiffMetadata computes the metadata diff needed for an Update call. It
-// returns a *cfresource.Metadata containing only the keys that need to change.
+// returns nil if no metadata changes are needed, otherwise a *cfresource.Metadata
+// containing only the keys that need to change.
 //
 // The diff follows CF API merge-patch semantics:
 //   - Keys in desiredLabels/desiredAnnotations that are new or different from
@@ -183,9 +188,15 @@ func diffMap(desired, actual map[string]*string) map[string]*string {
 // must ensure desiredLabels and desiredAnnotations come from BuildMetadata
 // (or an equivalent merge) to avoid accidentally reverting default labels.
 func DiffMetadata(desiredLabels, desiredAnnotations, actualLabels, actualAnnotations map[string]*string) *cfresource.Metadata {
+	labels := diffMap(desiredLabels, actualLabels)
+	annotations := diffMap(desiredAnnotations, actualAnnotations)
+	if len(labels) == 0 && len(annotations) == 0 {
+		return nil
+	}
+
 	m := cfresource.NewMetadata()
-	m.Labels = diffMap(desiredLabels, actualLabels)
-	m.Annotations = diffMap(desiredAnnotations, actualAnnotations)
+	m.Labels = labels
+	m.Annotations = annotations
 	return m
 }
 

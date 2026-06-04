@@ -458,11 +458,8 @@ func TestDiffMetadata(t *testing.T) {
 		actual := map[string]*string{"a": ptrTo("1"), "b": ptrTo("2")}
 		m := DiffMetadata(desired, nil, actual, nil)
 
-		if len(m.Labels) != 0 {
-			t.Errorf("expected empty label diff, got %d keys: %v", len(m.Labels), m.Labels)
-		}
-		if len(m.Annotations) != 0 {
-			t.Errorf("expected empty annotation diff, got %d keys", len(m.Annotations))
+		if m != nil {
+			t.Errorf("expected nil diff, got labels=%v annotations=%v", m.Labels, m.Annotations)
 		}
 	})
 
@@ -497,8 +494,8 @@ func TestDiffMetadata(t *testing.T) {
 		actual := map[string]*string{"a": ptrTo("1"), "system-label": ptrTo("system-val")}
 		m := DiffMetadata(desired, nil, actual, nil)
 
-		if len(m.Labels) != 0 {
-			t.Errorf("expected empty diff (actual extra keys are ignored), got %d keys: %v", len(m.Labels), m.Labels)
+		if m != nil {
+			t.Errorf("expected nil diff (actual extra keys are ignored), got labels=%v annotations=%v", m.Labels, m.Annotations)
 		}
 	})
 
@@ -519,11 +516,18 @@ func TestDiffMetadata(t *testing.T) {
 
 	t.Run("both nil maps", func(t *testing.T) {
 		m := DiffMetadata(nil, nil, nil, nil)
-		if len(m.Labels) != 0 {
-			t.Errorf("expected empty label diff, got %d keys", len(m.Labels))
+		if m != nil {
+			t.Errorf("expected nil diff, got labels=%v annotations=%v", m.Labels, m.Annotations)
 		}
-		if len(m.Annotations) != 0 {
-			t.Errorf("expected empty annotation diff, got %d keys", len(m.Annotations))
+	})
+
+	t.Run("nil pointer deletion marker already absent produces no diff", func(t *testing.T) {
+		desired := map[string]*string{"a": nil}
+		actual := map[string]*string{}
+		m := DiffMetadata(desired, nil, actual, nil)
+
+		if m != nil {
+			t.Errorf("expected nil diff for already absent deletion marker, got labels=%v annotations=%v", m.Labels, m.Annotations)
 		}
 	})
 
@@ -606,11 +610,8 @@ func TestDiffMetadata_Annotations(t *testing.T) {
 		actualAnnotations := map[string]*string{"system": ptrTo("data")}
 		m := DiffMetadata(desiredLabels, nil, actualLabels, actualAnnotations)
 
-		if len(m.Labels) != 0 {
-			t.Errorf("expected empty label diff, got %d keys", len(m.Labels))
-		}
-		if len(m.Annotations) != 0 {
-			t.Errorf("expected empty annotation diff (actual annotations ignored), got %d keys", len(m.Annotations))
+		if m != nil {
+			t.Errorf("expected nil diff (actual annotations ignored), got labels=%v annotations=%v", m.Labels, m.Annotations)
 		}
 	})
 }
@@ -689,8 +690,8 @@ func TestDiffMetadata_WithCrossplaneDefaultLabels(t *testing.T) {
 		}
 		m := DiffMetadata(desired, nil, actual, nil)
 
-		if len(m.Labels) != 0 {
-			t.Errorf("expected empty diff (extra actual keys ignored), got %d keys: %v", len(m.Labels), m.Labels)
+		if m != nil {
+			t.Errorf("expected nil diff (extra actual keys ignored), got labels=%v annotations=%v", m.Labels, m.Annotations)
 		}
 	})
 }
