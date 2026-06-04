@@ -246,25 +246,38 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 func (c *external) applyAppUpdates(ctx context.Context, guid string, cr *v1alpha1.App, changes *app.ChangeDetection) error {
-	dockerChanged := changes.HasField("docker_image")
-	if dockerChanged {
-		if err := c.updateDockerImage(ctx, guid, cr); err != nil {
-			return err
-		}
+	dockerChanged, err := c.updateDockerImageIfChanged(ctx, guid, cr, changes)
+	if err != nil {
+		return err
 	}
 
-	if changes.HasField("environment") {
-		if err := c.updateEnvVars(ctx, guid, cr, dockerChanged); err != nil {
-			return err
-		}
+	if err := c.updateEnvironmentIfChanged(ctx, guid, cr, changes, dockerChanged); err != nil {
+		return err
 	}
 
-	if changes.HasOtherChanges("docker_image", "environment") || !changes.HasChanges() {
-		_, err := c.client.Update(ctx, guid, cr, cr.Spec.ForProvider)
-		return errors.Wrap(err, errUpdateResource)
+	if !changes.HasOtherChanges("docker_image", "environment") {
+		return nil
 	}
 
-	return nil
+	_, err = c.client.Update(ctx, guid, cr, cr.Spec.ForProvider)
+	return errors.Wrap(err, errUpdateResource)
+}
+
+func (c *external) updateDockerImageIfChanged(ctx context.Context, guid string, cr *v1alpha1.App, changes *app.ChangeDetection) (bool, error) {
+	if !changes.HasField("docker_image") {
+		return false, nil
+	}
+	if err := c.updateDockerImage(ctx, guid, cr); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (c *external) updateEnvironmentIfChanged(ctx context.Context, guid string, cr *v1alpha1.App, changes *app.ChangeDetection, dockerChanged bool) error {
+	if !changes.HasField("environment") {
+		return nil
+	}
+	return c.updateEnvVars(ctx, guid, cr, dockerChanged)
 }
 
 // updateDockerImage pushes a new docker image for the app.

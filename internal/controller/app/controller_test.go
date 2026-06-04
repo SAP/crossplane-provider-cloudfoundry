@@ -864,6 +864,41 @@ func TestUpdate(t *testing.T) {
 			},
 		},
 
+		"EnvVarAndMetadataChanged": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue}),
+					withLabels(map[string]*string{"env": ptr.To("prod")}),
+					withObservedLabels(map[string]*string{"env": ptr.To("dev")})),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue}),
+					withLabels(map[string]*string{"env": ptr.To("prod")}),
+					withObservedLabels(map[string]*string{"env": ptr.To("dev")})),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				v := envVarValue
+				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
+				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
+				m.On("Stop", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Start", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Update", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				return m
+			},
+		},
+
 		"EnvVarAndDockerChanged": {
 			args: args{
 				mg: newApp("docker",

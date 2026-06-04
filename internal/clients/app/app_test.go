@@ -144,6 +144,38 @@ func TestDetectChanges(t *testing.T) {
 			},
 			expectedFields: []string{},
 		},
+		{
+			name: "Label drift",
+			spec: v1alpha1.AppParameters{
+				Name: "test-app",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name: "test-app",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("dev")},
+				},
+			},
+			expectedFields: []string{"metadata"},
+		},
+		{
+			name: "Annotation drift",
+			spec: v1alpha1.AppParameters{
+				Name: "test-app",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("expected")},
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name: "test-app",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("actual")},
+				},
+			},
+			expectedFields: []string{"metadata"},
+		},
 	}
 
 	for _, tt := range tests {
