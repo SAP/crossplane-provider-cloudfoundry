@@ -1,0 +1,16 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: OrgQuota
+metadata:
+  name: upgrade-test-external-name-org-quota
+  annotations:
+    crossplane.io/paused: "false"
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    # IMPORTANT: Change this to an existing org quota name in your CF instance
+    # Run `cf org-quotas` to see available org quotas
+    name: default # ← TODO: Change this to an existing org quota name
+    allowPaidServicePlans: false
+  providerConfigRef:
+    name: default
