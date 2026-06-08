@@ -106,6 +106,14 @@ type DomainStatus struct {
 // +kubebuilder:storageversion
 
 // Domain is the Schema for the Domains API. Provides a resource for managing shared or private domains in Cloud Foundry.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: Domain GUID (UUID format)
+//   - How to find:
+//   - UI: Not available in the BTP Cockpit
+//   - CLI: Use CF CLI: `cf domains` (see GUID column)
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
@@ -146,4 +154,9 @@ func (d *Domain) GetID() string {
 		return *d.Status.AtProvider.ID
 	}
 	return ""
+}
+
+// GetOrgRef returns the OrgReference of the domain. Implements OrgScoped interface.
+func (d *Domain) GetOrgRef() *OrgReference {
+	return &d.Spec.ForProvider.OrgReference
 }

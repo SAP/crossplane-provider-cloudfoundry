@@ -181,6 +181,12 @@ local-deploy: build controlplane.up local.xpkg.deploy.provider.$(PROJECT_NAME)
 	@$(KUBECTL) -n upbound-system wait --for=condition=Available deployment --all --timeout=5m
 	@$(OK) running locally built provider
 
+local-deploy-prebuilt: controlplane.up local.xpkg.deploy.provider.$(PROJECT_NAME)
+	@$(INFO) deploying prebuilt provider
+	@$(KUBECTL) wait provider.pkg $(PROJECT_NAME) --for condition=Healthy --timeout 5m
+	@$(KUBECTL) -n upbound-system wait --for=condition=Available deployment --all --timeout=5m
+	@$(OK) running prebuilt provider
+
 e2e: local-deploy uptest
 
 # Updated End to End Testing following BTP Provider
@@ -205,8 +211,10 @@ generate-test-crs:
 	done
 	@$(OK) CRS generated
 
+ACCEPTANCE_DEPLOY ?= local-deploy
+
 .PHONY: test-acceptance
-test-acceptance: local-deploy $(KUBECTL) generate-test-crs
+test-acceptance: $(ACCEPTANCE_DEPLOY) $(KUBECTL) generate-test-crs
 	@# xp-testing puts the provider secret in crossplane-system; local-deploy installs UXP in upbound-system, so the namespace isn't created upstream.
 	@$(KUBECTL) get namespace crossplane-system >/dev/null 2>&1 || $(KUBECTL) create namespace crossplane-system
 	@$(INFO) running integration tests

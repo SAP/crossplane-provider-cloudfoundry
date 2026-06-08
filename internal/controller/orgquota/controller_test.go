@@ -4,11 +4,13 @@ import (
 	"context"
 	"testing"
 
+	"github.com/cloudfoundry/go-cfclient/v3/client"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/mock"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
@@ -50,12 +52,6 @@ func withAllowPaidServicePlans(allow bool) modifier {
 
 func withConditions(c ...xpv1.Condition) modifier {
 	return func(r *v1alpha1.OrgQuota) { r.Status.SetConditions(c...) }
-}
-
-func withNilID() modifier {
-	return func(r *v1alpha1.OrgQuota) {
-		r.Status.AtProvider.ID = nil
-	}
 }
 
 func fakeOrgQuota(m ...modifier) *v1alpha1.OrgQuota {
@@ -134,7 +130,7 @@ func TestObserve(t *testing.T) {
 			},
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
-				m.On("Get", guid).Return(
+				m.On("Get", mock.Anything, guid).Return(
 					nilOrgQuota,
 					errBoom,
 				)
@@ -146,19 +142,50 @@ func TestObserve(t *testing.T) {
 				mg: fakeOrgQuota(),
 			},
 			want: want{
-				mg: fakeOrgQuota(withExternalName(name)),
+				mg: fakeOrgQuota(),
 				obs: managed.ExternalObservation{
 					ResourceExists: false,
 				},
-				err: errors.Wrap(errors.New("not found"), errGet),
+				err: nil,
 			},
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
-
-				m.On("Get", name).Return(
-					nilOrgQuota,
-					errors.New("not found"),
+				m.On("Single", mock.Anything, mock.Anything).Return(
+					nil,
+					client.ErrNoResultsReturned,
 				)
+				return m
+			},
+		},
+		"Error when FindBySpec returns non-404 error": {
+			args: args{
+				mg: fakeOrgQuota(),
+			},
+			want: want{
+				mg:  fakeOrgQuota(),
+				obs: managed.ExternalObservation{},
+				err: errors.Wrap(errBoom, errGet),
+			},
+			service: func() *fake.MockOrgQuota {
+				m := &fake.MockOrgQuota{}
+				m.On("Single", mock.Anything, mock.Anything).Return(
+					nil,
+					errBoom,
+				)
+				return m
+			},
+		},
+		"Error when external name is not a valid GUID": {
+			args: args{
+				mg: fakeOrgQuota(withExternalName("not-a-valid-guid")),
+			},
+			want: want{
+				mg:  fakeOrgQuota(withExternalName("not-a-valid-guid")),
+				obs: managed.ExternalObservation{},
+				err: errors.Errorf("external-name '%s' is not a valid GUID format", "not-a-valid-guid"),
+			},
+			service: func() *fake.MockOrgQuota {
+				m := &fake.MockOrgQuota{}
 				return m
 			},
 		},
@@ -171,13 +198,13 @@ func TestObserve(t *testing.T) {
 				obs: managed.ExternalObservation{
 					ResourceExists: false,
 				},
-				err: errors.Wrap(errors.New("not found"), errGet),
+				err: nil,
 			},
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
-				m.On("Get", guid).Return(
+				m.On("Get", mock.Anything, guid).Return(
 					nilOrgQuota,
-					errors.New("not found"),
+					client.ErrNoResultsReturned,
 				)
 				return m
 			},
@@ -205,22 +232,20 @@ func TestObserve(t *testing.T) {
 			},
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
-				m.On("Get", guid).Return(
+				m.On("Get", mock.Anything, guid).Return(
 					fakeOrgQuotaResource(guid, true),
 					nil,
 				)
 				return m
 			},
 		},
-		"Found using metadata.name as external-name": {
+		"Found by spec when external-name is empty": {
 			args: args{
 				mg: fakeOrgQuota(),
 			},
 			want: want{
 				mg: fakeOrgQuota(
-					withExternalName("test-org-quota"),
-					withName("test-quota"),
-					withAllowPaidServicePlans(true),
+					withExternalName(guid),
 				),
 				obs: managed.ExternalObservation{
 					ResourceExists:          true,
@@ -231,7 +256,11 @@ func TestObserve(t *testing.T) {
 			},
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
-				m.On("Get", "test-org-quota").Return(
+				m.On("Single", mock.Anything, mock.Anything).Return(
+					fakeOrgQuotaResource(guid, true),
+					nil,
+				)
+				m.On("Get", mock.Anything, guid).Return(
 					fakeOrgQuotaResource(guid, true),
 					nil,
 				)
@@ -303,7 +332,7 @@ func TestCreate(t *testing.T) {
 			},
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
-				m.On("Create").Return(
+				m.On("Create", mock.Anything, mock.Anything).Return(
 					fakeOrgQuotaResource(guid, true),
 					nil,
 				)
@@ -327,7 +356,7 @@ func TestCreate(t *testing.T) {
 			},
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
-				m.On("Create").Return(
+				m.On("Create", mock.Anything, mock.Anything).Return(
 					(*cfresource.OrganizationQuota)(nil),
 					errBoom,
 				)
@@ -402,7 +431,7 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
-				m.On("Update").Return(
+				m.On("Update", mock.Anything, mock.Anything, mock.Anything).Return(
 					fakeOrgQuotaResource(guid, true),
 					nil,
 				)
@@ -428,33 +457,8 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
-				m.On("Update").Return(
+				m.On("Update", mock.Anything, mock.Anything, mock.Anything).Return(
 					(*cfresource.OrganizationQuota)(nil),
-					errBoom,
-				)
-				return m
-			},
-		},
-		"Failed because nil ID": {
-			args: args{
-				mg: fakeOrgQuota(
-					withExternalName(guid),
-					withName("test-quota"),
-					withNilID(),
-				),
-			},
-			want: want{
-				mg: fakeOrgQuota(
-					withExternalName(guid),
-					withName("test-quota"),
-					withNilID(),
-				),
-				err: errors.New(errUpdate),
-			},
-			service: func() *fake.MockOrgQuota {
-				m := &fake.MockOrgQuota{}
-				m.On("Update").Return(
-					"",
 					errBoom,
 				)
 				return m
@@ -525,7 +529,7 @@ func TestDelete(t *testing.T) {
 			},
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
-				m.On("Delete").Return(
+				m.On("Delete", mock.Anything, mock.Anything).Return(
 					"",
 					nil,
 				)
@@ -549,19 +553,36 @@ func TestDelete(t *testing.T) {
 			},
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
-				m.On("Delete").Return(
+				m.On("Delete", mock.Anything, mock.Anything).Return(
 					"",
 					errBoom,
 				)
 				return m
 			},
 		},
-		"Failed because nil ID": {
+		"Failed with empty external-name": {
+			args: args{
+				mg: fakeOrgQuota(
+					withName("test-quota"),
+				),
+			},
+			want: want{
+				mg: fakeOrgQuota(
+					withName("test-quota"),
+					withConditions(xpv1.Deleting()),
+				),
+				err: nil,
+			},
+			service: func() *fake.MockOrgQuota {
+				m := &fake.MockOrgQuota{}
+				return m
+			},
+		},
+		"NotFound is not an error": {
 			args: args{
 				mg: fakeOrgQuota(
 					withExternalName(guid),
 					withName("test-quota"),
-					withNilID(),
 				),
 			},
 			want: want{
@@ -569,15 +590,14 @@ func TestDelete(t *testing.T) {
 					withExternalName(guid),
 					withName("test-quota"),
 					withConditions(xpv1.Deleting()),
-					withNilID(),
 				),
-				err: errors.Wrap(errors.New(".Status.AtProvider.ID is not set"), errDelete),
+				err: nil,
 			},
 			service: func() *fake.MockOrgQuota {
 				m := &fake.MockOrgQuota{}
-				m.On("Delete").Return(
+				m.On("Delete", mock.Anything, mock.Anything).Return(
 					"",
-					nil,
+					client.ErrNoResultsReturned,
 				)
 				return m
 			},
