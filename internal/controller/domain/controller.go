@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/pkg/errors"
-	"k8s.io/utils/ptr"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -24,25 +23,27 @@ import (
 	pcv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	domain "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/domain"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/org"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
+
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 )
 
 const (
-	resourceType         = "Domain"
-	externalSystem       = "Cloud Foundry"
-	errNotDomainKind     = "managed resource is not of kind " + resourceType
-	errNameRequired      = "name is required, please set the name attribute"
-	errTrackUsage        = "cannot track usage"
-	errGetProviderConfig = "cannot get ProviderConfig or resolve credential references"
-	errGetClient         = "cannot create a client to talk to the API of" + externalSystem
-	errGetResource       = "cannot get " + externalSystem + " domain according to the specified parameters"
-	errCreate            = "cannot create " + externalSystem + " domain"
-	errGet               = "cannot get " + resourceType + " in " + externalSystem
-	errDelete            = "cannot delete" + resourceType
-	errUpdate            = "cannot update" + resourceType
+	resourceType     = "Domain"
+	externalSystem   = "Cloud Foundry"
+	errNotDomainKind = "managed resource is not of kind " + resourceType
+	errNameRequired  = "name is required, please set the name attribute"
+	errTrackUsage    = "cannot track usage"
+	errGetClient     = "cannot create a client to talk to the API of " + externalSystem
+	errCreate        = "cannot create " + externalSystem + " domain"
+	errGet           = "cannot get " + resourceType + " in " + externalSystem
+	errDelete        = "cannot delete " + resourceType
+	errUpdate        = "cannot update " + resourceType
 )
 
-// Setup adds a controller that reconciles Org resources.
+// Setup adds a controller that reconciles Domain resources.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
 	name := managed.ControllerName(v1alpha1.Domain_GroupKind)
 
@@ -106,7 +107,8 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errGetClient)
 	}
 
-	return &external{client: domain.NewClient(cf), kube: c.kube}, nil
+	domainClient, jobClient := domain.NewClient(cf)
+	return &external{client: domainClient, kube: c.kube, job: jobClient}, nil
 }
 
 // Disconnect implements the managed.ExternalClient interface
@@ -115,10 +117,20 @@ func (c *external) Disconnect(ctx context.Context) error {
 	return nil
 }
 
+// DomainService defines the operations needed for Domain external-name handling.
+type DomainService interface {
+	FindDomainBySpec(ctx context.Context, spec v1alpha1.DomainParameters) (*cfresource.Domain, error)
+	GetDomainByGUID(ctx context.Context, guid string) (*cfresource.Domain, error)
+	Create(ctx context.Context, create *cfresource.DomainCreate) (*cfresource.Domain, error)
+	Update(ctx context.Context, guid string, update *cfresource.DomainUpdate) (*cfresource.Domain, error)
+	Delete(ctx context.Context, guid string) (string, error)
+}
+
 // An external is a managed.ExternalConnecter that is using the CloudFoundry API to observe and modify resources.
 type external struct {
-	client domain.Client
+	client DomainService
 	kube   k8s.Client
+	job    job.Job
 }
 
 // Observe managed resource Domain
@@ -128,35 +140,64 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errNotDomainKind)
 	}
 
-	domainID := meta.GetExternalName(cr)
+	resourceLateInitialized, exists, err := c.resolveExternalName(ctx, cr)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
+	if !exists {
+		return managed.ExternalObservation{ResourceExists: false}, nil
+	}
 
-	d, err := domain.GetByIDOrName(ctx, c.client, domainID, cr.Spec.ForProvider.Name)
+	guid := meta.GetExternalName(cr)
 
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.New(
+			fmt.Sprintf("external-name '%s' is not a valid GUID format", guid))
+	}
+
+	d, err := c.client.GetDomainByGUID(ctx, guid)
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
 		}
-
-		return managed.ExternalObservation{}, errors.Wrap(err, errGetResource)
+		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
 	}
 
-	resourceLateInitialized := domain.LateInitialize()
-
-	// set the external name to the GUID
-	if domainID != d.GUID {
-		meta.SetExternalName(cr, d.GUID)
-		resourceLateInitialized = true
+	if d == nil {
+		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
-
-	cr.SetConditions(xpv1.Available())
 
 	cr.Status.AtProvider = domain.GenerateObservation(d)
+	cr.SetConditions(xpv1.Available())
 
 	return managed.ExternalObservation{
-		ResourceExists:          cr.Status.AtProvider.ID != nil,
+		ResourceExists:          true,
 		ResourceUpToDate:        domain.IsUpToDate(cr.Spec.ForProvider, d),
 		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
+}
+
+// resolveExternalName sets the external-name on the Domain CR if it is empty,
+// by looking up the domain by spec.
+// Returns (lateInitialized, exists, error).
+func (c *external) resolveExternalName(ctx context.Context, cr *v1alpha1.Domain) (bool, bool, error) {
+	if meta.GetExternalName(cr) != "" {
+		return false, true, nil
+	}
+
+	d, err := c.client.FindDomainBySpec(ctx, cr.Spec.ForProvider)
+	if err != nil {
+		if clients.ErrorIsNotFound(err) {
+			return false, false, nil
+		}
+		return false, false, errors.Wrap(err, errGet)
+	}
+	if d == nil {
+		return false, false, nil
+	}
+
+	meta.SetExternalName(cr, d.GUID)
+	return true, true, nil
 }
 
 // Create a managed resource Domain
@@ -189,24 +230,17 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errNotDomainKind)
 	}
 
-	// assert that ID is set
-	if cr.Status.AtProvider.ID == nil {
-		return managed.ExternalUpdate{}, errors.New(errUpdate)
+	guid := meta.GetExternalName(cr)
+	if guid == "" {
+		return managed.ExternalUpdate{}, nil
 	}
 
-	// rename resource
-	if cr.Name != ptr.Deref(cr.Status.AtProvider.Name, "") {
-		_, err := c.client.Update(ctx, *cr.Status.AtProvider.ID, domain.GenerateUpdate(cr.Spec.ForProvider))
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
-		}
+	_, err := c.client.Update(ctx, guid, domain.GenerateUpdate(cr.Spec.ForProvider))
+	if err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 
-	return managed.ExternalUpdate{
-		// Optionally return any details that may be required to connect to the
-		// external resource. These will be stored as the connection secret.
-		ConnectionDetails: managed.ConnectionDetails{},
-	}, nil
+	return managed.ExternalUpdate{}, nil
 }
 
 // Delete managed resource Domain
@@ -215,23 +249,27 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	if !ok {
 		return managed.ExternalDelete{}, errors.New(errNotDomainKind)
 	}
+
 	cr.SetConditions(xpv1.Deleting())
 
-	// assert that ID is set
-	if cr.Status.AtProvider.ID == nil {
-		return managed.ExternalDelete{}, errors.New(errDelete)
+	if meta.GetExternalName(cr) == "" {
+		return managed.ExternalDelete{}, nil
 	}
 
-	_, err := c.client.Delete(ctx, *cr.Status.AtProvider.ID)
+	jobGUID, err := c.client.Delete(ctx, meta.GetExternalName(cr))
 	if err != nil {
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
 		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
-	return managed.ExternalDelete{}, nil
+
+	return managed.ExternalDelete{}, job.PollJobComplete(ctx, c.job, jobGUID)
 }
 
 // initializer type implements the managed.Initializer interface
 type initializer struct {
-	client k8s.Reader
+	client k8s.Client
 }
 
 // Initialize method resolves the references which are not resolved by
@@ -251,6 +289,15 @@ func (i initializer) Initialize(ctx context.Context, mg resource.Managed) error 
 
 		cr.Spec.ForProvider.Name = fmt.Sprintf("%s.%s", *cr.Spec.ForProvider.SubDomain, *cr.Spec.ForProvider.Domain)
 	}
-	return nil
+	// Resolve orgRef/orgSelector references so spec.Org is populated before Observe/Create
+	if cr.Spec.ForProvider.OrgRef != nil || cr.Spec.ForProvider.OrgSelector != nil {
+		return cr.ResolveReferences(ctx, i.client)
+	}
 
+	// If orgName is provided, resolve by orgName
+	if cr.Spec.ForProvider.OrgName != nil {
+		return org.ResolveByName(ctx, clients.ClientFnBuilder(ctx, i.client), mg)
+	}
+
+	return nil
 }
