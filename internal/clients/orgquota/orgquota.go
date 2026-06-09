@@ -20,11 +20,20 @@ type OrgQuota interface {
 	Create(ctx context.Context, res *resource.OrganizationQuotaCreateOrUpdate) (*resource.OrganizationQuota, error)
 	Update(ctx context.Context, guid string, r *resource.OrganizationQuotaCreateOrUpdate) (*resource.OrganizationQuota, error)
 	Delete(ctx context.Context, guid string) (string, error)
+	Single(ctx context.Context, opts *client.OrganizationQuotaListOptions) (*resource.OrganizationQuota, error)
 }
 
 // NewClient creates a new OrgQuota client
 func NewClient(cf *client.Client) OrgQuota {
 	return cf.OrganizationQuotas
+}
+
+// FindOrgQuotaBySpec finds an organization quota by spec name.
+// Used for backwards compatibility when external-name is not set.
+func FindOrgQuotaBySpec(ctx context.Context, c OrgQuota, spec v1alpha1.OrgQuotaParameters) (*resource.OrganizationQuota, error) {
+	opts := client.NewOrganizationQuotaListOptions()
+	opts.Names.EqualTo(ptr.Deref(spec.Name, ""))
+	return c.Single(ctx, opts)
 }
 
 // GenerateCreate generates the OrgazationQuotaCreateOrUpdate from
@@ -132,7 +141,7 @@ func orgsEqual(orgs1, orgs2 []*string) bool {
 			orgSet1[*org] = struct{}{}
 		}
 	}
-	// orgSet2 is a set that contains non-nil strings of org1
+	// orgSet2 is a set that contains non-nil strings of org2
 	orgSet2 := map[string]interface{}{}
 	for _, org := range orgs2 {
 		if org != nil {
@@ -164,7 +173,7 @@ func NeedsReconciliation(orgQuota *v1alpha1.OrgQuota) bool {
 		!ptr.Equal(orgQuota.Spec.ForProvider.TotalRoutes, orgQuota.Status.AtProvider.TotalRoutes) ||
 		!ptr.Equal(orgQuota.Spec.ForProvider.TotalServiceKeys, orgQuota.Status.AtProvider.TotalServiceKeys) ||
 		!ptr.Equal(orgQuota.Spec.ForProvider.TotalServices, orgQuota.Status.AtProvider.TotalServices) ||
-		orgsEqual(orgQuota.Spec.ForProvider.Orgs, orgQuota.Status.AtProvider.Orgs) {
+		!orgsEqual(orgQuota.Spec.ForProvider.Orgs, orgQuota.Status.AtProvider.Orgs) {
 		return true
 	}
 	return false
@@ -179,13 +188,6 @@ func NeedsReconciliation(orgQuota *v1alpha1.OrgQuota) bool {
 // *float64.
 func ptrCast[I, O interface{ ~int | ~float64 | ~float32 }](in *I, defValue I) *O {
 	return ptr.To(O(ptr.Deref(in, defValue)))
-}
-
-// ptrDef function accepts a pointer to a value. If in is not nil,
-// then it returns with in. Otherwise, it returns with a pointer to
-// default value.
-func ptrDef[T any](in *T, defValue T) *T {
-	return ptr.To(ptr.Deref(in, defValue))
 }
 
 // LateInitialize fills the unassigned fields with values from a
@@ -204,7 +206,9 @@ func LateInitialize(spec *v1alpha1.OrgQuotaParameters, from *resource.Organizati
 		for i := range from.Relationships.Organizations.Data {
 			spec.Orgs[i] = &from.Relationships.Organizations.Data[i].GUID
 		}
-		changed = true
+		if len(from.Relationships.Organizations.Data) > 0 {
+			changed = true
+		}
 	}
 	if spec.AllowPaidServicePlans == nil {
 		spec.AllowPaidServicePlans = ptr.To(from.Services.PaidServicesAllowed)
@@ -219,7 +223,7 @@ func LateInitialize(spec *v1alpha1.OrgQuotaParameters, from *resource.Organizati
 		changed = true
 	}
 	if spec.TotalAppLogRateLimit == nil {
-		spec.TotalAppInstances = ptrCast[int, float64](from.Apps.LogRateLimitInBytesPerSecond, -1)
+		spec.TotalAppLogRateLimit = ptrCast[int, float64](from.Apps.LogRateLimitInBytesPerSecond, -1)
 		changed = true
 	}
 	if spec.TotalAppTasks == nil {
@@ -227,27 +231,27 @@ func LateInitialize(spec *v1alpha1.OrgQuotaParameters, from *resource.Organizati
 		changed = true
 	}
 	if spec.TotalMemory == nil {
-		spec.TotalAppTasks = ptrCast[int, float64](from.Apps.TotalMemoryInMB, -1)
+		spec.TotalMemory = ptrCast[int, float64](from.Apps.TotalMemoryInMB, -1)
 		changed = true
 	}
 	if spec.TotalPrivateDomains == nil {
-		spec.TotalAppTasks = ptrCast[int, float64](from.Domains.TotalDomains, -1)
+		spec.TotalPrivateDomains = ptrCast[int, float64](from.Domains.TotalDomains, -1)
 		changed = true
 	}
 	if spec.TotalRoutePorts == nil {
-		spec.TotalAppTasks = ptrCast[int, float64](from.Routes.TotalReservedPorts, -1)
+		spec.TotalRoutePorts = ptrCast[int, float64](from.Routes.TotalReservedPorts, -1)
 		changed = true
 	}
 	if spec.TotalRoutes == nil {
-		spec.TotalAppTasks = ptrCast[int, float64](from.Routes.TotalRoutes, -1)
+		spec.TotalRoutes = ptrCast[int, float64](from.Routes.TotalRoutes, -1)
 		changed = true
 	}
 	if spec.TotalServiceKeys == nil {
-		spec.TotalAppTasks = ptrCast[int, float64](from.Services.TotalServiceKeys, -1)
+		spec.TotalServiceKeys = ptrCast[int, float64](from.Services.TotalServiceKeys, -1)
 		changed = true
 	}
 	if spec.TotalServices == nil {
-		spec.TotalAppTasks = ptrCast[int, float64](from.Services.TotalServiceInstances, -1)
+		spec.TotalServices = ptrCast[int, float64](from.Services.TotalServiceInstances, -1)
 		changed = true
 	}
 	slog.Info("LateInitialize done", "changed", changed)

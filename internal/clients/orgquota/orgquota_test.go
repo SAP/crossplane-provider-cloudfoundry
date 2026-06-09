@@ -5,7 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"k8s.io/utils/ptr"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 // ptrString turns any pointer into a string. If the pointer is nil,
@@ -127,23 +130,118 @@ func TestPtrCast(t *testing.T) {
 	}
 }
 
-func TestPtrDef(t *testing.T) {
-	if ptr.Deref(ptrDef(nil, -5), -1000) != -5 {
-		t.Error("ptrDef(nil, -5) != -5")
+func TestLateInitialize(t *testing.T) {
+	fullResource := &resource.OrganizationQuota{}
+	fullResource.GUID = "test-guid"
+	fullResource.Name = "test-quota"
+	fullResource.Services.PaidServicesAllowed = true
+	fullResource.Services.TotalServiceInstances = ptr.To(5)
+	fullResource.Services.TotalServiceKeys = ptr.To(10)
+	fullResource.Apps.PerProcessMemoryInMB = ptr.To(1024)
+	fullResource.Apps.TotalInstances = ptr.To(20)
+	fullResource.Apps.LogRateLimitInBytesPerSecond = ptr.To(4096)
+	fullResource.Apps.PerAppTasks = ptr.To(8)
+	fullResource.Apps.TotalMemoryInMB = ptr.To(2048)
+	fullResource.Routes.TotalRoutes = ptr.To(100)
+	fullResource.Routes.TotalReservedPorts = ptr.To(5)
+	fullResource.Domains.TotalDomains = ptr.To(3)
+	fullResource.Relationships.Organizations.Data = []resource.Relationship{
+		{GUID: "org-guid-1"},
+		{GUID: "org-guid-2"},
 	}
-	if ptr.Deref(ptrDef(nil, -5.0), -1000.0) != -5.0 {
-		t.Error("ptrDef(nil, -5.0) != -5.0")
-	}
-	if ptr.Deref(ptrDef(nil, true), false) != true {
-		t.Error("ptrDef(nil, true) != true")
-	}
-	if ptr.Deref(ptrDef(ptr.To(10), -5), -1000) != 10 {
-		t.Error("ptrDef(10, -5) != 10")
-	}
-	if ptr.Deref(ptrDef(ptr.To(10.0), -5.0), -1000.0) != 10.0 {
-		t.Error("ptrDef(10.0, -5.0) != 10.0")
-	}
-	if ptr.Deref(ptrDef(ptr.To(false), true), true) != false {
-		t.Error("ptrDef(false, true) != false")
-	}
+
+	t.Run("all fields nil - all populated", func(t *testing.T) {
+		spec := &v1alpha1.OrgQuotaParameters{}
+		changed := LateInitialize(spec, fullResource)
+		if !changed {
+			t.Error("expected changed=true when all fields nil")
+		}
+		if ptr.Deref(spec.Name, "") != "test-quota" {
+			t.Errorf("Name: got %q, want %q", ptr.Deref(spec.Name, ""), "test-quota")
+		}
+		if ptr.Deref(spec.AllowPaidServicePlans, false) != true {
+			t.Error("AllowPaidServicePlans not populated")
+		}
+		if ptr.Deref(spec.InstanceMemory, 0) != 1024 {
+			t.Errorf("InstanceMemory: got %v, want 1024", ptr.Deref(spec.InstanceMemory, 0))
+		}
+		if ptr.Deref(spec.TotalAppInstances, 0) != 20 {
+			t.Errorf("TotalAppInstances: got %v, want 20", ptr.Deref(spec.TotalAppInstances, 0))
+		}
+		if ptr.Deref(spec.TotalAppLogRateLimit, 0) != 4096 {
+			t.Errorf("TotalAppLogRateLimit: got %v, want 4096", ptr.Deref(spec.TotalAppLogRateLimit, 0))
+		}
+		if ptr.Deref(spec.TotalAppTasks, 0) != 8 {
+			t.Errorf("TotalAppTasks: got %v, want 8", ptr.Deref(spec.TotalAppTasks, 0))
+		}
+		if ptr.Deref(spec.TotalMemory, 0) != 2048 {
+			t.Errorf("TotalMemory: got %v, want 2048", ptr.Deref(spec.TotalMemory, 0))
+		}
+		if ptr.Deref(spec.TotalPrivateDomains, 0) != 3 {
+			t.Errorf("TotalPrivateDomains: got %v, want 3", ptr.Deref(spec.TotalPrivateDomains, 0))
+		}
+		if ptr.Deref(spec.TotalRoutePorts, 0) != 5 {
+			t.Errorf("TotalRoutePorts: got %v, want 5", ptr.Deref(spec.TotalRoutePorts, 0))
+		}
+		if ptr.Deref(spec.TotalRoutes, 0) != 100 {
+			t.Errorf("TotalRoutes: got %v, want 100", ptr.Deref(spec.TotalRoutes, 0))
+		}
+		if ptr.Deref(spec.TotalServiceKeys, 0) != 10 {
+			t.Errorf("TotalServiceKeys: got %v, want 10", ptr.Deref(spec.TotalServiceKeys, 0))
+		}
+		if ptr.Deref(spec.TotalServices, 0) != 5 {
+			t.Errorf("TotalServices: got %v, want 5", ptr.Deref(spec.TotalServices, 0))
+		}
+		if len(spec.Orgs) != 2 {
+			t.Fatalf("Orgs length: got %d, want 2", len(spec.Orgs))
+		}
+		if ptr.Deref(spec.Orgs[0], "") != "org-guid-1" {
+			t.Errorf("Orgs[0]: got %q, want %q", ptr.Deref(spec.Orgs[0], ""), "org-guid-1")
+		}
+		if ptr.Deref(spec.Orgs[1], "") != "org-guid-2" {
+			t.Errorf("Orgs[1]: got %q, want %q", ptr.Deref(spec.Orgs[1], ""), "org-guid-2")
+		}
+	})
+
+	t.Run("some fields set - only nil populated", func(t *testing.T) {
+		spec := &v1alpha1.OrgQuotaParameters{
+			Name: ptr.To("custom-name"),
+			Orgs: []*string{ptr.To("existing-org")},
+		}
+		changed := LateInitialize(spec, fullResource)
+		if !changed {
+			t.Error("expected changed=true when some fields nil")
+		}
+		if ptr.Deref(spec.Name, "") != "custom-name" {
+			t.Error("Name should not be overwritten")
+		}
+		if len(spec.Orgs) != 1 {
+			t.Error("Orgs should not be overwritten when non-empty")
+		}
+		if ptr.Deref(spec.TotalServices, 0) != 5 {
+			t.Error("TotalServices should be populated")
+		}
+	})
+
+	t.Run("all fields set - no change", func(t *testing.T) {
+		spec := &v1alpha1.OrgQuotaParameters{
+			Name:                  ptr.To("custom-name"),
+			AllowPaidServicePlans: ptr.To(false),
+			InstanceMemory:        ptr.To(512.0),
+			TotalAppInstances:     ptr.To(10.0),
+			TotalAppLogRateLimit:  ptr.To(2048.0),
+			TotalAppTasks:         ptr.To(4.0),
+			TotalMemory:           ptr.To(1024.0),
+			TotalPrivateDomains:   ptr.To(1.0),
+			TotalRoutePorts:       ptr.To(2.0),
+			TotalRoutes:           ptr.To(50.0),
+			TotalServiceKeys:      ptr.To(5.0),
+			TotalServices:         ptr.To(3.0),
+			Orgs:                  []*string{ptr.To("existing-org")},
+		}
+		changed := LateInitialize(spec, fullResource)
+		if changed {
+			t.Error("expected changed=false when all fields set")
+		}
+	})
 }

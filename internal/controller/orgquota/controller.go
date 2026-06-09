@@ -32,7 +32,6 @@ const (
 	errCreate            = "cannot create cloudfoundry OrgQuota"
 	errUpdate            = "cannot update cloudfoundry OrgQuota"
 	errDelete            = "cannot delete cloudfoundry OrgQuota"
-	errIDNotSet          = ".Status.AtProvider.ID is not set"
 )
 
 // externalConnecter specifies how the Reconciler should connect to
@@ -70,6 +69,7 @@ func Setup(mgr ctrl.Manager, controllerOptions controller.Options) error {
 	name := managed.ControllerName(v1alpha1.OrgQuota_GroupKind)
 
 	options := []managed.ReconcilerOption{
+		managed.WithInitializers(),
 		managed.WithExternalConnecter(&externalConnecter{
 			kubeClient:   mgr.GetClient(),
 			usageTracker: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
@@ -118,16 +118,34 @@ func (e *externalClient) Observe(ctx context.Context, res resource.Managed) (man
 		return managed.ExternalObservation{}, errors.New(errNotOrgQuota)
 	}
 
-	external_name := meta.GetExternalName(managedOrgQuota)
-	// If external name is not set, use metadata.name as default
-	if external_name == "" {
-		external_name = managedOrgQuota.GetName()
+	resourceLateInitialized := false
+
+	// ADR Step 1: Check if external-name is empty
+	if meta.GetExternalName(managedOrgQuota) == "" {
+		// Backwards compatibility: lookup by spec name
+		r, err := orgquota.FindOrgQuotaBySpec(ctx, e.cloudFoundryClient, managedOrgQuota.Spec.ForProvider)
+		if err != nil {
+			if clients.ErrorIsNotFound(err) {
+				return managed.ExternalObservation{ResourceExists: false}, nil
+			}
+			return managed.ExternalObservation{}, errors.Wrap(err, errGet)
+		}
+		if r == nil {
+			return managed.ExternalObservation{ResourceExists: false}, nil
+		}
+		meta.SetExternalName(managedOrgQuota, r.GUID)
+		resourceLateInitialized = true
 	}
 
-	// get by external name
-	externalOrgQuota, err := e.cloudFoundryClient.Get(ctx, external_name)
+	guid := meta.GetExternalName(managedOrgQuota)
 
-	// not found or error
+	// ADR Step 2: External-name is set, check its format (must be valid GUID)
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.Errorf("external-name '%s' is not a valid GUID format", guid)
+	}
+
+	// ADR Step 3: Get by GUID
+	externalOrgQuota, err := e.cloudFoundryClient.Get(ctx, guid)
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
@@ -139,13 +157,9 @@ func (e *externalClient) Observe(ctx context.Context, res resource.Managed) (man
 	lateInitialized := orgquota.LateInitialize(&managedOrgQuota.Spec.ForProvider, externalOrgQuota)
 	managedOrgQuota.Status.AtProvider = orgquota.GenerateObservation(externalOrgQuota)
 
-	if err := e.kubeClient.Status().Update(ctx, managedOrgQuota); err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, errUpdate)
-	}
-
 	return managed.ExternalObservation{
 		ResourceExists:          true,
-		ResourceLateInitialized: lateInitialized,
+		ResourceLateInitialized: lateInitialized || resourceLateInitialized,
 		ResourceUpToDate:        !orgquota.NeedsReconciliation(managedOrgQuota),
 	}, nil
 }
@@ -168,10 +182,6 @@ func (e *externalClient) Create(ctx context.Context, res resource.Managed) (mana
 
 	meta.SetExternalName(managedOrgQuota, externalOrgQuota.GUID)
 
-	if err := e.kubeClient.Update(ctx, managedOrgQuota); err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, errUpdate)
-	}
-
 	return managed.ExternalCreation{}, nil
 }
 
@@ -184,12 +194,7 @@ func (e *externalClient) Update(ctx context.Context, res resource.Managed) (mana
 		return managed.ExternalUpdate{}, errors.New(errNotOrgQuota)
 	}
 
-	// assert that ID is set
-	if managedOrgQuota.Status.AtProvider.ID == nil {
-		return managed.ExternalUpdate{}, errors.New(errUpdate)
-	}
-
-	_, err := e.cloudFoundryClient.Update(ctx, *managedOrgQuota.Status.AtProvider.ID, orgquota.GenerateCreateOrUpdate(managedOrgQuota.Spec.ForProvider))
+	_, err := e.cloudFoundryClient.Update(ctx, meta.GetExternalName(managedOrgQuota), orgquota.GenerateCreateOrUpdate(managedOrgQuota.Spec.ForProvider))
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
@@ -206,13 +211,15 @@ func (e *externalClient) Delete(ctx context.Context, res resource.Managed) (mana
 	}
 	managedOrgQuota.SetConditions(xpv1.Deleting())
 
-	// assert that ID is set
-	if managedOrgQuota.Status.AtProvider.ID == nil {
-		return managed.ExternalDelete{}, errors.Wrap(errors.New(errIDNotSet), errDelete)
+	if meta.GetExternalName(managedOrgQuota) == "" {
+		return managed.ExternalDelete{}, nil
 	}
 
-	_, err := e.cloudFoundryClient.Delete(ctx, *managedOrgQuota.Status.AtProvider.ID)
+	_, err := e.cloudFoundryClient.Delete(ctx, meta.GetExternalName(managedOrgQuota))
 	if err != nil {
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
 		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 
