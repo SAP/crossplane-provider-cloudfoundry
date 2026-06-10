@@ -1,4 +1,4 @@
-# Run e2e tests in a single CF enviironment, potentially requiring approval based on the `environment` input.
+# Run e2e tests in a single CF environment, potentially requiring approval based on the `environment` input.
 #
 # Enviroment variables/secrets that are needed
 # CF_CREDENTIALS contains the login information of the CF technical user for this test
