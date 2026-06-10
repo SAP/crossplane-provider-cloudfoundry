@@ -246,8 +246,8 @@ spec:
                     - process
                     type: string
                   routes:
-                    description: (NOT SUPPORTED YET) The routes to map to the application
-                      to control its ingress traffic.
+                    description: The routes to map to the application to control its
+                      ingress traffic.
                     items:
                       description: RouteConfiguration defines the route for the application
                       properties:

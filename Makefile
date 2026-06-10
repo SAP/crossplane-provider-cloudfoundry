@@ -181,7 +181,20 @@ local-deploy: build controlplane.up local.xpkg.deploy.provider.$(PROJECT_NAME)
 	@$(KUBECTL) -n upbound-system wait --for=condition=Available deployment --all --timeout=5m
 	@$(OK) running locally built provider
 
-local-deploy-prebuilt: controlplane.up local.xpkg.deploy.provider.$(PROJECT_NAME)
+# Retry controlplane.up: the UXP chart pull from charts.upbound.io can flake (transient 403/rate-limit) under matrix load.
+CONTROLPLANE_UP_ATTEMPTS ?= 5
+
+.PHONY: controlplane.up.retry
+controlplane.up.retry:
+	@for attempt in $$(seq 1 $(CONTROLPLANE_UP_ATTEMPTS)); do \
+		$(MAKE) controlplane.up && break; \
+		if [ "$$attempt" -eq "$(CONTROLPLANE_UP_ATTEMPTS)" ]; then \
+			$(ERR) "controlplane.up failed after $(CONTROLPLANE_UP_ATTEMPTS) attempts" && exit 1; \
+		fi; \
+		$(INFO) "controlplane.up attempt $$attempt failed; retrying in $$((attempt * 15))s..." && sleep $$((attempt * 15)); \
+	done
+
+local-deploy-prebuilt: controlplane.up.retry local.xpkg.deploy.provider.$(PROJECT_NAME)
 	@$(INFO) deploying prebuilt provider
 	@$(KUBECTL) wait provider.pkg $(PROJECT_NAME) --for condition=Healthy --timeout 5m
 	@$(KUBECTL) -n upbound-system wait --for=condition=Available deployment --all --timeout=5m

@@ -77,7 +77,7 @@ type AppParameters struct {
 	// +kubebuilder:validation:Optional
 	NoRoute bool `json:"no-route,omitempty"`
 
-	// (NOT SUPPORTED YET) The routes to map to the application to control its ingress traffic.
+	// The routes to map to the application to control its ingress traffic.
 	// +kubebuilder:validation:Optional
 	Routes []RouteConfiguration `json:"routes,omitempty"`
 
