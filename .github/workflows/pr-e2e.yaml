@@ -1,3 +1,5 @@
+# Runs e2e tests on PRs that are not solely markdown changes.
+#
 # The on.pull_request_target runs on changes to a pull request. Contrary to the on.pull_request, this pipeline has access to secrets and can therefore run e2e tests.
 # DANGEROUS: 1) with access to secrets it is possible to steal those by a pull request that executes code that reads the secrets and exfiltrates those.
 # DANGEROUS: 2) the GITHUB_TOKEN has read and write permissions by default. Therefore, restrict the permissions with the permissions field
