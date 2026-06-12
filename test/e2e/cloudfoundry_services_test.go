@@ -161,53 +161,74 @@ func TestCloudFoundryServices(t *testing.T) {
 }
 
 func checkServiceResourceLabelsAndAnnotations(ctx context.Context, t *testing.T, cfg *envconf.Config, obj k8s.Object, stepName string) {
-	cr := cfg.Client().Resources()
 	switch v := obj.(type) {
 	case *v1alpha1.ServiceInstance:
-		if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), v); err != nil {
-			t.Errorf("error getting ServiceInstance for label check: %s", err.Error())
-			return
-		}
 		if stepName == "service_instance" {
 			// Managed SI with user labels in manifest
-			if err := AssertLabelsAndAnnotations(
-				v.Status.AtProvider.Labels,
-				v.Status.AtProvider.Annotations,
-				map[string]string{"environment": "test", "team": "platform"},
-				map[string]string{"description": "E2E test service instance"},
-				v.GetName(),
-				"serviceinstance.cloudfoundry.crossplane.io",
-				v.GetProviderConfigReference().Name,
-			); err != nil {
+			if err := wait.For(func(ctx context.Context) (bool, error) {
+				cr := cfg.Client().Resources()
+				si := &v1alpha1.ServiceInstance{}
+				if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), si); err != nil {
+					return false, err
+				}
+				if err := AssertLabelsAndAnnotations(
+					si.Status.AtProvider.Labels,
+					si.Status.AtProvider.Annotations,
+					map[string]string{"environment": "test", "team": "platform"},
+					map[string]string{"description": "E2E test service instance"},
+					si.GetName(),
+					"serviceinstance.cloudfoundry.crossplane.io",
+					si.GetProviderConfigReference().Name,
+				); err != nil {
+					return false, nil // not yet reconciled
+				}
+				return true, nil
+			}, wait.WithTimeout(5*time.Minute)); err != nil {
 				t.Errorf("ServiceInstance %s labels/annotations check failed: %s", v.GetName(), err.Error())
 			}
 		} else {
 			// UPS instances — no user labels in manifest, just check default labels
-			if err := AssertDefaultLabels(
-				v.Status.AtProvider.Labels,
-				v.GetName(),
-				"serviceinstance.cloudfoundry.crossplane.io",
-				v.GetProviderConfigReference().Name,
-			); err != nil {
+			if err := wait.For(func(ctx context.Context) (bool, error) {
+				cr := cfg.Client().Resources()
+				si := &v1alpha1.ServiceInstance{}
+				if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), si); err != nil {
+					return false, err
+				}
+				if err := AssertDefaultLabels(
+					si.Status.AtProvider.Labels,
+					si.GetName(),
+					"serviceinstance.cloudfoundry.crossplane.io",
+					si.GetProviderConfigReference().Name,
+				); err != nil {
+					return false, nil // not yet reconciled
+				}
+				return true, nil
+			}, wait.WithTimeout(5*time.Minute)); err != nil {
 				t.Errorf("ServiceInstance %s default labels check failed: %s", v.GetName(), err.Error())
 			}
 		}
 	case *v1alpha1.ServiceCredentialBinding:
-		if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), v); err != nil {
-			t.Errorf("error getting SCB for label check: %s", err.Error())
-			return
-		}
 		if stepName == "scb_key" {
 			// SCB with user labels in manifest
-			if err := AssertLabelsAndAnnotations(
-				v.Status.AtProvider.Labels,
-				v.Status.AtProvider.Annotations,
-				map[string]string{"environment": "test", "team": "platform"},
-				map[string]string{"description": "E2E test service credential binding"},
-				v.GetName(),
-				"servicecredentialbinding.cloudfoundry.crossplane.io",
-				v.GetProviderConfigReference().Name,
-			); err != nil {
+			if err := wait.For(func(ctx context.Context) (bool, error) {
+				cr := cfg.Client().Resources()
+				scb := &v1alpha1.ServiceCredentialBinding{}
+				if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), scb); err != nil {
+					return false, err
+				}
+				if err := AssertLabelsAndAnnotations(
+					scb.Status.AtProvider.Labels,
+					scb.Status.AtProvider.Annotations,
+					map[string]string{"environment": "test", "team": "platform"},
+					map[string]string{"description": "E2E test service credential binding"},
+					scb.GetName(),
+					"servicecredentialbinding.cloudfoundry.crossplane.io",
+					scb.GetProviderConfigReference().Name,
+				); err != nil {
+					return false, nil // not yet reconciled
+				}
+				return true, nil
+			}, wait.WithTimeout(5*time.Minute)); err != nil {
 				t.Errorf("SCB %s labels/annotations check failed: %s", v.GetName(), err.Error())
 			}
 		}
