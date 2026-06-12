@@ -1172,7 +1172,29 @@ func TestDelete(t *testing.T) {
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
-				// No Delete mock — if Delete is called, testify will panic
+				// External-name is invalid UUID, but status has valid GUID - should use status GUID
+				m.On("Delete", mock.Anything, guid).Return("", nil)
+				return m
+			},
+			keyRotator: func() *fake.MockKeyRotator {
+				m := &fake.MockKeyRotator{}
+				m.On("DeleteRetiredKeys", mock.Anything, mock.MatchedBy(func(cr *v1alpha1.ServiceCredentialBinding) bool {
+					return cr.GetCondition(xpv1.TypeReady).Reason == xpv1.ReasonDeleting
+				})).Return(nil)
+				return m
+			},
+		},
+		"InvalidUUID_BothInvalid_SkipsDelete": {
+			args: args{
+				mg: serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName("my-key-name")),
+			},
+			want: want{
+				mg:  serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName("my-key-name"), withConditions(xpv1.Deleting())),
+				err: nil,
+			},
+			service: func() *fake.MockServiceCredentialBinding {
+				m := &fake.MockServiceCredentialBinding{}
+				// No Delete mock — both external-name and status GUID are invalid, so Delete should not be called
 				return m
 			},
 			keyRotator: func() *fake.MockKeyRotator {
