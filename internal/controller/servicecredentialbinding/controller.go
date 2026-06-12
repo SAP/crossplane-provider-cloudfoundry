@@ -271,13 +271,23 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalDelete{}, fmt.Errorf(errDeleteRetiredKeys, err)
 	}
 
+	// Try external-name first, then fall back to status GUID
 	externalName := meta.GetExternalName(cr)
-	if !isValidUUID(externalName) {
-		// External name is not a valid UUID; nothing to delete in CF
+	guidToDelete := ""
+
+	if isValidUUID(externalName) {
+		guidToDelete = externalName
+	} else if statusGUID := cr.GetID(); isValidUUID(statusGUID) {
+		// Fallback: external-name is not a valid UUID, but status has a valid GUID
+		guidToDelete = statusGUID
+	}
+
+	// If neither external-name nor status GUID is valid, skip deletion
+	if guidToDelete == "" {
 		return managed.ExternalDelete{}, nil
 	}
 
-	if err := clients.IgnoreNotFoundErr(scb.Delete(ctx, c.scbClient, externalName)); err != nil {
+	if err := clients.IgnoreNotFoundErr(scb.Delete(ctx, c.scbClient, guidToDelete)); err != nil {
 		return managed.ExternalDelete{}, fmt.Errorf(errDelete, err)
 	}
 
