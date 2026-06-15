@@ -116,7 +116,9 @@ type SCBResource struct {
 // External-Name Configuration:
 //   - Follows Standard: yes
 //   - Format: Service Credential Binding GUID (UUID format)
-//   - How to find: UI: Not available in the BTP Cockpit; CLI: Use CF CLI: `cf service-keys <SERVICE_INSTANCE>` and look up the key GUID via `cf curl /v3/service_credential_bindings?names=<KEY_NAME>`
+//   - How to find:
+//   - UI: Not available in the BTP Cockpit
+//   - CLI: Use CF CLI: `cf service-keys <SERVICE_INSTANCE>` and look up the key GUID via `cf curl /v3/service_credential_bindings?names=<KEY_NAME>`
 //
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
