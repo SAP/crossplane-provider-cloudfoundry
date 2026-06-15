@@ -416,6 +416,11 @@ func TestObserve(t *testing.T) {
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
 			}
+			if tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Observe(...): -want managed resource, +got managed resource:\n%s", diff)
+				}
+			}
 		})
 	}
 }
