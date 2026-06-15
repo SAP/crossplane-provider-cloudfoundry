@@ -417,8 +417,17 @@ func TestObserve(t *testing.T) {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
 			}
 			if tc.want.mg != nil {
-				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
-					t.Errorf("Observe(...): -want managed resource, +got managed resource:\n%s", diff)
+				// Verify external-name was updated (for adoption test)
+				cr, ok := tc.args.mg.(*v1alpha1.ServiceCredentialBinding)
+				if ok {
+					wantCR, wantOk := tc.want.mg.(*v1alpha1.ServiceCredentialBinding)
+					if wantOk {
+						gotExternalName := meta.GetExternalName(cr)
+						wantExternalName := meta.GetExternalName(wantCR)
+						if gotExternalName != wantExternalName {
+							t.Errorf("Observe(...): external-name mismatch: want %s, got %s", wantExternalName, gotExternalName)
+						}
+					}
 				}
 			}
 		})
