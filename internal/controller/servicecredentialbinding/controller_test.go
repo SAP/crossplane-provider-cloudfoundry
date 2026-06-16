@@ -71,6 +71,14 @@ func withStatus(guid string) modifier {
 	}
 }
 
+func withObservation(guid string, lastOp *v1alpha1.LastOperation) modifier {
+	return func(r *v1alpha1.ServiceCredentialBinding) {
+		r.Status.AtProvider.GUID = guid
+		r.Status.AtProvider.CreatedAt = &metav1.Time{}
+		r.Status.AtProvider.LastOperation = lastOp
+	}
+}
+
 func serviceCredentialBinding(typ string, m ...modifier) *v1alpha1.ServiceCredentialBinding {
 	r := &v1alpha1.ServiceCredentialBinding{
 		ObjectMeta: metav1.ObjectMeta{
@@ -269,7 +277,13 @@ func TestObserve(t *testing.T) {
 				mg: scb.DeepCopy(),
 			},
 			want: want{
-				mg:  scb.DeepCopy(),
+				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID), withObservation(guid, &v1alpha1.LastOperation{
+					Type:        "create",
+					State:       "succeeded",
+					Description: "create succeeded",
+					CreatedAt:   "0001-01-01 00:00:00 +0000 UTC",
+					UpdatedAt:   "",
+				})),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
@@ -348,7 +362,13 @@ func TestObserve(t *testing.T) {
 				mg: serviceCredentialBinding("key", withExternalName("my-key-name"), withServiceInstanceID(serviceInstanceGUID)),
 			},
 			want: want{
-				mg:  serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID), withStatus(guid)),
+				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID), withObservation(guid, &v1alpha1.LastOperation{
+					Type:        "create",
+					State:       "succeeded",
+					Description: "create succeeded",
+					CreatedAt:   "0001-01-01 00:00:00 +0000 UTC",
+					UpdatedAt:   "",
+				})),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
