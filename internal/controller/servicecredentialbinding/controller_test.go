@@ -114,13 +114,6 @@ func TestObserve(t *testing.T) {
 	}
 
 	scb := serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID))
-	scbAvailable := serviceCredentialBinding(
-		"key",
-		withExternalName(guid),
-		withStatus(guid),
-		withServiceInstanceID(serviceInstanceGUID),
-		withConditions(xpv1.Available()),
-	)
 
 	cfSucceeded := func() *cfresource.ServiceCredentialBinding {
 		return &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceCredentialBinding
