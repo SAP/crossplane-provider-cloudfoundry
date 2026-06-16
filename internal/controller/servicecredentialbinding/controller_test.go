@@ -409,7 +409,7 @@ func TestObserve(t *testing.T) {
 					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
-				if diff := cmp.Diff(tc.want.err, err); diff != nil {
+				if diff := cmp.Diff(tc.want.err, err); diff != "" {
 					t.Errorf("Observe(...): want error != got error:\n%s", diff)
 				}
 			}
