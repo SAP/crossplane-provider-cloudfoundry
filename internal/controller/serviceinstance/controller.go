@@ -140,11 +140,16 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errWrongCRType)
 	}
 
-	// Check if the external resource exists
+	// ADR: the external-name identifies the external resource.
 	guid := meta.GetExternalName(cr)
 
-	// Normal (non‑deletion) observe path.
-	r, err := serviceinstance.GetByIDOrSpec(ctx, c.serviceinstance, guid, cr.Spec.ForProvider)
+	// A set external-name must be a valid GUID; an empty one triggers a spec-based
+	// backward-compatibility lookup.
+	if guid != "" && !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.Errorf("external-name '%s' is not a valid GUID format", guid)
+	}
+
+	r, err := serviceinstance.GetByGUIDOrSpec(ctx, c.serviceinstance, guid, cr.Spec.ForProvider)
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
@@ -152,7 +157,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
 	}
 	if r == nil {
-		return managed.ExternalObservation{}, nil
+		// Not found by GUID or spec -> treat as drift / non-existent.
+		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 	// resource exists, set/update the external name
 	if guid != r.GUID {
@@ -238,7 +244,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	// If the last operation is create and it failed, clean up the failed service instance before retry create
 	if cr.Status.AtProvider.Type == v1alpha1.LastOperationCreate && cr.Status.AtProvider.State == v1alpha1.LastOperationFailed {
-		err := c.serviceinstance.Delete(ctx, cr)
+		err := c.serviceinstance.Delete(ctx, meta.GetExternalName(cr))
 		if err != nil {
 			return managed.ExternalCreation{}, errors.Wrap(err, errCleanFailed)
 		}
@@ -295,8 +301,10 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errWrongCRType)
 	}
 
-	if cr.Status.AtProvider.ID == nil {
-		return managed.ExternalUpdate{}, errors.New(errUpdate)
+	// ADR: drive the update off the external-name (GUID), not the observed status.
+	guid := meta.GetExternalName(cr)
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalUpdate{}, errors.Errorf("external-name '%s' is not a valid GUID format", guid)
 	}
 
 	creds, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
@@ -304,7 +312,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.Wrap(err, errSecret)
 	}
 
-	if _, err := c.serviceinstance.Update(ctx, *cr.Status.AtProvider.ID, &cr.Spec.ForProvider, creds); err != nil {
+	if _, err := c.serviceinstance.Update(ctx, guid, &cr.Spec.ForProvider, creds); err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 
@@ -316,7 +324,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	// Update shared spaces after successful update
-	if err := c.serviceinstance.UpdateSharedSpaces(ctx, *cr.Status.AtProvider.ID, cr.Spec.ForProvider.SharedSpaces); err != nil {
+	if err := c.serviceinstance.UpdateSharedSpaces(ctx, guid, cr.Spec.ForProvider.SharedSpaces); err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateSharedSpaces)
 	}
 
@@ -331,8 +339,14 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 	cr.SetConditions(xpv1.Deleting())
 
-	if err := c.serviceinstance.Delete(ctx, cr); err != nil {
-		return managed.ExternalDelete{}, errors.New(errDelete)
+	// ADR: the external-name (GUID) identifies the resource to delete; nothing to do if unset.
+	guid := meta.GetExternalName(cr)
+	if guid == "" {
+		return managed.ExternalDelete{}, nil
+	}
+
+	if err := c.serviceinstance.Delete(ctx, guid); err != nil {
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 	return managed.ExternalDelete{}, nil
 }

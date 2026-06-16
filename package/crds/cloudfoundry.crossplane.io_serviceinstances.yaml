@@ -34,8 +34,15 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: ServiceInstance is the Schema for the ServiceInstances API. Provides
-          a Cloud Foundry resource for managing service instances.
+        description: |-
+          ServiceInstance is the Schema for the ServiceInstances API. Provides a Cloud Foundry resource for managing service instances.
+
+          External-Name Configuration:
+            - Follows Standard: yes
+            - Format: ServiceInstance GUID (UUID format)
+            - How to find:
+            - UI: In the BTP Cockpit, navigate to your service instance; the GUID is the ID in the URL
+            - CLI: `cf service <SERVICE_INSTANCE_NAME> --guid`
         properties:
           apiVersion:
             description: |-

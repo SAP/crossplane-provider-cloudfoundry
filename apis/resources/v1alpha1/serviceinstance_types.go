@@ -247,6 +247,14 @@ type ServiceInstanceStatus struct {
 // +kubebuilder:storageversion
 
 // ServiceInstance is the Schema for the ServiceInstances API. Provides a Cloud Foundry resource for managing service instances.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: ServiceInstance GUID (UUID format)
+//   - How to find:
+//   - UI: In the BTP Cockpit, navigate to your service instance; the GUID is the ID in the URL
+//   - CLI: `cf service <SERVICE_INSTANCE_NAME> --guid`
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
