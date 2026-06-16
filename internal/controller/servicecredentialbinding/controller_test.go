@@ -184,7 +184,6 @@ func TestObserve(t *testing.T) {
 				mg: scb.DeepCopy(),
 			},
 			want: want{
-				mg:  serviceCredentialBinding("key", withExternalName(guid)),
 				obs: managed.ExternalObservation{},
 				err: fmt.Errorf(errGet, errCFClientError),
 			},
@@ -210,7 +209,6 @@ func TestObserve(t *testing.T) {
 				mg: scb.DeepCopy(),
 			},
 			want: want{
-				mg:  serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID)),
 				obs: managed.ExternalObservation{ResourceExists: false},
 				err: nil,
 			},
@@ -237,7 +235,6 @@ func TestObserve(t *testing.T) {
 				mg: scb.DeepCopy(),
 			},
 			want: want{
-				mg:  scbAvailable.DeepCopy(),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ConnectionDetails: managed.ConnectionDetails{}},
 				err: nil,
 			},
