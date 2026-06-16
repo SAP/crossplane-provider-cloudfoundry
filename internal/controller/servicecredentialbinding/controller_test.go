@@ -348,7 +348,7 @@ func TestObserve(t *testing.T) {
 				mg: serviceCredentialBinding("key", withExternalName("my-key-name"), withServiceInstanceID(serviceInstanceGUID)),
 			},
 			want: want{
-				mg:  serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID)),
+				mg:  serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID), withStatus(guid)),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
@@ -409,26 +409,15 @@ func TestObserve(t *testing.T) {
 					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
-				if diff := cmp.Diff(tc.want.err, err); diff != "" {
+				if diff := cmp.Diff(tc.want.err, err); diff != nil {
 					t.Errorf("Observe(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
 			}
-			if tc.want.mg != nil {
-				// Verify external-name was updated (for adoption test)
-				cr, ok := tc.args.mg.(*v1alpha1.ServiceCredentialBinding)
-				if ok {
-					wantCR, wantOk := tc.want.mg.(*v1alpha1.ServiceCredentialBinding)
-					if wantOk {
-						gotExternalName := meta.GetExternalName(cr)
-						wantExternalName := meta.GetExternalName(wantCR)
-						if gotExternalName != wantExternalName {
-							t.Errorf("Observe(...): external-name mismatch: want %s, got %s", wantExternalName, gotExternalName)
-						}
-					}
-				}
+			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+				t.Errorf("Observe(...): -want, +got:\n%s", diff)
 			}
 		})
 	}
