@@ -210,7 +210,7 @@ func TestObserve(t *testing.T) {
 				mg: scb.DeepCopy(),
 			},
 			want: want{
-				mg:  serviceCredentialBinding("key", withExternalName(guid)),
+				mg:  serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID)),
 				obs: managed.ExternalObservation{ResourceExists: false},
 				err: nil,
 			},
@@ -437,7 +437,11 @@ func TestObserve(t *testing.T) {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
 			}
 			if tc.want.mg != nil {
-				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+				// Ignore UpdatedAt timestamp in LastOperation as it's set to time.Now() by the fake
+				ignoreUpdateTime := cmp.FilterPath(func(p cmp.Path) bool {
+					return p.String() == "Status.AtProvider.LastOperation.UpdatedAt"
+				}, cmp.Ignore())
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg, ignoreUpdateTime); diff != "" {
 					t.Errorf("Observe(...): -want, +got:\n%s", diff)
 				}
 			}
