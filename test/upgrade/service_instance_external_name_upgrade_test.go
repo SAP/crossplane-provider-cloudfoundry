@@ -21,6 +21,7 @@ import (
 
 	v1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/test"
+	"github.com/crossplane/crossplane-runtime/pkg/meta"
 	"k8s.io/klog/v2"
 	res "sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
@@ -60,9 +61,8 @@ func Test_Service_Instance_External_Name(t *testing.T) {
 					t.Fatalf("Failed to get ServiceInstance resource: %v", err)
 				}
 
-				annotations := serviceInstance.GetAnnotations()
-				externalName, exists := annotations["crossplane.io/external-name"]
-				if !exists {
+				externalName := meta.GetExternalName(serviceInstance)
+				if externalName == "" {
 					t.Fatal("External name annotation does not exist")
 				}
 
@@ -86,9 +86,8 @@ func Test_Service_Instance_External_Name(t *testing.T) {
 					t.Fatalf("Failed to get ServiceInstance resource: %v", err)
 				}
 
-				annotations := serviceInstance.GetAnnotations()
-				externalName, exists := annotations["crossplane.io/external-name"]
-				if !exists {
+				externalName := meta.GetExternalName(serviceInstance)
+				if externalName == "" {
 					t.Fatal("External name annotation does not exist after upgrade")
 				}
 

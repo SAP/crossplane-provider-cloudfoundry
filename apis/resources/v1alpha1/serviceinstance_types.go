@@ -252,7 +252,7 @@ type ServiceInstanceStatus struct {
 //   - Follows Standard: yes
 //   - Format: ServiceInstance GUID (UUID format)
 //   - How to find:
-//   - UI: In the BTP Cockpit, navigate to your service instance; the GUID is the ID in the URL
+//   - UI: In the BTP Cockpit, open the service instance detail view; the GUID is shown in the "Instance ID" field
 //   - CLI: `cf service <SERVICE_INSTANCE_NAME> --guid`
 //
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
