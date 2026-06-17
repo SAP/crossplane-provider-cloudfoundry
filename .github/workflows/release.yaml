@@ -41,11 +41,7 @@ jobs:
       - run-reuse-license-check
       - run-unit-test
       - run-make-reviewable-and-check-diff
-      with:
-        environment: pr-e2e-no-approval
-      secrets:
-        CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
-        CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
+      secrets: inherit
 
     release:
       runs-on: ubuntu-latest
