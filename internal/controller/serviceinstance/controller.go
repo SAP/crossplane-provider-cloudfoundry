@@ -14,7 +14,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/google/uuid"
 	"github.com/nsf/jsondiff"
 	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -38,6 +37,7 @@ const (
 	errUpdateCR           = "cannot update the managed resource"
 	errGet                = "cannot get " + resourceType + " in " + externalSystem
 	errCreate             = "cannot create " + resourceType + " in " + externalSystem
+	errCreateIncomplete   = "service instance not yet available after create; provisioning may still be in progress"
 	errUpdate             = "cannot update " + resourceType + " in " + externalSystem
 	errDelete             = "cannot delete " + resourceType + " in " + externalSystem
 	errCleanFailed        = "cannot delete failed service instance"
@@ -263,6 +263,10 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
 
+	if r == nil {
+		return managed.ExternalCreation{}, errors.New(errCreateIncomplete)
+	}
+
 	if err := c.postCreate(ctx, cr, r.GUID, creds); err != nil {
 		return managed.ExternalCreation{}, err
 	}
@@ -342,7 +346,12 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	// ADR: the external-name (GUID) identifies the resource to delete; nothing to do if unset.
 	guid := meta.GetExternalName(cr)
 	if guid == "" {
+		// Nothing to delete if the external-name was never set.
 		return managed.ExternalDelete{}, nil
+	}
+	// A set external-name must be a valid GUID before we ask CF to delete it.
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalDelete{}, errors.Errorf("external-name '%s' is not a valid GUID format", guid)
 	}
 
 	if err := c.serviceinstance.Delete(ctx, guid); err != nil {
@@ -448,7 +457,7 @@ func (s servicePlanInitializer) Initialize(ctx context.Context, mg resource.Mana
 	// Service plan is not set
 	guid := meta.GetExternalName(cr)
 
-	if _, err := uuid.Parse(guid); err == nil {
+	if clients.IsValidGUID(guid) {
 		// We have a valid external-name annotation
 		return nil
 	}

@@ -318,6 +318,29 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
+		"Adopt by spec but CR update fails": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+				),
+				obs: managed.ExternalObservation{},
+				err: errors.Wrap(errBoom, errUpdateCR),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				return m
+			},
+			kube: &test.MockClient{MockUpdate: test.NewMockUpdateFn(errBoom)},
+		},
 		"CreateFailed": {
 			args: args{
 				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
@@ -715,10 +738,12 @@ func TestObserve(t *testing.T) {
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
+			kube := tc.kube
+			if kube == nil {
+				kube = &test.MockClient{MockUpdate: test.NewMockUpdateFn(nil)}
+			}
 			c := &external{
-				kube: &test.MockClient{
-					MockUpdate: test.NewMockUpdateFn(nil),
-				},
+				kube: kube,
 				serviceinstance: &serviceinstance.Client{
 					ServiceInstance: tc.service(),
 					Job:             nil,
@@ -1033,16 +1058,69 @@ func TestCreate(t *testing.T) {
 				return m
 			},
 		},
+		"CRUpdateFailsAfterCreate": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating()), withExternalName(guid)),
+				obs: managed.ExternalCreation{},
+				err: errors.Wrap(errBoom, errUpdateCR),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+			kube: &test.MockClient{MockUpdate: test.NewMockUpdateFn(errBoom)},
+		},
+		"CreateReturnsNilIsRequeued": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating())),
+				obs: managed.ExternalCreation{},
+				err: errors.New(errCreateIncomplete),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("Single").Return(
+					fake.ServiceInstanceNil,
+					fake.ErrNoResultReturned,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
 	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
-			c := &external{
-				kube: &test.MockClient{
+			kube := tc.kube
+			if kube == nil {
+				kube = &test.MockClient{
 					MockUpdate:       test.NewMockUpdateFn(nil),
 					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
-				},
+				}
+			}
+			c := &external{
+				kube: kube,
 				serviceinstance: &serviceinstance.Client{
 					ServiceInstance: tc.service(),
 					Job:             tc.job(),
@@ -1598,6 +1676,24 @@ func TestDelete(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Delete", guid).Return("", errBoom)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				return m
+			},
+		},
+		"InvalidExternalNameIsError": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: errors.Errorf("external-name '%s' is not a valid GUID format", "not-guid"),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
 				return m
 			},
 			job: func() *fake.MockJob {
