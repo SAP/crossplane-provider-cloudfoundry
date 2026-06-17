@@ -46,7 +46,7 @@ const (
 	errExtractParams         = "cannot extract specified parameters: %w"
 	errUnknownState          = "unknown last operation state for " + resourceType + " in " + externalSystem
 	errUpdateCR              = "cannot update managed resource"
-	maxCreateAttempts        = 5
+	maxCreateAttempts        = 10
 	createAttemptsAnnotation = "crossplane-provider-cloudfoundry/create-attempts"
 )
 
