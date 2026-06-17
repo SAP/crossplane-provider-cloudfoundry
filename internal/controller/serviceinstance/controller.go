@@ -242,11 +242,17 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
 	}
 
-	// If the last operation is create and it failed, clean up the failed service instance before retry create
+	// On a failed create, clean up then clear the stale external-name so a re-create
+	// whose poll times out is re-adopted by spec instead of resolving the deleted GUID.
 	if cr.Status.AtProvider.Type == v1alpha1.LastOperationCreate && cr.Status.AtProvider.State == v1alpha1.LastOperationFailed {
-		err := c.serviceinstance.Delete(ctx, meta.GetExternalName(cr))
-		if err != nil {
-			return managed.ExternalCreation{}, errors.Wrap(err, errCleanFailed)
+		if guid := meta.GetExternalName(cr); clients.IsValidGUID(guid) {
+			if err := c.serviceinstance.Delete(ctx, guid); err != nil {
+				return managed.ExternalCreation{}, errors.Wrap(err, errCleanFailed)
+			}
+			meta.SetExternalName(cr, "")
+			if err := c.kube.Update(ctx, cr); err != nil {
+				return managed.ExternalCreation{}, errors.Wrap(err, errUpdateCR)
+			}
 		}
 	}
 
