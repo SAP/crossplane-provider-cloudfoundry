@@ -711,6 +711,7 @@ func TestObserve(t *testing.T) {
 					withExternalName(guid),
 					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDefaultMetadataLabels(),
 					// sharedSpaces field is not set/is nil, sharing is unmanaged
 				),
 			},
@@ -731,7 +732,15 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					&fake.NewServiceInstance("managed").
+						SetName(name).
+						SetGUID(guid).
+						SetServicePlan(servicePlan).
+						SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).
+						SetLabels(map[string]*string{
+							"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+							"crossplane-name": ptr.To("my-service-instance"),
+						}).ServiceInstance,
 					nil,
 				)
 				m.On("GetManagedParameters", guid).Return(
