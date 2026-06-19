@@ -204,7 +204,11 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	serviceBinding, err := scb.Create(ctx, c.scbClient, cr.Spec.ForProvider, params)
 	if serviceBinding != nil && serviceBinding.GUID != "" {
-		// Capture the external name even if the job failed, as the binding was created in Cloud Foundry and we can manage it going forward. This can happen when CF accepts the request but the broker fails to provision the backing service instance (e.g. due to invalid parameters).
+		// Capture the external name even if the job failed,
+		// as the binding was created in Cloud Foundry and we can manage it going forward.
+		// This can happen when CF accepts the request
+		// but the broker fails to provision the backing service instance
+		// (e.g. due to invalid parameters).
 		meta.SetExternalName(cr, serviceBinding.GUID)
 	}
 	if err != nil {

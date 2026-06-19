@@ -193,7 +193,6 @@ func newCreateOption(forProvider v1alpha1.ServiceCredentialBindingParameters, pa
 }
 
 func createToListOptions(create *resource.ServiceCredentialBindingCreate) *client.ServiceCredentialBindingListOptions {
-	// create options are not used in the controller, but can be used in tests
 	opts := client.NewServiceCredentialBindingListOptions()
 	opts.Type.EqualTo(create.Type)
 
