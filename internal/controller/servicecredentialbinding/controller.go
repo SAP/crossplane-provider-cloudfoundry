@@ -159,20 +159,19 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errWrongCRType)
 	}
 
-	// Check circuit breaker first - if tripped, return without calling CF API
-	if isCircuitBreakerTripped(cr) {
-		cr.SetConditions(xpv1.Unavailable().WithMessage(
-			fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
-		))
-		return managed.ExternalObservation{
-			ResourceExists:   true,
-			ResourceUpToDate: true,
-		}, nil
-	}
-
 	guid := meta.GetExternalName(cr)
 	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, cr.Spec.ForProvider)
 	if isBindingNotFoundError(err) {
+		// Check circuit breaker only if resource doesn't exist - prevents retry loops
+		if isCircuitBreakerTripped(cr) {
+			cr.SetConditions(xpv1.Unavailable().WithMessage(
+				fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
+			))
+			return managed.ExternalObservation{
+				ResourceExists:   true,
+				ResourceUpToDate: true,
+			}, nil
+		}
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 	if err != nil {
@@ -182,6 +181,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	// Adoption: if the external-name doesn't match the discovered GUID, update it
 	if guid != serviceBinding.GUID {
 		meta.SetExternalName(cr, serviceBinding.GUID)
+		// Reset circuit breaker on successful adoption
+		resetCreateAttempts(cr)
 		if err := c.kube.Update(ctx, cr); err != nil {
 			return managed.ExternalObservation{}, fmt.Errorf("%s: %w", errUpdateCR, err)
 		}

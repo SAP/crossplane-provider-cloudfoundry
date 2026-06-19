@@ -303,7 +303,7 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
-		"CircuitBreakerTripped": {
+		"CircuitBreakerTripped_ResourceNotFound": {
 			args: args{
 				mg: serviceCredentialBinding("key",
 					withExternalName(guid),
@@ -319,10 +319,59 @@ func TestObserve(t *testing.T) {
 				err: nil,
 			},
 			service: func() *fake.MockServiceCredentialBinding {
-				return &fake.MockServiceCredentialBinding{}
+				m := &fake.MockServiceCredentialBinding{}
+				// Circuit breaker now allows the discovery attempt
+				m.On("Get", mock.Anything, guid).Return(
+					fake.ServiceCredentialBindingNil,
+					fake.ErrNoResultReturned,
+				)
+				return m
 			},
 			keyRotator: func() *fake.MockKeyRotator {
 				return &fake.MockKeyRotator{}
+			},
+		},
+		"CircuitBreakerTripped_AdoptionSucceeds": {
+			args: args{
+				mg: serviceCredentialBinding("key",
+					withExternalName("my-key-name"),
+					withServiceInstanceID(serviceInstanceGUID),
+					withCreateAttempts(maxCreateAttempts),
+				),
+			},
+			want: want{
+				mg: serviceCredentialBinding("key",
+					withExternalName(guid),
+					withServiceInstanceID(serviceInstanceGUID),
+					withObservation(guid, &v1alpha1.LastOperation{
+						Type:        "create",
+						State:       "succeeded",
+						Description: "create succeeded",
+						CreatedAt:   "0001-01-01 00:00:00 +0000 UTC",
+						UpdatedAt:   "",
+					}),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceCredentialBinding {
+				m := &fake.MockServiceCredentialBinding{}
+				// First call with invalid name fails
+				m.On("Get", mock.Anything, "my-key-name").Return(
+					fake.ServiceCredentialBindingNil,
+					fake.ErrNoResultReturned,
+				)
+				// Second call via search succeeds
+				m.On("Single", mock.Anything, mock.Anything).Return(
+					&fake.NewServiceCredentialBinding("key").SetGUID(guid).SetName(name).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceCredentialBinding,
+					nil,
+				)
+				return m
+			},
+			keyRotator: func() *fake.MockKeyRotator {
+				m := &fake.MockKeyRotator{}
+				m.On("RetireBinding", mock.Anything, mock.Anything).Return(false)
+				return m
 			},
 		},
 		"InvalidGUIDFormat_FallsBackToSpecSearch": {
