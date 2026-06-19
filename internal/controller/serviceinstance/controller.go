@@ -219,12 +219,14 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		// Check if the credentials in the spec match the credentials in the external resource
 		upToDate := credentialsUpToDate && serviceinstance.IsUpToDate(&cr.Spec.ForProvider, r)
 
-		// Check if shared spaces are up to date
-		sharedSpacesUpToDate, err := c.serviceinstance.AreSharedSpacesUpToDate(ctx, r.GUID, cr.Spec.ForProvider.SharedSpaces)
-		if err != nil {
-			return managed.ExternalObservation{ResourceExists: true}, errors.Wrap(err, errCheckSharedSpaces)
+		// Check if shared spaces are up to date (only if field is explicitly set)
+		if cr.Spec.ForProvider.SharedSpaces != nil {
+			sharedSpacesUpToDate, err := c.serviceinstance.AreSharedSpacesUpToDate(ctx, r.GUID, cr.Spec.ForProvider.SharedSpaces)
+			if err != nil {
+				return managed.ExternalObservation{ResourceExists: true}, errors.Wrap(err, errCheckSharedSpaces)
+			}
+			upToDate = upToDate && sharedSpacesUpToDate
 		}
-		upToDate = upToDate && sharedSpacesUpToDate
 
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
 	default:
@@ -236,7 +238,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 }
 
 // Create attempts to create the external resource.
-func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) {
+func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.ExternalCreation, error) { //nolint:gocyclo
 	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
@@ -333,9 +335,11 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		}
 	}
 
-	// Update shared spaces after successful update
-	if err := c.serviceinstance.UpdateSharedSpaces(ctx, guid, cr.Spec.ForProvider.SharedSpaces); err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateSharedSpaces)
+	// Update shared spaces after successful update (only if field is explicitly set)
+	if cr.Spec.ForProvider.SharedSpaces != nil {
+		if err := c.serviceinstance.UpdateSharedSpaces(ctx, guid, cr.Spec.ForProvider.SharedSpaces); err != nil {
+			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateSharedSpaces)
+		}
 	}
 
 	return managed.ExternalUpdate{}, nil

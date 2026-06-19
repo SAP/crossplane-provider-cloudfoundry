@@ -692,6 +692,43 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
+		"SharedSpacesNilNotManaged": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					// sharedSpaces field is not set/is nil, sharing is unmanaged
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+					}),
+					withConditions(xpv1.Available()),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage(""),
+					nil,
+				)
+				// GetSharedSpaceRelationships must NOT be called
+				return m
+			},
+		},
 		"GetSharedSpaceRelationshipsError": {
 			args: args{
 				mg: serviceInstance("managed",
@@ -1514,6 +1551,7 @@ func TestUpdate(t *testing.T) {
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
 					withExternalName(guid),
 					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(), // sharedSpaces field explicitly set empty, unshare all
 				),
 			},
 			want: want{
@@ -1522,6 +1560,7 @@ func TestUpdate(t *testing.T) {
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
 					withExternalName(guid),
 					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(),
 				),
 				obs: managed.ExternalUpdate{},
 				err: nil,
@@ -1604,13 +1643,14 @@ func TestUpdate(t *testing.T) {
 				return m
 			},
 		},
-		"UnShareWithSpacesError": {
+		"SharedSpacesNilNotManaged": {
 			args: args{
 				mg: serviceInstance("managed",
 					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
 					withExternalName(guid),
 					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					// sharedSpaces field is not set/is nil, sharing is unmanaged
 				),
 			},
 			want: want{
@@ -1619,6 +1659,44 @@ func TestUpdate(t *testing.T) {
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
 					withExternalName(guid),
 					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+				),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return("JOB123", nil)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(nil, nil)
+				// GetSharedSpaceRelationships must NOT be called
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"UnShareWithSpacesError": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(), // explicitly empty: manage sharing, remove all
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(),
 				),
 				obs: managed.ExternalUpdate{},
 				err: errors.New("cannot update shared spaces: cannot unshare service instance from spaces: boom"),
