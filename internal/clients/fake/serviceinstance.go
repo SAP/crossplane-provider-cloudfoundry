@@ -146,10 +146,14 @@ func (s *ServiceInstance) SetServicePlan(guid string) *ServiceInstance {
 
 // SetLastOperation assigns ServiceInstance LastOperation
 func (s *ServiceInstance) SetLastOperation(op, state string) *ServiceInstance {
+	desc := ""
+	if op != "" || state != "" {
+		desc = op + " " + state
+	}
 	s.LastOperation = resource.LastOperation{
 		Type:        op,
 		State:       state,
-		Description: op + " " + state,
+		Description: desc,
 		UpdatedAt:   time.Now(),
 	}
 	return s
