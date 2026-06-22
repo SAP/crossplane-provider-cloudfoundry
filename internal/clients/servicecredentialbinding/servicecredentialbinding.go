@@ -77,8 +77,15 @@ func Create(ctx context.Context, scbClient ServiceCredentialBinding, forProvider
 	}
 
 	if jobGUID != "" { // async creation waits for the job to complete
-		if err := job.PollJobComplete(ctx, scbClient, jobGUID); err != nil {
-			return nil, err
+		if pollErr := job.PollJobComplete(ctx, scbClient, jobGUID); pollErr != nil {
+			// Capture the external name even on error - otherwise a failed create
+			// is invisible to Observe(), which creates another binding instead of
+			// recognizing the existing one, repeating until the circuit breaker
+			// trips and quota may be exhausted.
+			if found, lookupErr := scbClient.Single(ctx, createToListOptions(opt)); lookupErr == nil {
+				return found, pollErr
+			}
+			return nil, pollErr
 		}
 	}
 
@@ -186,7 +193,6 @@ func newCreateOption(forProvider v1alpha1.ServiceCredentialBindingParameters, pa
 }
 
 func createToListOptions(create *resource.ServiceCredentialBindingCreate) *client.ServiceCredentialBindingListOptions {
-	// create options are not used in the controller, but can be used in tests
 	opts := client.NewServiceCredentialBindingListOptions()
 	opts.Type.EqualTo(create.Type)
 

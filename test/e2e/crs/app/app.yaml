@@ -12,7 +12,7 @@ spec:
         resolve: Always
     lifecycle: docker
     docker:
-      image: loud/hello_co:latest
+      image: ghcr.io/nginxinc/nginx-unprivileged:latest
     processes:
       - type: web
         health-check-type: http
@@ -38,7 +38,7 @@ spec:
         resolve: Always
     lifecycle: docker
     docker:
-      image: loud/hello_co:latest
+      image: ghcr.io/nginxinc/nginx-unprivileged:latest
     processes:
       - type: web
         health-check-type: http

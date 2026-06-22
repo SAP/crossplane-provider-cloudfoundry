@@ -4,8 +4,10 @@ import (
 	"context"
 	"net/url"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -86,8 +88,8 @@ func withDriftDetection(d bool) modifier {
 }
 
 func withDeletionTimestamp() modifier {
+	ts := metav1.NewTime(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
 	return func(r *v1alpha1.ServiceInstance) {
-		ts := metav1.Now()
 		r.DeletionTimestamp = &ts
 	}
 }
@@ -187,7 +189,7 @@ func TestObserve(t *testing.T) {
 				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withExternalName(guid)),
+				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 				obs: managed.ExternalObservation{},
 				err: errors.Wrap(errBoom, errGet),
 			},
@@ -209,7 +211,7 @@ func TestObserve(t *testing.T) {
 				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withExternalName(guid)),
+				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 				obs: managed.ExternalObservation{ResourceExists: false},
 				err: nil,
 			},
@@ -228,28 +230,19 @@ func TestObserve(t *testing.T) {
 			kube: &test.MockClient{},
 		},
 
-		"NotFound - fallback on Single when NO valid GUID is recorded in CR": {
+		"Invalid GUID external-name returns error": {
 			args: args{
 				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withExternalName(guid)),
-				obs: managed.ExternalObservation{ResourceExists: false},
-				err: nil,
+				mg:  serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				obs: managed.ExternalObservation{},
+				err: errors.Errorf("external-name '%s' is not a valid GUID format", "not-guid"),
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("Get", "not-guid").Return(
-					fake.ServiceInstanceNil,
-					errBoom,
-				)
-				m.On("Single").Return(
-					fake.ServiceInstanceNil,
-					fake.ErrNoResultReturned,
-				)
 				return m
 			},
-			kube: &test.MockClient{},
 		},
 		"Successful - Get by GUID": {
 			args: args{
@@ -258,8 +251,12 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+					}),
 					withConditions(xpv1.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -288,13 +285,17 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful - adopt by forProvider spec": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+					}),
 					withConditions(xpv1.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -302,10 +303,6 @@ func TestObserve(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("Get", "not-guid").Return(
-					fake.ServiceInstanceNil,
-					fake.ErrNoResultReturned,
-				)
 				m.On("Single").Return(
 					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
 					nil,
@@ -321,6 +318,29 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
+		"Adopt by spec but CR update fails": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+				),
+				obs: managed.ExternalObservation{},
+				err: errors.Wrap(errBoom, errUpdateCR),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				return m
+			},
+			kube: &test.MockClient{MockUpdate: test.NewMockUpdateFn(errBoom)},
+		},
 		"CreateFailed": {
 			args: args{
 				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
@@ -328,9 +348,13 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
-					withConditions(xpv1.Available()),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed, Description: "create failed"},
+					}),
+					withConditions(xpv1.Unavailable().WithMessage("create failed")),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
 				err: nil,
@@ -359,9 +383,13 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
-					withConditions(xpv1.Available()),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationUpdate, State: v1alpha1.LastOperationFailed, Description: "update failed"},
+					}),
+					withConditions(xpv1.Unavailable().WithMessage("update failed")),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
@@ -390,9 +418,13 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
-					withConditions(xpv1.Unavailable()),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationInProgress, Description: "create in progress"},
+					}),
+					withConditions(xpv1.Unavailable().WithMessage("create in progress")),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -430,7 +462,10 @@ func TestObserve(t *testing.T) {
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
 					withDeletionTimestamp(),
 					// Status updated by UpdateObservation before early return
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed, Description: "create failed"},
+					}),
 				),
 				// Early return only sets ResourceExists: true
 				obs: managed.ExternalObservation{ResourceExists: true},
@@ -461,8 +496,13 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan, Credentials: iSha256(*fake.JSONRawMessage("{\"foo\":\"bar\"}"))}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						Credentials:   iSha256(*fake.JSONRawMessage("{\"foo\":\"bar\"}")),
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+					}),
 					withConditions(xpv1.Available()),
 					withParameters("{\"foo\":\"bar\", \"baz\": 1}"),
 					withDriftDetection(true),
@@ -498,8 +538,13 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan, Credentials: iSha256([]byte("{\"foo\":\"bar\", \"baz\": 1}"))}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						Credentials:   iSha256([]byte("{\"foo\":\"bar\", \"baz\": 1}")),
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+					}),
 					withConditions(xpv1.Available()),
 					withParameters("{\"foo\":\"bar\", \"baz\": 1}"),
 					withDriftDetection(false),
@@ -577,9 +622,13 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
 					withSharedSpaces(sharedSpaceGUID),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+					}),
 					withConditions(xpv1.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -614,9 +663,13 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
 					withSharedSpaces(sharedSpaceGUID),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+					}),
 					withConditions(xpv1.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
@@ -651,8 +704,12 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+					}),
 					withConditions(xpv1.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -684,9 +741,13 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
 					withSharedSpaces(sharedSpaceGUID),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+					}),
 					withConditions(xpv1.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true},
@@ -714,10 +775,12 @@ func TestObserve(t *testing.T) {
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
+			kube := tc.kube
+			if kube == nil {
+				kube = &test.MockClient{MockUpdate: test.NewMockUpdateFn(nil)}
+			}
 			c := &external{
-				kube: &test.MockClient{
-					MockUpdate: test.NewMockUpdateFn(nil),
-				},
+				kube: kube,
 				serviceinstance: &serviceinstance.Client{
 					ServiceInstance: tc.service(),
 					Job:             nil,
@@ -737,6 +800,14 @@ func TestObserve(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+			}
+			if tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg,
+					cmpopts.IgnoreFields(v1alpha1.ServiceInstanceObservation{}, "CreatedAt", "UpdatedAt"),
+					cmpopts.IgnoreFields(v1alpha1.LastOperation{}, "CreatedAt", "UpdatedAt"),
+				); diff != "" {
+					t.Errorf("Observe(...): -want mg, +got mg:\n%s", diff)
+				}
 			}
 		})
 	}
@@ -1024,16 +1095,160 @@ func TestCreate(t *testing.T) {
 				return m
 			},
 		},
+		"CRUpdateFailsAfterCreate": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating()), withExternalName(guid)),
+				obs: managed.ExternalCreation{},
+				err: errors.Wrap(errBoom, errUpdateCR),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+			kube: &test.MockClient{MockUpdate: test.NewMockUpdateFn(errBoom)},
+		},
+		"CreateReturnsNilIsRequeued": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating())),
+				obs: managed.ExternalCreation{},
+				err: errors.New(errCreateIncomplete),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("Single").Return(
+					fake.ServiceInstanceNil,
+					fake.ErrNoResultReturned,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"RetryAfterFailedCreate": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
+					})),
+			},
+			want: want{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
+					}),
+					withConditions(xpv1.Creating())),
+				obs: managed.ExternalCreation{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Delete", guid).Return("DELJOB", nil)
+				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"RetryAfterFailedCreateRequeues": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
+					})),
+			},
+			want: want{
+				// Cleanup clears the stale external-name (to "") so the requeued Observe re-adopts by spec.
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
+					}),
+					withExternalName(""),
+					withConditions(xpv1.Creating())),
+				obs: managed.ExternalCreation{},
+				err: errors.New(errCreateIncomplete),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Delete", guid).Return("DELJOB", nil)
+				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("Single").Return(
+					fake.ServiceInstanceNil,
+					fake.ErrNoResultReturned,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"FailedCreateCleanupError": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
+					})),
+			},
+			want: want{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
+					})),
+				obs: managed.ExternalCreation{},
+				err: errors.Wrap(errBoom, errCleanFailed),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Delete", guid).Return("", errBoom)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				return m
+			},
+		},
 	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
-			c := &external{
-				kube: &test.MockClient{
+			kube := tc.kube
+			if kube == nil {
+				kube = &test.MockClient{
 					MockUpdate:       test.NewMockUpdateFn(nil),
 					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
-				},
+				}
+			}
+			c := &external{
+				kube: kube,
 				serviceinstance: &serviceinstance.Client{
 					ServiceInstance: tc.service(),
 					Job:             tc.job(),
@@ -1149,6 +1364,34 @@ func TestUpdate(t *testing.T) {
 				m := &fake.MockJob{}
 				m.On("PollComplete").Return(nil)
 				return m
+			},
+		},
+		"CredentialsStatusUpdateFails": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}), withCredentials(&jsonCredentials)),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: iSha256([]byte(jsonCredentials))})),
+				obs: managed.ExternalUpdate{},
+				err: errors.Wrap(errBoom, errUpdateCR),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return("JOB123", nil)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+			kube: &test.MockClient{
+				MockUpdate:       test.NewMockUpdateFn(nil),
+				MockStatusUpdate: test.NewMockSubResourceUpdateFn(errBoom),
 			},
 		},
 		"HTTPClientTimeout": {
@@ -1485,16 +1728,38 @@ func TestUpdate(t *testing.T) {
 				return m
 			},
 		},
+		"InvalidExternalName": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName("not-guid")),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName("not-guid")),
+				obs: managed.ExternalUpdate{},
+				err: errors.Errorf("external-name '%s' is not a valid GUID format", "not-guid"),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				return m
+			},
+		},
 	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
-			c := &external{
-				kube: &test.MockClient{
+			kube := tc.kube
+			if kube == nil {
+				kube = &test.MockClient{
 					MockUpdate:       test.NewMockUpdateFn(nil),
 					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
-				},
+				}
+			}
+			c := &external{
+				kube: kube,
 				serviceinstance: &serviceinstance.Client{
 					ServiceInstance: tc.service(),
 					Job:             tc.job(),
@@ -1517,6 +1782,156 @@ func TestUpdate(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
 				t.Errorf("Update(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestDelete(t *testing.T) {
+	type service func() *fake.MockServiceInstance
+	type job func() *fake.MockJob
+	type args struct {
+		mg resource.Managed
+	}
+
+	type want struct {
+		mg  resource.Managed
+		obs managed.ExternalDelete
+		err error
+	}
+
+	notFound := errors.New("CF-ResourceNotFound")
+
+	cases := map[string]struct {
+		args    args
+		want    want
+		service service
+		job
+	}{
+		"Successful": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Delete", guid).Return("JOB123", nil)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"NotFoundIsSuccess": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Delete", guid).Return("", notFound)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				return m
+			},
+		},
+		"EmptyExternalNameIsNoop": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				return m
+			},
+		},
+		"DeleteError": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: errors.Wrap(errBoom, errDelete),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Delete", guid).Return("", errBoom)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				return m
+			},
+		},
+		"InvalidExternalNameIsError": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: errors.Errorf("external-name '%s' is not a valid GUID format", "not-guid"),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				return m
+			},
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			t.Logf("Testing: %s", t.Name())
+			c := &external{
+				kube: &test.MockClient{
+					MockUpdate: test.NewMockUpdateFn(nil),
+				},
+				serviceinstance: &serviceinstance.Client{
+					ServiceInstance: tc.service(),
+					Job:             tc.job(),
+				},
+			}
+			obs, err := c.Delete(context.Background(), tc.args.mg)
+
+			if tc.want.err != nil && err != nil {
+				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
+					t.Errorf("Delete(...): want error string != got error string:\n%s", diff)
+				}
+			} else {
+				if diff := cmp.Diff(tc.want.err, err); diff != "" {
+					t.Errorf("Delete(...): want error != got error:\n%s", diff)
+				}
+			}
+			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
+				t.Errorf("Delete(...): -want, +got:\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+				t.Errorf("Delete(...): -want, +got:\n%s", diff)
 			}
 		})
 	}
