@@ -13,7 +13,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	"github.com/google/uuid"
 	"github.com/nsf/jsondiff"
 	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
