@@ -118,7 +118,7 @@ type DomainService interface {
 	Delete(ctx context.Context, guid string) (string, error)
 }
 
-// An external is a managed.ExternalConnecter that is using the CloudFoundry API to observe and modify resources.
+// An external is a managed.ExternalConnector that is using the CloudFoundry API to observe and modify resources.
 type external struct {
 	client DomainService
 	kube   k8s.Client

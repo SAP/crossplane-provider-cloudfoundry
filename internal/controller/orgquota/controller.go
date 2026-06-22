@@ -34,19 +34,19 @@ const (
 	errDelete            = "cannot delete cloudfoundry OrgQuota"
 )
 
-// externalConnecter specifies how the Reconciler should connect to
+// externalConnector specifies how the Reconciler should connect to
 // the API used to sync and delete external resources.
-type externalConnecter struct {
+type externalConnector struct {
 	kubeClient   k8s.Client
 	usageTracker resource.LegacyTracker
 }
 
-// externalConnecter type implements managed.ExternalConnector
-var _ managed.ExternalConnector = &externalConnecter{}
+// externalConnector type implements managed.ExternalConnector
+var _ managed.ExternalConnector = &externalConnector{}
 
 // Connect method connects to the provider specified by the supplied
 // managed resource and produce an ExternalClient.
-func (c *externalConnecter) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
+func (c *externalConnector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
 	if _, ok := mg.(*v1alpha1.OrgQuota); !ok {
 		return nil, errors.New(errNotOrgQuota)
 	}
@@ -70,7 +70,7 @@ func Setup(mgr ctrl.Manager, controllerOptions controller.Options) error {
 
 	options := []managed.ReconcilerOption{
 		managed.WithInitializers(),
-		managed.WithExternalConnecter(&externalConnecter{
+		managed.WithExternalConnector(&externalConnector{
 			kubeClient:   mgr.GetClient(),
 			usageTracker: resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
 		}),
