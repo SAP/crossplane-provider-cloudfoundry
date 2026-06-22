@@ -983,6 +983,7 @@ func TestCreate(t *testing.T) {
 					"key",
 					withServiceInstanceID(serviceInstanceGUID),
 					withCreateAttempts(1),
+					withExternalName(guid),
 				),
 				obs: managed.ExternalCreation{},
 				err: fmt.Errorf(errCreate, errCFClientError),
@@ -1005,6 +1006,37 @@ func TestCreate(t *testing.T) {
 				return m
 			},
 		},
+		"PollErrorBindingNotFound": {
+			args: args{
+				mg: serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID)),
+			},
+			want: want{
+				mg: serviceCredentialBinding(
+					"key",
+					withServiceInstanceID(serviceInstanceGUID),
+					withCreateAttempts(1),
+				),
+				obs: managed.ExternalCreation{},
+				err: fmt.Errorf(errCreate, errCFClientError),
+			},
+			service: func() *fake.MockServiceCredentialBinding {
+				m := &fake.MockServiceCredentialBinding{}
+
+				m.On("Create", mock.Anything, mock.Anything).Return(
+					guid,
+					scbKey(),
+					nil,
+				)
+
+				m.On("Single", mock.Anything, mock.Anything).Return(
+					fake.ServiceCredentialBindingNil,
+					fake.ErrNoResultReturned,
+				)
+				m.On("PollComplete", mock.Anything, mock.Anything, mock.Anything).Return(errCFClientError)
+
+				return m
+			},
+		},
 		"AlreadyExist": {
 			args: args{
 				mg: serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID)),
@@ -1014,6 +1046,7 @@ func TestCreate(t *testing.T) {
 					"key",
 					withServiceInstanceID(serviceInstanceGUID),
 					withCreateAttempts(1),
+					withExternalName(guid),
 				),
 
 				obs: managed.ExternalCreation{},

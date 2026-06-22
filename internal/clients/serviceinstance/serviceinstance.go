@@ -8,7 +8,6 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	"github.com/google/uuid"
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 
@@ -82,15 +81,6 @@ func NewClient(cf *client.Client) *Client {
 	return &Client{cf.ServiceInstances, cf.Jobs, cf.ServicePlans}
 }
 
-// GetByIDOrSpec retrieves external resource by GUID or by matching CR's ForProvider spec
-func GetByIDOrSpec(ctx context.Context, c *Client, guid string, spec v1alpha1.ServiceInstanceParameters) (*resource.ServiceInstance, error) {
-	if _, err := uuid.Parse(guid); err == nil {
-		return c.Get(ctx, guid)
-	}
-
-	return c.MatchSingle(ctx, spec)
-}
-
 // Get retrieves external resource using GUID
 func (c *Client) Get(ctx context.Context, guid string) (*resource.ServiceInstance, error) {
 	if guid == "" {
@@ -99,8 +89,22 @@ func (c *Client) Get(ctx context.Context, guid string) (*resource.ServiceInstanc
 	return c.ServiceInstance.Get(ctx, guid)
 }
 
+// GetByGUIDOrSpec resolves the external service instance per the external-name ADR: a set
+// external-name (guid) is fetched directly, while an empty one falls back to a spec-based lookup
+// for backward compatibility. The caller is responsible for validating the GUID format.
+func GetByGUIDOrSpec(ctx context.Context, c *Client, guid string, spec v1alpha1.ServiceInstanceParameters) (*resource.ServiceInstance, error) {
+	if guid != "" {
+		return c.Get(ctx, guid)
+	}
+	return c.MatchSingle(ctx, spec)
+}
+
 // MatchSingle retrieves external resource by matching CR's ForProvider spec
 func (c *Client) MatchSingle(ctx context.Context, spec v1alpha1.ServiceInstanceParameters) (*resource.ServiceInstance, error) {
+	// Backward-compat lookup requires at least a name to match on.
+	if spec.Name == nil || *spec.Name == "" {
+		return nil, nil
+	}
 	// if external-name is not set, search by Name and Space
 	opt := client.NewServiceInstanceListOptions()
 	opt.Type = string(spec.Type)
@@ -279,9 +283,9 @@ func (c *Client) updateUserProvided(ctx context.Context, observed *resource.Serv
 	return c.UpdateUserProvided(ctx, observed.GUID, upd)
 }
 
-// Delete deletes a service instance managed by the CR
-func (c *Client) Delete(ctx context.Context, cr *v1alpha1.ServiceInstance) error {
-	job, err := c.ServiceInstance.Delete(ctx, *cr.Status.AtProvider.ID)
+// Delete deletes the service instance identified by guid
+func (c *Client) Delete(ctx context.Context, guid string) error {
+	job, err := c.ServiceInstance.Delete(ctx, guid)
 
 	// If the service instance is already deleted, return nil
 	if clients.ErrorIsNotFound(err) {
