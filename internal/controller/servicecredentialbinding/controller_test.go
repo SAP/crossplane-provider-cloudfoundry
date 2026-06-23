@@ -313,15 +313,16 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				obs: managed.ExternalObservation{
-					ResourceExists:   false,
-					ResourceUpToDate: false,
+					ResourceExists:   true,
+					ResourceUpToDate: true,
 				},
 				err: nil,
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
-				// Circuit breaker is now checked in Create(), not Observe()
-				// So Observe() still attempts to find the resource
+				// Resource is not found and create attempts are exhausted, so
+				// Observe() settles into an Unavailable state (ResourceExists: true)
+				// instead of triggering another Create.
 				m.On("Get", mock.Anything, guid).Return(
 					fake.ServiceCredentialBindingNil,
 					fake.ErrNoResultReturned,

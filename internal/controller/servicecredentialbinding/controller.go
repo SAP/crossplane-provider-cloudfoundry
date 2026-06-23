@@ -46,7 +46,7 @@ const (
 	errExtractParams         = "cannot extract specified parameters: %w"
 	errUnknownState          = "unknown last operation state for " + resourceType + " in " + externalSystem
 	errUpdateCR              = "cannot update managed resource"
-	maxCreateAttempts        = 10
+	maxCreateAttempts        = 5
 	createAttemptsAnnotation = "crossplane-provider-cloudfoundry/create-attempts"
 )
 
@@ -162,6 +162,17 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	guid := meta.GetExternalName(cr)
 	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, cr.Spec.ForProvider)
 	if isBindingNotFoundError(err) {
+		// The binding does not exist in Cloud Foundry. If we have exhausted the
+		// create attempts, settle into an Unavailable state instead of triggering
+		// another Create. Returning ResourceExists: true with a nil error stops the
+		// reconciler from calling Create again, which avoids an endless
+		// create-fail-requeue loop and prevents flooding CF with orphaned bindings.
+		if isCircuitBreakerTripped(cr) {
+			cr.SetConditions(xpv1.Unavailable().WithMessage(
+				fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
+			))
+			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
+		}
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 	if err != nil {
@@ -198,14 +209,6 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
-	}
-
-	// Check circuit breaker before attempting create
-	if isCircuitBreakerTripped(cr) {
-		cr.SetConditions(xpv1.Unavailable().WithMessage(
-			fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
-		))
-		return managed.ExternalCreation{}, fmt.Errorf("circuit breaker tripped after %d failed creation attempts", maxCreateAttempts)
 	}
 
 	incrementCreateAttempts(cr)
