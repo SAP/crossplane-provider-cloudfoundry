@@ -162,16 +162,6 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	guid := meta.GetExternalName(cr)
 	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, cr.Spec.ForProvider)
 	if isBindingNotFoundError(err) {
-		// Check circuit breaker only if resource doesn't exist - prevents retry loops
-		if isCircuitBreakerTripped(cr) {
-			cr.SetConditions(xpv1.Unavailable().WithMessage(
-				fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
-			))
-			return managed.ExternalObservation{
-				ResourceExists:   true,
-				ResourceUpToDate: true,
-			}, nil
-		}
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 	if err != nil {
@@ -208,6 +198,14 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
 	if !ok {
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
+	}
+
+	// Check circuit breaker before attempting create
+	if isCircuitBreakerTripped(cr) {
+		cr.SetConditions(xpv1.Unavailable().WithMessage(
+			fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
+		))
+		return managed.ExternalCreation{}, fmt.Errorf("circuit breaker tripped after %d failed creation attempts", maxCreateAttempts)
 	}
 
 	incrementCreateAttempts(cr)
