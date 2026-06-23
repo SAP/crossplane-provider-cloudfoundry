@@ -313,14 +313,15 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				obs: managed.ExternalObservation{
-					ResourceExists:   true,
-					ResourceUpToDate: true,
+					ResourceExists:   false,
+					ResourceUpToDate: false,
 				},
 				err: nil,
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
-				// Circuit breaker now allows the discovery attempt
+				// Circuit breaker is now checked in Create(), not Observe()
+				// So Observe() still attempts to find the resource
 				m.On("Get", mock.Anything, guid).Return(
 					fake.ServiceCredentialBindingNil,
 					fake.ErrNoResultReturned,
@@ -371,6 +372,14 @@ func TestObserve(t *testing.T) {
 			keyRotator: func() *fake.MockKeyRotator {
 				m := &fake.MockKeyRotator{}
 				m.On("RetireBinding", mock.Anything, mock.Anything).Return(false)
+				return m
+			},
+			observationStateHandler: func() *MockObservationStateHandler {
+				m := &MockObservationStateHandler{}
+				m.On("HandleObservationState", mock.Anything, mock.Anything, mock.Anything).Return(
+					managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+					nil,
+				)
 				return m
 			},
 		},
