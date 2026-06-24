@@ -6,9 +6,12 @@ spec:
   providerConfigRef:
     name: default
   forProvider:
-    type: user-provided
+    type: managed
     name: upgrade-test-scb-serviceinstance
     spaceRef:
       name: upgrade-test-import-space
       policy:
         resolve: Always
+    servicePlan:
+      offering: xsuaa
+      plan: application
