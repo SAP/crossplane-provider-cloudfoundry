@@ -196,6 +196,7 @@ type OrgQuotaStatus struct {
 //   - How to find:
 //   - UI: Cloud Foundry > Quota Definitions > <quota name> (GUID in URL or details)
 //   - CLI: cf curl /v3/organization_quotas?names=<name> (field: guid)
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"

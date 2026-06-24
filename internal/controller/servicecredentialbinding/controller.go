@@ -14,6 +14,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/google/uuid"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -44,6 +45,7 @@ const (
 	errUpdateStatus          = "cannot update status after retiring binding: %w"
 	errExtractParams         = "cannot extract specified parameters: %w"
 	errUnknownState          = "unknown last operation state for " + resourceType + " in " + externalSystem
+	errUpdateCR              = "cannot update managed resource"
 	maxCreateAttempts        = 5
 	createAttemptsAnnotation = "crossplane-provider-cloudfoundry/create-attempts"
 )
@@ -142,6 +144,14 @@ type external struct {
 	observationStateHandler ObservationStateHandler
 }
 
+// isBindingNotFoundError returns true if the error indicates the binding was not found
+func isBindingNotFoundError(err error) bool {
+	return errors.Is(err, cfclient.ErrNoResultsReturned) ||
+		errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
+		cfresource.IsResourceNotFoundError(err) ||
+		cfresource.IsServiceBindingNotFoundError(err)
+}
+
 // Observe checks the observed state of the resource and updates the managed resource's status.
 func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
 	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
@@ -149,25 +159,34 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errWrongCRType)
 	}
 
-	if isCircuitBreakerTripped(cr) {
-		cr.SetConditions(xpv1.Unavailable().WithMessage(
-			fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
-		))
-		return managed.ExternalObservation{
-			ResourceExists:   true,
-			ResourceUpToDate: true,
-		}, nil
-	}
-
 	guid := meta.GetExternalName(cr)
 	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, cr.Spec.ForProvider)
-	if errors.Is(err, cfclient.ErrNoResultsReturned) ||
-		errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
-		cfresource.IsResourceNotFoundError(err) ||
-		cfresource.IsServiceBindingNotFoundError(err) {
+	if isBindingNotFoundError(err) {
+		// The binding does not exist in Cloud Foundry. If we have exhausted the
+		// create attempts, settle into an Unavailable state instead of triggering
+		// another Create. Returning ResourceExists: true with a nil error stops the
+		// reconciler from calling Create again, which avoids an endless
+		// create-fail-requeue loop and prevents flooding CF with orphaned bindings.
+		if isCircuitBreakerTripped(cr) {
+			cr.SetConditions(xpv1.Unavailable().WithMessage(
+				fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
+			))
+			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
+		}
 		return managed.ExternalObservation{ResourceExists: false}, nil
-	} else if err != nil {
+	}
+	if err != nil {
 		return managed.ExternalObservation{}, fmt.Errorf(errGet, err)
+	}
+
+	// Adoption: if the external-name doesn't match the discovered GUID, update it
+	if guid != serviceBinding.GUID {
+		meta.SetExternalName(cr, serviceBinding.GUID)
+		// Reset circuit breaker on successful adoption
+		resetCreateAttempts(cr)
+		if err := c.kube.Update(ctx, cr); err != nil {
+			return managed.ExternalObservation{}, fmt.Errorf("%s: %w", errUpdateCR, err)
+		}
 	}
 
 	cr.Status.AtProvider.GUID = serviceBinding.GUID
@@ -231,8 +250,8 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errWrongCRType)
 	}
 
-	if externalName := meta.GetExternalName(cr); externalName != "" {
-		if _, err := scb.Update(ctx, c.scbClient, meta.GetExternalName(cr), cr.Spec.ForProvider); err != nil {
+	if externalName := meta.GetExternalName(cr); externalName != "" && isValidUUID(externalName) {
+		if _, err := scb.Update(ctx, c.scbClient, externalName, cr.Spec.ForProvider); err != nil {
 			return managed.ExternalUpdate{}, fmt.Errorf(errUpdate, err)
 		}
 	}
@@ -261,8 +280,23 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalDelete{}, fmt.Errorf(errDeleteRetiredKeys, err)
 	}
 
-	err := scb.Delete(ctx, c.scbClient, cr.GetID())
-	if err != nil {
+	// Try external-name first, then fall back to status GUID
+	externalName := meta.GetExternalName(cr)
+	guidToDelete := ""
+
+	if isValidUUID(externalName) {
+		guidToDelete = externalName
+	} else if statusGUID := cr.GetID(); isValidUUID(statusGUID) {
+		// Fallback: external-name is not a valid UUID, but status has a valid GUID
+		guidToDelete = statusGUID
+	}
+
+	// If neither external-name nor status GUID is valid, skip deletion
+	if guidToDelete == "" {
+		return managed.ExternalDelete{}, nil
+	}
+
+	if err := clients.IgnoreNotFoundErr(scb.Delete(ctx, c.scbClient, guidToDelete)); err != nil {
 		return managed.ExternalDelete{}, fmt.Errorf(errDelete, err)
 	}
 
@@ -341,6 +375,11 @@ func incrementCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) {
 
 func resetCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) {
 	meta.RemoveAnnotations(cr, createAttemptsAnnotation)
+}
+
+// isValidUUID returns true if the given string is a valid UUID
+func isValidUUID(s string) bool {
+	return uuid.Validate(s) == nil
 }
 
 // isCircuitBreakerTripped returns true if the maximum number of create attempts has been reached.
