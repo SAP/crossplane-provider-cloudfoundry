@@ -3,6 +3,7 @@ package app
 import (
 	"testing"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -180,7 +181,7 @@ func TestDetectChanges(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := DetectChanges(tt.spec, tt.status)
+			result, err := DetectChanges(nil, tt.spec, tt.status)
 			if err != nil {
 				t.Fatalf("DetectChanges() error = %v", err)
 			}
@@ -212,6 +213,24 @@ func TestDetectChanges(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestDetectChanges_DefaultMetadataDrift(t *testing.T) {
+	mg := &v1alpha1.App{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       v1alpha1.App_Kind,
+			APIVersion: v1alpha1.CRDGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-app"},
+	}
+
+	changes, err := DetectChanges(mg, v1alpha1.AppParameters{Name: "test-app"}, v1alpha1.AppObservation{Name: "test-app"})
+	if err != nil {
+		t.Fatalf("DetectChanges() error = %v", err)
+	}
+	if !changes.HasField("metadata") {
+		t.Fatal("DetectChanges() did not report metadata drift for missing default labels")
 	}
 }
 

@@ -233,7 +233,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 	guid := meta.GetExternalName(cr)
 
-	changes, err := app.DetectChanges(cr.Spec.ForProvider, cr.Status.AtProvider)
+	changes, err := app.DetectChanges(cr, cr.Spec.ForProvider, cr.Status.AtProvider)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource+": Failed to detect changes")
 	}

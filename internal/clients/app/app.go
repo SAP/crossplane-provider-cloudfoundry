@@ -217,12 +217,11 @@ func envVarsChanged(spec v1alpha1.AppParameters, appManifest *operation.AppManif
 }
 
 // DetectChanges determines what fields have changed between spec and status.
-// Metadata drift covers only explicit user labels/annotations from spec. It
-// intentionally builds desired metadata without the managed resource so
-// Crossplane-owned/default metadata does not influence controller update-path
-// selection. Those managed-resource-derived metadata semantics are checked
-// separately in IsUpToDate.
-func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (*ChangeDetection, error) {
+// Metadata drift is computed from the full desired metadata, including
+// Crossplane-owned/default labels derived from the managed resource. Passing
+// mg ensures missing or stale default labels trigger the Update path that
+// re-applies them to the Cloud Foundry app.
+func DetectChanges(mg xpresource.Managed, spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (*ChangeDetection, error) {
 	changes := &ChangeDetection{
 		ChangedFields: make(map[string]struct{}),
 	}
@@ -254,30 +253,26 @@ func DetectChanges(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) 
 		changes.ChangedFields["name"] = struct{}{}
 	}
 
-	if metadataChanged(spec, status) {
+	if metadataChanged(mg, spec, status) {
 		changes.ChangedFields["metadata"] = struct{}{}
 	}
 
 	return changes, nil
 }
 
-func metadataChanged(spec v1alpha1.AppParameters, status v1alpha1.AppObservation) bool {
-	desired := metadata.BuildMetadata(nil, spec.Labels, spec.Annotations)
+func metadataChanged(mg xpresource.Managed, spec v1alpha1.AppParameters, status v1alpha1.AppObservation) bool {
+	desired := metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
 	return !metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, status.Labels, status.Annotations)
 }
 
-// IsUpToDate first checks spec-driven drift via DetectChanges, then separately
-// validates metadata using the managed resource because BuildMetadata may add
-// Crossplane-owned labels/annotations that should affect up-to-date semantics
-// but should not drive the controller's update-path selection.
+// IsUpToDate checks whether current state is up-to-date compared to the given
+// spec and managed-resource-derived metadata.
 func IsUpToDate(mg xpresource.Managed, spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (bool, error) {
-	changes, err := DetectChanges(spec, status)
+	changes, err := DetectChanges(mg, spec, status)
 	if err != nil {
 		return false, err
 	}
-	desired := metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
-	metadataUpToDate := metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, status.Labels, status.Annotations)
-	return !changes.HasChanges() && metadataUpToDate, nil
+	return !changes.HasChanges(), nil
 }
 
 // DiffServiceBindings checks whether current state is up-to-date compared to the given
@@ -374,8 +369,8 @@ func newUpdateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resour
 	}
 }
 
-// newManifestFromSpec creates a manifest from the given spec.
+// bindService binds the requested service instance to the app.
+// TODO: Implement the binding logic.
 func bindService(ctx context.Context, scbClient servicecredentialbinding.ServiceCredentialBinding, s v1alpha1.ServiceBindingConfiguration) error {
-	// TODO: Implement the binding logic
 	return nil
 }

@@ -744,6 +744,7 @@ func TestUpdate(t *testing.T) {
 				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
 				m.On("Stop", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
 				m.On("Start", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Update", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
 				return m
 			},
 		},
@@ -774,6 +775,7 @@ func TestUpdate(t *testing.T) {
 				m.On("SetEnvironmentVariables", guid, map[string]*string{"ANOTHER_VAR": (*string)(nil)}).Return(map[string]*string{}, nil)
 				m.On("Stop", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
 				m.On("Start", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Update", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
 				return m
 			},
 		},
@@ -829,6 +831,7 @@ func TestUpdate(t *testing.T) {
 				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
 				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
 				// No Stop/Start expected — app is already stopped
+				m.On("Update", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
 				return m
 			},
 		},
