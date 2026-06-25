@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 )

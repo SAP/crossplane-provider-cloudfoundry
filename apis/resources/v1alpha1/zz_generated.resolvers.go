@@ -21,7 +21,7 @@ package v1alpha1
 import (
 	"context"
 	resources "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources"
-	reference "github.com/crossplane/crossplane-runtime/pkg/reference"
+	reference "github.com/crossplane/crossplane-runtime/v2/pkg/reference"
 	errors "github.com/pkg/errors"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 )

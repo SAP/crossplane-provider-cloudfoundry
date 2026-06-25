@@ -10,7 +10,7 @@ import (
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
 	"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -60,7 +60,7 @@ func GetCredentialConfig(ctx context.Context, client client.Client, mg resource.
 
 func getProviderConfig(ctx context.Context, client client.Client, mg resource.Managed) (*v1beta1.ProviderConfig, error) {
 	pc := &v1beta1.ProviderConfig{}
-	if err := client.Get(ctx, types.NamespacedName{Name: mg.GetProviderConfigReference().Name}, pc); err != nil {
+	if err := client.Get(ctx, types.NamespacedName{Name: mg.(resource.LegacyManaged).GetProviderConfigReference().Name}, pc); err != nil {
 		return nil, err
 	}
 	return pc, nil

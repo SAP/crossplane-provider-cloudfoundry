@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"

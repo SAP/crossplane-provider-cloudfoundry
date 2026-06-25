@@ -3,13 +3,13 @@ package orgquota
 import (
 	"context"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
-	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,24 +34,24 @@ const (
 	errDelete            = "cannot delete cloudfoundry OrgQuota"
 )
 
-// externalConnecter specifies how the Reconciler should connect to
+// externalConnector specifies how the Reconciler should connect to
 // the API used to sync and delete external resources.
-type externalConnecter struct {
+type externalConnector struct {
 	kubeClient   k8s.Client
-	usageTracker resource.Tracker
+	usageTracker resource.LegacyTracker
 }
 
-// externalConnecter type implements managed.ExternalConnecter
-var _ managed.ExternalConnecter = &externalConnecter{}
+// externalConnector type implements managed.ExternalConnector
+var _ managed.ExternalConnector = &externalConnector{}
 
 // Connect method connects to the provider specified by the supplied
 // managed resource and produce an ExternalClient.
-func (c *externalConnecter) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
+func (c *externalConnector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
 	if _, ok := mg.(*v1alpha1.OrgQuota); !ok {
 		return nil, errors.New(errNotOrgQuota)
 	}
 
-	if err := c.usageTracker.Track(ctx, mg); err != nil {
+	if err := c.usageTracker.Track(ctx, mg.(resource.LegacyManaged)); err != nil {
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
@@ -70,9 +70,9 @@ func Setup(mgr ctrl.Manager, controllerOptions controller.Options) error {
 
 	options := []managed.ReconcilerOption{
 		managed.WithInitializers(),
-		managed.WithExternalConnecter(&externalConnecter{
+		managed.WithExternalConnector(&externalConnector{
 			kubeClient:   mgr.GetClient(),
-			usageTracker: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
+			usageTracker: resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
 		}),
 		managed.WithLogger(controllerOptions.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),

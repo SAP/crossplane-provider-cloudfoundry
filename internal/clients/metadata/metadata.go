@@ -4,7 +4,7 @@ package metadata
 
 import (
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 )
 
 // BuildMetadata constructs a *cfresource.Metadata for a Create or Update call

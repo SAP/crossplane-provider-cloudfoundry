@@ -5,7 +5,7 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	"github.com/crossplane/crossplane-runtime/pkg/errors"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"

@@ -9,7 +9,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
-	xpmeta "github.com/crossplane/crossplane-runtime/pkg/meta"
+	xpmeta "github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"

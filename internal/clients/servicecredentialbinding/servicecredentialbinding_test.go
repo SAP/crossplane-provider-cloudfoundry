@@ -9,7 +9,7 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/mock"
 	"k8s.io/utils/ptr"

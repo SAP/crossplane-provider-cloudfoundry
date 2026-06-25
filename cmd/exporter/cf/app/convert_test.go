@@ -12,7 +12,7 @@ import (
 	"github.com/SAP/xp-clifford/yaml"
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	cpresource "github.com/crossplane/crossplane-runtime/pkg/resource"
+	cpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/utils/ptr"
 )

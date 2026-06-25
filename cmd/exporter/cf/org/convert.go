@@ -7,7 +7,7 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/metadata"
 
 	"github.com/SAP/xp-clifford/yaml"
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 

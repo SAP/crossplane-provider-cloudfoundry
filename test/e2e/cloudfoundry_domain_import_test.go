@@ -10,7 +10,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 )
 
 var (

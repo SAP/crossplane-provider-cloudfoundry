@@ -7,7 +7,7 @@ package controller
 import (
 	ctrl "sigs.k8s.io/controller-runtime"
 
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/app"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/domain"

@@ -12,11 +12,11 @@ import (
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/crossplane/crossplane-runtime/pkg/test"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 

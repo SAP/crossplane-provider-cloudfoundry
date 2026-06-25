@@ -20,7 +20,7 @@ import (
 	"github.com/SAP/xp-clifford/yaml"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 )
 
 var (
