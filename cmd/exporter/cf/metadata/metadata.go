@@ -2,7 +2,7 @@
 package metadata
 
 import (
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 )
 
 // StripDefaultLabels removes Crossplane default label keys from a label map.
