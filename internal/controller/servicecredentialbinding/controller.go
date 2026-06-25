@@ -221,7 +221,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, fmt.Errorf(errExtractParams, err)
 	}
 
-	serviceBinding, err := scb.Create(ctx, c.scbClient, cr.Spec.ForProvider, params)
+	serviceBinding, err := scb.Create(ctx, c.scbClient, cr, cr.Spec.ForProvider, params)
 	if serviceBinding != nil && serviceBinding.GUID != "" {
 		// Capture the external name even if the job failed,
 		// as the binding was created in Cloud Foundry and we can manage it going forward.
@@ -251,7 +251,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	if externalName := meta.GetExternalName(cr); externalName != "" && isValidUUID(externalName) {
-		if _, err := scb.Update(ctx, c.scbClient, externalName, cr.Spec.ForProvider); err != nil {
+		if _, err := scb.Update(ctx, c.scbClient, externalName, cr, cr.Spec.ForProvider); err != nil {
 			return managed.ExternalUpdate{}, fmt.Errorf(errUpdate, err)
 		}
 	}
@@ -345,7 +345,7 @@ func (c *external) HandleObservationState(serviceBinding *cfresource.ServiceCred
 
 		return managed.ExternalObservation{
 			ResourceExists:    true,
-			ResourceUpToDate:  scb.IsUpToDate(ctx, cr.Spec.ForProvider, *serviceBinding) && !c.keyRotator.HasExpiredKeys(cr),
+			ResourceUpToDate:  scb.IsUpToDate(ctx, cr, cr.Spec.ForProvider, *serviceBinding) && !c.keyRotator.HasExpiredKeys(cr),
 			ConnectionDetails: scb.GetConnectionDetails(ctx, c.scbClient, serviceBinding.GUID, cr.Spec.ConnectionDetailsAsJSON),
 		}, nil
 	}

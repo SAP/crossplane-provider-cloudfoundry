@@ -237,5 +237,79 @@ func TestGetOrgByGUID(t *testing.T) {
 	}
 }
 
+func TestLateInitialize(t *testing.T) {
+	labels := map[string]*string{"team": ptr.To("platform")}
+	annotations := map[string]*string{"note": ptr.To("managed-elsewhere")}
+
+	spec := &v1alpha1.OrgParameters{}
+	from := &cfresource.Organization{
+		Name:      testOrgName,
+		Suspended: true,
+		Metadata: &cfresource.Metadata{
+			Labels: map[string]*string{
+				"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"),
+				"crossplane-name": ptr.To("my-org"),
+				"team":            labels["team"],
+			},
+			Annotations: annotations,
+		},
+	}
+
+	LateInitialize(spec, from)
+
+	if spec.Name != testOrgName {
+		t.Fatalf("LateInitialize(...): expected Name %q, got %q", testOrgName, spec.Name)
+	}
+	if spec.Suspended == nil || !*spec.Suspended {
+		t.Fatalf("LateInitialize(...): expected Suspended to be true, got %#v", spec.Suspended)
+	}
+	if spec.Labels != nil {
+		t.Fatalf("LateInitialize(...): expected Labels to remain nil, got %#v", spec.Labels)
+	}
+	if spec.Annotations != nil {
+		t.Fatalf("LateInitialize(...): expected Annotations to remain nil, got %#v", spec.Annotations)
+	}
+}
+
+func TestIsUpToDate(t *testing.T) {
+	cases := map[string]struct {
+		spec     v1alpha1.OrgParameters
+		observed *cfresource.Organization
+		want     bool
+	}{
+		"NameMatchesMetadataIgnored": {
+			spec: v1alpha1.OrgParameters{
+				Name: testOrgName,
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels:      map[string]*string{"team": ptr.To("platform")},
+					Annotations: map[string]*string{"note": ptr.To("managed-by-user")},
+				},
+			},
+			observed: &cfresource.Organization{
+				Name: testOrgName,
+				Metadata: &cfresource.Metadata{
+					Labels:      map[string]*string{"team": ptr.To("other-team")},
+					Annotations: map[string]*string{"note": ptr.To("managed-elsewhere")},
+				},
+			},
+			want: true,
+		},
+		"NameDrift": {
+			spec:     v1alpha1.OrgParameters{Name: testOrgName},
+			observed: &cfresource.Organization{Name: "renamed-org"},
+			want:     false,
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			result := IsUpToDate(nil, tc.spec, tc.observed)
+			if result != tc.want {
+				t.Errorf("IsUpToDate(...): want %v, got %v", tc.want, result)
+			}
+		})
+	}
+}
+
 // Ensure mockClient satisfies the Client interface
 var _ Client = &mockClient{}

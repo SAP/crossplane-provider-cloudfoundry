@@ -193,7 +193,7 @@ func (c *external) updateObservedStatus(ctx context.Context, cr *v1alpha1.App, r
 		cr.SetConditions(xpv1.Unavailable())
 	}
 
-	return app.IsUpToDate(cr.Spec.ForProvider, cr.Status.AtProvider)
+	return app.IsUpToDate(cr, cr.Spec.ForProvider, cr.Status.AtProvider)
 }
 
 // Create managed resource
@@ -210,7 +210,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Creating())
 
-	application, err := c.client.CreateAndPush(ctx, cr.Spec.ForProvider, dockerCredentials)
+	application, err := c.client.CreateAndPush(ctx, cr, cr.Spec.ForProvider, dockerCredentials)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreateResource)
 	}
@@ -233,31 +233,51 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 	guid := meta.GetExternalName(cr)
 
-	changes, err := app.DetectChanges(cr.Spec.ForProvider, cr.Status.AtProvider)
+	changes, err := app.DetectChanges(cr, cr.Spec.ForProvider, cr.Status.AtProvider)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource+": Failed to detect changes")
 	}
 
-	if changes.HasField("docker_image") {
-		if err := c.updateDockerImage(ctx, guid, cr); err != nil {
-			return managed.ExternalUpdate{}, err
-		}
-	}
-
-	if changes.HasField("environment") {
-		if err := c.updateEnvVars(ctx, guid, cr, changes.HasField("docker_image")); err != nil {
-			return managed.ExternalUpdate{}, err
-		}
-	}
-
-	if changes.HasOtherChanges("docker_image", "environment") {
-		_, err := c.client.Update(ctx, guid, cr.Spec.ForProvider)
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource)
-		}
+	if err := c.applyAppUpdates(ctx, guid, cr, changes); err != nil {
+		return managed.ExternalUpdate{}, err
 	}
 
 	return managed.ExternalUpdate{}, nil
+}
+
+func (c *external) applyAppUpdates(ctx context.Context, guid string, cr *v1alpha1.App, changes *app.ChangeDetection) error {
+	dockerChanged, err := c.updateDockerImageIfChanged(ctx, guid, cr, changes)
+	if err != nil {
+		return err
+	}
+
+	if err := c.updateEnvironmentIfChanged(ctx, guid, cr, changes, dockerChanged); err != nil {
+		return err
+	}
+
+	if !changes.HasOtherChanges("docker_image", "environment") {
+		return nil
+	}
+
+	_, err = c.client.Update(ctx, guid, cr, cr.Spec.ForProvider)
+	return errors.Wrap(err, errUpdateResource)
+}
+
+func (c *external) updateDockerImageIfChanged(ctx context.Context, guid string, cr *v1alpha1.App, changes *app.ChangeDetection) (bool, error) {
+	if !changes.HasField("docker_image") {
+		return false, nil
+	}
+	if err := c.updateDockerImage(ctx, guid, cr); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+func (c *external) updateEnvironmentIfChanged(ctx context.Context, guid string, cr *v1alpha1.App, changes *app.ChangeDetection, dockerChanged bool) error {
+	if !changes.HasField("environment") {
+		return nil
+	}
+	return c.updateEnvVars(ctx, guid, cr, dockerChanged)
 }
 
 // updateDockerImage pushes a new docker image for the app.
@@ -266,7 +286,7 @@ func (c *external) updateDockerImage(ctx context.Context, guid string, cr *v1alp
 	if err != nil {
 		return errors.Wrap(err, errSecret)
 	}
-	_, err = c.client.UpdateAndPush(ctx, guid, cr.Spec.ForProvider, dockerCredentials)
+	_, err = c.client.UpdateAndPush(ctx, guid, cr, cr.Spec.ForProvider, dockerCredentials)
 	return errors.Wrap(err, errUpdateResource)
 }
 

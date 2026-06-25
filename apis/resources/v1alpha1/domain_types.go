@@ -41,13 +41,8 @@ type DomainObservation struct {
 	// (String) The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	UpdatedAt *string `json:"updatedAt,omitempty"`
 
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +mapType=granular
-	Annotations map[string]*string `json:"annotations,omitempty"`
-
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +mapType=granular
-	Labels map[string]*string `json:"labels,omitempty"`
+	// (Attributes) The metadata associated with the Cloud Foundry resource.
+	ResourceMetadata `json:",inline"`
 }
 
 type DomainParameters struct {
@@ -78,15 +73,9 @@ type DomainParameters struct {
 	// +listType=set
 	SharedOrgs []*string `json:"sharedOrgs,omitempty"`
 
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Attributes) The metadata associated with the Cloud Foundry resource.
 	// +kubebuilder:validation:Optional
-	// +mapType=granular
-	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
-
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +kubebuilder:validation:Optional
-	// +mapType=granular
-	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
+	ResourceMetadata `json:",inline"`
 }
 
 // DomainSpec defines the desired state of Domain

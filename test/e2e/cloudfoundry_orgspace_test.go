@@ -71,7 +71,6 @@ func TestCloudFoundryOrgSpace(t *testing.T) {
 				if err := cr.Get(ctx, ft.name, cfg.Namespace(), ft.obj); err != nil {
 					t.Errorf("error observing resource %s: %s", ft.obj.GetName(), err.Error())
 				}
-				//klog.InfoS("resourced details", "cr", ft.obj)
 				return ctx
 			}).Assess(name+":"+ft.name+" ready",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
@@ -81,6 +80,8 @@ func TestCloudFoundryOrgSpace(t *testing.T) {
 				if err := wait.For(ResourceReady(cfg, ft.obj), wait.WithTimeout(10*time.Minute)); err != nil {
 					t.Errorf("error waiting for resource %s to be ready: %s", ft.obj.GetName(), err.Error())
 				}
+				// Check labels and annotations for eligible resources
+				checkResourceLabelsAndAnnotations(ctx, t, cfg, ft.obj, name)
 				return ctx
 			})
 	}
@@ -136,4 +137,46 @@ func TestCloudFoundryOrgSpace(t *testing.T) {
 	}
 
 	testenv.Test(t, feat.Feature())
+}
+
+// checkResourceLabelsAndAnnotations verifies user-provided labels/annotations and
+// default Crossplane labels for eligible resources (those with CF Metadata support).
+func checkResourceLabelsAndAnnotations(ctx context.Context, t *testing.T, cfg *envconf.Config, obj k8s.Object, stepName string) {
+	cr := cfg.Client().Resources()
+	switch v := obj.(type) {
+	case *v1alpha1.Space:
+		if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), v); err != nil {
+			t.Errorf("error getting Space for label check: %s", err.Error())
+			return
+		}
+		if stepName == "space" {
+			// e2e-space-org-ref
+			if err := AssertLabelsAndAnnotations(
+				v.Status.AtProvider.Labels,
+				v.Status.AtProvider.Annotations,
+				map[string]string{"environment": "test", "team": "platform"},
+				map[string]string{"description": "E2E test space with org ref"},
+				v.GetName(),
+				"space.cloudfoundry.crossplane.io",
+				v.GetProviderConfigReference().Name,
+			); err != nil {
+				t.Errorf("Space %s labels/annotations check failed: %s", v.GetName(), err.Error())
+			}
+		} else {
+			// e2e-space-org-name
+			if err := AssertLabelsAndAnnotations(
+				v.Status.AtProvider.Labels,
+				v.Status.AtProvider.Annotations,
+				map[string]string{"environment": "staging", "team": "devops"},
+				map[string]string{"description": "E2E test space with org name"},
+				v.GetName(),
+				"space.cloudfoundry.crossplane.io",
+				v.GetProviderConfigReference().Name,
+			); err != nil {
+				t.Errorf("Space %s labels/annotations check failed: %s", v.GetName(), err.Error())
+			}
+		}
+	default:
+		// Not an eligible resource type (OrgRole, SpaceRole, etc.) — skip label checks
+	}
 }

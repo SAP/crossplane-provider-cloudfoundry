@@ -19,6 +19,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -71,6 +72,12 @@ func withStatus(guid string) modifier {
 	}
 }
 
+func withObservedLabels(labels map[string]*string) modifier {
+	return func(r *v1alpha1.ServiceCredentialBinding) {
+		r.Status.AtProvider.Labels = labels
+	}
+}
+
 func withObservation(guid string, lastOp *v1alpha1.LastOperation) modifier {
 	return func(r *v1alpha1.ServiceCredentialBinding) {
 		r.Status.AtProvider.GUID = guid
@@ -99,6 +106,12 @@ func serviceCredentialBinding(typ string, m ...modifier) *v1alpha1.ServiceCreden
 	}
 	return r
 }
+func withDefaultMetadataLabels() modifier {
+	return func(r *v1alpha1.ServiceCredentialBinding) {
+		r.SetGroupVersionKind(v1alpha1.ServiceCredentialBindingGroupVersionKind)
+	}
+}
+
 func TestObserve(t *testing.T) {
 	type service func() *fake.MockServiceCredentialBinding
 	type keyRotator func() *fake.MockKeyRotator
@@ -113,10 +126,10 @@ func TestObserve(t *testing.T) {
 		err error
 	}
 
-	scb := serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID))
+	scb := serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID), withDefaultMetadataLabels())
 
 	cfSucceeded := func() *cfresource.ServiceCredentialBinding {
-		return &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceCredentialBinding
+		return &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).SetLabels(map[string]*string{"crossplane-kind": ptr.To("servicecredentialbinding.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-service-credential-binding")}).ServiceCredentialBinding
 	}
 
 	cases := map[string]struct {
@@ -267,13 +280,21 @@ func TestObserve(t *testing.T) {
 				mg: scb.DeepCopy(),
 			},
 			want: want{
-				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID), withObservation(guid, &v1alpha1.LastOperation{
-					Type:        "create",
-					State:       "succeeded",
-					Description: "create succeeded",
-					CreatedAt:   "0001-01-01 00:00:00 +0000 UTC",
-					UpdatedAt:   "",
-				})),
+				mg: serviceCredentialBinding("key",
+					withExternalName(guid), withServiceInstanceID(serviceInstanceGUID),
+					withDefaultMetadataLabels(),
+					withObservation(guid, &v1alpha1.LastOperation{
+						Type:        "create",
+						State:       "succeeded",
+						Description: "create succeeded",
+						CreatedAt:   "0001-01-01 00:00:00 +0000 UTC",
+						UpdatedAt:   "",
+					}),
+					withObservedLabels(map[string]*string{
+						"crossplane-kind": ptr.To("servicecredentialbinding.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-service-credential-binding"),
+					}),
+				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
@@ -411,13 +432,21 @@ func TestObserve(t *testing.T) {
 				mg: serviceCredentialBinding("key", withExternalName("my-key-name"), withServiceInstanceID(serviceInstanceGUID)),
 			},
 			want: want{
-				mg: serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID), withObservation(guid, &v1alpha1.LastOperation{
-					Type:        "create",
-					State:       "succeeded",
-					Description: "create succeeded",
-					CreatedAt:   "0001-01-01 00:00:00 +0000 UTC",
-					UpdatedAt:   "",
-				})),
+				mg: serviceCredentialBinding("key",
+					withExternalName(guid),
+					withServiceInstanceID(serviceInstanceGUID),
+					withObservation(guid, &v1alpha1.LastOperation{
+						Type:        "create",
+						State:       "succeeded",
+						Description: "create succeeded",
+						CreatedAt:   "0001-01-01 00:00:00 +0000 UTC",
+						UpdatedAt:   "",
+					}),
+					withObservedLabels(map[string]*string{
+						"crossplane-kind": ptr.To("servicecredentialbinding.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-service-credential-binding"),
+					}),
+				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
@@ -758,10 +787,10 @@ func TestHandleObservationState(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	cr := serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID))
+	cr := serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID), withDefaultMetadataLabels())
 
 	scbCreate := func(lastOperation string) *cfresource.ServiceCredentialBinding {
-		return &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, lastOperation).ServiceCredentialBinding
+		return &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, lastOperation).SetLabels(map[string]*string{"crossplane-kind": ptr.To("servicecredentialbinding.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-service-credential-binding")}).ServiceCredentialBinding
 	}
 
 	cases := map[string]struct {

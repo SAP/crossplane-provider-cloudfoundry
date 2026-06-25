@@ -18,6 +18,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -133,6 +134,12 @@ func serviceInstance(typ string, m ...modifier) *v1alpha1.ServiceInstance {
 	return r
 }
 
+func withDefaultMetadataLabels() modifier {
+	return func(r *v1alpha1.ServiceInstance) {
+		r.SetGroupVersionKind(v1alpha1.ServiceInstance_GroupVersionKind)
+	}
+}
+
 func TestObserve(t *testing.T) {
 	type service func() *fake.MockServiceInstance
 	type args struct {
@@ -246,7 +253,7 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful - Get by GUID": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: serviceInstance("managed",
@@ -256,8 +263,15 @@ func TestObserve(t *testing.T) {
 					withStatus(v1alpha1.ServiceInstanceObservation{
 						ID: &guid, ServicePlan: &servicePlan,
 						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+						ResourceMetadata: v1alpha1.ResourceMetadata{
+							Labels: map[string]*string{
+								"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+								"crossplane-name": ptr.To("my-service-instance"),
+							},
+						},
 					}),
 					withConditions(xpv1.Available()),
+					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -265,7 +279,10 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-service-instance"),
+					}).ServiceInstance,
 					nil,
 				)
 				m.On("Single").Return(
@@ -285,7 +302,7 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful - adopt by forProvider spec": {
 			args: args{
-				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: serviceInstance("managed",
@@ -295,8 +312,14 @@ func TestObserve(t *testing.T) {
 					withStatus(v1alpha1.ServiceInstanceObservation{
 						ID: &guid, ServicePlan: &servicePlan,
 						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
-					}),
+						ResourceMetadata: v1alpha1.ResourceMetadata{
+							Labels: map[string]*string{
+								"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+								"crossplane-name": ptr.To("my-service-instance"),
+							},
+						}}),
 					withConditions(xpv1.Available()),
+					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -304,7 +327,10 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Single").Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-service-instance"),
+					}).ServiceInstance,
 					nil,
 				)
 				m.On("GetManagedParameters", guid).Return(
@@ -533,7 +559,7 @@ func TestObserve(t *testing.T) {
 		},
 		"DriftDetectionBreak": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(false), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte("{\"foo\":\"bar\", \"baz\": 1}"))})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(false), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte("{\"foo\":\"bar\", \"baz\": 1}"))}), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: serviceInstance("managed",
@@ -544,10 +570,17 @@ func TestObserve(t *testing.T) {
 						ID: &guid, ServicePlan: &servicePlan,
 						Credentials:   iSha256([]byte("{\"foo\":\"bar\", \"baz\": 1}")),
 						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+						ResourceMetadata: v1alpha1.ResourceMetadata{
+							Labels: map[string]*string{
+								"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+								"crossplane-name": ptr.To("my-service-instance"),
+							},
+						},
 					}),
 					withConditions(xpv1.Available()),
 					withParameters("{\"foo\":\"bar\", \"baz\": 1}"),
 					withDriftDetection(false),
+					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -555,7 +588,10 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-service-instance"),
+					}).ServiceInstance,
 					nil,
 				)
 				m.On("Single").Return(
@@ -575,15 +611,25 @@ func TestObserve(t *testing.T) {
 		},
 		"UserProvidedService_EmptyLastOperation": {
 			args: args{
-				mg: serviceInstance("user-provided", withExternalName(guid), withSpace(spaceGUID), withCredentials(&jsonCredentials), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte(jsonCredentials))})),
+				mg: serviceInstance("user-provided", withExternalName(guid), withSpace(spaceGUID), withCredentials(&jsonCredentials), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte(jsonCredentials))}), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: serviceInstance("user-provided",
 					withExternalName(guid),
 					withSpace(spaceGUID),
 					withCredentials(&jsonCredentials),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: iSha256([]byte(jsonCredentials))}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID:          &guid,
+						Credentials: iSha256([]byte(jsonCredentials)),
+						ResourceMetadata: v1alpha1.ResourceMetadata{
+							Labels: map[string]*string{
+								"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+								"crossplane-name": ptr.To("my-service-instance"),
+							},
+						},
+					}),
 					withConditions(xpv1.Available()),
+					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -592,7 +638,10 @@ func TestObserve(t *testing.T) {
 				m := &fake.MockServiceInstance{}
 				// User-provided services have empty LastOperation
 				m.On("Get", guid).Return(
-					&fake.NewServiceInstance("user-provided").SetName(name).SetGUID(guid).SetLastOperation("", "").ServiceInstance,
+					&fake.NewServiceInstance("user-provided").SetName(name).SetGUID(guid).SetLastOperation("", "").SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-service-instance"),
+					}).ServiceInstance,
 					nil,
 				)
 				m.On("Single").Return(
@@ -617,6 +666,7 @@ func TestObserve(t *testing.T) {
 					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
 					withSharedSpaces(sharedSpaceGUID),
+					withDefaultMetadataLabels(),
 				),
 			},
 			want: want{
@@ -628,8 +678,15 @@ func TestObserve(t *testing.T) {
 					withStatus(v1alpha1.ServiceInstanceObservation{
 						ID: &guid, ServicePlan: &servicePlan,
 						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+						ResourceMetadata: v1alpha1.ResourceMetadata{
+							Labels: map[string]*string{
+								"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+								"crossplane-name": ptr.To("my-service-instance"),
+							},
+						},
 					}),
 					withConditions(xpv1.Available()),
+					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -637,7 +694,10 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-service-instance"),
+					}).ServiceInstance,
 					nil,
 				)
 				m.On("GetManagedParameters", guid).Return(
@@ -698,6 +758,7 @@ func TestObserve(t *testing.T) {
 					withExternalName(guid),
 					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDefaultMetadataLabels(),
 					// sharedSpaces field is not set/is nil, sharing is unmanaged
 				),
 			},
@@ -709,8 +770,15 @@ func TestObserve(t *testing.T) {
 					withStatus(v1alpha1.ServiceInstanceObservation{
 						ID: &guid, ServicePlan: &servicePlan,
 						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+						ResourceMetadata: v1alpha1.ResourceMetadata{
+							Labels: map[string]*string{
+								"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+								"crossplane-name": ptr.To("my-service-instance"),
+							},
+						},
 					}),
 					withConditions(xpv1.Available()),
+					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -718,7 +786,15 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					&fake.NewServiceInstance("managed").
+						SetName(name).
+						SetGUID(guid).
+						SetServicePlan(servicePlan).
+						SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).
+						SetLabels(map[string]*string{
+							"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+							"crossplane-name": ptr.To("my-service-instance"),
+						}).ServiceInstance,
 					nil,
 				)
 				m.On("GetManagedParameters", guid).Return(

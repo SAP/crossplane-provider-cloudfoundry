@@ -22,6 +22,11 @@ spec:
           name: app-route-domainref
           policy:
             resolve: Always
+    labels:
+      environment: test
+      team: platform
+    annotations:
+      description: E2E test app
 
 ---
 apiVersion: cloudfoundry.crossplane.io/v1alpha1
@@ -48,3 +53,8 @@ spec:
           name: app-route-domainname
           policy:
             resolve: Always
+    labels:
+      environment: test
+      team: platform
+    annotations:
+      description: E2E test app 2

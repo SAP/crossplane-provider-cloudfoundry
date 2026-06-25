@@ -178,7 +178,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	return managed.ExternalObservation{
 		ResourceExists:          true,
-		ResourceUpToDate:        space.IsUpToDate(cr.Spec.ForProvider, s, ssh),
+		ResourceUpToDate:        space.IsUpToDate(cr, cr.Spec.ForProvider, s, ssh),
 		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
 }
@@ -192,7 +192,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Creating())
 
-	s, err := c.client.Create(ctx, space.GenerateCreate(cr.Spec.ForProvider))
+	s, err := c.client.Create(ctx, space.GenerateCreate(cr, cr.Spec.ForProvider))
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
@@ -240,12 +240,9 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		}
 	}
 
-	// rename
-	if cr.Spec.ForProvider.Name != cr.Status.AtProvider.Name {
-		_, err := c.client.Update(ctx, guid, space.GenerateUpdate(cr.Spec.ForProvider))
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
-		}
+	_, err := c.client.Update(ctx, guid, space.GenerateUpdate(cr, cr.Spec.ForProvider))
+	if err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 
 	return managed.ExternalUpdate{}, nil

@@ -25,6 +25,8 @@ type AppObservation struct {
 
 	// The list of routes currently mapped to the application.
 	Routes []AppRouteObservation `json:"routes,omitempty"`
+
+	ResourceMetadata `json:",inline"`
 }
 
 // AppRouteObservation represents an observed route for the application.

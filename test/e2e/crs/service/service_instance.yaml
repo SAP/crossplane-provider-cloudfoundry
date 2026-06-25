@@ -19,3 +19,8 @@ spec:
     sharedSpaces:
       - spaceRef:
           name: service-space-shared
+    labels:
+      environment: test
+      team: platform
+    annotations:
+      description: E2E test service instance
