@@ -5,9 +5,9 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/google/go-cmp/cmp"
-
 	"github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/google/go-cmp/cmp"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -313,7 +313,7 @@ func TestCreate(t *testing.T) {
 				Route: tc.service(),
 			}
 
-			id, err := c.Create(context.Background(), tc.args.forProvider)
+			id, err := c.Create(context.Background(), nil, tc.args.forProvider)
 
 			if tc.want.err != nil && err != nil {
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
@@ -432,6 +432,86 @@ func TestDelete(t *testing.T) {
 			}
 			if diff := cmp.Diff(tc.want.jobGUID, jobGUID); diff != "" {
 				t.Errorf("Delete(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIsUpToDate(t *testing.T) {
+	cases := map[string]struct {
+		forProvider v1alpha1.RouteParameters
+		atProvider  v1alpha1.RouteObservation
+		want        bool
+	}{
+		"UpToDate no labels": {
+			forProvider: v1alpha1.RouteParameters{},
+			atProvider:  v1alpha1.RouteObservation{},
+			want:        true,
+		},
+		"Label drift - spec has labels but observation does not": {
+			forProvider: v1alpha1.RouteParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			atProvider: v1alpha1.RouteObservation{},
+			want:       false,
+		},
+		"Labels match": {
+			forProvider: v1alpha1.RouteParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			atProvider: v1alpha1.RouteObservation{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			want: true,
+		},
+		"Annotation drift - spec has annotations but observation does not": {
+			forProvider: v1alpha1.RouteParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			atProvider: v1alpha1.RouteObservation{},
+			want:       false,
+		},
+		"Annotations match": {
+			forProvider: v1alpha1.RouteParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			atProvider: v1alpha1.RouteObservation{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			want: true,
+		},
+		"Extra observed labels are ok - subset check": {
+			forProvider: v1alpha1.RouteParameters{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			atProvider: v1alpha1.RouteObservation{
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod"), "extra": ptr.To("other")},
+				},
+			},
+			want: true,
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			result := IsUpToDate(nil, tc.forProvider, tc.atProvider)
+			if result != tc.want {
+				t.Errorf("IsUpToDate(...): want %v, got %v", tc.want, result)
 			}
 		})
 	}

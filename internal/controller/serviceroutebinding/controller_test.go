@@ -19,10 +19,12 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 )
 
 var (
@@ -108,6 +110,12 @@ func serviceRouteBinding(m ...modifier) *v1alpha1.ServiceRouteBinding {
 	return r
 }
 
+func withDefaultMetadataLabels() modifier {
+	return func(r *v1alpha1.ServiceRouteBinding) {
+		r.SetGroupVersionKind(v1alpha1.ServiceRouteBinding_GroupVersionKind)
+	}
+}
+
 func TestObserve(t *testing.T) {
 	type service func() *fake.MockServiceRouteBinding
 	type args struct {
@@ -124,6 +132,7 @@ func TestObserve(t *testing.T) {
 		withExternalName(guid),
 		withRouteID(routeGUID),
 		withServiceInstanceID(serviceInstanceGUID),
+		withDefaultMetadataLabels(),
 	)
 
 	srbAvailable := serviceRouteBinding(
@@ -132,6 +141,7 @@ func TestObserve(t *testing.T) {
 		withRouteID(routeGUID),
 		withServiceInstanceID(serviceInstanceGUID),
 		withConditions(xpv1.Available(), xpv1.ReconcileSuccess()),
+		withDefaultMetadataLabels(),
 	)
 
 	srbInvalid := serviceRouteBinding(
@@ -154,6 +164,7 @@ func TestObserve(t *testing.T) {
 			SetServiceInstanceRef(serviceInstanceGUID).
 			SetRouteServiceURL(routeServiceURL).
 			SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).
+			SetLabels(map[string]*string{"crossplane-kind": ptr.To("serviceroutebinding.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-service-route-binding")}).
 			ServiceRouteBinding
 	}
 
@@ -208,6 +219,7 @@ func TestObserve(t *testing.T) {
 				mg: serviceRouteBinding(withExternalName(guid),
 					withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
+					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{},
 				err: fmt.Errorf(errGet, errBoom),
@@ -233,6 +245,7 @@ func TestObserve(t *testing.T) {
 				mg: serviceRouteBinding(withExternalName(guid),
 					withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
+					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false},
 				err: nil,
@@ -284,6 +297,7 @@ func TestObserve(t *testing.T) {
 					withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
 					withConditions(xpv1.Unavailable().WithMessage("create in progress")),
+					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -314,6 +328,7 @@ func TestObserve(t *testing.T) {
 					withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
 					withConditions(xpv1.Unavailable().WithMessage("create failed")),
+					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
 				err: nil,
@@ -871,8 +886,9 @@ func TestHandleObservationState(t *testing.T) {
 			args: args{
 				binding: &fake.NewServiceRouteBinding().
 					SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).
+					SetLabels(map[string]*string{"crossplane-kind": ptr.To("serviceroutebinding.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-service-route-binding")}).
 					ServiceRouteBinding,
-				cr: serviceRouteBinding(),
+				cr: serviceRouteBinding(withDefaultMetadataLabels()),
 			},
 			want: want{
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -1095,7 +1111,7 @@ func TestIsMetadataUpToDate(t *testing.T) {
 					},
 				},
 			},
-			expected: false,
+			expected: true,
 		},
 		"SpecWithoutMetadataBindingHasLabels": {
 			spec: v1alpha1.ServiceRouteBindingParameters{},
@@ -1106,7 +1122,7 @@ func TestIsMetadataUpToDate(t *testing.T) {
 					},
 				},
 			},
-			expected: false,
+			expected: true,
 		},
 		"SpecHasLabelsBindingHasNoMetadata": {
 			spec: v1alpha1.ServiceRouteBindingParameters{
@@ -1125,9 +1141,14 @@ func TestIsMetadataUpToDate(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			result := isMetadataUpToDate(tc.spec, tc.binding)
+			var actualLabels, actualAnnotations map[string]*string
+			if tc.binding.Metadata != nil {
+				actualLabels = tc.binding.Metadata.Labels
+				actualAnnotations = tc.binding.Metadata.Annotations
+			}
+			result := metadata.IsMetadataUpToDate(tc.spec.Labels, tc.spec.Annotations, actualLabels, actualAnnotations)
 			if diff := cmp.Diff(tc.expected, result); diff != "" {
-				t.Errorf("isMetadataUpToDate(...): -want, +got:\n%s", diff)
+				t.Errorf("metadata.IsMetadataUpToDate(...): -want, +got:\n%s", diff)
 			}
 		})
 	}
@@ -1235,9 +1256,9 @@ func TestMetadataMapEqual(t *testing.T) {
 
 	for name, tc := range cases {
 		t.Run(name, func(t *testing.T) {
-			result := metadataMapEqual(tc.desired, tc.actual)
+			result := metadata.MetadataMapEqual(tc.desired, tc.actual)
 			if diff := cmp.Diff(tc.expected, result); diff != "" {
-				t.Errorf("metadataMapEqual(...): -want, +got:\n%s", diff)
+				t.Errorf("metadata.MetadataMapEqual(...): -want, +got:\n%s", diff)
 			}
 		})
 	}

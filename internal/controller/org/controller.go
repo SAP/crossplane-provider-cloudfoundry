@@ -159,8 +159,8 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}
 
 	return managed.ExternalObservation{
-		ResourceExists:          true,
-		ResourceUpToDate:        org.IsUpToDate(cr.Spec.ForProvider, o),
+		ResourceExists:          cr.Status.AtProvider.ID != nil,
+		ResourceUpToDate:        org.IsUpToDate(cr, cr.Spec.ForProvider, o),
 		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
 }
@@ -172,7 +172,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errNotOrgKind)
 	}
 
-	o, err := c.client.Create(ctx, org.GenerateCreate(cr.Spec.ForProvider))
+	o, err := c.client.Create(ctx, org.GenerateCreate(cr, cr.Spec.ForProvider))
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}

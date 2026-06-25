@@ -16,6 +16,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/app"
@@ -104,9 +105,24 @@ func withAppManifest(manifest string) modifier {
 	}
 }
 
+func withObservedLabels(labels map[string]*string) modifier {
+	return func(r *v1alpha1.App) {
+		r.Status.AtProvider.Labels = labels
+	}
+}
+
+func withLabels(labels map[string]*string) modifier {
+	return func(r *v1alpha1.App) {
+		r.Spec.ForProvider.Labels = labels
+	}
+}
+
 func newApp(typ string, m ...modifier) *v1alpha1.App {
 	r := &v1alpha1.App{
-
+		TypeMeta: metav1.TypeMeta{
+			Kind:       v1alpha1.App_Kind,
+			APIVersion: v1alpha1.CRDGroupVersion.String(),
+		},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:        name,
 			Finalizers:  []string{},
@@ -133,6 +149,13 @@ func newMockPush() *fake.MockPush {
 		nil,
 	)
 	return m
+
+}
+
+func withDefaultMetadataLabels() modifier {
+	return func(r *v1alpha1.App) {
+		r.SetGroupVersionKind(v1alpha1.App_GroupVersionKind)
+	}
 }
 
 func TestObserve(t *testing.T) {
@@ -235,6 +258,10 @@ func TestObserve(t *testing.T) {
 			},
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
+				m.On("Get", guid).Return(
+					fake.AppNil,
+					fake.ErrNoResultReturned,
+				)
 				m.On("Single").Return(
 					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
 					nil,
@@ -258,13 +285,17 @@ func TestObserve(t *testing.T) {
 					fake.AppNil,
 					fake.ErrNoResultReturned,
 				)
+				m.On("Single").Return(
+					fake.AppNil,
+					fake.ErrNoResultReturned,
+				)
 				return m
 			},
 			kube: &test.MockClient{},
 		},
 		"Successful": {
 			args: args{
-				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: newApp("docker",
@@ -273,7 +304,12 @@ func TestObserve(t *testing.T) {
 					withStatus(guid, "STARTED"),
 					withObservedName(name),
 					withAppManifest("applications:\n- name: "+name),
-					withConditions(xpv1.Available())),
+					withConditions(xpv1.Available()),
+					withObservedLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}),
+				),
 
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -281,7 +317,17 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).SetState("STARTED").App,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).SetState("STARTED").App,
 					nil,
 				)
 				return m
@@ -289,7 +335,7 @@ func TestObserve(t *testing.T) {
 		},
 		"RoutesPopulated": {
 			args: args{
-				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: newApp("docker",
@@ -304,14 +350,29 @@ func TestObserve(t *testing.T) {
 						Path:     "",
 						Protocol: "http",
 					}),
-					withConditions(xpv1.Available())),
+					withConditions(xpv1.Available()),
+					withObservedLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}),
+				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).SetState("STARTED").App,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).SetState("STARTED").App,
 					nil,
 				)
 				return m
@@ -376,7 +437,7 @@ func TestObserve(t *testing.T) {
 		},
 		"RouteFetchErrorNonFatal": {
 			args: args{
-				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID),
+				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID), withDefaultMetadataLabels(),
 					withRoutes(v1alpha1.AppRouteObservation{
 						URL:      "stale.apps.example.com",
 						Host:     "stale",
@@ -395,14 +456,29 @@ func TestObserve(t *testing.T) {
 						Host:     "stale",
 						Protocol: "http",
 					}),
-					withConditions(xpv1.Available())),
+					withConditions(xpv1.Available()),
+					withObservedLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}),
+				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
 			service: func() *fake.MockApp {
 				m := &fake.MockApp{}
 				m.On("Get", guid).Return(
-					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetState("STARTED").App,
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).SetState("STARTED").App,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-app"),
+					}).SetState("STARTED").App,
 					nil,
 				)
 				return m
@@ -668,6 +744,7 @@ func TestUpdate(t *testing.T) {
 				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
 				m.On("Stop", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
 				m.On("Start", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Update", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
 				return m
 			},
 		},
@@ -698,6 +775,7 @@ func TestUpdate(t *testing.T) {
 				m.On("SetEnvironmentVariables", guid, map[string]*string{"ANOTHER_VAR": (*string)(nil)}).Return(map[string]*string{}, nil)
 				m.On("Stop", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
 				m.On("Start", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Update", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
 				return m
 			},
 		},
@@ -753,6 +831,73 @@ func TestUpdate(t *testing.T) {
 				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
 				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
 				// No Stop/Start expected — app is already stopped
+				m.On("Update", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				return m
+			},
+		},
+
+		"MetadataOnly": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withLabels(map[string]*string{"env": ptr.To("prod")}),
+					withObservedLabels(map[string]*string{"env": ptr.To("dev")})),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withLabels(map[string]*string{"env": ptr.To("prod")}),
+					withObservedLabels(map[string]*string{"env": ptr.To("dev")})),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				m.On("Update", guid).Return(
+					&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+					nil,
+				)
+				return m
+			},
+		},
+
+		"EnvVarAndMetadataChanged": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue}),
+					withLabels(map[string]*string{"env": ptr.To("prod")}),
+					withObservedLabels(map[string]*string{"env": ptr.To("dev")})),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withEnvironment(map[string]string{"MY_VAR": envVarValue}),
+					withLabels(map[string]*string{"env": ptr.To("prod")}),
+					withObservedLabels(map[string]*string{"env": ptr.To("dev")})),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockApp {
+				m := &fake.MockApp{}
+				v := envVarValue
+				m.On("GetEnvironmentVariables", guid).Return(map[string]*string{}, nil)
+				m.On("SetEnvironmentVariables", guid, map[string]*string{"MY_VAR": &v}).Return(map[string]*string{}, nil)
+				m.On("Stop", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Start", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Update", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
 				return m
 			},
 		},

@@ -19,6 +19,8 @@ type ServiceCredentialBindingObservation struct {
 	// If the binding is rotated, `retiredBindings` stores resources that have been rotated out but are still transitionally retained due to `rotation.ttl` setting
 	// +kubebuilder:validation:Optional
 	RetiredKeys []*SCBResource `json:"retiredKeys,omitempty"`
+
+	ResourceMetadata `json:",inline"`
 }
 
 type ServiceCredentialBindingParameters struct {
@@ -73,6 +75,8 @@ type ServiceCredentialBindingParameters struct {
 	// Rotation defines the parameters for rotating the service credential binding.
 	// +kubebuilder:validation:Optional
 	Rotation *RotationParameters `json:"rotation,omitempty"`
+
+	ResourceMetadata `json:",inline"`
 }
 
 type ServiceCredentialBindingSpec struct {
@@ -112,6 +116,18 @@ type SCBResource struct {
 // +kubebuilder:object:root=true
 
 // ServiceCredentialBinding is the Schema for the ServiceCredentialBindings API. Provides a Cloud Foundry Service Key.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: Service Credential Binding GUID (UUID format)
+//   - How to find:
+//   - For type: key
+//   - UI: Not available in the BTP Cockpit
+//   - CLI: Use CF CLI: `cf service-keys <SERVICE_INSTANCE>` and look up the key GUID via `cf curl /v3/service_credential_bindings?names=<KEY_NAME>`
+//   - For type: app
+//   - UI: Open app > Service Bindings > Service Binding GUID column
+//   - CLI: `cf service <SERVICE_INSTANCE>` > Showing bound apps > guid column
+//
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"

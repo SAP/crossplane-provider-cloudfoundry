@@ -5,7 +5,7 @@ metadata:
   namespace: app-test
 spec:
   forProvider:
-    domainRef: 
+    domainRef:
       name: app-domain
       policy:
         resolve: Always

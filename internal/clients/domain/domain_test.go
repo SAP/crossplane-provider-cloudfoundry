@@ -6,9 +6,11 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
@@ -55,111 +57,404 @@ func (m *MockClient) Update(ctx context.Context, guid string, update *resource.D
 	return args.Get(0).(*resource.Domain), args.Error(1)
 }
 
+// ---------------------------------------------------------------------------
+// ClientWrapper tests
+// ---------------------------------------------------------------------------
+
 func TestClientWrapper_FindDomainBySpec(t *testing.T) {
 	ctx := context.Background()
-	mockClient := new(MockClient)
 
-	spec := v1alpha1.DomainParameters{
-		Name: "test-domain.com",
-	}
-
-	expectedDomain := &resource.Domain{
-		Resource: resource.Resource{
-			GUID: "test-guid-123",
+	cases := map[string]struct {
+		spec       v1alpha1.DomainParameters
+		mockOpts   *client.DomainListOptions
+		mockReturn *resource.Domain
+		mockError  error
+		wantErr    bool
+	}{
+		"ByName": {
+			spec: v1alpha1.DomainParameters{
+				Name: "test-domain.com",
+			},
+			mockOpts: &client.DomainListOptions{
+				Names: client.Filter{Values: []string{"test-domain.com"}},
+			},
+			mockReturn: &resource.Domain{
+				Resource: resource.Resource{GUID: "test-guid-123"},
+				Name:     "test-domain.com",
+			},
 		},
-		Name: "test-domain.com",
-	}
-
-	mockClient.On("Single", ctx, &client.DomainListOptions{
-		Names: client.Filter{Values: []string{"test-domain.com"}},
-	}).Return(expectedDomain, nil)
-
-	wrapper := &ClientWrapper{Client: mockClient}
-	result, err := wrapper.FindDomainBySpec(ctx, spec)
-	require.NoError(t, err)
-	assert.Equal(t, expectedDomain, result)
-	mockClient.AssertExpectations(t)
-}
-
-func TestClientWrapper_FindDomainBySpec_OrgIsIgnored(t *testing.T) {
-	ctx := context.Background()
-	mockClient := new(MockClient)
-
-	orgGUID := "org-guid-789"
-	spec := v1alpha1.DomainParameters{
-		Name:         "test-domain.com",
-		OrgReference: v1alpha1.OrgReference{Org: &orgGUID},
-	}
-
-	expectedDomain := &resource.Domain{
-		Resource: resource.Resource{
-			GUID: "test-guid-123",
+		"OrgIsIgnored": {
+			spec: v1alpha1.DomainParameters{
+				Name:         "test-domain.com",
+				OrgReference: v1alpha1.OrgReference{Org: ptr.To("org-guid-789")},
+			},
+			mockOpts: &client.DomainListOptions{
+				Names: client.Filter{Values: []string{"test-domain.com"}},
+			},
+			mockReturn: &resource.Domain{
+				Resource: resource.Resource{GUID: "test-guid-123"},
+				Name:     "test-domain.com",
+			},
 		},
-		Name: "test-domain.com",
+		"NotFound": {
+			spec: v1alpha1.DomainParameters{
+				Name: "nonexistent-domain.com",
+			},
+			mockOpts: &client.DomainListOptions{
+				Names: client.Filter{Values: []string{"nonexistent-domain.com"}},
+			},
+			mockError: assert.AnError,
+			wantErr:   true,
+		},
 	}
 
-	mockClient.On("Single", ctx, &client.DomainListOptions{
-		Names: client.Filter{Values: []string{"test-domain.com"}},
-	}).Return(expectedDomain, nil)
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			mockClient := new(MockClient)
+			mockClient.On("Single", ctx, tc.mockOpts).Return(tc.mockReturn, tc.mockError)
 
-	wrapper := &ClientWrapper{Client: mockClient}
-	result, err := wrapper.FindDomainBySpec(ctx, spec)
-	require.NoError(t, err)
-	assert.Equal(t, expectedDomain, result)
-	mockClient.AssertExpectations(t)
-}
+			wrapper := &ClientWrapper{Client: mockClient}
+			result, err := wrapper.FindDomainBySpec(ctx, tc.spec)
 
-func TestClientWrapper_FindDomainBySpec_NotFound(t *testing.T) {
-	ctx := context.Background()
-	mockClient := new(MockClient)
-
-	spec := v1alpha1.DomainParameters{
-		Name: "nonexistent-domain.com",
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.mockReturn, result)
+			}
+			mockClient.AssertExpectations(t)
+		})
 	}
-
-	mockClient.On("Single", ctx, &client.DomainListOptions{
-		Names: client.Filter{Values: []string{"nonexistent-domain.com"}},
-	}).Return(nil, assert.AnError)
-
-	wrapper := &ClientWrapper{Client: mockClient}
-	result, err := wrapper.FindDomainBySpec(ctx, spec)
-	require.Error(t, err)
-	assert.Nil(t, result)
-	mockClient.AssertExpectations(t)
 }
 
 func TestClientWrapper_GetDomainByGUID(t *testing.T) {
 	ctx := context.Background()
-	mockClient := new(MockClient)
 
-	guid := "test-guid-456"
-	expectedDomain := &resource.Domain{
-		Resource: resource.Resource{
-			GUID: guid,
+	cases := map[string]struct {
+		guid       string
+		mockReturn *resource.Domain
+		mockError  error
+		wantErr    bool
+	}{
+		"ByGUID": {
+			guid: "test-guid-456",
+			mockReturn: &resource.Domain{
+				Resource: resource.Resource{GUID: "test-guid-456"},
+				Name:     "test-domain.com",
+			},
 		},
-		Name: "test-domain.com",
+		"NotFound": {
+			guid:      "nonexistent-guid",
+			mockError: assert.AnError,
+			wantErr:   true,
+		},
 	}
 
-	mockClient.On("Get", ctx, guid).Return(expectedDomain, nil)
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			mockClient := new(MockClient)
+			mockClient.On("Get", ctx, tc.guid).Return(tc.mockReturn, tc.mockError)
 
-	wrapper := &ClientWrapper{Client: mockClient}
-	result, err := wrapper.GetDomainByGUID(ctx, guid)
-	require.NoError(t, err)
-	assert.Equal(t, expectedDomain, result)
-	mockClient.AssertExpectations(t)
+			wrapper := &ClientWrapper{Client: mockClient}
+			result, err := wrapper.GetDomainByGUID(ctx, tc.guid)
+
+			if tc.wantErr {
+				require.Error(t, err)
+				assert.Nil(t, result)
+			} else {
+				require.NoError(t, err)
+				assert.Equal(t, tc.mockReturn, result)
+			}
+			mockClient.AssertExpectations(t)
+		})
+	}
 }
 
-func TestClientWrapper_GetDomainByGUID_NotFound(t *testing.T) {
-	ctx := context.Background()
-	mockClient := new(MockClient)
+// ---------------------------------------------------------------------------
+// Pure function tests
+// ---------------------------------------------------------------------------
 
-	guid := "nonexistent-guid"
+func TestGenerateCreate(t *testing.T) {
+	type args struct {
+		spec v1alpha1.DomainParameters
+	}
+	type want struct {
+		create *resource.DomainCreate
+	}
 
-	mockClient.On("Get", ctx, guid).Return(nil, assert.AnError)
+	cases := map[string]struct {
+		args args
+		want want
+	}{
+		"BasicCreate": {
+			args: args{
+				spec: v1alpha1.DomainParameters{
+					Name: "test.domain.com",
+				},
+			},
+			want: want{
+				create: &resource.DomainCreate{
+					Name:     "test.domain.com",
+					Metadata: &resource.Metadata{},
+				},
+			},
+		},
+		"CreateWithLabels": {
+			args: args{
+				spec: v1alpha1.DomainParameters{
+					Name: "test.domain.com",
+					ResourceMetadata: v1alpha1.ResourceMetadata{
+						Labels: map[string]*string{
+							"env": ptr.To("prod"),
+						},
+					},
+				},
+			},
+			want: want{
+				create: &resource.DomainCreate{
+					Name: "test.domain.com",
+					Metadata: &resource.Metadata{
+						Labels: map[string]*string{
+							"env": ptr.To("prod"),
+						},
+					},
+				},
+			},
+		},
+		"CreateInternalFalseWithRouterGroup": {
+			args: args{
+				spec: v1alpha1.DomainParameters{
+					Name:        "test.domain.com",
+					Internal:    ptr.To(false),
+					RouterGroup: ptr.To("rg-guid"),
+				},
+			},
+			want: want{
+				create: &resource.DomainCreate{
+					Name:        "test.domain.com",
+					Internal:    ptr.To(false),
+					RouterGroup: &resource.Relationship{GUID: "rg-guid"},
+					Metadata:    &resource.Metadata{},
+				},
+			},
+		},
+		"CreateWithOrg": {
+			args: args{
+				spec: v1alpha1.DomainParameters{
+					Name: "test.domain.com",
+					OrgReference: v1alpha1.OrgReference{
+						Org: ptr.To("org-guid"),
+					},
+				},
+			},
+			want: want{
+				create: &resource.DomainCreate{
+					Name: "test.domain.com",
+					Relationships: &resource.DomainRelationships{
+						Organization: &resource.ToOneRelationship{
+							Data: &resource.Relationship{GUID: "org-guid"},
+						},
+					},
+					Metadata: &resource.Metadata{},
+				},
+			},
+		},
+	}
 
-	wrapper := &ClientWrapper{Client: mockClient}
-	result, err := wrapper.GetDomainByGUID(ctx, guid)
-	require.Error(t, err)
-	assert.Nil(t, result)
-	mockClient.AssertExpectations(t)
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			result := GenerateCreate(nil, tc.args.spec)
+			if diff := cmp.Diff(tc.want.create, result); diff != "" {
+				t.Errorf("GenerateCreate(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestGenerateUpdate(t *testing.T) {
+	type args struct {
+		spec v1alpha1.DomainParameters
+	}
+	type want struct {
+		update *resource.DomainUpdate
+	}
+
+	cases := map[string]struct {
+		args args
+		want want
+	}{
+		"BasicUpdate": {
+			args: args{
+				spec: v1alpha1.DomainParameters{
+					Name: "test.domain.com",
+				},
+			},
+			want: want{
+				update: &resource.DomainUpdate{
+					Metadata: &resource.Metadata{},
+				},
+			},
+		},
+		"UpdateWithLabels": {
+			args: args{
+				spec: v1alpha1.DomainParameters{
+					Name: "test.domain.com",
+					ResourceMetadata: v1alpha1.ResourceMetadata{
+						Labels: map[string]*string{
+							"env": ptr.To("prod"),
+						},
+					},
+				},
+			},
+			want: want{
+				update: &resource.DomainUpdate{
+					Metadata: &resource.Metadata{
+						Labels: map[string]*string{
+							"env": ptr.To("prod"),
+						},
+					},
+				},
+			},
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			result := GenerateUpdate(nil, tc.args.spec)
+			if diff := cmp.Diff(tc.want.update, result); diff != "" {
+				t.Errorf("GenerateUpdate(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestGenerateObservation(t *testing.T) {
+	cases := map[string]struct {
+		domain     *resource.Domain
+		wantID     string
+		wantName   string
+		wantLabels map[string]*string
+		wantAnns   map[string]*string
+	}{
+		"WithMetadata": {
+			domain: &resource.Domain{
+				Name: "test.domain.com",
+				Metadata: &resource.Metadata{
+					Labels:      map[string]*string{"env": ptr.To("prod")},
+					Annotations: map[string]*string{"note": ptr.To("test")},
+				},
+				Resource: resource.Resource{GUID: "domain-guid"},
+			},
+			wantID:     "domain-guid",
+			wantName:   "test.domain.com",
+			wantLabels: map[string]*string{"env": ptr.To("prod")},
+			wantAnns:   map[string]*string{"note": ptr.To("test")},
+		},
+		"NilMetadata": {
+			domain: &resource.Domain{
+				Name:     "test.domain.com",
+				Resource: resource.Resource{GUID: "domain-guid"},
+			},
+			wantID:   "domain-guid",
+			wantName: "test.domain.com",
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			result := GenerateObservation(tc.domain)
+			if result.ID == nil || *result.ID != tc.wantID {
+				t.Errorf("ID: want %q, got %v", tc.wantID, result.ID)
+			}
+			if result.Name == nil || *result.Name != tc.wantName {
+				t.Errorf("Name: want %q, got %v", tc.wantName, result.Name)
+			}
+			if diff := cmp.Diff(tc.wantLabels, result.Labels); diff != "" {
+				t.Errorf("Labels: -want, +got:\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.wantAnns, result.Annotations); diff != "" {
+				t.Errorf("Annotations: -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestIsUpToDate(t *testing.T) {
+	cases := map[string]struct {
+		spec     v1alpha1.DomainParameters
+		observed *resource.Domain
+		want     bool
+	}{
+		"NilObserved": {
+			spec:     v1alpha1.DomainParameters{Name: "test.domain.com"},
+			observed: nil,
+			want:     false,
+		},
+		"UpToDateNoLabels": {
+			spec:     v1alpha1.DomainParameters{Name: "test.domain.com"},
+			observed: &resource.Domain{Name: "test.domain.com"},
+			want:     true,
+		},
+		"LabelDrift": {
+			spec: v1alpha1.DomainParameters{
+				Name: "test.domain.com",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			observed: &resource.Domain{Name: "test.domain.com"},
+			want:     false,
+		},
+		"LabelsMatch": {
+			spec: v1alpha1.DomainParameters{
+				Name: "test.domain.com",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			observed: &resource.Domain{
+				Name:     "test.domain.com",
+				Metadata: &resource.Metadata{Labels: map[string]*string{"env": ptr.To("prod")}},
+			},
+			want: true,
+		},
+		"AnnotationDrift": {
+			spec: v1alpha1.DomainParameters{
+				Name: "test.domain.com",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			observed: &resource.Domain{Name: "test.domain.com"},
+			want:     false,
+		},
+		"AnnotationsMatch": {
+			spec: v1alpha1.DomainParameters{
+				Name: "test.domain.com",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			observed: &resource.Domain{
+				Name:     "test.domain.com",
+				Metadata: &resource.Metadata{Annotations: map[string]*string{"note": ptr.To("value")}},
+			},
+			want: true,
+		},
+		"ObservedNilMetadata": {
+			spec:     v1alpha1.DomainParameters{Name: "test.domain.com"},
+			observed: &resource.Domain{Name: "test.domain.com"},
+			want:     true,
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			result := IsUpToDate(nil, tc.spec, tc.observed)
+			if result != tc.want {
+				t.Errorf("IsUpToDate(...): want %v, got %v", tc.want, result)
+			}
+		})
+	}
 }

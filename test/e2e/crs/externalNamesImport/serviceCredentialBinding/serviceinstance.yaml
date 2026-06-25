@@ -1,0 +1,17 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: import-test-scb-serviceinstance
+spec:
+  providerConfigRef:
+    name: default
+  forProvider:
+    type: managed
+    name: import-test-scb-serviceinstance
+    spaceRef:
+      name: upgrade-test-import-space
+      policy:
+        resolve: Always
+    servicePlan:
+      offering: xsuaa
+      plan: application

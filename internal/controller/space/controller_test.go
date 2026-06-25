@@ -16,6 +16,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -80,6 +81,12 @@ func fakeSpace(m ...modifier) *v1alpha1.Space {
 type MockSpaceFeature struct {
 	*fake.MockSpace
 	*fake.MockFeature
+}
+
+func withDefaultMetadataLabels() modifier {
+	return func(r *v1alpha1.Space) {
+		r.SetGroupVersionKind(v1alpha1.Space_GroupVersionKind)
+	}
 }
 
 func TestObserve(t *testing.T) {
@@ -178,10 +185,10 @@ func TestObserve(t *testing.T) {
 		},
 		"UnsetExternalNameSuccessful": {
 			args: args{
-				mg: fakeSpace(withName(name), withOrg(orgGuid)),
+				mg: fakeSpace(withName(name), withOrg(orgGuid), withDefaultMetadataLabels()),
 			},
 			want: want{
-				mg:  fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withAllowSSH(false), withConditions(xpv1.Available())),
+				mg:  fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withAllowSSH(false), withConditions(xpv1.Available()), withDefaultMetadataLabels()),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
@@ -190,12 +197,12 @@ func TestObserve(t *testing.T) {
 				f := &fake.MockFeature{}
 
 				m.On("Single").Return(
-					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).Space,
+					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("space.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-space")}).Space,
 					nil,
 				)
 
 				m.On("Get", guid).Return(
-					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).Space,
+					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("space.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-space")}).Space,
 					nil,
 				)
 
@@ -232,10 +239,10 @@ func TestObserve(t *testing.T) {
 		},
 		"SetExternalNameSuccessful": {
 			args: args{
-				mg: fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid)),
+				mg: fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withDefaultMetadataLabels()),
 			},
 			want: want{
-				mg:  fakeSpace(withName(name), withOrg(orgGuid), withAllowSSH(false), withExternalName(guid), withConditions(xpv1.Available())),
+				mg:  fakeSpace(withName(name), withOrg(orgGuid), withAllowSSH(false), withExternalName(guid), withConditions(xpv1.Available()), withDefaultMetadataLabels()),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
 				err: nil,
 			},
@@ -244,7 +251,7 @@ func TestObserve(t *testing.T) {
 				f := &fake.MockFeature{}
 
 				m.On("Get", guid).Return(
-					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).Space,
+					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("space.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-space")}).Space,
 					nil,
 				)
 
@@ -261,7 +268,7 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  fakeSpace(withName("existing-space"), withExternalName(guid), withAllowSSH(false), withOrg(orgGuid), withConditions(xpv1.Available())),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ResourceLateInitialized: false},
 				err: nil,
 			},
 			service: func() *MockSpaceFeature {

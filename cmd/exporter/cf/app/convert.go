@@ -7,6 +7,7 @@ import (
 	"log/slog"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/metadata"
 	"github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/space"
 
 	"github.com/SAP/xp-clifford/cli/export"
@@ -154,6 +155,10 @@ func convertAppResource(ctx context.Context, cfClient *client.Client, app *res, 
 				Lifecycle: app.Lifecycle.Type,
 				SpaceReference: v1alpha1.SpaceReference{
 					Space: &app.Relationships.Space.Data.GUID,
+				},
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels:      metadata.StripDefaultLabels(app.Metadata.Labels),
+					Annotations: app.Metadata.Annotations,
 				},
 				// Buildpacks:                        []string{}, // not supported yet
 				// Stack:                             new(string), // not supported yet

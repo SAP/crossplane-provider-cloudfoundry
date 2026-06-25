@@ -35,14 +35,6 @@ var (
 		Name:     name,
 		Internal: false,
 	}
-
-	internalDomain = &cfresource.Domain{
-		Resource: cfresource.Resource{
-			GUID: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
-		},
-		Name:     "apps.internal",
-		Internal: true,
-	}
 )
 
 type modifier func(*v1alpha1.Domain)
@@ -152,7 +144,7 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  fakeDomain(withName(name), withExternalName(guid), withConditions(xpv1.Available())),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ResourceLateInitialized: true},
 				err: nil,
 			},
 			service: func() *mockDomainService {
@@ -206,7 +198,7 @@ func TestObserve(t *testing.T) {
 			},
 			want: want{
 				mg:  fakeDomain(withExternalName(guid), withName(name), withConditions(xpv1.Available())),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
 			service: func() *mockDomainService {
@@ -260,23 +252,6 @@ func TestObserve(t *testing.T) {
 				return &mockDomainService{
 					GetDomainByGUIDFunc: func(ctx context.Context, guid string) (*cfresource.Domain, error) {
 						return nil, errBoom
-					},
-				}
-			},
-		},
-		"ObserveInternalDomainAvailable": {
-			args: args{
-				mg: fakeDomain(withExternalName("a1b2c3d4-e5f6-7890-abcd-ef1234567890")),
-			},
-			want: want{
-				mg:  fakeDomain(withExternalName("a1b2c3d4-e5f6-7890-abcd-ef1234567890"), withConditions(xpv1.Available())),
-				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
-				err: nil,
-			},
-			service: func() *mockDomainService {
-				return &mockDomainService{
-					GetDomainByGUIDFunc: func(ctx context.Context, guid string) (*cfresource.Domain, error) {
-						return internalDomain, nil
 					},
 				}
 			},
@@ -425,10 +400,10 @@ func TestUpdate(t *testing.T) {
 	}{
 		"UpdateSuccessful": {
 			args: args{
-				mg: fakeDomain(withExternalName(guid), withName(name)),
+				mg: fakeDomain(withExternalName(guid), withName(name), withID(guid)),
 			},
 			want: want{
-				mg:  fakeDomain(withExternalName(guid), withName(name)),
+				mg:  fakeDomain(withExternalName(guid), withName(name), withID(guid)),
 				obs: managed.ExternalUpdate{},
 				err: nil,
 			},

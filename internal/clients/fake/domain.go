@@ -102,3 +102,18 @@ func (s *Domain) SetGUID(guid string) *Domain {
 	s.GUID = guid
 	return s
 }
+
+func (s *Domain) SetLabels(labels map[string]*string) *Domain {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Labels = labels
+	return s
+}
+func (s *Domain) SetAnnotations(annotations map[string]*string) *Domain {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Annotations = annotations
+	return s
+}

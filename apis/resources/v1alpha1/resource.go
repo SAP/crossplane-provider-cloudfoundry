@@ -15,8 +15,10 @@ type Resource struct {
 // ResourceMetadata represents the metadata associated with a Cloud Foundry resource.
 type ResourceMetadata struct {
 	// (Map of String) The annotations associated with the resource. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// +mapType=granular
 	Annotations map[string]*string `json:"annotations,omitempty"`
 
 	// (Map of String) The labels associated with the resource. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// +mapType=granular
 	Labels map[string]*string `json:"labels,omitempty"`
 }

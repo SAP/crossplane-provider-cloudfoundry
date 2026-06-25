@@ -86,6 +86,7 @@ spec:
                     description: (Map of String) The annotations associated with the
                       resource. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
+                    x-kubernetes-map-type: granular
                   buildpacks:
                     description: (NOT SUPPORTED YET) An array of one ore more installed
                       buildpack names, e.g., ruby_buildpack, java_buildpack.
@@ -135,6 +136,7 @@ spec:
                     description: (Map of String) The labels associated with the resource.
                       Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
+                    x-kubernetes-map-type: granular
                   lifecycle:
                     default: buildpack
                     description: Type of the lifecycle; valid values are `buildpack`,
@@ -619,6 +621,13 @@ spec:
             properties:
               atProvider:
                 properties:
+                  annotations:
+                    additionalProperties:
+                      type: string
+                    description: (Map of String) The annotations associated with the
+                      resource. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    type: object
+                    x-kubernetes-map-type: granular
                   appManifest:
                     description: The yaml representation of the environment variables.
                     type: string
@@ -629,6 +638,13 @@ spec:
                   guid:
                     description: (String) The GUID of the Cloud Foundry resource.
                     type: string
+                  labels:
+                    additionalProperties:
+                      type: string
+                    description: (Map of String) The labels associated with the resource.
+                      Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    type: object
+                    x-kubernetes-map-type: granular
                   name:
                     description: The `name` of the application.
                     type: string
