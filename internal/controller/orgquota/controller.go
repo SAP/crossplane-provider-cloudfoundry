@@ -3,13 +3,13 @@ package orgquota
 import (
 	"context"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
-	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -34,24 +34,24 @@ const (
 	errDelete            = "cannot delete cloudfoundry OrgQuota"
 )
 
-// externalConnecter specifies how the Reconciler should connect to
+// externalConnector specifies how the Reconciler should connect to
 // the API used to sync and delete external resources.
-type externalConnecter struct {
+type externalConnector struct {
 	kubeClient   k8s.Client
-	usageTracker resource.Tracker
+	usageTracker resource.LegacyTracker
 }
 
-// externalConnecter type implements managed.ExternalConnecter
-var _ managed.ExternalConnecter = &externalConnecter{}
+// externalConnector type implements managed.ExternalConnector
+var _ managed.ExternalConnector = &externalConnector{}
 
 // Connect method connects to the provider specified by the supplied
 // managed resource and produce an ExternalClient.
-func (c *externalConnecter) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
+func (c *externalConnector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
 	if _, ok := mg.(*v1alpha1.OrgQuota); !ok {
 		return nil, errors.New(errNotOrgQuota)
 	}
 
-	if err := c.usageTracker.Track(ctx, mg); err != nil {
+	if err := c.usageTracker.Track(ctx, mg.(resource.LegacyManaged)); err != nil {
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
@@ -69,9 +69,10 @@ func Setup(mgr ctrl.Manager, controllerOptions controller.Options) error {
 	name := managed.ControllerName(v1alpha1.OrgQuota_GroupKind)
 
 	options := []managed.ReconcilerOption{
-		managed.WithExternalConnecter(&externalConnecter{
+		managed.WithInitializers(),
+		managed.WithExternalConnector(&externalConnector{
 			kubeClient:   mgr.GetClient(),
-			usageTracker: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
+			usageTracker: resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
 		}),
 		managed.WithLogger(controllerOptions.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
@@ -93,6 +94,12 @@ func Setup(mgr ctrl.Manager, controllerOptions controller.Options) error {
 		Complete(ratelimiter.NewReconciler(name, r, controllerOptions.GlobalRateLimiter))
 }
 
+// Disconnect implements the managed.ExternalClient interface
+func (c *externalClient) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
 // externalClient manages the lifecycle of an external
 // OrganizationQuota resource.
 type externalClient struct {
@@ -111,15 +118,34 @@ func (e *externalClient) Observe(ctx context.Context, res resource.Managed) (man
 		return managed.ExternalObservation{}, errors.New(errNotOrgQuota)
 	}
 
-	// TODO: external_name are set to metadata.name by default.
+	resourceLateInitialized := false
+
+	// ADR Step 1: Check if external-name is empty
 	if meta.GetExternalName(managedOrgQuota) == "" {
-		return managed.ExternalObservation{}, nil
+		// Backwards compatibility: lookup by spec name
+		r, err := orgquota.FindOrgQuotaBySpec(ctx, e.cloudFoundryClient, managedOrgQuota.Spec.ForProvider)
+		if err != nil {
+			if clients.ErrorIsNotFound(err) {
+				return managed.ExternalObservation{ResourceExists: false}, nil
+			}
+			return managed.ExternalObservation{}, errors.Wrap(err, errGet)
+		}
+		if r == nil {
+			return managed.ExternalObservation{ResourceExists: false}, nil
+		}
+		meta.SetExternalName(managedOrgQuota, r.GUID)
+		resourceLateInitialized = true
 	}
 
-	// get by external name
-	externalOrgQuota, err := e.cloudFoundryClient.Get(ctx, meta.GetExternalName(managedOrgQuota))
+	guid := meta.GetExternalName(managedOrgQuota)
 
-	// not found or error
+	// ADR Step 2: External-name is set, check its format (must be valid GUID)
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.Errorf("external-name '%s' is not a valid GUID format", guid)
+	}
+
+	// ADR Step 3: Get by GUID
+	externalOrgQuota, err := e.cloudFoundryClient.Get(ctx, guid)
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
@@ -131,13 +157,9 @@ func (e *externalClient) Observe(ctx context.Context, res resource.Managed) (man
 	lateInitialized := orgquota.LateInitialize(&managedOrgQuota.Spec.ForProvider, externalOrgQuota)
 	managedOrgQuota.Status.AtProvider = orgquota.GenerateObservation(externalOrgQuota)
 
-	if err := e.kubeClient.Status().Update(ctx, managedOrgQuota); err != nil {
-		return managed.ExternalObservation{}, errors.Wrap(err, errUpdate)
-	}
-
 	return managed.ExternalObservation{
 		ResourceExists:          true,
-		ResourceLateInitialized: lateInitialized,
+		ResourceLateInitialized: lateInitialized || resourceLateInitialized,
 		ResourceUpToDate:        !orgquota.NeedsReconciliation(managedOrgQuota),
 	}, nil
 }
@@ -160,10 +182,6 @@ func (e *externalClient) Create(ctx context.Context, res resource.Managed) (mana
 
 	meta.SetExternalName(managedOrgQuota, externalOrgQuota.GUID)
 
-	if err := e.kubeClient.Update(ctx, managedOrgQuota); err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, errUpdate)
-	}
-
 	return managed.ExternalCreation{}, nil
 }
 
@@ -176,12 +194,7 @@ func (e *externalClient) Update(ctx context.Context, res resource.Managed) (mana
 		return managed.ExternalUpdate{}, errors.New(errNotOrgQuota)
 	}
 
-	// assert that ID is set
-	if managedOrgQuota.Status.AtProvider.ID == nil {
-		return managed.ExternalUpdate{}, errors.New(errUpdate)
-	}
-
-	_, err := e.cloudFoundryClient.Update(ctx, *managedOrgQuota.Status.AtProvider.ID, orgquota.GenerateCreateOrUpdate(managedOrgQuota.Spec.ForProvider))
+	_, err := e.cloudFoundryClient.Update(ctx, meta.GetExternalName(managedOrgQuota), orgquota.GenerateCreateOrUpdate(managedOrgQuota.Spec.ForProvider))
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
@@ -191,22 +204,24 @@ func (e *externalClient) Update(ctx context.Context, res resource.Managed) (mana
 
 // Delete the external resource upon deletion of its associated Managed
 // resource. Called when the managed resource has been deleted.
-func (e *externalClient) Delete(ctx context.Context, res resource.Managed) error {
+func (e *externalClient) Delete(ctx context.Context, res resource.Managed) (managed.ExternalDelete, error) {
 	managedOrgQuota, ok := res.(*v1alpha1.OrgQuota)
 	if !ok {
-		return errors.New(errNotOrgQuota)
+		return managed.ExternalDelete{}, errors.New(errNotOrgQuota)
 	}
 	managedOrgQuota.SetConditions(xpv1.Deleting())
 
-	// assert that ID is set
-	if managedOrgQuota.Status.AtProvider.ID == nil {
-		return errors.Wrap(errors.New(".Status.AtProvider.ID is not set"), errDelete)
+	if meta.GetExternalName(managedOrgQuota) == "" {
+		return managed.ExternalDelete{}, nil
 	}
 
-	_, err := e.cloudFoundryClient.Delete(ctx, *managedOrgQuota.Status.AtProvider.ID)
+	_, err := e.cloudFoundryClient.Delete(ctx, meta.GetExternalName(managedOrgQuota))
 	if err != nil {
-		return errors.Wrap(err, errDelete)
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 
-	return nil
+	return managed.ExternalDelete{}, nil
 }

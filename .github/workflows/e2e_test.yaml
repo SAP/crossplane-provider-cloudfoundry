@@ -1,3 +1,6 @@
+# Run e2e tests in a single CF environment. Approval is handled by the caller
+# before invoking this workflow.
+#
 # Enviroment variables/secrets that are needed
 # CF_CREDENTIALS contains the login information of the CF technical user for this test
 # CF_ENVIRONMENT contains the URL of the CF API endpoint
@@ -8,7 +11,6 @@
 name: e2e-Tests
 
 on:
-  workflow_dispatch:
   workflow_call:
     inputs:
       checkout-ref:
@@ -16,60 +18,225 @@ on:
         default: ''
         required: false
         type: string
-      environment:
-        description: 'the environment to run in'
-        default: 'pr-e2e-approval'
-        required: false
-        type: string
-    secrets:
-      CF_CREDENTIALS:
-        description: contains the login information of the CF technical user for this test
-        required: true
-      CF_ENVIRONMENT:
-        description: contains the URL of the CF API endpoint
-        required: true
-      # USER_WHERE_ROLES_GET_ASSIGNED_EMAIL:
-      #   description: contains the email of a technical user (different to TECHNICAL_USER_EMAIL)
-      #   required: true
-      # TECHNICAL_USER_EMAIL:
-      #   description: contains the email of the BTP_TECHNICAL_USER
-      #   required: true
+
 
 permissions:
   contents: read
 
+# Serialize all e2e runs globally: every run shares cf-ci-e2e, and the orgrole
+# and spacerole import tests assign roles to static usernames in sap.ids that
+# would race across concurrent runs.
+concurrency:
+  group: e2e-cf-ci-e2e
+  cancel-in-progress: false
+
+env:
+  BUILD_ID: ${{ github.run_id }}-${{ github.run_attempt }}
+  E2E_BUILD_REGISTRY: e2e
+  E2E_PROVIDER_IMAGE: e2e/provider-cloudfoundry-amd64
+
 jobs:
-  e2e-tests:
+  prepare-matrix:
     runs-on: ubuntu-latest
-    environment: ${{ inputs.environment }}
+    outputs:
+      test-names: ${{ steps.set-matrix.outputs.test-names }}
     steps:
       - name: checkout repo
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
-          #use inputs.checkout-ref to be able to call it from a pull_request_target workflow, since there it needs to be github.event.pull_request.head.sha and not the default
+          ref: ${{ inputs.checkout-ref }}
+
+      - name: Set matrix with test names
+        id: set-matrix
+        run: |
+          names="$(grep -rh --include='*_test.go' -o -E 'func (Test[A-Za-z0-9_]+)\(t \*testing.T\)' test/e2e | sed 's/func //;s/(t \*testing.T)//' | jq -R . | jq -cs .)"
+          count="$(echo "$names" | jq 'length')"
+          if [ "$count" -eq 0 ]; then
+            echo "::error::No Test* functions discovered under test/e2e — refusing to render an empty matrix"
+            exit 1
+          fi
+          echo "test-names=$names" >> "$GITHUB_OUTPUT"
+
+      - name: Print test names
+        run: |
+          echo "Test names: ${{ steps.set-matrix.outputs.test-names }}"
+
+  # Build image + xpkg + CLI tools once; the matrix consumes them as artifacts.
+  # NOTE: after the 7-day artifact retention window expires (retention-days below),
+  # "Re-run failed jobs" fails — build won't re-run, so the artifacts it
+  # produced are gone. Use "Re-run all jobs" to rebuild them.
+  build:
+    runs-on: ubuntu-latest
+    needs: prepare-matrix
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
           ref: ${{ inputs.checkout-ref }}
           submodules: true
 
       - name: Set up Go
-        uses: actions/setup-go@cdcb36043654635271a94b9a6d1392de5bb323a7 # v5.0.1
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
         with:
-          go-version: '1.23'
+          go-version-file: 'go.mod'
+
+      - name: Fetch CLI tools once (up, kind, kubectl)
+        run: |
+          set -euo pipefail
+          vars="$(make --no-print-directory build.vars | grep -E '^(UP|KIND|KUBECTL)=')"
+          eval "$vars"
+          : "${UP:?}" "${KIND:?}" "${KUBECTL:?}"
+          for attempt in 1 2 3 4 5; do
+            if make "$UP" "$KIND" "$KUBECTL"; then break; fi
+            if [ "$attempt" -eq 5 ]; then
+              echo "::error::failed to fetch CLI tools from upstream CDNs after 5 attempts"
+              exit 1
+            fi
+            echo "tool fetch attempt $attempt failed; backing off $((attempt * 15))s..."
+            sleep "$((attempt * 15))"
+          done
+
+      - name: Build provider image and package once
+        run: make build BUILD_REGISTRY=${{ env.E2E_BUILD_REGISTRY }} PLATFORMS=linux_amd64
+
+      - name: Export provider image
+        run: docker save "${{ env.E2E_PROVIDER_IMAGE }}" -o provider-image.tar
+
+      - name: Upload provider image
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-image
+          path: provider-image.tar
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: error
+
+      - name: Upload provider package (xpkg)
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: provider-xpkg
+          path: _output/xpkg
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: error
+
+      - name: Upload CLI tools
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: e2e-tools
+          path: .cache/tools
+          retention-days: 7
+          overwrite: true
+          if-no-files-found: error
+
+  e2e-test:
+    runs-on: ubuntu-latest
+    needs: [prepare-matrix, build]
+    environment: pr-e2e-no-approval
+    strategy:
+      fail-fast: false
+      matrix:
+        testName: ${{ fromJson(needs.prepare-matrix.outputs.test-names) }}
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ inputs.checkout-ref }}
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Download CLI tools
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: e2e-tools
+          path: .cache/tools
+
+      - name: Restore tool executable bits
+        # upload-artifact drops the +x bit
+        run: find .cache/tools -type f -exec chmod +x {} +
+
+      - name: Download provider package (xpkg)
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: provider-xpkg
+          path: _output/xpkg
+
+      - name: Download provider image
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: provider-image
+          path: ${{ runner.temp }}/artifacts/provider-image
+
+      - name: Validate provider image artifact
+        run: test -f "${{ runner.temp }}/artifacts/provider-image/provider-image.tar"
+
+      - name: Load provider image
+        run: docker load -i "${{ runner.temp }}/artifacts/provider-image/provider-image.tar"
 
       - name: Install Helm
-        run: |
-          curl https://baltocdn.com/helm/signing.asc | sudo gpg --dearmor -o /usr/share/keyrings/helm.gpg
-          sudo apt-get install apt-transport-https --yes
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/helm.gpg] https://baltocdn.com/helm/stable/debian/ all main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
-          sudo apt-get update
-          sudo apt-get install -y helm
+        uses: azure/setup-helm@dda3372f752e03dde6b3237bc9431cdc2f7a02a2 # v5.0.0
+        with:
+          version: v3.14.0
 
       - name: Install gettext for envsubst
         run: sudo apt-get update && sudo apt-get install -y gettext
 
-      - name: Run build and e2e test
-        run: make test-acceptance
+      - name: Deploy prebuilt provider and run e2e test
+        run: make test-acceptance ACCEPTANCE_DEPLOY=local-deploy-prebuilt BUILD_REGISTRY=${{ env.E2E_BUILD_REGISTRY }} testFilter=${{ matrix.testName }}
         env:
           CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
           CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
-          # USER_WHERE_ROLES_GET_ASSIGNED_EMAIL: ${{ secrets.USER_WHERE_ROLES_GET_ASSIGNED_EMAIL }}
-          # TECHNICAL_USER_EMAIL: ${{ secrets.TECHNICAL_USER_EMAIL }}
+
+  cleanup-e2e:
+    runs-on: ubuntu-latest
+    needs: [prepare-matrix, e2e-test]
+    environment: pr-e2e-no-approval
+    if: always() && needs.prepare-matrix.result == 'success' # intentional: workflow cancellation skips cleanup; resources will persist until the next run
+    steps:
+      - name: checkout repo
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          ref: ${{ github.base_ref || github.sha }}
+          submodules: true
+
+      - name: Set up Go
+        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        with:
+          go-version-file: 'go.mod'
+
+      - name: Clean up CF resources
+        run: |
+          go run .github/workflows/cleanup.go
+        env:
+          CF_CREDENTIALS: ${{ secrets.CF_CREDENTIALS }}
+          CF_ENVIRONMENT: ${{ secrets.CF_ENVIRONMENT }}
+
+  e2e-tests:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare-matrix
+      - build
+      - e2e-test
+    timeout-minutes: 1
+    if: always()
+    steps:
+      - name: Fail for failed prepare-matrix job
+        if: |
+          needs.prepare-matrix.result == 'failure' ||
+          needs.prepare-matrix.result == 'cancelled'
+        run: exit 1
+      - name: Fail for failed build job
+        if: |
+          needs.build.result == 'failure' ||
+          needs.build.result == 'cancelled'
+        run: exit 1
+      - name: Fail for failed matrix jobs
+        if: |
+          needs.e2e-test.result == 'failure' ||
+          needs.e2e-test.result == 'cancelled' ||
+          needs.e2e-test.result == 'skipped'
+        run: exit 1

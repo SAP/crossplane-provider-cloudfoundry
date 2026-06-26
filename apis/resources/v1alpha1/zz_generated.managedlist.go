@@ -18,7 +18,7 @@ limitations under the License.
 
 package v1alpha1
 
-import resource "github.com/crossplane/crossplane-runtime/pkg/resource"
+import resource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 
 // GetItems of this AppList.
 func (l *AppList) GetItems() []resource.Managed {
@@ -94,6 +94,15 @@ func (l *ServiceCredentialBindingList) GetItems() []resource.Managed {
 
 // GetItems of this ServiceInstanceList.
 func (l *ServiceInstanceList) GetItems() []resource.Managed {
+	items := make([]resource.Managed, len(l.Items))
+	for i := range l.Items {
+		items[i] = &l.Items[i]
+	}
+	return items
+}
+
+// GetItems of this ServiceRouteBindingList.
+func (l *ServiceRouteBindingList) GetItems() []resource.Managed {
 	items := make([]resource.Managed, len(l.Items))
 	for i := range l.Items {
 		items[i] = &l.Items[i]

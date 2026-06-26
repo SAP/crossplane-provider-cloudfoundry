@@ -4,14 +4,15 @@ import (
 	"context"
 	"testing"
 
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/test"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -29,13 +30,19 @@ type modifier func(*v1alpha1.Organization)
 
 func withExternalName(name string) modifier {
 	return func(r *v1alpha1.Organization) {
-		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
+		r.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
 func withName(name string) modifier {
 	return func(r *v1alpha1.Organization) {
 		r.Spec.ForProvider.Name = name
+	}
+}
+
+func withConditions(c ...xpv1.Condition) modifier {
+	return func(r *v1alpha1.Organization) {
+		r.Status.SetConditions(c...)
 	}
 }
 
@@ -59,6 +66,12 @@ func fakeOrg(m ...modifier) *v1alpha1.Organization {
 	return r
 }
 
+func withDefaultMetadataLabels() modifier {
+	return func(r *v1alpha1.Organization) {
+		r.SetGroupVersionKind(v1alpha1.Org_GroupVersionKind)
+	}
+}
+
 func TestObserve(t *testing.T) {
 	type service func() *fake.MockOrganization
 	type args struct {
@@ -77,37 +90,32 @@ func TestObserve(t *testing.T) {
 		service service
 		kube    k8s.Client
 	}{
-		"Error if cr is not the right kind": {
+		"Nil": {
 			args: args{
 				mg: nil,
 			},
 			want: want{
 				mg:  nil,
-				obs: managed.ExternalObservation{ResourceExists: false},
+				obs: managed.ExternalObservation{},
 				err: errors.New(errNotOrgKind),
 			},
 			service: func() *fake.MockOrganization {
-				m := &fake.MockOrganization{}
-				return m
+				return &fake.MockOrganization{}
 			},
 		},
-		// This tests whether the external API is reachable
-		"Error when external API is not working": {
+		"Boom!": {
 			args: args{
-				mg: fakeOrg(withExternalName(guid)),
+				mg: fakeOrg(withExternalName(guid), withName(name)),
 			},
 			want: want{
-				mg:  fakeOrg(withExternalName(guid)),
+				mg:  fakeOrg(withExternalName(guid), withName(name)),
 				obs: managed.ExternalObservation{},
 				err: errors.Wrap(errBoom, errGetResource),
 			},
 			service: func() *fake.MockOrganization {
 				m := &fake.MockOrganization{}
+				// GetOrgByGUID calls Get, which returns error
 				m.On("Get", guid).Return(
-					fake.OrganizationNil,
-					errBoom,
-				)
-				m.On("Single").Return(
 					fake.OrganizationNil,
 					errBoom,
 				)
@@ -142,22 +150,13 @@ func TestObserve(t *testing.T) {
 				mg: fakeOrg(withName(name), withExternalName("not-a-uuid")),
 			},
 			want: want{
-				mg: fakeOrg(withName(name), withExternalName(guid)),
-				obs: managed.ExternalObservation{
-					ResourceExists: false,
-				},
-				err: nil,
+				mg:  fakeOrg(withName(name), withExternalName("not-a-uuid")),
+				obs: managed.ExternalObservation{},
+				err: errors.New("external-name 'not-a-uuid' is not a valid GUID format"),
 			},
 			service: func() *fake.MockOrganization {
 				m := &fake.MockOrganization{}
-				m.On("Get", "").Return( // this should be called
-					fake.OrganizationNil,
-					errBoom,
-				)
-				m.On("Single").Return(
-					fake.OrganizationNil,
-					fake.ErrNoResultReturned,
-				)
+				// No mock calls needed: GUID validation fails before any API call
 				return m
 			},
 		},
@@ -166,6 +165,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeOrg(
 					withExternalName(guid),
 					withName(name),
+					withDefaultMetadataLabels(),
 				),
 			},
 			want: want{
@@ -180,11 +180,11 @@ func TestObserve(t *testing.T) {
 				m := &fake.MockOrganization{}
 
 				m.On("Get", guid).Return(
-					&fake.NewOrganization().SetName(name).SetGUID(guid).Organization,
+					&fake.NewOrganization().SetName(name).SetGUID(guid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-org")}).Organization,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewOrganization().SetName(name).SetGUID(guid).Organization,
+					&fake.NewOrganization().SetName(name).SetGUID(guid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-org")}).Organization,
 					nil,
 				)
 				return m
@@ -221,10 +221,76 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful when guid is not provided and org with name is found ": {
 			args: args{
+				mg: fakeOrg(withName(name), withDefaultMetadataLabels()),
+			},
+			want: want{
+				mg: fakeOrg(withName(name), withExternalName(guid), withDefaultMetadataLabels()),
+				obs: managed.ExternalObservation{
+					ResourceExists:          true,
+					ResourceUpToDate:        true,
+					ResourceLateInitialized: true,
+				},
+				err: nil,
+			},
+			service: func() *fake.MockOrganization {
+				m := &fake.MockOrganization{}
+				// FindOrgBySpec calls Single to find by name
+				m.On("Single").Return(
+					&fake.NewOrganization().SetName(name).SetGUID(guid).Organization,
+					nil,
+				).Once()
+				// GetOrgByGUID calls Get with the discovered GUID
+				m.On("Get", guid).Return(
+					&fake.NewOrganization().SetName(name).SetGUID(guid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-org")}).Organization,
+					nil,
+				)
+				return m
+			},
+		},
+		"UnsetExternalNameNotFound": {
+			args: args{
 				mg: fakeOrg(withName(name)),
 			},
 			want: want{
-				mg: fakeOrg(withName(name), withExternalName(guid)),
+				mg:  fakeOrg(withName(name)),
+				obs: managed.ExternalObservation{ResourceExists: false},
+				err: nil,
+			},
+			service: func() *fake.MockOrganization {
+				m := &fake.MockOrganization{}
+				// FindOrgBySpec calls Single, not-found returns nil, nil
+				m.On("Single").Return(
+					fake.OrganizationNil,
+					nil,
+				)
+				return m
+			},
+		},
+		"UnsetExternalNameError": {
+			args: args{
+				mg: fakeOrg(withName(name)),
+			},
+			want: want{
+				mg:  fakeOrg(withName(name)),
+				obs: managed.ExternalObservation{},
+				err: errors.Wrap(errBoom, errGetResource),
+			},
+			service: func() *fake.MockOrganization {
+				m := &fake.MockOrganization{}
+				// FindOrgBySpec calls Single, which returns error
+				m.On("Single").Return(
+					fake.OrganizationNil,
+					errBoom,
+				)
+				return m
+			},
+		},
+		"SetExternalNameSuccessful": {
+			args: args{
+				mg: fakeOrg(withExternalName(guid), withName(name), withDefaultMetadataLabels()),
+			},
+			want: want{
+				mg: fakeOrg(withExternalName(guid), withName(name)),
 				obs: managed.ExternalObservation{
 					ResourceExists:   true,
 					ResourceUpToDate: true,
@@ -233,15 +299,43 @@ func TestObserve(t *testing.T) {
 			},
 			service: func() *fake.MockOrganization {
 				m := &fake.MockOrganization{}
-				m.On("Get", "").Return(
-					fake.OrganizationNil,
-					fake.ErrNoResultReturned,
-				)
-				m.On("Single").Return(
-					&fake.NewOrganization().SetName(name).SetGUID(guid).Organization,
+				// GetOrgByGUID calls Get with the GUID
+				m.On("Get", guid).Return(
+					&fake.NewOrganization().SetName(name).SetGUID(guid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-org")}).Organization,
 					nil,
 				)
 				return m
+			},
+		},
+		"SetExternalNameNotFound": {
+			args: args{
+				mg: fakeOrg(withExternalName(guid)),
+			},
+			want: want{
+				mg:  fakeOrg(withExternalName(guid)),
+				obs: managed.ExternalObservation{ResourceExists: false},
+				err: nil,
+			},
+			service: func() *fake.MockOrganization {
+				m := &fake.MockOrganization{}
+				m.On("Get", guid).Return(
+					fake.OrganizationNil,
+					fake.ErrNoResultReturned,
+				)
+				return m
+			},
+		},
+		"SetExternalNameInvalidFormat": {
+			args: args{
+				mg: fakeOrg(withName(name), withExternalName("not-valid")),
+			},
+			want: want{
+				mg:  fakeOrg(withName(name), withExternalName("not-valid")),
+				obs: managed.ExternalObservation{},
+				err: errors.New("external-name 'not-valid' is not a valid GUID format"),
+			},
+			service: func() *fake.MockOrganization {
+				return &fake.MockOrganization{}
 			},
 		},
 	}
@@ -275,8 +369,10 @@ func TestObserve(t *testing.T) {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
 			}
 			if org != nil && tc.want.mg != nil {
-
 				if diff := cmp.Diff(org.Spec, tc.want.mg.Spec); diff != "" {
+					t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				}
+				if diff := cmp.Diff(org.Annotations, tc.want.mg.Annotations); diff != "" {
 					t.Errorf("Observe(...): -want, +got:\n%s", diff)
 				}
 			}
@@ -364,18 +460,138 @@ func TestCreate(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Create(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Create(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Create(...): -want, +got:\n%s", diff)
 			}
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Create(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestDelete(t *testing.T) {
+	type service func() *fake.MockOrganization
+	type args struct {
+		mg resource.Managed
+	}
+
+	type want struct {
+		mg  resource.Managed
+		del managed.ExternalDelete
+		err error
+	}
+
+	cases := map[string]struct {
+		args    args
+		want    want
+		service service
+	}{
+		"SuccessfulDelete": {
+			args: args{
+				mg: fakeOrg(withExternalName(guid)),
+			},
+			want: want{
+				mg:  fakeOrg(withExternalName(guid), withConditions(xpv1.Deleting())),
+				del: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockOrganization {
+				m := &fake.MockOrganization{}
+				m.On("Delete").Return(
+					"job-guid-123",
+					nil,
+				)
+				return m
+			},
+		},
+		"NotFound": {
+			args: args{
+				mg: fakeOrg(withExternalName(guid)),
+			},
+			want: want{
+				mg:  fakeOrg(withExternalName(guid), withConditions(xpv1.Deleting())),
+				del: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockOrganization {
+				m := &fake.MockOrganization{}
+				m.On("Delete").Return(
+					"",
+					fake.ErrNoResultReturned,
+				)
+				return m
+			},
+		},
+		"Error": {
+			args: args{
+				mg: fakeOrg(withExternalName(guid)),
+			},
+			want: want{
+				mg:  fakeOrg(withExternalName(guid), withConditions(xpv1.Deleting())),
+				del: managed.ExternalDelete{},
+				err: errors.Wrap(errBoom, errDelete),
+			},
+			service: func() *fake.MockOrganization {
+				m := &fake.MockOrganization{}
+				m.On("Delete").Return(
+					"",
+					errBoom,
+				)
+				return m
+			},
+		},
+		"EmptyExternalName": {
+			args: args{
+				mg: fakeOrg(withName(name)),
+			},
+			want: want{
+				del: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockOrganization {
+				return &fake.MockOrganization{}
+			},
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			mockJob := &fake.MockJob{}
+			mockJob.On("PollComplete").Return(nil)
+
+			c := &external{
+				kube: &test.MockClient{
+					MockUpdate: test.NewMockUpdateFn(nil),
+				},
+				client: tc.service(),
+				job:    mockJob,
+			}
+			del, err := c.Delete(context.Background(), tc.args.mg)
+
+			if tc.want.err != nil && err != nil {
+				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
+					t.Errorf("Delete(...): want error string != got error string:\n%s", diff)
+				}
+			} else {
+				if diff := cmp.Diff(tc.want.err, err); diff != "" {
+					t.Errorf("Delete(...): want error != got error:\n%s", diff)
+				}
+			}
+			if diff := cmp.Diff(tc.want.del, del); diff != "" {
+				t.Errorf("Delete(...): -want, +got:\n%s", diff)
+			}
+			if tc.args.mg != nil && tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+					t.Errorf("Delete(...): -want, +got:\n%s", diff)
+				}
 			}
 		})
 	}

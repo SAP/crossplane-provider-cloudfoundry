@@ -5,14 +5,14 @@ metadata:
   name: e2e-app
 spec:
   forProvider:
-    name: e2e-app
+    name: e2e-app-$BUILD_ID
     spaceRef:
       name: app-space
       policy:
         resolve: Always
     lifecycle: docker
     docker:
-      image: loud/hello_co:latest
+      image: ghcr.io/nginxinc/nginx-unprivileged:latest
     processes:
       - type: web
         health-check-type: http
@@ -22,6 +22,11 @@ spec:
           name: app-route-domainref
           policy:
             resolve: Always
+    labels:
+      environment: test
+      team: platform
+    annotations:
+      description: E2E test app
 
 ---
 apiVersion: cloudfoundry.crossplane.io/v1alpha1
@@ -31,14 +36,14 @@ metadata:
   name: e2e-app-2
 spec:
   forProvider:
-    name: e2e-app-2
+    name: e2e-app-2-$BUILD_ID
     spaceRef:
       name: app-space
       policy:
         resolve: Always
     lifecycle: docker
     docker:
-      image: loud/hello_co:latest
+      image: ghcr.io/nginxinc/nginx-unprivileged:latest
     processes:
       - type: web
         health-check-type: http
@@ -48,3 +53,8 @@ spec:
           name: app-route-domainname
           policy:
             resolve: Always
+    labels:
+      environment: test
+      team: platform
+    annotations:
+      description: E2E test app 2

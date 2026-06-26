@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.14.0
+    controller-gen.kubebuilder.io/version: v0.20.0
   name: spaces.cloudfoundry.crossplane.io
 spec:
   group: cloudfoundry.crossplane.io
@@ -34,8 +34,15 @@ spec:
     name: v1alpha1
     schema:
       openAPIV3Schema:
-        description: Space is the Schema for the Spaces API. Provides a Cloud Foundry
-          resource for managing Cloud Foundry spaces within organizations.
+        description: |-
+          Space is the Schema for the Spaces API. Provides a Cloud Foundry resource for managing Cloud Foundry spaces within organizations.
+
+          External-Name Configuration:
+            - Follows Standard: yes
+            - Format: Space GUID (UUID format)
+            - How to find:
+            - UI: Global Account → Account Explorer → Subaccounts → Select Subaccount → Spaces → Select Space → View URL: `https://<cockpit_url>/cockpit#/globalaccount/<global_account_id>/subaccount/<subaccount_id>/org/<org_id>/space/<SPACE_ID>/applications`
+            - CLI: Use CF CLI: `cf space <SPACE> --guid`
         properties:
           apiVersion:
             description: |-
@@ -81,8 +88,8 @@ spec:
                   annotations:
                     additionalProperties:
                       type: string
-                    description: (Map of String) The annotations associated with Cloud
-                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The annotations associated with the
+                      resource. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   isolationSegment:
@@ -93,8 +100,8 @@ spec:
                   labels:
                     additionalProperties:
                       type: string
-                    description: (Map of String) The labels associated with Cloud
-                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The labels associated with the resource.
+                      Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   name:
@@ -250,93 +257,12 @@ spec:
                 required:
                 - name
                 type: object
-              publishConnectionDetailsTo:
-                description: |-
-                  PublishConnectionDetailsTo specifies the connection secret config which
-                  contains a name, metadata and a reference to secret store config to
-                  which any connection details for this managed resource should be written.
-                  Connection details frequently include the endpoint, username,
-                  and password required to connect to the managed resource.
-                properties:
-                  configRef:
-                    default:
-                      name: default
-                    description: |-
-                      SecretStoreConfigRef specifies which secret store config should be used
-                      for this ConnectionSecret.
-                    properties:
-                      name:
-                        description: Name of the referenced object.
-                        type: string
-                      policy:
-                        description: Policies for referencing.
-                        properties:
-                          resolution:
-                            default: Required
-                            description: |-
-                              Resolution specifies whether resolution of this reference is required.
-                              The default is 'Required', which means the reconcile will fail if the
-                              reference cannot be resolved. 'Optional' means this reference will be
-                              a no-op if it cannot be resolved.
-                            enum:
-                            - Required
-                            - Optional
-                            type: string
-                          resolve:
-                            description: |-
-                              Resolve specifies when this reference should be resolved. The default
-                              is 'IfNotPresent', which will attempt to resolve the reference only when
-                              the corresponding field is not present. Use 'Always' to resolve the
-                              reference on every reconcile.
-                            enum:
-                            - Always
-                            - IfNotPresent
-                            type: string
-                        type: object
-                    required:
-                    - name
-                    type: object
-                  metadata:
-                    description: Metadata is the metadata for connection secret.
-                    properties:
-                      annotations:
-                        additionalProperties:
-                          type: string
-                        description: |-
-                          Annotations are the annotations to be added to connection secret.
-                          - For Kubernetes secrets, this will be used as "metadata.annotations".
-                          - It is up to Secret Store implementation for others store types.
-                        type: object
-                      labels:
-                        additionalProperties:
-                          type: string
-                        description: |-
-                          Labels are the labels/tags to be added to connection secret.
-                          - For Kubernetes secrets, this will be used as "metadata.labels".
-                          - It is up to Secret Store implementation for others store types.
-                        type: object
-                      type:
-                        description: |-
-                          Type is the SecretType for the connection secret.
-                          - Only valid for Kubernetes Secret Stores.
-                        type: string
-                    type: object
-                  name:
-                    description: Name is the name of the connection secret.
-                    type: string
-                required:
-                - name
-                type: object
               writeConnectionSecretToRef:
                 description: |-
                   WriteConnectionSecretToReference specifies the namespace and name of a
                   Secret to which any connection details for this managed resource should
                   be written. Connection details frequently include the endpoint, username,
                   and password required to connect to the managed resource.
-                  This field is planned to be replaced in a future release in favor of
-                  PublishConnectionDetailsTo. Currently, both could be set independently
-                  and connection details would be published to both without affecting
-                  each other.
                 properties:
                   name:
                     description: Name of the secret.
@@ -363,8 +289,8 @@ spec:
                   annotations:
                     additionalProperties:
                       type: string
-                    description: (Map of String) The annotations associated with Cloud
-                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The annotations associated with the
+                      resource. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   createdAt:
@@ -382,8 +308,8 @@ spec:
                   labels:
                     additionalProperties:
                       type: string
-                    description: (Map of String) The labels associated with Cloud
-                      Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+                    description: (Map of String) The labels associated with the resource.
+                      Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
                   name:
@@ -459,6 +385,13 @@ spec:
         required:
         - spec
         type: object
+        x-kubernetes-validations:
+        - message: name is required
+          rule: self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.name)
+        - message: 'OrgReference is required: exactly one of orgName, orgRef, or orgSelector
+            must be set'
+          rule: self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.orgName)
+            || has(self.spec.forProvider.orgRef) || has(self.spec.forProvider.orgSelector))
     served: true
     storage: true
     subresources:

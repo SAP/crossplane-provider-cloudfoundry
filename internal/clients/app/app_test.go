@@ -1,0 +1,394 @@
+package app
+
+import (
+	"testing"
+
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+)
+
+func TestDetectChanges(t *testing.T) {
+	tests := []struct {
+		name           string
+		spec           v1alpha1.AppParameters
+		status         v1alpha1.AppObservation
+		expectedFields []string
+	}{
+		{
+			name: "No changes",
+			spec: v1alpha1.AppParameters{
+				Name:      "test-app",
+				Lifecycle: "docker",
+				Docker: &v1alpha1.DockerConfiguration{
+					Image: "nginx:latest",
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+			},
+			expectedFields: []string{},
+		},
+		{
+			name: "Docker image changed",
+			spec: v1alpha1.AppParameters{
+				Name:      "test-app",
+				Lifecycle: "docker",
+				Docker: &v1alpha1.DockerConfiguration{
+					Image: "nginx:1.21",
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+			},
+			expectedFields: []string{"docker_image"},
+		},
+		{
+			name: "Name changed",
+			spec: v1alpha1.AppParameters{
+				Name:      "new-app-name",
+				Lifecycle: "docker",
+				Docker: &v1alpha1.DockerConfiguration{
+					Image: "nginx:latest",
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+			},
+			expectedFields: []string{"name"},
+		},
+		{
+			name: "Both Docker image and name changed",
+			spec: v1alpha1.AppParameters{
+				Name:      "new-app-name",
+				Lifecycle: "docker",
+				Docker: &v1alpha1.DockerConfiguration{
+					Image: "nginx:1.21",
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+			},
+			expectedFields: []string{"docker_image", "name"},
+		},
+		{
+			name: "Non-docker app name change",
+			spec: v1alpha1.AppParameters{
+				Name:      "new-app-name",
+				Lifecycle: "buildpack",
+			},
+			status: v1alpha1.AppObservation{
+				Name: "test-app",
+			},
+			expectedFields: []string{"name"},
+		},
+		{
+			name: "Env vars set in spec, same in CF - no drift",
+			spec: v1alpha1.AppParameters{
+				Name:        "test-app",
+				Environment: map[string]string{"FOO": "bar"},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  env:\n    FOO: bar",
+			},
+			expectedFields: []string{},
+		},
+		{
+			name: "Env vars set in spec, different in CF - drift detected",
+			spec: v1alpha1.AppParameters{
+				Name:        "test-app",
+				Environment: map[string]string{"FOO": "newvalue"},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  env:\n    FOO: bar",
+			},
+			expectedFields: []string{"environment"},
+		},
+		{
+			name: "Env vars set in spec, none in CF - drift detected",
+			spec: v1alpha1.AppParameters{
+				Name:        "test-app",
+				Environment: map[string]string{"FOO": "bar"},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app",
+			},
+			expectedFields: []string{"environment"},
+		},
+		{
+			name: "Env vars removed from spec, CF still has them - drift detected",
+			spec: v1alpha1.AppParameters{
+				Name: "test-app",
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  env:\n    FOO: bar",
+			},
+			expectedFields: []string{"environment"},
+		},
+		{
+			name: "Env vars nil in spec, none in CF - no drift",
+			spec: v1alpha1.AppParameters{
+				Name: "test-app",
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app",
+			},
+			expectedFields: []string{},
+		},
+		{
+			name: "Label drift",
+			spec: v1alpha1.AppParameters{
+				Name: "test-app",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name: "test-app",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("dev")},
+				},
+			},
+			expectedFields: []string{"metadata"},
+		},
+		{
+			name: "Annotation drift",
+			spec: v1alpha1.AppParameters{
+				Name: "test-app",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("expected")},
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name: "test-app",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("actual")},
+				},
+			},
+			expectedFields: []string{"metadata"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := DetectChanges(nil, tt.spec, tt.status)
+			if err != nil {
+				t.Fatalf("DetectChanges() error = %v", err)
+			}
+			if len(result.ChangedFields) != len(tt.expectedFields) {
+				t.Errorf("DetectChanges().ChangedFields length = %v, want %v", len(result.ChangedFields), len(tt.expectedFields))
+			}
+
+			// Check if all expected fields are present in the map
+			for _, field := range tt.expectedFields {
+				if !result.HasField(field) {
+					t.Errorf("DetectChanges().ChangedFields missing expected field: %v", field)
+				}
+			}
+
+			// Test helper methods
+			if len(tt.expectedFields) == 0 {
+				if result.HasChanges() {
+					t.Errorf("DetectChanges().HasChanges() = true, want false")
+				}
+			} else {
+				if !result.HasChanges() {
+					t.Errorf("DetectChanges().HasChanges() = false, want true")
+				}
+				// Test HasField for each expected field
+				for _, field := range tt.expectedFields {
+					if !result.HasField(field) {
+						t.Errorf("DetectChanges().HasField(%s) = false, want true", field)
+					}
+				}
+			}
+		})
+	}
+}
+
+func TestDetectChanges_DefaultMetadataDrift(t *testing.T) {
+	mg := &v1alpha1.App{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       v1alpha1.App_Kind,
+			APIVersion: v1alpha1.CRDGroupVersion.String(),
+		},
+		ObjectMeta: metav1.ObjectMeta{Name: "test-app"},
+	}
+
+	changes, err := DetectChanges(mg, v1alpha1.AppParameters{Name: "test-app"}, v1alpha1.AppObservation{Name: "test-app"})
+	if err != nil {
+		t.Fatalf("DetectChanges() error = %v", err)
+	}
+	if !changes.HasField("metadata") {
+		t.Fatal("DetectChanges() did not report metadata drift for missing default labels")
+	}
+}
+
+func TestIsUpToDate(t *testing.T) {
+	tests := []struct {
+		name     string
+		spec     v1alpha1.AppParameters
+		status   v1alpha1.AppObservation
+		expected bool
+	}{
+		{
+			name: "Up to date",
+			spec: v1alpha1.AppParameters{
+				Name:      "test-app",
+				Lifecycle: "docker",
+				Docker: &v1alpha1.DockerConfiguration{
+					Image: "nginx:latest",
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+			},
+			expected: true,
+		},
+		{
+			name: "Not up to date - Docker image changed",
+			spec: v1alpha1.AppParameters{
+				Name:      "test-app",
+				Lifecycle: "docker",
+				Docker: &v1alpha1.DockerConfiguration{
+					Image: "nginx:1.21",
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+			},
+			expected: false,
+		},
+		{
+			name: "Not up to date - Name changed",
+			spec: v1alpha1.AppParameters{
+				Name:      "new-app-name",
+				Lifecycle: "docker",
+				Docker: &v1alpha1.DockerConfiguration{
+					Image: "nginx:latest",
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+			},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := IsUpToDate(nil, tt.spec, tt.status)
+			if err != nil {
+				t.Fatalf("IsUpToDate() error = %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("IsUpToDate() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestIsUpToDate_Metadata(t *testing.T) {
+	tests := []struct {
+		name     string
+		spec     v1alpha1.AppParameters
+		status   v1alpha1.AppObservation
+		expected bool
+	}{
+		{
+			name: "Label drift - spec has labels but observation does not",
+			spec: v1alpha1.AppParameters{
+				Name:      "test-app",
+				Lifecycle: "docker",
+				Docker:    &v1alpha1.DockerConfiguration{Image: "nginx:latest"},
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+			},
+			expected: false,
+		},
+		{
+			name: "Labels match",
+			spec: v1alpha1.AppParameters{
+				Name:      "test-app",
+				Lifecycle: "docker",
+				Docker:    &v1alpha1.DockerConfiguration{Image: "nginx:latest"},
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Labels: map[string]*string{"env": ptr.To("prod")},
+				},
+			},
+			expected: true,
+		},
+		{
+			name: "Annotation drift - spec has annotations but observation does not",
+			spec: v1alpha1.AppParameters{
+				Name:      "test-app",
+				Lifecycle: "docker",
+				Docker:    &v1alpha1.DockerConfiguration{Image: "nginx:latest"},
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+			},
+			expected: false,
+		},
+		{
+			name: "Annotations match",
+			spec: v1alpha1.AppParameters{
+				Name:      "test-app",
+				Lifecycle: "docker",
+				Docker:    &v1alpha1.DockerConfiguration{Image: "nginx:latest"},
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			status: v1alpha1.AppObservation{
+				Name:        "test-app",
+				AppManifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest",
+				ResourceMetadata: v1alpha1.ResourceMetadata{
+					Annotations: map[string]*string{"note": ptr.To("value")},
+				},
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := IsUpToDate(nil, tt.spec, tt.status)
+			if err != nil {
+				t.Fatalf("IsUpToDate() error = %v", err)
+			}
+			if result != tt.expected {
+				t.Errorf("IsUpToDate() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}

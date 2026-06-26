@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 )
 
 type SpaceRoleObservation struct {
@@ -41,8 +41,8 @@ type SpaceRoleParameters struct {
 	SpaceReference `json:",inline"`
 
 	// (String) The space role type; see [Valid role types](https://v3-apidocs.cloudfoundry.org/version/3.154.0/index.html#valid-role-types).
-	// +kubebuilder:validation:Required
 	// +kubebuilder:validation:Enum=Developer;Auditor;Manager;Supporter;Developers;Auditors;Managers;Supporters
+	// +kubebuilder:validation:Optional
 	Type string `json:"type,omitempty" tf:"type,omitempty"`
 
 	// (String) The identity provider for the UAA user.
@@ -50,7 +50,7 @@ type SpaceRoleParameters struct {
 	Origin *string `json:"origin,omitempty" tf:"origin,omitempty"`
 
 	// (String) The username of the Cloud Foundry user to assign the role to.
-	// +kubebuilder:validation:Required
+	// +kubebuilder:validation:Optional
 	Username string `json:"username,omitempty" tf:"username,omitempty"`
 }
 
@@ -71,11 +71,22 @@ type SpaceRoleStatus struct {
 // +kubebuilder:storageversion
 
 // SpaceRole is the Schema for the OrgRoles API. Provides a Cloud Foundry resource for assigning org roles.(Updating a role is not supported according to the docs)
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: Space Role GUID (UUID format)
+//   - How to find:
+//   - UI: Not available in the BTP Cockpit
+//   - CLI: Use CF CLI: `cf space-users <ORG> <SPACE> -v` and find the GUID in the output
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.type)",message="type is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.username)",message="username is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName) || has(self.spec.forProvider.spaceRef) || has(self.spec.forProvider.spaceSelector))",message="SpaceReference is required: exactly one of spaceName, spaceRef, or spaceSelector must be set"
 type SpaceRole struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

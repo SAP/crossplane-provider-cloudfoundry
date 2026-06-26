@@ -2,18 +2,23 @@ package serviceinstance
 
 import (
 	"context"
+	"net/url"
 	"testing"
+	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/crossplane/crossplane-runtime/pkg/test"
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -27,13 +32,14 @@ var (
 	guid            = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 	servicePlan     = "c595293f-2696-438d-887e-053200ec47c8"
 	jsonCredentials = `{"json":"bar"}`
+	sharedSpaceGUID = "2514e716-ebd0-4cea-ba35-84ce6631c63e"
 )
 
 type modifier func(*v1alpha1.ServiceInstance)
 
 func withExternalName(name string) modifier {
 	return func(r *v1alpha1.ServiceInstance) {
-		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
+		r.Annotations[meta.AnnotationKeyExternalName] = name
 	}
 }
 
@@ -82,6 +88,31 @@ func withDriftDetection(d bool) modifier {
 	}
 }
 
+func withDeletionTimestamp() modifier {
+	ts := metav1.NewTime(time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC))
+	return func(r *v1alpha1.ServiceInstance) {
+		r.DeletionTimestamp = &ts
+	}
+}
+
+func withSharedSpaces(guids ...string) modifier {
+	return func(r *v1alpha1.ServiceInstance) {
+		refs := make([]v1alpha1.SpaceReference, 0, len(guids))
+		for i := range guids {
+			refs = append(refs, v1alpha1.SpaceReference{Space: &guids[i]})
+		}
+		r.Spec.ForProvider.SharedSpaces = refs
+	}
+}
+
+func sharedSpaceRelationships(guids ...string) *cfresource.ServiceInstanceSharedSpaceRelationships {
+	rels := make([]cfresource.Relationship, 0, len(guids))
+	for _, g := range guids {
+		rels = append(rels, cfresource.Relationship{GUID: g})
+	}
+	return &cfresource.ServiceInstanceSharedSpaceRelationships{Data: rels}
+}
+
 func serviceInstance(typ string, m ...modifier) *v1alpha1.ServiceInstance {
 	r := &v1alpha1.ServiceInstance{
 		ObjectMeta: metav1.ObjectMeta{
@@ -101,6 +132,12 @@ func serviceInstance(typ string, m ...modifier) *v1alpha1.ServiceInstance {
 		rm(r)
 	}
 	return r
+}
+
+func withDefaultMetadataLabels() modifier {
+	return func(r *v1alpha1.ServiceInstance) {
+		r.SetGroupVersionKind(v1alpha1.ServiceInstance_GroupVersionKind)
+	}
 }
 
 func TestObserve(t *testing.T) {
@@ -159,7 +196,7 @@ func TestObserve(t *testing.T) {
 				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withExternalName(guid)),
+				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 				obs: managed.ExternalObservation{},
 				err: errors.Wrap(errBoom, errGet),
 			},
@@ -181,7 +218,7 @@ func TestObserve(t *testing.T) {
 				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withExternalName(guid)),
+				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 				obs: managed.ExternalObservation{ResourceExists: false},
 				err: nil,
 			},
@@ -200,39 +237,41 @@ func TestObserve(t *testing.T) {
 			kube: &test.MockClient{},
 		},
 
-		"NotFound - fallback on Single when NO valid GUID is recorded in CR": {
+		"Invalid GUID external-name returns error": {
 			args: args{
 				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withExternalName(guid)),
-				obs: managed.ExternalObservation{ResourceExists: false},
-				err: nil,
+				mg:  serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				obs: managed.ExternalObservation{},
+				err: errors.Errorf("external-name '%s' is not a valid GUID format", "not-guid"),
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("Get", "not-guid").Return(
-					fake.ServiceInstanceNil,
-					errBoom,
-				)
-				m.On("Single").Return(
-					fake.ServiceInstanceNil,
-					fake.ErrNoResultReturned,
-				)
 				return m
 			},
-			kube: &test.MockClient{},
 		},
 		"Successful - Get by GUID": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+						ResourceMetadata: v1alpha1.ResourceMetadata{
+							Labels: map[string]*string{
+								"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+								"crossplane-name": ptr.To("my-service-instance"),
+							},
+						},
+					}),
 					withConditions(xpv1.Available()),
+					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -240,7 +279,10 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-service-instance"),
+					}).ServiceInstance,
 					nil,
 				)
 				m.On("Single").Return(
@@ -250,40 +292,80 @@ func TestObserve(t *testing.T) {
 				m.On("GetManagedParameters", guid).Return(
 					fake.JSONRawMessage(""),
 					nil, // no error
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
 				)
 				return m
 			},
 		},
 		"Successful - adopt by forProvider spec": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+						ResourceMetadata: v1alpha1.ResourceMetadata{
+							Labels: map[string]*string{
+								"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+								"crossplane-name": ptr.To("my-service-instance"),
+							},
+						}}),
 					withConditions(xpv1.Available()),
+					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("Get", "not-guid").Return(
-					fake.ServiceInstanceNil,
-					fake.ErrNoResultReturned,
-				)
 				m.On("Single").Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-service-instance"),
+					}).ServiceInstance,
 					nil,
 				)
 				m.On("GetManagedParameters", guid).Return(
 					fake.JSONRawMessage(""),
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
+				)
 				return m
 			},
+		},
+		"Adopt by spec but CR update fails": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+				),
+				obs: managed.ExternalObservation{},
+				err: errors.Wrap(errBoom, errUpdateCR),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				return m
+			},
+			kube: &test.MockClient{MockUpdate: test.NewMockUpdateFn(errBoom)},
 		},
 		"CreateFailed": {
 			args: args{
@@ -292,9 +374,13 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
-					withConditions(xpv1.Available()),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed, Description: "create failed"},
+					}),
+					withConditions(xpv1.Unavailable().WithMessage("create failed")),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
 				err: nil,
@@ -323,9 +409,13 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
-					withConditions(xpv1.Available()),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationUpdate, State: v1alpha1.LastOperationFailed, Description: "update failed"},
+					}),
+					withConditions(xpv1.Unavailable().WithMessage("update failed")),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
@@ -354,9 +444,13 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
-					withConditions(xpv1.Unavailable()),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationInProgress, Description: "create in progress"},
+					}),
+					withConditions(xpv1.Unavailable().WithMessage("create in progress")),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -378,6 +472,49 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
+		"DeletionFastPath_Exists": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDeletionTimestamp(), // triggers meta.WasDeleted short-circuit
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDeletionTimestamp(),
+					// Status updated by UpdateObservation before early return
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed, Description: "create failed"},
+					}),
+				),
+				// Early return only sets ResourceExists: true
+				obs: managed.ExternalObservation{ResourceExists: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					// LastOperationFailed + Create would have produced ResourceExists:false in the normal path,
+					// proving we exited early.
+					&fake.NewServiceInstance("managed").
+						SetName(name).
+						SetGUID(guid).
+						SetServicePlan(servicePlan).
+						SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationFailed).
+						ServiceInstance,
+					nil,
+				)
+				// Fallback shouldn't be called, keep safe default.
+				m.On("Single").Return(fake.ServiceInstanceNil, fake.ErrNoResultReturned)
+				return m
+			},
+		},
 		"DriftDetectionLoop": {
 			args: args{
 				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(true)),
@@ -385,8 +522,13 @@ func TestObserve(t *testing.T) {
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						Credentials:   iSha256(*fake.JSONRawMessage("{\"foo\":\"bar\"}")),
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+					}),
 					withConditions(xpv1.Available()),
 					withParameters("{\"foo\":\"bar\", \"baz\": 1}"),
 					withDriftDetection(true),
@@ -408,21 +550,37 @@ func TestObserve(t *testing.T) {
 					fake.JSONRawMessage("{\"foo\":\"bar\"}"),
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
+				)
 				return m
 			},
 		},
 		"DriftDetectionBreak": {
 			args: args{
-				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(false)),
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withParameters("{\"foo\":\"bar\", \"baz\": 1}"), withDriftDetection(false), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte("{\"foo\":\"bar\", \"baz\": 1}"))}), withDefaultMetadataLabels()),
 			},
 			want: want{
 				mg: serviceInstance("managed",
 					withExternalName(guid),
+					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
-					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, ServicePlan: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						Credentials:   iSha256([]byte("{\"foo\":\"bar\", \"baz\": 1}")),
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+						ResourceMetadata: v1alpha1.ResourceMetadata{
+							Labels: map[string]*string{
+								"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+								"crossplane-name": ptr.To("my-service-instance"),
+							},
+						},
+					}),
 					withConditions(xpv1.Available()),
 					withParameters("{\"foo\":\"bar\", \"baz\": 1}"),
 					withDriftDetection(false),
+					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -430,7 +588,10 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Get", guid).Return(
-					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-service-instance"),
+					}).ServiceInstance,
 					nil,
 				)
 				m.On("Single").Return(
@@ -441,17 +602,261 @@ func TestObserve(t *testing.T) {
 					fake.JSONRawMessage("{\"foo\":\"bar\"}"),
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
+				)
 				return m
 			},
-		}}
+		},
+		"UserProvidedService_EmptyLastOperation": {
+			args: args{
+				mg: serviceInstance("user-provided", withExternalName(guid), withSpace(spaceGUID), withCredentials(&jsonCredentials), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte(jsonCredentials))}), withDefaultMetadataLabels()),
+			},
+			want: want{
+				mg: serviceInstance("user-provided",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withCredentials(&jsonCredentials),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID:          &guid,
+						Credentials: iSha256([]byte(jsonCredentials)),
+						ResourceMetadata: v1alpha1.ResourceMetadata{
+							Labels: map[string]*string{
+								"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+								"crossplane-name": ptr.To("my-service-instance"),
+							},
+						},
+					}),
+					withConditions(xpv1.Available()),
+					withDefaultMetadataLabels(),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				// User-provided services have empty LastOperation
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("user-provided").SetName(name).SetGUID(guid).SetLastOperation("", "").SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-service-instance"),
+					}).ServiceInstance,
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("user-provided").SetName(name).SetGUID(guid).SetLastOperation("", "").ServiceInstance,
+					nil,
+				)
+				m.On("GetUserProvidedCredentials", guid).Return(
+					fake.JSONRawMessage(jsonCredentials),
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
+				)
+				return m
+			},
+		},
+		"SharedSpacesUpToDate": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+					withDefaultMetadataLabels(),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+						ResourceMetadata: v1alpha1.ResourceMetadata{
+							Labels: map[string]*string{
+								"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+								"crossplane-name": ptr.To("my-service-instance"),
+							},
+						},
+					}),
+					withConditions(xpv1.Available()),
+					withDefaultMetadataLabels(),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).SetLabels(map[string]*string{
+						"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+						"crossplane-name": ptr.To("my-service-instance"),
+					}).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage(""),
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(sharedSpaceGUID),
+					nil,
+				)
+				return m
+			},
+		},
+		"SharedSpacesOutOfDate": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+					}),
+					withConditions(xpv1.Available()),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage(""),
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
+				)
+				return m
+			},
+		},
+		"SharedSpacesNilNotManaged": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withDefaultMetadataLabels(),
+					// sharedSpaces field is not set/is nil, sharing is unmanaged
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+						ResourceMetadata: v1alpha1.ResourceMetadata{
+							Labels: map[string]*string{
+								"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+								"crossplane-name": ptr.To("my-service-instance"),
+							},
+						},
+					}),
+					withConditions(xpv1.Available()),
+					withDefaultMetadataLabels(),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").
+						SetName(name).
+						SetGUID(guid).
+						SetServicePlan(servicePlan).
+						SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).
+						SetLabels(map[string]*string{
+							"crossplane-kind": ptr.To("serviceinstance.cloudfoundry.crossplane.io"),
+							"crossplane-name": ptr.To("my-service-instance"),
+						}).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage(""),
+					nil,
+				)
+				// GetSharedSpaceRelationships must NOT be called
+				return m
+			},
+		},
+		"GetSharedSpaceRelationshipsError": {
+			args: args{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withExternalName(guid),
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						ID: &guid, ServicePlan: &servicePlan,
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
+					}),
+					withConditions(xpv1.Available()),
+				),
+				obs: managed.ExternalObservation{ResourceExists: true},
+				err: errors.New("cannot check shared spaces: cannot get shared space relationships: boom"),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage(""),
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					nil,
+					errBoom,
+				)
+				return m
+			},
+		},
+	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
+			kube := tc.kube
+			if kube == nil {
+				kube = &test.MockClient{MockUpdate: test.NewMockUpdateFn(nil)}
+			}
 			c := &external{
-				kube: &test.MockClient{
-					MockUpdate: test.NewMockUpdateFn(nil),
-				},
+				kube: kube,
 				serviceinstance: &serviceinstance.Client{
 					ServiceInstance: tc.service(),
 					Job:             nil,
@@ -472,9 +877,24 @@ func TestObserve(t *testing.T) {
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
 				t.Errorf("Observe(...): -want, +got:\n%s", diff)
 			}
+			if tc.want.mg != nil {
+				if diff := cmp.Diff(tc.want.mg, tc.args.mg,
+					cmpopts.IgnoreFields(v1alpha1.ServiceInstanceObservation{}, "CreatedAt", "UpdatedAt"),
+					cmpopts.IgnoreFields(v1alpha1.LastOperation{}, "CreatedAt", "UpdatedAt"),
+				); diff != "" {
+					t.Errorf("Observe(...): -want mg, +got mg:\n%s", diff)
+				}
+			}
 		})
 	}
 }
+
+type timeoutError struct {
+	timeout bool
+}
+
+func (e *timeoutError) Error() string { return "timeout error" }
+func (e *timeoutError) Timeout() bool { return e.timeout }
 
 func TestCreate(t *testing.T) {
 	type service func() *fake.MockServiceInstance
@@ -532,7 +952,7 @@ func TestCreate(t *testing.T) {
 				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials)),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv1.Creating()), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: []byte(jsonCredentials)})),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv1.Creating()), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte(jsonCredentials))})),
 				obs: managed.ExternalCreation{},
 				err: nil,
 			},
@@ -555,6 +975,39 @@ func TestCreate(t *testing.T) {
 			job: func() *fake.MockJob {
 				m := &fake.MockJob{}
 				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"HTTPClientTimeout": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials)),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv1.Creating()), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte(jsonCredentials))})),
+				obs: managed.ExternalCreation{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("CreateManaged").Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage(jsonCredentials),
+					nil, // no error
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(&url.Error{
+					Err: &timeoutError{true},
+				})
 				return m
 			},
 		},
@@ -620,16 +1073,258 @@ func TestCreate(t *testing.T) {
 				return m
 			},
 		},
+		"SharedSpacesSuccessful": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+					withConditions(xpv1.Creating()),
+					withExternalName(guid),
+				),
+				obs: managed.ExternalCreation{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("CreateManaged").Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					nil,
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
+				)
+				m.On("ShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(
+					sharedSpaceRelationships(sharedSpaceGUID),
+					nil,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"ShareWithSpacesError": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withSharedSpaces(sharedSpaceGUID),
+					withConditions(xpv1.Creating()),
+					withExternalName(guid),
+				),
+				obs: managed.ExternalCreation{},
+				err: errors.New("cannot update shared spaces: cannot share service instance with spaces: boom"),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("CreateManaged").Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					nil,
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
+				)
+				m.On("ShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(
+					nil,
+					errBoom,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"CRUpdateFailsAfterCreate": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating()), withExternalName(guid)),
+				obs: managed.ExternalCreation{},
+				err: errors.Wrap(errBoom, errUpdateCR),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+			kube: &test.MockClient{MockUpdate: test.NewMockUpdateFn(errBoom)},
+		},
+		"CreateReturnsNilIsRequeued": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating())),
+				obs: managed.ExternalCreation{},
+				err: errors.New(errCreateIncomplete),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("Single").Return(
+					fake.ServiceInstanceNil,
+					fake.ErrNoResultReturned,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"RetryAfterFailedCreate": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
+					})),
+			},
+			want: want{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
+					}),
+					withConditions(xpv1.Creating())),
+				obs: managed.ExternalCreation{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Delete", guid).Return("DELJOB", nil)
+				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("Single").Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"RetryAfterFailedCreateRequeues": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
+					})),
+			},
+			want: want{
+				// Cleanup clears the stale external-name (to "") so the requeued Observe re-adopts by spec.
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
+					}),
+					withExternalName(""),
+					withConditions(xpv1.Creating())),
+				obs: managed.ExternalCreation{},
+				err: errors.New(errCreateIncomplete),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Delete", guid).Return("DELJOB", nil)
+				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("Single").Return(
+					fake.ServiceInstanceNil,
+					fake.ErrNoResultReturned,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"FailedCreateCleanupError": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
+					})),
+			},
+			want: want{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withStatus(v1alpha1.ServiceInstanceObservation{
+						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
+					})),
+				obs: managed.ExternalCreation{},
+				err: errors.Wrap(errBoom, errCleanFailed),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Delete", guid).Return("", errBoom)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				return m
+			},
+		},
 	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
-			c := &external{
-				kube: &test.MockClient{
+			kube := tc.kube
+			if kube == nil {
+				kube = &test.MockClient{
 					MockUpdate:       test.NewMockUpdateFn(nil),
 					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
-				},
+				}
+			}
+			c := &external{
+				kube: kube,
 				serviceinstance: &serviceinstance.Client{
 					ServiceInstance: tc.service(),
 					Job:             tc.job(),
@@ -640,18 +1335,18 @@ func TestCreate(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Create(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Create(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Create(...): -want, +got:\n%s", diff)
 			}
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Create(...): -want, +got:\n%s", diff)
 			}
 		})
 	}
@@ -700,6 +1395,10 @@ func TestUpdate(t *testing.T) {
 					nil,
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
+				)
 				return m
 			},
 			job: func() *fake.MockJob {
@@ -713,7 +1412,7 @@ func TestUpdate(t *testing.T) {
 				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}), withCredentials(&jsonCredentials)),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: *fake.JSONRawMessage(jsonCredentials)})),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: iSha256([]byte(jsonCredentials))})),
 				obs: managed.ExternalUpdate{},
 				err: nil,
 			},
@@ -731,11 +1430,80 @@ func TestUpdate(t *testing.T) {
 					fake.JSONRawMessage(jsonCredentials),
 					nil, // no error
 				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
+				)
 				return m
 			},
 			job: func() *fake.MockJob {
 				m := &fake.MockJob{}
 				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"CredentialsStatusUpdateFails": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}), withCredentials(&jsonCredentials)),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: iSha256([]byte(jsonCredentials))})),
+				obs: managed.ExternalUpdate{},
+				err: errors.Wrap(errBoom, errUpdateCR),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return("JOB123", nil)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+			kube: &test.MockClient{
+				MockUpdate:       test.NewMockUpdateFn(nil),
+				MockStatusUpdate: test.NewMockSubResourceUpdateFn(errBoom),
+			},
+		},
+		"HTTPClientTimeout": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}), withCredentials(&jsonCredentials)),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: iSha256([]byte(jsonCredentials))})),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					fake.JSONRawMessage(jsonCredentials),
+					nil, // no error
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(&url.Error{
+					Err: &timeoutError{true},
+				})
 				return m
 			},
 		},
@@ -761,6 +1529,10 @@ func TestUpdate(t *testing.T) {
 				m.On("GetManagedParameters", guid).Return(
 					nil,
 					nil, // no error
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
 				)
 				return m
 			},
@@ -797,16 +1569,273 @@ func TestUpdate(t *testing.T) {
 				return m
 			},
 		},
+		"AddSharedSpace": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					nil,
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
+				)
+				m.On("ShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(
+					sharedSpaceRelationships(sharedSpaceGUID),
+					nil,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"RemoveSharedSpace": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(), // sharedSpaces field explicitly set empty, unshare all
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(),
+				),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					nil,
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(sharedSpaceGUID),
+					nil,
+				)
+				m.On("UnShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(nil)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"ShareWithSpacesError": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(sharedSpaceGUID),
+				),
+				obs: managed.ExternalUpdate{},
+				err: errors.New("cannot update shared spaces: cannot share service instance with spaces: boom"),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					nil,
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(),
+					nil,
+				)
+				m.On("ShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(
+					nil,
+					errBoom,
+				)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"SharedSpacesNilNotManaged": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					// sharedSpaces field is not set/is nil, sharing is unmanaged
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+				),
+				obs: managed.ExternalUpdate{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return("JOB123", nil)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(nil, nil)
+				// GetSharedSpaceRelationships must NOT be called
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"UnShareWithSpacesError": {
+			args: args{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(), // explicitly empty: manage sharing, remove all
+				),
+			},
+			want: want{
+				mg: serviceInstance("managed",
+					withSpace(spaceGUID),
+					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
+					withExternalName(guid),
+					withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid}),
+					withSharedSpaces(),
+				),
+				obs: managed.ExternalUpdate{},
+				err: errors.New("cannot update shared spaces: cannot unshare service instance from spaces: boom"),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("UpdateManaged", guid).Return(
+					"JOB123",
+					nil,
+				)
+				m.On("Get", guid).Return(
+					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
+					nil,
+				)
+				m.On("GetManagedParameters", guid).Return(
+					nil,
+					nil,
+				)
+				m.On("GetSharedSpaceRelationships", guid).Return(
+					sharedSpaceRelationships(sharedSpaceGUID),
+					nil,
+				)
+				m.On("UnShareWithSpaces", guid, []string{sharedSpaceGUID}).Return(errBoom)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"InvalidExternalName": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName("not-guid")),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName("not-guid")),
+				obs: managed.ExternalUpdate{},
+				err: errors.Errorf("external-name '%s' is not a valid GUID format", "not-guid"),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				return m
+			},
+		},
 	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
 			t.Logf("Testing: %s", t.Name())
-			c := &external{
-				kube: &test.MockClient{
+			kube := tc.kube
+			if kube == nil {
+				kube = &test.MockClient{
 					MockUpdate:       test.NewMockUpdateFn(nil),
 					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
-				},
+				}
+			}
+			c := &external{
+				kube: kube,
 				serviceinstance: &serviceinstance.Client{
 					ServiceInstance: tc.service(),
 					Job:             tc.job(),
@@ -817,18 +1846,168 @@ func TestUpdate(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Update(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Update(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Update(...): -want, +got:\n%s", diff)
 			}
 			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Update(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestDelete(t *testing.T) {
+	type service func() *fake.MockServiceInstance
+	type job func() *fake.MockJob
+	type args struct {
+		mg resource.Managed
+	}
+
+	type want struct {
+		mg  resource.Managed
+		obs managed.ExternalDelete
+		err error
+	}
+
+	notFound := errors.New("CF-ResourceNotFound")
+
+	cases := map[string]struct {
+		args    args
+		want    want
+		service service
+		job
+	}{
+		"Successful": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Delete", guid).Return("JOB123", nil)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				m.On("PollComplete").Return(nil)
+				return m
+			},
+		},
+		"NotFoundIsSuccess": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Delete", guid).Return("", notFound)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				return m
+			},
+		},
+		"EmptyExternalNameIsNoop": {
+			args: args{
+				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				return m
+			},
+		},
+		"DeleteError": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: errors.Wrap(errBoom, errDelete),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				m.On("Delete", guid).Return("", errBoom)
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				return m
+			},
+		},
+		"InvalidExternalNameIsError": {
+			args: args{
+				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
+			},
+			want: want{
+				mg:  serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: errors.Errorf("external-name '%s' is not a valid GUID format", "not-guid"),
+			},
+			service: func() *fake.MockServiceInstance {
+				m := &fake.MockServiceInstance{}
+				return m
+			},
+			job: func() *fake.MockJob {
+				m := &fake.MockJob{}
+				return m
+			},
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			t.Logf("Testing: %s", t.Name())
+			c := &external{
+				kube: &test.MockClient{
+					MockUpdate: test.NewMockUpdateFn(nil),
+				},
+				serviceinstance: &serviceinstance.Client{
+					ServiceInstance: tc.service(),
+					Job:             tc.job(),
+				},
+			}
+			obs, err := c.Delete(context.Background(), tc.args.mg)
+
+			if tc.want.err != nil && err != nil {
+				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
+					t.Errorf("Delete(...): want error string != got error string:\n%s", diff)
+				}
+			} else {
+				if diff := cmp.Diff(tc.want.err, err); diff != "" {
+					t.Errorf("Delete(...): want error != got error:\n%s", diff)
+				}
+			}
+			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
+				t.Errorf("Delete(...): -want, +got:\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+				t.Errorf("Delete(...): -want, +got:\n%s", diff)
 			}
 		})
 	}
@@ -894,7 +2073,7 @@ func TestJSONContain(t *testing.T) {
 		"Superset": {
 			args: args{
 				a: `{ "bar": 1, "baz": "baz", "foo":"foo"}`,
-				b: `{"foo":"foo", 
+				b: `{"foo":"foo",
 				"bar": 1}`,
 			},
 			want: want{

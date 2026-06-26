@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -36,7 +36,7 @@ func ResolveByName(ctx context.Context, clientFn clients.ClientFn, mg resource.M
 	if err != nil {
 		return errors.Wrap(err, "Could not connect to Cloud Foundry")
 	}
-	domainClient := NewClient(cf)
+	domainClient, _ := NewClient(cf)
 	domainGUID, err := GetGUID(ctx, domainClient, *dr.DomainName)
 	if err != nil {
 		return errors.Wrap(err, "Cannot resolve space reference by name")

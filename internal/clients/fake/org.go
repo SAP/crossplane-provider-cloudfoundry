@@ -31,6 +31,12 @@ func (m *MockOrganization) Create(ctx context.Context, opt *resource.Organizatio
 	return args.Get(0).(*resource.Organization), args.Error(1)
 }
 
+// Delete mocks Organization.Delete
+func (m *MockOrganization) Delete(ctx context.Context, guid string) (string, error) {
+	args := m.Called()
+	return args.String(0), args.Error(1)
+}
+
 // Organization is a nil Organization
 var (
 	OrganizationNil *resource.Organization
@@ -56,5 +62,20 @@ func (s *Organization) SetName(name string) *Organization {
 // SetGUID assigns Organization GUID
 func (s *Organization) SetGUID(guid string) *Organization {
 	s.GUID = guid
+	return s
+}
+
+func (s *Organization) SetLabels(labels map[string]*string) *Organization {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Labels = labels
+	return s
+}
+func (s *Organization) SetAnnotations(annotations map[string]*string) *Organization {
+	if s.Metadata == nil {
+		s.Metadata = &resource.Metadata{}
+	}
+	s.Metadata.Annotations = annotations
 	return s
 }

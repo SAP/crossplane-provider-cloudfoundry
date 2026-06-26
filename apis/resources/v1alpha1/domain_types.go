@@ -8,7 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 )
 
 type DomainObservation struct {
@@ -41,13 +41,8 @@ type DomainObservation struct {
 	// (String) The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	UpdatedAt *string `json:"updatedAt,omitempty"`
 
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +mapType=granular
-	Annotations map[string]*string `json:"annotations,omitempty"`
-
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +mapType=granular
-	Labels map[string]*string `json:"labels,omitempty"`
+	// (Attributes) The metadata associated with the Cloud Foundry resource.
+	ResourceMetadata `json:",inline"`
 }
 
 type DomainParameters struct {
@@ -78,15 +73,9 @@ type DomainParameters struct {
 	// +listType=set
 	SharedOrgs []*string `json:"sharedOrgs,omitempty"`
 
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Attributes) The metadata associated with the Cloud Foundry resource.
 	// +kubebuilder:validation:Optional
-	// +mapType=granular
-	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
-
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +kubebuilder:validation:Optional
-	// +mapType=granular
-	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
+	ResourceMetadata `json:",inline"`
 }
 
 // DomainSpec defines the desired state of Domain
@@ -106,11 +95,20 @@ type DomainStatus struct {
 // +kubebuilder:storageversion
 
 // Domain is the Schema for the Domains API. Provides a resource for managing shared or private domains in Cloud Foundry.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: Domain GUID (UUID format)
+//   - How to find:
+//   - UI: Not available in the BTP Cockpit
+//   - CLI: Use CF CLI: `cf domains` (see GUID column)
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.name) || (has(self.spec.forProvider.subDomain) && has(self.spec.forProvider.domain))",message="either name or both domain and subdomain must be set"
 type Domain struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -145,4 +143,9 @@ func (d *Domain) GetID() string {
 		return *d.Status.AtProvider.ID
 	}
 	return ""
+}
+
+// GetOrgRef returns the OrgReference of the domain. Implements OrgScoped interface.
+func (d *Domain) GetOrgRef() *OrgReference {
+	return &d.Spec.ForProvider.OrgReference
 }

@@ -3,16 +3,18 @@ package serviceinstance
 import (
 	"context"
 	"encoding/json"
+	"net/url"
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	"github.com/google/uuid"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 )
 
 // ServiceInstance defines interfaces to the ServiceInstance resource
@@ -26,6 +28,9 @@ type ServiceInstance interface {
 	CreateUserProvided(context.Context, *resource.ServiceInstanceUserProvidedCreate) (*resource.ServiceInstance, error)
 	UpdateUserProvided(context.Context, string, *resource.ServiceInstanceUserProvidedUpdate) (*resource.ServiceInstance, error)
 	Delete(context.Context, string) (string, error)
+	GetSharedSpaceRelationships(context.Context, string) (*resource.ServiceInstanceSharedSpaceRelationships, error)
+	ShareWithSpaces(context.Context, string, []string) (*resource.ServiceInstanceSharedSpaceRelationships, error)
+	UnShareWithSpaces(ctx context.Context, guid string, spaceGUIDs []string) error
 }
 
 // Job defines interfaces to async operations/jobs.
@@ -49,10 +54,19 @@ func (c *Client) pollJobComplete(ctx context.Context, job string) error {
 	ctx, cancel := context.WithTimeout(ctx, pollTimeout)
 	defer cancel()
 
-	err := c.Job.PollComplete(ctx, job, newPollingOptions())
+	err := c.PollComplete(ctx, job, newPollingOptions())
 
-	if err != nil && errors.Is(err, client.AsyncProcessTimeoutError) { // because we have logic to observe job state, we can safely ignore timeout error
-		return nil
+	if err != nil {
+		isTimeoutError := false
+		urlErr := &url.Error{}
+		if errors.As(err, &urlErr) {
+			// urlErr.Timeout() is true if the http client
+			// experienced timeout error
+			isTimeoutError = urlErr.Timeout()
+		}
+		if errors.Is(err, client.AsyncProcessTimeoutError) || isTimeoutError { // because we have logic to observe job state, we can safely ignore timeout error
+			return nil
+		}
 	}
 	return err
 }
@@ -61,20 +75,12 @@ func (c *Client) pollJobComplete(ctx context.Context, job string) error {
 type Client struct {
 	ServiceInstance
 	Job
+	ServicePlanResolver
 }
 
 // NewClient creates a new client instance from a cfclient.ServiceInstance instance.
 func NewClient(cf *client.Client) *Client {
-	return &Client{cf.ServiceInstances, cf.Jobs}
-}
-
-// GetByIDOrSpec retrieves external resource by GUID or by matching CR's ForProvider spec
-func GetByIDOrSpec(ctx context.Context, c *Client, guid string, spec v1alpha1.ServiceInstanceParameters) (*resource.ServiceInstance, error) {
-	if _, err := uuid.Parse(guid); err == nil {
-		return c.Get(ctx, guid)
-	}
-
-	return c.MatchSingle(ctx, spec)
+	return &Client{cf.ServiceInstances, cf.Jobs, cf.ServicePlans}
 }
 
 // Get retrieves external resource using GUID
@@ -85,8 +91,22 @@ func (c *Client) Get(ctx context.Context, guid string) (*resource.ServiceInstanc
 	return c.ServiceInstance.Get(ctx, guid)
 }
 
+// GetByGUIDOrSpec resolves the external service instance per the external-name ADR: a set
+// external-name (guid) is fetched directly, while an empty one falls back to a spec-based lookup
+// for backward compatibility. The caller is responsible for validating the GUID format.
+func GetByGUIDOrSpec(ctx context.Context, c *Client, guid string, spec v1alpha1.ServiceInstanceParameters) (*resource.ServiceInstance, error) {
+	if guid != "" {
+		return c.Get(ctx, guid)
+	}
+	return c.MatchSingle(ctx, spec)
+}
+
 // MatchSingle retrieves external resource by matching CR's ForProvider spec
 func (c *Client) MatchSingle(ctx context.Context, spec v1alpha1.ServiceInstanceParameters) (*resource.ServiceInstance, error) {
+	// Backward-compat lookup requires at least a name to match on.
+	if spec.Name == nil || *spec.Name == "" {
+		return nil, nil
+	}
 	// if external-name is not set, search by Name and Space
 	opt := client.NewServiceInstanceListOptions()
 	opt.Type = string(spec.Type)
@@ -121,14 +141,14 @@ func (c *Client) GetServiceCredentials(ctx context.Context, r *resource.ServiceI
 	}
 
 	if r.Type == string(v1alpha1.ManagedService) {
-		raw, err := c.ServiceInstance.GetManagedParameters(ctx, r.GUID)
+		raw, err := c.GetManagedParameters(ctx, r.GUID)
 		if raw == nil {
 			return nil, err
 		}
 		return *raw, err
 	}
 
-	raw, err := c.ServiceInstance.GetUserProvidedCredentials(ctx, r.GUID)
+	raw, err := c.GetUserProvidedCredentials(ctx, r.GUID)
 	if raw == nil {
 		return nil, err
 	}
@@ -136,20 +156,20 @@ func (c *Client) GetServiceCredentials(ctx context.Context, r *resource.ServiceI
 }
 
 // Create creates the external resource according to CR's ForProvider spec
-func (c *Client) Create(ctx context.Context, spec v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) Create(ctx context.Context, mg xpresource.Managed, spec v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
 	switch spec.Type {
 	case v1alpha1.ManagedService:
-		return c.createManaged(ctx, spec, creds)
+		return c.createManaged(ctx, mg, spec, creds)
 
 	case v1alpha1.UserProvidedService:
-		return c.createUserProvided(ctx, spec, creds)
+		return c.createUserProvided(ctx, mg, spec, creds)
 	default:
 		return nil, errors.New("unknown service instance type")
 	}
 }
 
 // createManaged creates a managed service instance according to CR's ForProvider spec
-func (c *Client) createManaged(ctx context.Context, spec v1alpha1.ServiceInstanceParameters, params json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) createManaged(ctx context.Context, mg xpresource.Managed, spec v1alpha1.ServiceInstanceParameters, params json.RawMessage) (*resource.ServiceInstance, error) {
 
 	// throw error if no space is provided
 	if spec.Space == nil {
@@ -157,12 +177,13 @@ func (c *Client) createManaged(ctx context.Context, spec v1alpha1.ServiceInstanc
 	}
 
 	opt := resource.NewServiceInstanceCreateManaged(*spec.Name, *spec.Space, *spec.ServicePlan.ID)
+	opt.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
 
 	if params != nil {
 		opt.Parameters = &params
 	}
 
-	job, err := c.ServiceInstance.CreateManaged(ctx, opt)
+	job, err := c.CreateManaged(ctx, opt)
 	if err != nil {
 		return nil, err
 	}
@@ -175,50 +196,48 @@ func (c *Client) createManaged(ctx context.Context, spec v1alpha1.ServiceInstanc
 }
 
 // createUserProvided creates a user-provided service instance according to CR's ForProvider spec
-func (c *Client) createUserProvided(ctx context.Context, spec v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
-	// Credential is required for UPS
-	if creds == nil {
-		return nil, errors.New("Missing or invalid credentials")
-	}
-
+func (c *Client) createUserProvided(ctx context.Context, mg xpresource.Managed, spec v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
 	// throw error if no space is provided
 	if spec.Space == nil {
 		return nil, errors.New("no space reference provided")
 	}
 	// create the service instance
 	opt := resource.NewServiceInstanceCreateUserProvided(*spec.Name, *spec.Space)
-	si, err := c.ServiceInstance.CreateUserProvided(ctx, opt)
+	opt.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
+	si, err := c.CreateUserProvided(ctx, opt)
 	if err != nil {
 		return nil, err
 	}
 
 	// workaround: cf-goclient supports few ups options at creation time.
-	upt := resource.NewServiceInstanceUserProvidedUpdate().
-		WithCredentials(creds).
-		WithRouteServiceURL(spec.RouteServiceURL).
+	upt := resource.NewServiceInstanceUserProvidedUpdate()
+	if creds != nil {
+		upt.WithCredentials(creds)
+	}
+	upt.WithRouteServiceURL(spec.RouteServiceURL).
 		WithSyslogDrainURL(spec.SyslogDrainURL)
 
-	return c.ServiceInstance.UpdateUserProvided(ctx, si.GUID, upt)
+	return c.UpdateUserProvided(ctx, si.GUID, upt)
 }
 
 // Update updates the external resource to keep it in sync with CR's ForProvider spec
-func (c *Client) Update(ctx context.Context, guid string, desired *v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) Update(ctx context.Context, guid string, mg xpresource.Managed, desired *v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
 	observed, err := c.Get(ctx, guid)
 	if err != nil {
 		return nil, err
 	}
 	switch desired.Type {
 	case v1alpha1.ManagedService:
-		return c.updateManaged(ctx, observed, desired, creds)
+		return c.updateManaged(ctx, observed, mg, desired, creds)
 	case v1alpha1.UserProvidedService:
-		return c.updateUserProvided(ctx, observed, desired, creds)
+		return c.updateUserProvided(ctx, observed, mg, desired, creds)
 	default:
 		return nil, errors.New("unknown service instance type")
 	}
 }
 
 // updateManaged updates managed service instance according to CR's ForProvider spec
-func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceInstance, desired *v1alpha1.ServiceInstanceParameters, params json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceInstance, mg xpresource.Managed, desired *v1alpha1.ServiceInstanceParameters, params json.RawMessage) (*resource.ServiceInstance, error) {
 	upd := resource.NewServiceInstanceManagedUpdate()
 
 	if observed.Name != *desired.Name {
@@ -233,8 +252,10 @@ func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceIn
 		upd.WithParameters(params)
 	}
 
+	upd.Metadata = metadata.BuildMetadata(mg, desired.Labels, desired.Annotations)
+
 	// Update the service instance
-	job, s, err := c.ServiceInstance.UpdateManaged(ctx, observed.GUID, upd)
+	job, s, err := c.UpdateManaged(ctx, observed.GUID, upd)
 	if err != nil {
 		return nil, err
 	}
@@ -252,25 +273,27 @@ func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceIn
 }
 
 // updateUserProvided updates user-provided service instance according to CR's ForProvider spec
-func (c *Client) updateUserProvided(ctx context.Context, observed *resource.ServiceInstance, desired *v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
+func (c *Client) updateUserProvided(ctx context.Context, observed *resource.ServiceInstance, mg xpresource.Managed, desired *v1alpha1.ServiceInstanceParameters, creds json.RawMessage) (*resource.ServiceInstance, error) {
 	upd := resource.NewServiceInstanceUserProvidedUpdate()
 
-	if creds == nil {
-		return nil, errors.New("Missing or invalid credentials")
-
-	}
 	if observed.Name != *desired.Name {
 		upd.WithName(*desired.Name)
 	}
 
-	upd.WithRouteServiceURL(desired.RouteServiceURL).WithSyslogDrainURL(desired.SyslogDrainURL).WithCredentials(creds)
+	if creds != nil {
+		upd.WithCredentials(creds)
+	}
+	upd.WithRouteServiceURL(desired.RouteServiceURL).
+		WithSyslogDrainURL(desired.SyslogDrainURL)
 
-	return c.ServiceInstance.UpdateUserProvided(ctx, observed.GUID, upd)
+	upd.Metadata = metadata.BuildMetadata(mg, desired.Labels, desired.Annotations)
+
+	return c.UpdateUserProvided(ctx, observed.GUID, upd)
 }
 
-// Delete deletes a service instance managed by the CR
-func (c *Client) Delete(ctx context.Context, cr *v1alpha1.ServiceInstance) error {
-	job, err := c.ServiceInstance.Delete(ctx, *cr.Status.AtProvider.ID)
+// Delete deletes the service instance identified by guid
+func (c *Client) Delete(ctx context.Context, guid string) error {
+	job, err := c.ServiceInstance.Delete(ctx, guid)
 
 	// If the service instance is already deleted, return nil
 	if clients.ErrorIsNotFound(err) {
@@ -307,17 +330,23 @@ func UpdateObservation(in *v1alpha1.ServiceInstanceObservation, r *resource.Serv
 	if r.Type == string(v1alpha1.ManagedService) {
 		in.ServicePlan = &r.Relationships.ServicePlan.Data.GUID
 	}
+
+	if r.Metadata != nil {
+		in.Labels = r.Metadata.Labels
+		in.Annotations = r.Metadata.Annotations
+	}
 }
 
-// IsUpToDate checks if the managed resource is in sync with CR.
-func IsUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.ServiceInstance) bool {
-	if *in.Name != observed.Name {
+// specUpToDate checks whether the spec fields (name, service plan, route service URL,
+// syslog drain URL) of a ServiceInstance are in sync with the observed CF resource.
+func specUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.ServiceInstance) bool {
+	if in.Name != nil && *in.Name != observed.Name {
 		return false
 	}
 
 	switch in.Type {
 	case v1alpha1.ManagedService:
-		if in.ServicePlan.ID != nil && observed.Relationships.ServicePlan.Data.GUID != *in.ServicePlan.ID {
+		if in.ServicePlan != nil && in.ServicePlan.ID != nil && observed.Relationships.ServicePlan.Data.GUID != *in.ServicePlan.ID {
 			return false
 		}
 	case v1alpha1.UserProvidedService:
@@ -329,4 +358,111 @@ func IsUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.Servi
 		}
 	}
 	return true
+}
+
+// IsUpToDate checks if the managed resource is in sync with CR.
+func IsUpToDate(mg xpresource.Managed, in *v1alpha1.ServiceInstanceParameters, observed *resource.ServiceInstance) bool {
+	if !specUpToDate(in, observed) {
+		return false
+	}
+
+	desired := metadata.BuildMetadata(mg, in.Labels, in.Annotations)
+	var actualLabels, actualAnnotations map[string]*string
+	if observed.Metadata != nil {
+		actualLabels = observed.Metadata.Labels
+		actualAnnotations = observed.Metadata.Annotations
+	}
+	return metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, actualLabels, actualAnnotations)
+}
+
+// AreSharedSpacesUpToDate checks if the shared spaces of a service instance are in sync with the CR
+func (c *Client) AreSharedSpacesUpToDate(ctx context.Context, guid string, desired []v1alpha1.SpaceReference) (bool, error) {
+	currentGUIDs, err := c.getCurrentSharedSpaces(ctx, guid)
+	if err != nil {
+		return false, err
+	}
+	desiredGUIDs := getDesiredSharedSpaces(desired)
+
+	toAdd, toRemove := diffSharedSpaces(currentGUIDs, desiredGUIDs)
+	return len(toAdd) == 0 && len(toRemove) == 0, nil
+}
+
+// UpdateSharedSpaces updates the shared spaces of a service instance to keep them in sync with the CR
+func (c *Client) UpdateSharedSpaces(ctx context.Context, guid string, desired []v1alpha1.SpaceReference) error {
+	currentGUIDs, err := c.getCurrentSharedSpaces(ctx, guid)
+	if err != nil {
+		return err
+	}
+	desiredGUIDs := getDesiredSharedSpaces(desired)
+
+	toAdd, toRemove := diffSharedSpaces(currentGUIDs, desiredGUIDs)
+	if len(toAdd) > 0 {
+		_, err := c.ShareWithSpaces(ctx, guid, toAdd)
+		if err != nil {
+			return errors.Wrap(err, "cannot share service instance with spaces")
+		}
+	}
+	if len(toRemove) > 0 {
+		err := c.UnShareWithSpaces(ctx, guid, toRemove)
+		if err != nil {
+			return errors.Wrap(err, "cannot unshare service instance from spaces")
+		}
+	}
+
+	return nil
+}
+
+// getCurrentSharedSpaces retrieves the GUIDs of spaces a service instance is shared with
+func (c *Client) getCurrentSharedSpaces(ctx context.Context, guid string) ([]string, error) {
+	relationships, err := c.GetSharedSpaceRelationships(ctx, guid)
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot get shared space relationships")
+	}
+	if relationships == nil {
+		return []string{}, nil
+	}
+
+	spaceGUIDs := make([]string, 0, len(relationships.Data))
+	for _, rel := range relationships.Data {
+		spaceGUIDs = append(spaceGUIDs, rel.GUID)
+	}
+	return spaceGUIDs, nil
+}
+
+// getDesiredSharedSpaces extracts space GUIDs from a list of SpaceReference
+func getDesiredSharedSpaces(refs []v1alpha1.SpaceReference) []string {
+	guids := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		if ref.Space != nil && *ref.Space != "" {
+			guids = append(guids, *ref.Space)
+		}
+	}
+	return guids
+}
+
+// diffSharedSpaces compares the current and desired shared spaces and returns the spaces to add and remove to match the desired state
+func diffSharedSpaces(current, desired []string) (toAdd, toRemove []string) {
+	currentSet := make(map[string]struct{}, len(current))
+	for _, guid := range current {
+		currentSet[guid] = struct{}{}
+	}
+
+	// Find spaces to add (in desired but not in current)
+	for _, guid := range desired {
+		if _, exists := currentSet[guid]; !exists {
+			toAdd = append(toAdd, guid)
+		}
+		// Mark as seen by deleting from set
+		delete(currentSet, guid)
+	}
+
+	// Remaining spaces in currentSet need to be removed
+	if len(currentSet) > 0 {
+		toRemove = make([]string, 0, len(currentSet))
+		for guid := range currentSet {
+			toRemove = append(toRemove, guid)
+		}
+	}
+
+	return toAdd, toRemove
 }

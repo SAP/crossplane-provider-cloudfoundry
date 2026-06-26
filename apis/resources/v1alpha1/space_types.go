@@ -10,17 +10,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 )
 
 type SpaceObservation struct {
 
 	// (Boolean) Allows SSH to application containers via the CF CLI.
 	AllowSSH bool `json:"allowSsh,omitempty" tf:"allow_ssh,omitempty"`
-
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +mapType=granular
-	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
 
 	// (String) The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	CreatedAt *string `json:"createdAt,omitempty" tf:"created_at,omitempty"`
@@ -30,10 +26,6 @@ type SpaceObservation struct {
 
 	// (String) The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization.
 	IsolationSegment *string `json:"isolationSegment,omitempty" tf:"isolation_segment,omitempty"`
-
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +mapType=granular
-	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
 
 	// (String) The name of the space in Cloud Foundry.
 	Name string `json:"name,omitempty" tf:"name,omitempty"`
@@ -46,6 +38,9 @@ type SpaceObservation struct {
 
 	// (String) The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	UpdatedAt *string `json:"updatedAt,omitempty" tf:"updated_at,omitempty"`
+
+	// (Attributes) The metadata associated with the Cloud Foundry resource.
+	ResourceMetadata `json:",inline"`
 }
 
 type SpaceParameters struct {
@@ -55,22 +50,15 @@ type SpaceParameters struct {
 	// +kubebuilder:default=false
 	AllowSSH bool `json:"allowSsh,omitempty" tf:"allow_ssh,omitempty"`
 
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +kubebuilder:validation:Optional
-	// +mapType=granular
-	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
-
 	// (String) The ID of the isolation segment to assign to the space. The isolation segment must be entitled to the space's parent organization.
 	// +kubebuilder:validation:Optional
 	IsolationSegment *string `json:"isolationSegment,omitempty" tf:"isolation_segment,omitempty"`
 
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Attributes) The metadata associated with the Cloud Foundry resource.
 	// +kubebuilder:validation:Optional
-	// +mapType=granular
-	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
+	ResourceMetadata `json:",inline"`
 
 	// (String) The name of the space in Cloud Foundry.
-	// +kubebuilder:validation:Required
 	Name string `json:"name,omitempty" tf:"name,omitempty"`
 
 	// (Attributes) Reference to the organization in which to create the space.
@@ -94,11 +82,21 @@ type SpaceStatus struct {
 // +kubebuilder:storageversion
 
 // Space is the Schema for the Spaces API. Provides a Cloud Foundry resource for managing Cloud Foundry spaces within organizations.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: Space GUID (UUID format)
+//   - How to find:
+//   - UI: Global Account → Account Explorer → Subaccounts → Select Subaccount → Spaces → Select Space → View URL: `https://<cockpit_url>/cockpit#/globalaccount/<global_account_id>/subaccount/<subaccount_id>/org/<org_id>/space/<SPACE_ID>/applications`
+//   - CLI: Use CF CLI: `cf space <SPACE> --guid`
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.name)",message="name is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.orgName) || has(self.spec.forProvider.orgRef) || has(self.spec.forProvider.orgSelector))",message="OrgReference is required: exactly one of orgName, orgRef, or orgSelector must be set"
 type Space struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

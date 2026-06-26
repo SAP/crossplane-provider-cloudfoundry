@@ -7,11 +7,16 @@ metadata:
   name: e2e-space-org-ref
 spec:
   forProvider:
-    name: e2e-space
+    name: e2e-space-org-ref-$BUILD_ID
     orgRef:
       name:  e2e-org
       policy:
         resolve: Always
+    labels:
+      environment: test
+      team: platform
+    annotations:
+      description: E2E test space with org ref
 ---
 # create a new space with org name
 apiVersion: cloudfoundry.crossplane.io/v1alpha1
@@ -21,5 +26,10 @@ metadata:
   name: e2e-space-org-name
 spec:
   forProvider:
-    name: e2e-space
+    name: e2e-space-org-name-$BUILD_ID
     orgName: cf-ci-e2e
+    labels:
+      environment: staging
+      team: devops
+    annotations:
+      description: E2E test space with org name

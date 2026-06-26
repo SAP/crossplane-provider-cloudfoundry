@@ -6,10 +6,11 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/org"
 )
 
@@ -30,16 +31,16 @@ type Feature interface {
 
 // NewClient creates a new cf client and return interfaces for Space and SpaceFeatures
 func NewClient(cf *client.Client) (Space, Feature, org.Client) {
-
 	return cf.Spaces, cf.SpaceFeatures, cf.Organizations
 }
 
-// GetByIDOrSpec retrieves a Space by its GUID or by its specification.
-func GetByIDOrSpec(ctx context.Context, spaceClient Space, guid string, spec v1alpha1.SpaceParameters) (*resource.Space, error) {
-	if clients.IsValidGUID(guid) {
-		return spaceClient.Get(ctx, guid)
-	}
+// GetByID retrieves a Space by its GUID
+func GetByID(ctx context.Context, spaceClient Space, guid string) (*resource.Space, error) {
+	return spaceClient.Get(ctx, guid)
+}
 
+// GetBySpec retrieves a Space by its GUID
+func GetBySpec(ctx context.Context, spaceClient Space, spec v1alpha1.SpaceParameters) (*resource.Space, error) {
 	return spaceClient.Single(ctx, GenerateListOption(spec))
 }
 
@@ -59,20 +60,22 @@ func GenerateListOption(spec v1alpha1.SpaceParameters) *client.SpaceListOptions 
 }
 
 // GenerateCreate generates the SpaceCreate from an *SpaceParameters
-func GenerateCreate(spec v1alpha1.SpaceParameters) *resource.SpaceCreate {
+func GenerateCreate(mg xpresource.Managed, spec v1alpha1.SpaceParameters) *resource.SpaceCreate {
 	org := ptr.Deref(spec.Org, "")
-	return resource.NewSpaceCreate(spec.Name, org)
+	create := resource.NewSpaceCreate(spec.Name, org)
+	create.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
+	return create
 }
 
-// GenerateUpdate generates the SpaceCreate from an *SpaceParameters
-func GenerateUpdate(spec v1alpha1.SpaceParameters) *resource.SpaceUpdate {
+// GenerateUpdate generates the SpaceUpdate from an *SpaceParameters
+func GenerateUpdate(mg xpresource.Managed, spec v1alpha1.SpaceParameters) *resource.SpaceUpdate {
 	return &resource.SpaceUpdate{
 		Name:     spec.Name,
-		Metadata: &resource.Metadata{},
+		Metadata: metadata.BuildMetadata(mg, spec.Labels, spec.Annotations),
 	}
 }
 
-// GenerateObservation takes an Space resource and returns *SpaceObservation.
+// GenerateObservation takes a Space resource and returns *SpaceObservation.
 func GenerateObservation(o *resource.Space, ssh bool) v1alpha1.SpaceObservation {
 	obs := v1alpha1.SpaceObservation{
 		ID:        o.GUID,
@@ -86,8 +89,8 @@ func GenerateObservation(o *resource.Space, ssh bool) v1alpha1.SpaceObservation 
 		obs.Quota = ptr.To(o.Relationships.Quota.Data.GUID)
 	}
 	if o.Metadata != nil {
-		obs.Annotations = o.Metadata.Annotations
 		obs.Labels = o.Metadata.Labels
+		obs.Annotations = o.Metadata.Annotations
 	}
 	return obs
 }
@@ -100,10 +103,15 @@ func LateInitialize(cr *v1alpha1.Space, from *resource.Space, ssh bool) bool {
 
 // IsUpToDate checks whether current state is up-to-date compared to the given
 // set of parameters.
-func IsUpToDate(spec v1alpha1.SpaceParameters, observed *resource.Space, ssh bool) bool {
-	// rename or update ssh setting
-	return spec.Name == observed.Name && (spec.AllowSSH == ssh)
-
+func IsUpToDate(mg xpresource.Managed, spec v1alpha1.SpaceParameters, observed *resource.Space, ssh bool) bool {
+	upToDate := spec.Name == observed.Name && (spec.AllowSSH == ssh)
+	desired := metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
+	var actualLabels, actualAnnotations map[string]*string
+	if observed.Metadata != nil {
+		actualLabels = observed.Metadata.Labels
+		actualAnnotations = observed.Metadata.Annotations
+	}
+	return upToDate && metadata.IsMetadataUpToDate(desired.Labels, desired.Annotations, actualLabels, actualAnnotations)
 }
 
 // IsSSHEnabled checks whether SSH is enabled for the given space.

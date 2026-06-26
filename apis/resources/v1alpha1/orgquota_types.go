@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 )
 
 type OrgQuotaInitParameters struct {
@@ -189,6 +189,14 @@ type OrgQuotaStatus struct {
 // +kubebuilder:storageversion
 
 // OrgQuota is the Schema for the OrgQuotas API. Provides a Cloud Foundry resource to manage org quota definitions.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: GUID (UUID v4)
+//   - How to find:
+//   - UI: Cloud Foundry > Quota Definitions > <quota name> (GUID in URL or details)
+//   - CLI: cf curl /v3/organization_quotas?names=<name> (field: guid)
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"

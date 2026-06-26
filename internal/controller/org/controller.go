@@ -2,27 +2,26 @@ package org
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
-
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/connection"
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
-	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	scv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	pcv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
-	org "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/org"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/org"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
@@ -35,26 +34,22 @@ const (
 	errGetClient         = "cannot create a client to talk to the API of" + externalSystem
 	errGetResource       = "cannot get " + externalSystem + " organization according to the specified parameters"
 	errCreate            = "cannot create " + externalSystem + " organization"
-	errGet               = "cannot get " + resourceType + " in " + externalSystem
+	errDelete            = "cannot delete " + externalSystem + " organization"
 )
 
 // Setup adds a controller that reconciles Org resources.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
 	name := managed.ControllerName(v1alpha1.Org_GroupKind)
 
-	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
-	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
-		cps = append(cps, connection.NewDetailsManager(mgr.GetClient(), scv1alpha1.StoreConfigGroupVersionKind))
-	}
-
 	options := []managed.ReconcilerOption{
-		managed.WithExternalConnecter(&connector{
+		managed.WithExternalConnector(&connector{
 			kube:  mgr.GetClient(),
-			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
+			usage: resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
+		managed.WithPollInterval(o.PollInterval),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-		managed.WithConnectionPublishers(cps...),
+		managed.WithInitializers(),
 	}
 
 	if o.Features.Enabled(features.EnableBetaManagementPolicies) {
@@ -75,7 +70,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 // A connector supplies a function for the Reconciler to create a client to the external CloudFoundry resources.
 type connector struct {
 	kube  k8s.Client
-	usage resource.Tracker
+	usage resource.LegacyTracker
 }
 
 // Connect typically produces an ExternalClient by:
@@ -88,7 +83,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.New(errNotOrgKind)
 	}
 
-	if err := c.usage.Track(ctx, mg); err != nil {
+	if err := c.usage.Track(ctx, mg.(resource.LegacyManaged)); err != nil {
 		return nil, errors.Wrap(err, errTrackUsage)
 	}
 
@@ -97,12 +92,20 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errGetClient)
 	}
 
-	return &external{client: org.NewClient(cf), kube: c.kube}, nil
+	orgClient, jobClient := org.NewClient(cf)
+	return &external{client: orgClient, kube: c.kube, job: jobClient}, nil
 }
 
-// An external is a managed.ExternalConnecter that is using the CloudFoundry API to observe and modify resources.
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
+// An external is a managed.ExternalConnector that is using the CloudFoundry API to observe and modify resources.
 type external struct {
 	client org.Client
+	job    job.Job
 	kube   k8s.Client
 }
 
@@ -113,34 +116,42 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errNotOrgKind)
 	}
 
-	external_name := meta.GetExternalName(cr)
+	resourceLateInitialized := false
 
-	name := cr.Spec.ForProvider.Name
-	// if name is not set, use the external name for backward compatibility
-	if name == "" {
-		name = external_name
+	// ADR Step 1: Check if external-name is empty
+	if meta.GetExternalName(cr) == "" {
+		o, err := org.FindOrgBySpec(ctx, c.client, cr.Spec.ForProvider)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, errGetResource)
+		}
+		if o == nil {
+			return managed.ExternalObservation{ResourceExists: false}, nil
+		}
+		meta.SetExternalName(cr, o.GUID)
+		resourceLateInitialized = true
 	}
 
-	o, err := org.GetByIDOrName(ctx, c.client, external_name, name)
+	guid := meta.GetExternalName(cr)
 
+	// ADR Step 2: Validate GUID format
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.New(fmt.Sprintf("external-name '%s' is not a valid GUID format", guid))
+	}
+
+	// ADR Step 3: Get by GUID
+	o, err := org.GetOrgByGUID(ctx, c.client, guid)
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
 			return managed.ExternalObservation{ResourceExists: false}, nil
 		}
-
 		return managed.ExternalObservation{}, errors.Wrap(err, errGetResource)
 	}
 
-	org.LateInitialize(&cr.Spec.ForProvider, o)
-
-	// set the external name to the GUID
-	if external_name != o.GUID {
-		meta.SetExternalName(cr, o.GUID)
-		if err := c.kube.Update(ctx, cr); err != nil {
-			return managed.ExternalObservation{}, errors.Wrap(err, errGet)
-		}
+	if o == nil {
+		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
+	org.LateInitialize(&cr.Spec.ForProvider, o)
 	cr.Status.AtProvider = org.GenerateObservation(o)
 
 	if !ptr.Deref(cr.Status.AtProvider.Suspended, false) {
@@ -148,8 +159,9 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}
 
 	return managed.ExternalObservation{
-		ResourceExists:   cr.Status.AtProvider.ID != nil,
-		ResourceUpToDate: org.IsUpToDate(cr.Spec.ForProvider, o),
+		ResourceExists:          cr.Status.AtProvider.ID != nil,
+		ResourceUpToDate:        org.IsUpToDate(cr, cr.Spec.ForProvider, o),
+		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
 }
 
@@ -160,7 +172,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errNotOrgKind)
 	}
 
-	o, err := c.client.Create(ctx, org.GenerateCreate(cr.Spec.ForProvider))
+	o, err := c.client.Create(ctx, org.GenerateCreate(cr, cr.Spec.ForProvider))
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
@@ -191,12 +203,25 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Delete managed resource Org
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.Organization)
 	if !ok {
-		return errors.New(errNotOrgKind)
+		return managed.ExternalDelete{}, errors.New(errNotOrgKind)
 	}
-	// Do nothing, as Org is observe-only
+
 	cr.SetConditions(xpv1.Deleting())
-	return nil
+	if meta.GetExternalName(cr) == "" {
+		return managed.ExternalDelete{}, nil
+	}
+
+	jobGUID, err := c.client.Delete(ctx, meta.GetExternalName(cr))
+	if err != nil {
+		// ADR: 404 not found means already deleted - not considered as error case
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
+	}
+
+	return managed.ExternalDelete{}, job.PollJobComplete(ctx, c.job, jobGUID)
 }

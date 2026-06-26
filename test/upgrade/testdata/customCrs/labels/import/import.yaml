@@ -1,0 +1,15 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  name: upgrade-test-org
+  annotations:
+    crossplane.io/paused: "false"
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    # IMPORTANT: Change this to an org you have access to
+    # Run `cf orgs` to see available organizations
+    name: cf-ci-e2e # TODO: Change this to an existing org name
+  providerConfigRef:
+    name: default

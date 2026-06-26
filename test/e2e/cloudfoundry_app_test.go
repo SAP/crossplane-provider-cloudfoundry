@@ -5,6 +5,7 @@ package e2e
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -18,7 +19,7 @@ import (
 )
 
 func TestCloudfoundry_App(t *testing.T) {
-	var dir = "./crs/app"
+	var dir = crsDir("app")
 	var namespace = "app-test"
 	var feats = map[string]struct {
 		// name of the managed resource
@@ -69,7 +70,6 @@ func TestCloudfoundry_App(t *testing.T) {
 				if err := cr.Get(ctx, ft.name, cfg.Namespace(), ft.obj); err != nil {
 					t.Errorf("error observing resource %s: %s", ft.obj.GetName(), err.Error())
 				}
-				//klog.InfoS("resourced details", "cr", ft.obj)
 				return ctx
 			}).Assess(name+":"+ft.name+" ready",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
@@ -79,9 +79,55 @@ func TestCloudfoundry_App(t *testing.T) {
 				if err := wait.For(ResourceReady(cfg, ft.obj), wait.WithTimeout(10*time.Minute)); err != nil {
 					t.Errorf("error waiting for resource %s to be ready: %s", ft.obj.GetName(), err.Error())
 				}
+				checkAppResourceLabelsAndAnnotations(ctx, t, cfg, ft.obj, name)
 				return ctx
 			})
 	}
+
+	// Verify that route observations are populated in App status.
+	feat.Assess("app:e2e-app routes observed in status",
+		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			app := &v1alpha1.App{}
+			cr := cfg.Client().Resources()
+			if err := cr.Get(ctx, "e2e-app", cfg.Namespace(), app); err != nil {
+				t.Fatalf("error getting app e2e-app: %s", err.Error())
+			}
+			if len(app.Status.AtProvider.Routes) == 0 {
+				t.Fatalf("expected at least one route in app status, got 0")
+			}
+			expectedHost := runScopedName("app-route-host-domainref")
+			r, ok := findRouteByHost(app.Status.AtProvider.Routes, expectedHost)
+			if !ok {
+				t.Fatalf("expected route with host %q in app status, not found among %v", expectedHost, hosts(app.Status.AtProvider.Routes))
+			}
+			if r.URL == "" {
+				t.Errorf("expected route URL to be non-empty, got empty")
+			}
+			t.Logf("app e2e-app route observed: URL=%s Host=%s Protocol=%s", r.URL, r.Host, r.Protocol)
+			return ctx
+		},
+	).Assess("app:e2e-app-2 routes observed in status",
+		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+			app := &v1alpha1.App{}
+			cr := cfg.Client().Resources()
+			if err := cr.Get(ctx, "e2e-app-2", cfg.Namespace(), app); err != nil {
+				t.Fatalf("error getting app e2e-app-2: %s", err.Error())
+			}
+			if len(app.Status.AtProvider.Routes) == 0 {
+				t.Fatalf("expected at least one route in app status, got 0")
+			}
+			expectedHost := runScopedName("app-route-host-domainname")
+			r, ok := findRouteByHost(app.Status.AtProvider.Routes, expectedHost)
+			if !ok {
+				t.Fatalf("expected route with host %q in app status, not found among %v", expectedHost, hosts(app.Status.AtProvider.Routes))
+			}
+			if r.URL == "" {
+				t.Errorf("expected route URL to be non-empty, got empty")
+			}
+			t.Logf("app e2e-app-2 route observed: URL=%s Host=%s Protocol=%s", r.URL, r.Host, r.Protocol)
+			return ctx
+		},
+	)
 
 	for _, name := range steps {
 		ft, ok := feats[name]
@@ -134,4 +180,51 @@ func TestCloudfoundry_App(t *testing.T) {
 	}
 
 	testenv.Test(t, feat.Feature())
+}
+
+// findRouteByHost returns the first route matching the given host.
+func findRouteByHost(routes []v1alpha1.AppRouteObservation, host string) (v1alpha1.AppRouteObservation, bool) {
+	if i := slices.IndexFunc(routes, func(r v1alpha1.AppRouteObservation) bool {
+		return r.Host == host
+	}); i >= 0 {
+		return routes[i], true
+	}
+	return v1alpha1.AppRouteObservation{}, false
+}
+
+// hosts collects all host values from routes for diagnostic output.
+func hosts(routes []v1alpha1.AppRouteObservation) []string {
+	return slices.Collect(func(yield func(string) bool) {
+		for _, r := range routes {
+			yield(r.Host)
+		}
+	})
+}
+
+func checkAppResourceLabelsAndAnnotations(ctx context.Context, t *testing.T, cfg *envconf.Config, obj k8s.Object, stepName string) {
+	cr := cfg.Client().Resources()
+	switch v := obj.(type) {
+	case *v1alpha1.App:
+		if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), v); err != nil {
+			t.Errorf("error getting App for label check: %s", err.Error())
+			return
+		}
+		description := "E2E test app"
+		if stepName == "app-2" {
+			description = "E2E test app 2"
+		}
+		if err := AssertLabelsAndAnnotations(
+			v.Status.AtProvider.Labels,
+			v.Status.AtProvider.Annotations,
+			map[string]string{"environment": "test", "team": "platform"},
+			map[string]string{"description": description},
+			v.GetName(),
+			"app.cloudfoundry.crossplane.io",
+			v.GetProviderConfigReference().Name,
+		); err != nil {
+			t.Errorf("App %s labels/annotations check failed: %s", v.GetName(), err.Error())
+		}
+	default:
+		// Observe-only resources (Space, Domain, ServiceInstance, SCB) and other non-eligible types — skip
+	}
 }

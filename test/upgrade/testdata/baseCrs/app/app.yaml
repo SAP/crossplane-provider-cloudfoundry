@@ -1,0 +1,25 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: App
+metadata:
+  name: upgrade-test-app
+  annotations:
+    crossplane.io/paused: "false"
+spec:
+  forProvider:
+    name: upgrade-test-app
+    spaceRef:
+      name: upgrade-test-import-space
+      policy:
+        resolve: Always
+    lifecycle: docker
+    docker:
+      image: loud/hello_co:latest
+    processes:
+      - type: web
+        health-check-type: http
+        health-check-http-endpoint: "/"
+    routes:
+      - routeRef: 
+          name: upgrade-test-route
+          policy:
+            resolve: Always

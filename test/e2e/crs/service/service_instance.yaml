@@ -8,11 +8,19 @@ metadata:
 spec:
   forProvider:
     type: managed
-    name: e2e-service-instance
-    spaceRef: 
+    name: e2e-service-instance-$BUILD_ID
+    spaceRef:
       name: service-space
-      policy: 
+      policy:
         resolve: Always
     servicePlan:
-      offering: destination
-      plan: lite
+      offering: alert-notification
+      plan: standard
+    sharedSpaces:
+      - spaceRef:
+          name: service-space-shared
+    labels:
+      environment: test
+      team: platform
+    annotations:
+      description: E2E test service instance

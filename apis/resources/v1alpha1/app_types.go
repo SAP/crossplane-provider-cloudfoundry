@@ -8,8 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 )
 
 type AppObservation struct {
@@ -23,6 +22,29 @@ type AppObservation struct {
 
 	// The yaml representation of the environment variables.
 	AppManifest string `json:"appManifest,omitempty"`
+
+	// The list of routes currently mapped to the application.
+	Routes []AppRouteObservation `json:"routes,omitempty"`
+
+	ResourceMetadata `json:",inline"`
+}
+
+// AppRouteObservation represents an observed route for the application.
+type AppRouteObservation struct {
+	// The full URL of the route (e.g. myapp.apps.example.com).
+	URL string `json:"url,omitempty"`
+
+	// The host name of the route.
+	Host string `json:"host,omitempty"`
+
+	// The path of the route.
+	Path string `json:"path,omitempty"`
+
+	// The protocol of the route.
+	Protocol string `json:"protocol,omitempty"`
+
+	// The port of the route (for TCP routes).
+	Port *int `json:"port,omitempty"`
 }
 
 type AppParameters struct {
@@ -57,7 +79,7 @@ type AppParameters struct {
 	// +kubebuilder:validation:Optional
 	NoRoute bool `json:"no-route,omitempty"`
 
-	// (NOT SUPPORTED YET) The routes to map to the application to control its ingress traffic.
+	// The routes to map to the application to control its ingress traffic.
 	// +kubebuilder:validation:Optional
 	Routes []RouteConfiguration `json:"routes,omitempty"`
 
@@ -89,9 +111,9 @@ type AppParameters struct {
 	// +kubebuilder:validation:Optional
 	// Sidecars []SidecarConfiguration `json:"sidecars,omitempty"`
 
-	// (NOT SUPPORTED YET) A key-value mapping of environment variables to be used for the app when running
+	// A key-value mapping of environment variables to be used for the app when running
 	// +kubebuilder:validation:Optional
-	Environment *runtime.RawExtension `json:"environment,omitempty"`
+	Environment map[string]string `json:"environment,omitempty"`
 
 	// The log rate limit for all instances of an app. This attribute requires a unit of measurement: B, K, KB, M, MB, G, or GB, in either uppercase or lowercase.
 	// +kubebuilder:validation:Optional
@@ -107,7 +129,7 @@ type DockerConfiguration struct {
 
 	// (Attributes) Defines login credentials for private docker repositories
 	// +kubebuilder:validation:Optional
-	Credentials *xpv1.SecretReference `json:"credentialsSecretRef,omitempty"`
+	Credentials *v1.SecretReference `json:"credentialsSecretRef,omitempty"`
 }
 
 // RouteConfiguration defines the route for the application
@@ -260,11 +282,21 @@ type AppStatus struct {
 // +kubebuilder:storageversion
 
 // App is the Schema for the Apps API. Provides a Cloud Foundry resource to manage applications.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: App GUID (UUID format)
+//   - How to find:
+//   - UI: In the BTP Cockpit, navigate to your app and find the ID after app/ in the URL
+//   - CLI: `cf app <APP_NAME> --guid`
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName) || has(self.spec.forProvider.spaceRef) || has(self.spec.forProvider.spaceSelector))",message="SpaceReference is required: exactly one of spaceName, spaceRef, or spaceSelector must be set"
+// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.spaceName), has(self.spec.forProvider.spaceRef), has(self.spec.forProvider.spaceSelector)].filter(x, x).size() <= 1",message="SpaceReference validation: only one of spaceName, spaceRef, or spaceSelector can be set"
 type App struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

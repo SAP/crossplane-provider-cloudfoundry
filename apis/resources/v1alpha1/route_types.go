@@ -4,7 +4,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 )
 
 type RouteObservation struct {
@@ -33,6 +33,8 @@ type RouteObservation struct {
 	// (List of Attributes) One or more route mappings that map this route to applications. Can be repeated to load balance route traffic among multiple applications.
 	// +kubebuilder:validation:Optional
 	Destinations []RouteDestination `json:"destinations,omitempty"`
+
+	ResourceMetadata `json:",inline"`
 }
 
 type RouteParameters struct {
@@ -55,6 +57,8 @@ type RouteParameters struct {
 	// (Attributes) The route options.
 	// +kubebuilder:validation:Optional
 	Options *RouteOptions `json:"options,omitempty"`
+
+	ResourceMetadata `json:",inline"`
 }
 
 type RouteOptions struct {
@@ -108,12 +112,24 @@ type RouteStatus struct {
 // +kubebuilder:storageversion
 
 // Route is the Schema for the Routes API. Provides a Cloud Foundry route resource.
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: Route GUID (UUID format)
+//   - How to find:
+//   - UI: Not available in the BTP Cockpit
+//   - CLI: Use CF CLI: `cf routes` and find the GUID in the output
+//
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName) || has(self.spec.forProvider.spaceRef) || has(self.spec.forProvider.spaceSelector))",message="SpaceReference is required: exactly one of spaceName, spaceRef, or spaceSelector must be set"
+// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.spaceName), has(self.spec.forProvider.spaceRef), has(self.spec.forProvider.spaceSelector)].filter(x, x).size() <= 1",message="SpaceReference validation: only one of spaceName, spaceRef, or spaceSelector can be set"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.domainName) || has(self.spec.forProvider.domainRef) || has(self.spec.forProvider.domainSelector))",message="DomainReference is required: exactly one of domainName, domainRef, or domainSelector must be set"
+// +kubebuilder:validation:XValidation:rule="[has(self.spec.forProvider.domainName), has(self.spec.forProvider.domainRef), has(self.spec.forProvider.domainSelector)].filter(x, x).size() <= 1",message="DomainReference validation: only one of domainName, domainRef, or domainSelector can be set"
 type Route struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -158,4 +174,9 @@ func (r *Route) GetCloudFoundryName() string {
 // implement DomainScoped interface
 func (r *Route) GetDomainRef() *DomainReference {
 	return &r.Spec.ForProvider.DomainReference
+}
+
+// implement SpaceScoped interface
+func (r *Route) GetSpaceRef() *SpaceReference {
+	return &r.Spec.ForProvider.SpaceReference
 }

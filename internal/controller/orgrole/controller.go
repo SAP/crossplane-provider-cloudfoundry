@@ -2,6 +2,7 @@ package orgrole
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 
@@ -9,17 +10,15 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/connection"
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
-	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	scv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	pcv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
@@ -43,18 +42,13 @@ const (
 func Setup(mgr ctrl.Manager, o controller.Options) error {
 	name := managed.ControllerName(v1alpha1.OrgRole_GroupKind)
 
-	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
-	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
-		cps = append(cps, connection.NewDetailsManager(mgr.GetClient(), scv1alpha1.StoreConfigGroupVersionKind))
-	}
-
 	options := []managed.ReconcilerOption{
-		managed.WithExternalConnecter(&connector{kube: mgr.GetClient(),
-			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
+		managed.WithExternalConnector(&connector{kube: mgr.GetClient(),
+			usage: resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
+		managed.WithPollInterval(o.PollInterval),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-		managed.WithConnectionPublishers(cps...),
 		managed.WithInitializers(&orgInitializer{
 			kube: mgr.GetClient(),
 		}),
@@ -78,7 +72,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 // A connector supplies a function for the Reconciler to create a client to the external CloudFoundry resources.
 type connector struct {
 	kube  k8s.Client
-	usage resource.Tracker
+	usage resource.LegacyTracker
 }
 
 // Connect typically produces an ExternalClient by:
@@ -91,7 +85,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.New(errWrongKind)
 	}
 
-	if err := c.usage.Track(ctx, mg); err != nil {
+	if err := c.usage.Track(ctx, mg.(resource.LegacyManaged)); err != nil {
 		return nil, errors.Wrap(err, errTrackUsage)
 	}
 
@@ -104,7 +98,13 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	return &external{role: role, kube: c.kube, job: job}, nil
 }
 
-// An external is a managed.ExternalConnecter that is using the CloudFoundry API to observe and modify resources.
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
+// An external is a managed.ExternalConnector that is using the CloudFoundry API to observe and modify resources.
 type external struct {
 	role role.Role
 	job  job.Job
@@ -118,9 +118,34 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errWrongKind)
 	}
 
-	// Fetch the role object using the CloudFoundry API by guid or according to the specified parameters
+	resourceLateInitialized := false
+
+	// ADR Step 1: Check if external-name is empty
+	if meta.GetExternalName(cr) == "" {
+		// Backwards compatibility required as previously lookup by spec was supported
+		r, err := role.FindOrgRole(ctx, c.role, cr.Spec.ForProvider)
+		if err != nil {
+			if clients.ErrorIsNotFound(err) {
+				return managed.ExternalObservation{ResourceExists: false}, nil
+			}
+			return managed.ExternalObservation{}, errors.Wrap(err, errGet)
+		}
+		if r == nil {
+			return managed.ExternalObservation{ResourceExists: false}, nil
+		}
+		meta.SetExternalName(cr, r.GUID)
+		resourceLateInitialized = true
+	}
+
 	guid := meta.GetExternalName(cr)
-	r, err := role.GetOrgRole(ctx, c.role, guid, cr.Spec.ForProvider)
+
+	// ADR Step 2: External-name is set, check its format (must be valid GUID)
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.New(fmt.Sprintf("external-name '%s' is not a valid GUID format", guid))
+	}
+
+	// ADR Step 3: Build the Get API Request from the external-name (using GUID directly)
+	r, err := role.GetOrgRole(ctx, c.role, guid)
 
 	if err != nil {
 		if clients.ErrorIsNotFound(err) {
@@ -132,17 +157,11 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
-	resourceLateInitialized := false
-	if guid != r.GUID {
-		meta.SetExternalName(cr, r.GUID)
-		resourceLateInitialized = true
-	}
-
 	cr.Status.AtProvider = role.GenerateOrgRoleObservation(r)
 	cr.Status.SetConditions(xpv1.Available())
 
 	return managed.ExternalObservation{
-		ResourceExists:          cr.Status.AtProvider.ID != nil,
+		ResourceExists:          true,
 		ResourceUpToDate:        true,
 		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
@@ -191,25 +210,29 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Delete managed resource OrgRole
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.OrgRole)
 	if !ok {
-		return errors.New(errWrongKind)
+		return managed.ExternalDelete{}, errors.New(errWrongKind)
 	}
 	// TODO
 
 	cr.SetConditions(xpv1.Deleting())
-	if cr.Status.AtProvider.ID == nil {
-		return nil
+	if meta.GetExternalName(cr) == "" {
+		return managed.ExternalDelete{}, nil
 	}
 
 	// Delete is async and we need to implement wait for deletion
-	jobGUID, err := c.role.Delete(ctx, *cr.Status.AtProvider.ID)
+	jobGUID, err := c.role.Delete(ctx, meta.GetExternalName(cr))
 	if err != nil {
-		return errors.Wrap(err, errDelete)
+		// ADR: 404 not found means already deleted - not considered as error case
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 
-	return job.PollJobComplete(ctx, c.job, jobGUID)
+	return managed.ExternalDelete{}, job.PollJobComplete(ctx, c.job, jobGUID)
 }
 
 type initializer struct {

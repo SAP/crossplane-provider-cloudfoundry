@@ -2,38 +2,39 @@ package route
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/pkg/errors"
 
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/connection"
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
-	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/reference"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reference"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources"
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/domain"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/route"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/space"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
 type RouteService interface {
-	GetByIDOrSpec(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, error)
-	Create(ctx context.Context, forProvider v1alpha1.RouteParameters) (string, error)
-	Update(ctx context.Context, guid string, forProvider v1alpha1.RouteParameters) error
-	Delete(ctx context.Context, guid string) error
+	FindRouteBySpec(ctx context.Context, forProvider v1alpha1.RouteParameters) (*v1alpha1.RouteObservation, bool, error)
+	GetRouteByGUID(ctx context.Context, guid string) (*v1alpha1.RouteObservation, bool, error)
+	Create(ctx context.Context, mg resource.Managed, forProvider v1alpha1.RouteParameters) (string, error)
+	Update(ctx context.Context, guid string, mg resource.Managed, forProvider v1alpha1.RouteParameters) error
+	Delete(ctx context.Context, guid string) (string, error)
 }
 
 const (
@@ -53,23 +54,17 @@ const (
 func Setup(mgr ctrl.Manager, o controller.Options) error {
 	name := managed.ControllerName(v1alpha1.RouteGroupKind)
 
-	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
-	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
-		cps = append(cps, connection.NewDetailsManager(mgr.GetClient(), apisv1alpha1.StoreConfigGroupVersionKind))
-	}
-
 	options := []managed.ReconcilerOption{
 		managed.WithInitializers(
 			domainInitializer{client: mgr.GetClient()},
 			spaceInitializer{client: mgr.GetClient()},
 		),
-		managed.WithExternalConnecter(&connector{
+		managed.WithExternalConnector(&connector{
 			kube:  mgr.GetClient(),
-			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
+			usage: resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-		managed.WithConnectionPublishers(cps...),
 		managed.WithPollInterval(o.PollInterval),
 	}
 
@@ -92,7 +87,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 // is called.
 type connector struct {
 	kube  k8s.Client
-	usage resource.Tracker
+	usage resource.LegacyTracker
 }
 
 // Connect typically produces an ExternalClient by:
@@ -105,7 +100,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.New(errNotRoute)
 	}
 
-	if err := c.usage.Track(ctx, mg); err != nil {
+	if err := c.usage.Track(ctx, mg.(resource.LegacyManaged)); err != nil {
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
@@ -114,16 +109,22 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.Wrap(err, errNewClient)
 	}
 
-	return &external{RouteService: route.NewClient(cf), kube: c.kube}, nil
+	routeClient, jobClient := route.NewClient(cf)
+	return &external{RouteService: routeClient, kube: c.kube, job: jobClient}, nil
+}
+
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
 }
 
 // An ExternalClient observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
-	// A 'client' used to connect to the external resource API. In practice this
-	// would be something like an AWS SDK client.
 	kube k8s.Client
 	RouteService
+	job job.Job
 }
 
 // Observe generates observation for Route's
@@ -133,33 +134,43 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errNotRoute)
 	}
 
+	resourceLateInitialized := false
+
+	if meta.GetExternalName(cr) == "" {
+		// Backwards compatibility: lookup by spec fields
+		observed, exists, err := c.FindRouteBySpec(ctx, cr.Spec.ForProvider)
+		if err != nil {
+			return managed.ExternalObservation{}, errors.Wrap(err, errGet)
+		}
+		if !exists {
+			return managed.ExternalObservation{ResourceExists: false}, nil
+		}
+		meta.SetExternalName(cr, observed.GUID)
+		resourceLateInitialized = true
+	}
+
 	guid := meta.GetExternalName(cr)
 
-	atProvider, err := c.RouteService.GetByIDOrSpec(ctx, guid, cr.Spec.ForProvider)
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.New(fmt.Sprintf("external-name '%s' is not a valid GUID format", guid))
+	}
+
+	observed, exists, err := c.GetRouteByGUID(ctx, guid)
 	if err != nil {
 		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
 	}
-
-	if atProvider == nil {
+	if !exists {
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
-	cr.SetConditions(xpv1.Available())
-
-	lateInitialized := false
-	if atProvider.Resource.GUID != guid {
-		meta.SetExternalName(cr, atProvider.Resource.GUID)
-		lateInitialized = true
-	}
-
-	cr.Status.AtProvider = *atProvider
+	cr.Status.AtProvider = *observed
+	cr.Status.SetConditions(xpv1.Available())
 
 	return managed.ExternalObservation{
 		ResourceExists:          true,
-		ResourceUpToDate:        route.IsUpToDate(cr.Spec.ForProvider, *atProvider),
-		ResourceLateInitialized: lateInitialized,
+		ResourceUpToDate:        route.IsUpToDate(cr, cr.Spec.ForProvider, cr.Status.AtProvider),
+		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
-
 }
 
 // Create a route
@@ -171,7 +182,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Creating())
 
-	guid, err := c.RouteService.Create(ctx, cr.Spec.ForProvider)
+	guid, err := c.RouteService.Create(ctx, cr, cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
@@ -179,8 +190,6 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	meta.SetExternalName(cr, guid)
 
 	return managed.ExternalCreation{
-		// Optionally return any details that may be required to connect to the
-		// external resource. These will be stored as the connection secret.
 		ConnectionDetails: managed.ConnectionDetails{},
 	}, nil
 }
@@ -193,7 +202,7 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	guid := meta.GetExternalName(cr)
-	err := c.RouteService.Update(ctx, guid, cr.Spec.ForProvider)
+	err := c.RouteService.Update(ctx, guid, cr, cr.Spec.ForProvider)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
@@ -206,21 +215,29 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 }
 
 // Delete deletes a route
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.Route)
 	if !ok {
-		return errors.New(errNotRoute)
+		return managed.ExternalDelete{}, errors.New(errNotRoute)
 	}
 
 	// Prevent delete if there are bindings.
 	if len(cr.Status.AtProvider.Destinations) > 0 {
-		return errors.New(errActiveBinding)
+		return managed.ExternalDelete{}, errors.New(errActiveBinding)
 	}
 
 	cr.SetConditions(xpv1.Deleting())
 
-	return c.RouteService.Delete(ctx, meta.GetExternalName(cr))
+	if meta.GetExternalName(cr) == "" {
+		return managed.ExternalDelete{}, nil
+	}
 
+	jobGUID, err := c.RouteService.Delete(ctx, meta.GetExternalName(cr))
+	if err != nil {
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
+	}
+
+	return managed.ExternalDelete{}, job.PollJobComplete(ctx, c.job, jobGUID)
 }
 
 // ResolveReferences of this Route.

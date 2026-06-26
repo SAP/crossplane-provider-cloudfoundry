@@ -2,21 +2,20 @@ package space
 
 import (
 	"context"
+	"fmt"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/connection"
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
-	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/org"
@@ -42,20 +41,14 @@ const (
 func Setup(mgr ctrl.Manager, o controller.Options) error {
 	name := managed.ControllerName(v1alpha1.Space_GroupKind)
 
-	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
-	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
-		cps = append(cps, connection.NewDetailsManager(mgr.GetClient(), apisv1alpha1.StoreConfigGroupVersionKind))
-	}
-
 	options := []managed.ReconcilerOption{
 
-		managed.WithExternalConnecter(&connector{
+		managed.WithExternalConnector(&connector{
 			kube:  mgr.GetClient(),
-			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
+			usage: resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-		managed.WithConnectionPublishers(cps...),
 		managed.WithPollInterval(o.PollInterval),
 		managed.WithInitializers(&orgInitializer{
 			kube: mgr.GetClient(),
@@ -82,7 +75,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 // is called.
 type connector struct {
 	kube  k8s.Client
-	usage resource.Tracker
+	usage resource.LegacyTracker
 }
 
 // Connect typically produces an ExternalClient by:
@@ -95,7 +88,7 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.New(errNotSpace)
 	}
 
-	if err := c.usage.Track(ctx, mg); err != nil {
+	if err := c.usage.Track(ctx, mg.(resource.LegacyManaged)); err != nil {
 		return nil, errors.Wrap(err, errTrackPCUsage)
 	}
 
@@ -114,6 +107,12 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 
 }
 
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
 // An ExternalClient observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
@@ -129,10 +128,27 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, errors.New(errNotSpace)
 	}
 
-	// Check if the external resource exists
+	resourceLateInitialized := false
+
+	if meta.GetExternalName(cr) == "" {
+		s, err := space.GetBySpec(ctx, c.client, cr.Spec.ForProvider)
+		if err != nil {
+			if clients.ErrorIsNotFound(err) {
+				return managed.ExternalObservation{ResourceExists: false}, nil
+			}
+			return managed.ExternalObservation{ResourceExists: false}, errors.Wrap(err, errGet)
+		}
+		meta.SetExternalName(cr, s.GUID)
+		resourceLateInitialized = true
+	}
+
 	guid := meta.GetExternalName(cr)
 
-	s, err := space.GetByIDOrSpec(ctx, c.client, guid, cr.Spec.ForProvider)
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalObservation{}, errors.New(fmt.Sprintf("external-name '%s' is not a valid GUID format", guid))
+	}
+
+	s, err := space.GetByID(ctx, c.client, guid)
 
 	// not found or error
 	if err != nil {
@@ -142,22 +158,11 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{ResourceExists: false}, errors.Wrap(err, errGet)
 	}
 
-	if s == nil {
-		return managed.ExternalObservation{ResourceExists: false}, nil
-	}
-
 	// ssh
-	ssh, err := c.feature.IsSSHEnabled(ctx, s.GUID)
+	ssh, err := c.feature.IsSSHEnabled(ctx, guid)
 	if err != nil {
 		// new error message cannot get space feature
 		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
-	}
-
-	resourceLateInitialized := space.LateInitialize(cr, s, ssh)
-	// update external name, if needed
-	if guid != s.GUID {
-		meta.SetExternalName(cr, s.GUID)
-		resourceLateInitialized = true // force update
 	}
 
 	cr.Status.AtProvider = space.GenerateObservation(s, ssh)
@@ -165,7 +170,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	return managed.ExternalObservation{
 		ResourceExists:          true,
-		ResourceUpToDate:        space.IsUpToDate(cr.Spec.ForProvider, s, ssh),
+		ResourceUpToDate:        space.IsUpToDate(cr, cr.Spec.ForProvider, s, ssh),
 		ResourceLateInitialized: resourceLateInitialized,
 	}, nil
 }
@@ -179,7 +184,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 
 	cr.SetConditions(xpv1.Creating())
 
-	s, err := c.client.Create(ctx, space.GenerateCreate(cr.Spec.ForProvider))
+	s, err := c.client.Create(ctx, space.GenerateCreate(cr, cr.Spec.ForProvider))
 	if err != nil {
 		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
 	}
@@ -212,49 +217,53 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errNotSpace)
 	}
 
+	guid := meta.GetExternalName(cr)
+
 	// assert that ID is set
-	if !clients.IsValidGUID(cr.Status.AtProvider.ID) {
-		return managed.ExternalUpdate{}, errors.New(errUpdate)
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalUpdate{}, errors.Wrap(errors.New(errUpdate), fmt.Sprintf("external-name '%s' is not a valid GUID format", guid))
 	}
 
 	// reconcile SSH
 	if cr.Spec.ForProvider.AllowSSH != cr.Status.AtProvider.AllowSSH {
-		err := c.feature.EnableSSH(ctx, cr.Status.AtProvider.ID, cr.Spec.ForProvider.AllowSSH)
+		err := c.feature.EnableSSH(ctx, guid, cr.Spec.ForProvider.AllowSSH)
 		if err != nil {
 			return managed.ExternalUpdate{}, errors.Wrap(err, errEnableSSH)
 		}
 	}
 
-	// rename
-	if cr.Spec.ForProvider.Name != cr.Status.AtProvider.Name {
-		_, err := c.client.Update(ctx, cr.Status.AtProvider.ID, space.GenerateUpdate(cr.Spec.ForProvider))
-		if err != nil {
-			return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
-		}
+	_, err := c.client.Update(ctx, guid, space.GenerateUpdate(cr, cr.Spec.ForProvider))
+	if err != nil {
+		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 
 	return managed.ExternalUpdate{}, nil
 }
 
 // Delete deletes a space
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.Space)
 	if !ok {
-		return errors.New(errNotSpace)
+		return managed.ExternalDelete{}, errors.New(errNotSpace)
 	}
 	cr.SetConditions(xpv1.Deleting())
 
+	guid := meta.GetExternalName(cr)
+
 	// assert that ID is set
-	if !clients.IsValidGUID(cr.Status.AtProvider.ID) {
-		return errors.New(errDelete)
+	if !clients.IsValidGUID(guid) {
+		return managed.ExternalDelete{}, errors.Wrap(errors.New(errDelete), fmt.Sprintf("external-name '%s' is not a valid GUID format", guid))
 	}
 
-	_, err := c.client.Delete(ctx, cr.Status.AtProvider.ID)
+	_, err := c.client.Delete(ctx, guid)
 	if err != nil {
-		return errors.Wrap(err, errDelete)
+		if clients.ErrorIsNotFound(err) {
+			return managed.ExternalDelete{}, nil
+		}
+		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 
-	return nil
+	return managed.ExternalDelete{}, nil
 }
 
 type initializer struct {

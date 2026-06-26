@@ -5,14 +5,15 @@ import (
 	"testing"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/test"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -25,8 +26,8 @@ var (
 	errBoom      = errors.New("boom")
 	errSpace     = errors.New(role.ErrSpaceNotSpecified)
 	resourceName = "my-space-roles"
-	guidSpace    = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69u"
-	guidRole     = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69r"
+	guidSpace    = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69a"
+	guidRole     = "9e4b0d04-d537-6a6a-8c6f-f09ca0e7f69b"
 
 	guidNoRefUser   = "2d8b0d04-d537-4e4e-8c6f-f09ca0e7f56f"
 	guidHealthyUser = "1d1b0d04-d537-4e4e-8c6f-f09ca0e7f11f"
@@ -84,8 +85,18 @@ func withOrigin(origin string) modifier {
 
 func withExternalName(name string) modifier {
 	return func(r *v1alpha1.SpaceRole) {
-		r.ObjectMeta.Annotations[meta.AnnotationKeyExternalName] = name
+		r.Annotations[meta.AnnotationKeyExternalName] = name
 	}
+}
+
+func withID(id string) modifier {
+	return func(r *v1alpha1.SpaceRole) {
+		r.Status.AtProvider.ID = ptr.To(id)
+	}
+}
+
+func withConditions(c ...xpv1.Condition) modifier {
+	return func(i *v1alpha1.SpaceRole) { i.Status.SetConditions(c...) }
 }
 
 func fakeSpaceRole(m ...modifier) *v1alpha1.SpaceRole {
@@ -183,12 +194,12 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
-		"Successful": {
+		"UnsetExternalNameSuccesful": {
 			args: args{
 				mg: fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager)),
 			},
 			want: want{
-				mg:  fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager)),
+				mg:  fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager), withExternalName(guidRole)),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
@@ -200,7 +211,79 @@ func TestObserve(t *testing.T) {
 					[]*cfresource.User{healthyUser},
 					nil,
 				)
+
+				m.On("Get", guidRole).Return(
+					healthyRole,
+					nil,
+				)
 				return m
+			},
+		},
+		"UnsetExternalNameNotFound": {
+			args: args{
+				mg: fakeSpaceRole(withSpace(guidSpace), withUsername("user1"), withType(v1alpha1.SpaceManager)),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withSpace(guidSpace), withUsername("user1"), withType(v1alpha1.SpaceManager)),
+				obs: managed.ExternalObservation{ResourceExists: false},
+				err: nil,
+			},
+			service: func() *fake.MockSpaceRole {
+				m := &fake.MockSpaceRole{}
+				var emptyRoles []*cfresource.Role
+				var emptyUsers []*cfresource.User
+				m.On("ListIncludeUsersAll").Return(emptyRoles, emptyUsers, nil)
+				return m
+			},
+		},
+		"SetExternalNameSuccesful": {
+			args: args{
+				mg: fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager), withExternalName(guidRole)),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withSpace("my-space"), withUsername("user1"), withType(v1alpha1.SpaceManager), withExternalName(guidRole)),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+			service: func() *fake.MockSpaceRole {
+				m := &fake.MockSpaceRole{}
+
+				m.On("Get", guidRole).Return(
+					healthyRole,
+					nil,
+				)
+				return m
+			},
+		},
+		"SetExternalNameNotFound": {
+			args: args{
+				mg: fakeSpaceRole(withExternalName(guidRole)),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withExternalName(guidRole)),
+				obs: managed.ExternalObservation{ResourceExists: false},
+				err: nil,
+			},
+			service: func() *fake.MockSpaceRole {
+				m := &fake.MockSpaceRole{}
+				m.On("Get", guidRole).Return(
+					fake.SpaceRoleNil,
+					errors.New("CF-ResourceNotFound: The role was not found"),
+				)
+				return m
+			},
+		},
+		"SetExternalNameInvalidFormat": {
+			args: args{
+				mg: fakeSpaceRole(withExternalName("not-a-valid-guid")),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withExternalName("not-a-valid-guid")),
+				obs: managed.ExternalObservation{},
+				err: errors.New("external-name 'not-a-valid-guid' is not a valid GUID format"),
+			},
+			service: func() *fake.MockSpaceRole {
+				return &fake.MockSpaceRole{}
 			},
 		},
 	}
@@ -416,15 +499,124 @@ func TestCreate(t *testing.T) {
 			if tc.want.err != nil && err != nil {
 				// the case where our mock server returns error.
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("Observe(...): want error string != got error string:\n%s", diff)
+					t.Errorf("Create(...): want error string != got error string:\n%s", diff)
 				}
 			} else {
 				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Observe(...): want error != got error:\n%s", diff)
+					t.Errorf("Create(...): want error != got error:\n%s", diff)
 				}
 			}
 			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
-				t.Errorf("Observe(...): -want, +got:\n%s", diff)
+				t.Errorf("Create(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestDelete(t *testing.T) {
+	type service func() *fake.MockSpaceRole
+	type args struct {
+		mg resource.Managed
+	}
+
+	type want struct {
+		mg  resource.Managed
+		obs managed.ExternalDelete
+		err error
+	}
+
+	cases := map[string]struct {
+		args    args
+		want    want
+		service service
+		kube    k8s.Client
+	}{
+		"SuccessfulDelete": {
+			args: args{
+				mg: fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id"), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockSpaceRole {
+				m := &fake.MockSpaceRole{}
+				m.On("Delete").Return(
+					"job-guid-123",
+					nil,
+				)
+				return m
+			},
+		},
+		"404NotFound": {
+			args: args{
+				mg: fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id"), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: nil,
+			},
+			service: func() *fake.MockSpaceRole {
+				m := &fake.MockSpaceRole{}
+				m.On("Delete").Return(
+					"",
+					errors.New("CF-ResourceNotFound: The role was not found"),
+				)
+				return m
+			},
+		},
+		"Error": {
+			args: args{
+				mg: fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
+			},
+			want: want{
+				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id"), withConditions(xpv1.Deleting())),
+				obs: managed.ExternalDelete{},
+				err: errors.Wrap(errors.New("CF-ResourceNotDeleted: The role could not be deleted"), errDelete),
+			},
+			service: func() *fake.MockSpaceRole {
+				m := &fake.MockSpaceRole{}
+				m.On("Delete").Return(
+					"",
+					errors.New("CF-ResourceNotDeleted: The role could not be deleted"),
+				)
+				return m
+			},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			t.Logf("Testing: %s", t.Name())
+			mockJob := &fake.MockJob{}
+			mockJob.On("PollComplete").Return(nil)
+
+			c := &external{
+				kube: &test.MockClient{
+					MockDelete: test.NewMockDeleteFn(nil),
+				},
+				job:  mockJob,
+				role: tc.service(),
+			}
+
+			obs, err := c.Delete(context.Background(), tc.args.mg)
+
+			if tc.want.err != nil && err != nil {
+				// the case where our mock server returns error.
+				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
+					t.Errorf("Delete(...): want error string != got error string:\n%s", diff)
+				}
+			} else {
+				if diff := cmp.Diff(tc.want.err, err); diff != "" {
+					t.Errorf("Delete(...): want error != got error:\n%s", diff)
+				}
+			}
+			if diff := cmp.Diff(tc.want.obs, obs); diff != "" {
+				t.Errorf("Delete(...): -want, +got:\n%s", diff)
+			}
+			if diff := cmp.Diff(tc.want.mg, tc.args.mg); diff != "" {
+				t.Errorf("Delete(...): -want, +got:\n%s", diff)
 			}
 		})
 	}

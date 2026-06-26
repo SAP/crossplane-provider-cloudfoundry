@@ -10,23 +10,15 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 )
 
 type OrgObservation struct {
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +mapType=granular
-	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
-
 	// (String) The date and time when the resource was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	CreatedAt *string `json:"createdAt,omitempty" tf:"created_at,omitempty"`
 
 	// (String) The ID of the Organization.
 	ID *string `json:"id,omitempty" tf:"id,omitempty"`
-
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +mapType=granular
-	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
 
 	// (String) The name of the Organization in Cloud Foundry.
 	Name *string `json:"name,omitempty" tf:"name,omitempty"`
@@ -39,18 +31,15 @@ type OrgObservation struct {
 
 	// (String) The date and time when the resource was updated in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
 	UpdatedAt *string `json:"updatedAt,omitempty" tf:"updated_at,omitempty"`
+
+	// (Attributes) The metadata associated with the Cloud Foundry resource.
+	ResourceMetadata `json:",inline"`
 }
 
 type OrgParameters struct {
-	// (Map of String) The annotations associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
+	// (Attributes) The metadata associated with the Cloud Foundry resource.
 	// +kubebuilder:validation:Optional
-	// +mapType=granular
-	Annotations map[string]*string `json:"annotations,omitempty" tf:"annotations,omitempty"`
-
-	// (Map of String) The labels associated with Cloud Foundry resources. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
-	// +kubebuilder:validation:Optional
-	// +mapType=granular
-	Labels map[string]*string `json:"labels,omitempty" tf:"labels,omitempty"`
+	ResourceMetadata `json:",inline"`
 
 	// (String) The name of the Organization in Cloud Foundry.
 	// +kubebuilder:validation:Required
@@ -78,6 +67,14 @@ type OrgStatus struct {
 // +kubebuilder:storageversion
 
 // Org is the Schema for the Orgs API. Creates a Cloud Foundry Organization
+//
+// External-Name Configuration:
+//   - Follows Standard: yes
+//   - Format: Organization GUID (UUID format)
+//   - How to find:
+//   - UI: In the BTP Cockpit, navigate to your org and find the ID in the URL
+//   - CLI: Use `cf org <org-name> --guid`
+//
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"

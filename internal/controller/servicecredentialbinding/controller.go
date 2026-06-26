@@ -2,58 +2,65 @@ package servicecredentialbinding
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strconv"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
-	"github.com/crossplane/crossplane-runtime/pkg/connection"
-	"github.com/crossplane/crossplane-runtime/pkg/controller"
-	"github.com/crossplane/crossplane-runtime/pkg/event"
-	"github.com/crossplane/crossplane-runtime/pkg/meta"
-	"github.com/crossplane/crossplane-runtime/pkg/ratelimiter"
-	"github.com/crossplane/crossplane-runtime/pkg/reconciler/managed"
-	"github.com/crossplane/crossplane-runtime/pkg/resource"
-	"github.com/pkg/errors"
+	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	"github.com/google/uuid"
+
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	apisv1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1alpha1"
 	apisv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	scb "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
+
+	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 const (
-	resourceType    = "ServiceCredentialBinding"
-	externalSystem  = "Cloud Foundry"
-	errTrackPCUsage = "cannot track ProviderConfig usage"
-	errNewClient    = "cannot create a client for " + externalSystem
-	errWrongCRType  = "managed resource is not a " + resourceType
-	errGet          = "cannot get " + resourceType + " in " + externalSystem
-	errFind         = "cannot find " + resourceType + " in " + externalSystem
-	errCreate       = "cannot create " + resourceType + " in " + externalSystem
-	errUpdate       = "cannot update " + resourceType + " in " + externalSystem
-	errDelete       = "cannot delete " + resourceType + " in " + externalSystem
+	resourceType             = "ServiceCredentialBinding"
+	externalSystem           = "Cloud Foundry"
+	errTrackPCUsage          = "cannot track ProviderConfig usage: %w"
+	errNewClient             = "cannot create a client for " + externalSystem + ": %w"
+	errWrongCRType           = "managed resource is not a " + resourceType
+	errGet                   = "cannot get " + resourceType + " in " + externalSystem + ": %w"
+	errCreate                = "cannot create " + resourceType + " in " + externalSystem + ": %w"
+	errUpdate                = "cannot update " + resourceType + " in " + externalSystem + ": %w"
+	errDelete                = "cannot delete " + resourceType + " in " + externalSystem + ": %w"
+	errDeleteRetiredKeys     = "cannot delete retired keys in " + externalSystem + ": %w"
+	errDeleteExpiredKeys     = "cannot delete expired keys in " + externalSystem + ": %w"
+	errUpdateStatus          = "cannot update status after retiring binding: %w"
+	errExtractParams         = "cannot extract specified parameters: %w"
+	errUnknownState          = "unknown last operation state for " + resourceType + " in " + externalSystem
+	errUpdateCR              = "cannot update managed resource"
+	maxCreateAttempts        = 5
+	createAttemptsAnnotation = "crossplane-provider-cloudfoundry/create-attempts"
 )
 
 // Setup adds a controller that reconciles ServiceCredentialBinding CR.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
 	name := managed.ControllerName(v1alpha1.ServiceCredentialBindingGroupKind)
 
-	cps := []managed.ConnectionPublisher{managed.NewAPISecretPublisher(mgr.GetClient(), mgr.GetScheme())}
-	if o.Features.Enabled(features.EnableAlphaExternalSecretStores) {
-		cps = append(cps, connection.NewDetailsManager(mgr.GetClient(), apisv1alpha1.StoreConfigGroupVersionKind))
-	}
-
 	options := []managed.ReconcilerOption{
 		managed.WithInitializers(),
-		managed.WithExternalConnecter(&connector{
+		managed.WithExternalConnector(&connector{
 			kube:  mgr.GetClient(),
-			usage: resource.NewProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
+			usage: resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
 		}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-		managed.WithConnectionPublishers(cps...),
 		managed.WithPollInterval(o.PollInterval),
 	}
 
@@ -76,7 +83,7 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 // is called.
 type connector struct {
 	kube  k8s.Client
-	usage resource.Tracker
+	usage resource.LegacyTracker
 }
 
 // Connect typically produces an ExternalClient by:
@@ -89,26 +96,53 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		return nil, errors.New(errWrongCRType)
 	}
 
-	if err := c.usage.Track(ctx, mg); err != nil {
-		return nil, errors.Wrap(err, errTrackPCUsage)
+	if err := c.usage.Track(ctx, mg.(resource.LegacyManaged)); err != nil {
+		return nil, fmt.Errorf(errTrackPCUsage, err)
 	}
 
 	cf, err := clients.ClientFnBuilder(ctx, c.kube)(mg)
 	if err != nil {
-		return nil, errors.Wrap(err, errNewClient)
+		return nil, fmt.Errorf(errNewClient, err)
 	}
 
-	return &external{
+	client := scb.NewClient(cf)
+	ext := &external{
 		kube:      c.kube,
-		scbClient: scb.NewClient(cf),
-	}, nil
+		scbClient: client,
+		keyRotator: &scb.SCBKeyRotator{
+			SCBClient: client,
+		},
+	}
+	ext.observationStateHandler = ext // Use self as the default handler
+	return ext, nil
+}
+
+// Disconnect implements the managed.ExternalClient interface
+func (c *external) Disconnect(ctx context.Context) error {
+	// No cleanup needed for Cloud Foundry client
+	return nil
+}
+
+// ObservationStateHandler defines the interface for handling observation state
+type ObservationStateHandler interface {
+	HandleObservationState(serviceBinding *cfresource.ServiceCredentialBinding, ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error)
 }
 
 // An external service observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
-	kube      k8s.Client
-	scbClient scb.ServiceCredentialBinding
+	kube                    k8s.Client
+	scbClient               scb.ServiceCredentialBinding
+	keyRotator              scb.KeyRotator
+	observationStateHandler ObservationStateHandler
+}
+
+// isBindingNotFoundError returns true if the error indicates the binding was not found
+func isBindingNotFoundError(err error) bool {
+	return errors.Is(err, cfclient.ErrNoResultsReturned) ||
+		errors.Is(err, cfclient.ErrExactlyOneResultNotReturned) ||
+		cfresource.IsResourceNotFoundError(err) ||
+		cfresource.IsServiceBindingNotFoundError(err)
 }
 
 // Observe checks the observed state of the resource and updates the managed resource's status.
@@ -120,52 +154,47 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	guid := meta.GetExternalName(cr)
 	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, cr.Spec.ForProvider)
-	if err != nil {
-		if clients.ErrorIsNotFound(err) {
-			return managed.ExternalObservation{ResourceExists: false}, nil
+	if isBindingNotFoundError(err) {
+		// The binding does not exist in Cloud Foundry. If we have exhausted the
+		// create attempts, settle into an Unavailable state instead of triggering
+		// another Create. Returning ResourceExists: true with a nil error stops the
+		// reconciler from calling Create again, which avoids an endless
+		// create-fail-requeue loop and prevents flooding CF with orphaned bindings.
+		if isCircuitBreakerTripped(cr) {
+			cr.SetConditions(xpv1.Unavailable().WithMessage(
+				fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
+			))
+			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
 		}
-		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
-	}
-
-	if serviceBinding == nil {
 		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
+	if err != nil {
+		return managed.ExternalObservation{}, fmt.Errorf(errGet, err)
+	}
 
-	// Update the external name if it is different from the GUID
+	// Adoption: if the external-name doesn't match the discovered GUID, update it
 	if guid != serviceBinding.GUID {
-		meta.SetExternalName(cr, serviceBinding.Resource.GUID)
+		meta.SetExternalName(cr, serviceBinding.GUID)
+		// Reset circuit breaker on successful adoption
+		resetCreateAttempts(cr)
 		if err := c.kube.Update(ctx, cr); err != nil {
-			return managed.ExternalObservation{ResourceExists: true}, err
+			return managed.ExternalObservation{}, fmt.Errorf("%s: %w", errUpdateCR, err)
 		}
+	}
+
+	cr.Status.AtProvider.GUID = serviceBinding.GUID
+	cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: serviceBinding.CreatedAt}
+
+	if c.keyRotator.RetireBinding(cr, serviceBinding) {
+		if err := c.kube.Status().Update(ctx, cr); err != nil {
+			return managed.ExternalObservation{}, fmt.Errorf(errUpdateStatus, err)
+		}
+		return managed.ExternalObservation{ResourceExists: false}, nil
 	}
 
 	scb.UpdateObservation(&cr.Status.AtProvider, serviceBinding)
 
-	switch serviceBinding.LastOperation.State {
-	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
-		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
-		return managed.ExternalObservation{
-			ResourceExists:   true,
-			ResourceUpToDate: true, // Do not update the resource while the last operation is in progress
-		}, nil
-	case v1alpha1.LastOperationFailed:
-		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
-		return managed.ExternalObservation{
-			ResourceExists:   serviceBinding.LastOperation.Type != v1alpha1.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
-			ResourceUpToDate: serviceBinding.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
-		}, nil
-	case v1alpha1.LastOperationSucceeded:
-		cr.SetConditions(xpv1.Available())
-
-		return managed.ExternalObservation{
-			ResourceExists:    true,
-			ResourceUpToDate:  scb.IsUpToDate(ctx, cr.Spec.ForProvider, *serviceBinding),
-			ConnectionDetails: scb.GetConnectionDetails(ctx, c.scbClient, serviceBinding.GUID, cr.Spec.ConnectionDetailsAsJSON),
-		}, nil
-	}
-
-	// If the last operation is unknown, error out
-	return managed.ExternalObservation{}, errors.New("unknown last operation state")
+	return c.observationStateHandler.HandleObservationState(serviceBinding, ctx, cr)
 }
 
 // Create a ServiceCredentialBinding resource.
@@ -175,18 +204,34 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errWrongCRType)
 	}
 
+	incrementCreateAttempts(cr)
+	if err := c.kube.Update(ctx, cr); err != nil {
+		return managed.ExternalCreation{}, fmt.Errorf("cannot persist create attempt count: %w", err)
+	}
+
 	params, err := extractParameters(ctx, c.kube, cr.Spec.ForProvider)
 	if err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, "cannot extract specified parameters")
+		return managed.ExternalCreation{}, fmt.Errorf(errExtractParams, err)
 	}
-	cr.SetConditions(xpv1.Creating())
 
-	serviceBinding, err := scb.Create(ctx, c.scbClient, cr.Spec.ForProvider, params)
+	serviceBinding, err := scb.Create(ctx, c.scbClient, cr, cr.Spec.ForProvider, params)
+	if serviceBinding != nil && serviceBinding.GUID != "" {
+		// Capture the external name even if the job failed,
+		// as the binding was created in Cloud Foundry and we can manage it going forward.
+		// This can happen when CF accepts the request
+		// but the broker fails to provision the backing service instance
+		// (e.g. due to invalid parameters).
+		meta.SetExternalName(cr, serviceBinding.GUID)
+	}
 	if err != nil {
-		return managed.ExternalCreation{}, errors.Wrap(err, errCreate)
+		return managed.ExternalCreation{}, fmt.Errorf(errCreate, err)
 	}
 
-	meta.SetExternalName(cr, serviceBinding.GUID)
+	if cr.Annotations != nil {
+		if _, ok := cr.Annotations[scb.ForceRotationKey]; ok {
+			meta.RemoveAnnotations(cr, scb.ForceRotationKey)
+		}
+	}
 
 	return managed.ExternalCreation{}, nil
 }
@@ -198,28 +243,57 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.New(errWrongCRType)
 	}
 
-	_, err := scb.Update(ctx, c.scbClient, cr.GetID(), cr.Spec.ForProvider)
-	if err != nil {
-		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
+	if externalName := meta.GetExternalName(cr); externalName != "" && isValidUUID(externalName) {
+		if _, err := scb.Update(ctx, c.scbClient, externalName, cr, cr.Spec.ForProvider); err != nil {
+			return managed.ExternalUpdate{}, fmt.Errorf(errUpdate, err)
+		}
 	}
 
-	return managed.ExternalUpdate{}, nil
+	if cr.Status.AtProvider.RetiredKeys == nil {
+		return managed.ExternalUpdate{}, nil
+	}
+
+	if newRetiredKeys, err := c.keyRotator.DeleteExpiredKeys(ctx, cr); err != nil {
+		return managed.ExternalUpdate{}, fmt.Errorf(errDeleteExpiredKeys, err)
+	} else {
+		cr.Status.AtProvider.RetiredKeys = newRetiredKeys
+		return managed.ExternalUpdate{}, err
+	}
 }
 
 // Delete a ServiceCredentialBinding resource.
-func (c *external) Delete(ctx context.Context, mg resource.Managed) error {
+func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
 	if !ok {
-		return errors.New(errWrongCRType)
+		return managed.ExternalDelete{}, errors.New(errWrongCRType)
 	}
 	cr.SetConditions(xpv1.Deleting())
 
-	err := scb.Delete(ctx, c.scbClient, cr.GetID())
-	if err != nil {
-		return errors.Wrap(err, errDelete)
+	if err := c.keyRotator.DeleteRetiredKeys(ctx, cr); err != nil {
+		return managed.ExternalDelete{}, fmt.Errorf(errDeleteRetiredKeys, err)
 	}
 
-	return nil
+	// Try external-name first, then fall back to status GUID
+	externalName := meta.GetExternalName(cr)
+	guidToDelete := ""
+
+	if isValidUUID(externalName) {
+		guidToDelete = externalName
+	} else if statusGUID := cr.GetID(); isValidUUID(statusGUID) {
+		// Fallback: external-name is not a valid UUID, but status has a valid GUID
+		guidToDelete = statusGUID
+	}
+
+	// If neither external-name nor status GUID is valid, skip deletion
+	if guidToDelete == "" {
+		return managed.ExternalDelete{}, nil
+	}
+
+	if err := clients.IgnoreNotFoundErr(scb.Delete(ctx, c.scbClient, guidToDelete)); err != nil {
+		return managed.ExternalDelete{}, fmt.Errorf(errDelete, err)
+	}
+
+	return managed.ExternalDelete{}, nil
 }
 
 // extractParameters returns the parameters or credentials from the spec
@@ -235,4 +309,74 @@ func extractParameters(ctx context.Context, kube k8s.Client, spec v1alpha1.Servi
 
 	// If the spec has no parameters or secret ref, return nil
 	return nil, nil
+}
+
+func (c *external) HandleObservationState(serviceBinding *cfresource.ServiceCredentialBinding, ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error) {
+	switch serviceBinding.LastOperation.State {
+	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
+		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
+		return managed.ExternalObservation{
+			ResourceExists:   true,
+			ResourceUpToDate: true, // Do not update the resource while the last operation is in progress
+		}, nil
+	case v1alpha1.LastOperationFailed:
+		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
+		return managed.ExternalObservation{
+			ResourceExists:   true,
+			ResourceUpToDate: serviceBinding.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
+		}, nil
+	case v1alpha1.LastOperationSucceeded:
+		if getCreateAttempts(cr) > 0 {
+			resetCreateAttempts(cr)
+
+			if err := c.kube.Update(ctx, cr); err != nil {
+				return managed.ExternalObservation{}, fmt.Errorf("cannot persist create attempt reset: %w", err)
+			}
+		}
+
+		cr.SetConditions(xpv1.Available())
+
+		return managed.ExternalObservation{
+			ResourceExists:    true,
+			ResourceUpToDate:  scb.IsUpToDate(ctx, cr, cr.Spec.ForProvider, *serviceBinding) && !c.keyRotator.HasExpiredKeys(cr),
+			ConnectionDetails: scb.GetConnectionDetails(ctx, c.scbClient, serviceBinding.GUID, cr.Spec.ConnectionDetailsAsJSON),
+		}, nil
+	}
+
+	// If the last operation is unknown, error out
+	return managed.ExternalObservation{}, errors.New(errUnknownState)
+}
+
+func getCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) int {
+	val := cr.GetAnnotations()[createAttemptsAnnotation]
+	if val == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(val)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+func incrementCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) {
+	n := getCreateAttempts(cr)
+	meta.AddAnnotations(cr, map[string]string{
+		createAttemptsAnnotation: strconv.Itoa(n + 1),
+	})
+}
+
+func resetCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) {
+	meta.RemoveAnnotations(cr, createAttemptsAnnotation)
+}
+
+// isValidUUID returns true if the given string is a valid UUID
+func isValidUUID(s string) bool {
+	return uuid.Validate(s) == nil
+}
+
+// isCircuitBreakerTripped returns true if the maximum number of create attempts has been reached.
+// If the resource is being deleted, the circuit breaker is bypassed to allow cleanup.
+func isCircuitBreakerTripped(cr *v1alpha1.ServiceCredentialBinding) bool {
+	return getCreateAttempts(cr) >= maxCreateAttempts && cr.GetDeletionTimestamp().IsZero()
 }

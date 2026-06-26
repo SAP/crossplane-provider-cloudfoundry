@@ -4,7 +4,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/apis/common/v1"
+	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 )
 
 // SpaceMembersParameters encapsulate role assignments to CloudFoundry Spaces.
@@ -13,8 +13,8 @@ type SpaceMembersParameters struct {
 	SpaceReference `json:",inline"`
 
 	// (String) Space role type to assign to members; see valid role types https://v3-apidocs.cloudfoundry.space/version/3.127.0/index.html#valid-role-types
+	// +kubebuilder:validation:Optional
 	// +kubebuilder:validation:Enum=Developer;Auditor;Manager;Supporter;Developers;Auditors;Managers;Supporters
-	// +kubebuilder:validation:Required
 	RoleType string `json:"roleType"`
 
 	// (Attributes) List of members and enforcement policy for role assignment.
@@ -37,12 +37,23 @@ type SpaceMembersStatus struct {
 // +kubebuilder:object:root=true
 
 // SpaceMembers is the Schema for the SpaceMembers API. Provides a Cloud Foundry Space users resource.
+//
+// External-Name Configuration:
+//   - Follows Standard: no (uses compound key <space-guid>/<role-type>, not a single GUID)
+//   - Format: <space-guid>/<role-type>
+//   - How to find:
+//   - UI: BTP Cockpit → Subaccounts → [Select Subaccount] → Cloud Foundry → Space → Space ID + Settings → Space Members
+//   - CLI: cf space <SPACE_NAME> --guid (field: guid) combined with spec.forProvider.roleType
+//
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || has(self.spec.forProvider.roleType)",message="roleType is required"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.spaceName) || has(self.spec.forProvider.spaceRef) || has(self.spec.forProvider.spaceSelector))",message="SpaceReference is required: exactly one of spaceName, spaceRef, or spaceSelector must be set"
+// +kubebuilder:validation:XValidation:rule="self.spec.managementPolicies == ['Observe'] || (has(self.spec.forProvider.members) && self.spec.forProvider.members.size() >= 1)",message="Members validation: at least one member must be set"
 type SpaceMembers struct {
 	metav1.TypeMeta   `json:",inline"`
 	metav1.ObjectMeta `json:"metadata,omitempty"`

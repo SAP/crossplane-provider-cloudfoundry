@@ -1,0 +1,17 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: upgrade-test-external-name-service-instance
+  annotations:
+    crossplane.io/paused: "false"
+spec:
+  providerConfigRef:
+    name: default
+  forProvider:
+    type: user-provided
+    name: upgrade-test-external-name-service-instance
+    spaceRef:
+      name: upgrade-test-import-space
+      policy:
+        resolve: Always
+    routeServiceUrl: https://example-route-service.local/forward

@@ -21,7 +21,7 @@ package v1alpha1
 import (
 	"context"
 	resources "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources"
-	reference "github.com/crossplane/crossplane-runtime/pkg/reference"
+	reference "github.com/crossplane/crossplane-runtime/v2/pkg/reference"
 	errors "github.com/pkg/errors"
 	client "sigs.k8s.io/controller-runtime/pkg/client"
 )
@@ -273,6 +273,67 @@ func (mg *ServiceInstance) ResolveReferences(ctx context.Context, c client.Reade
 	}
 	mg.Spec.ForProvider.SpaceReference.Space = reference.ToPtrValue(rsp.ResolvedValue)
 	mg.Spec.ForProvider.SpaceReference.SpaceRef = rsp.ResolvedReference
+
+	for i3 := 0; i3 < len(mg.Spec.ForProvider.SharedSpaces); i3++ {
+		rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+			CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SharedSpaces[i3].Space),
+			Extract:      resources.ExternalID(),
+			Reference:    mg.Spec.ForProvider.SharedSpaces[i3].SpaceRef,
+			Selector:     mg.Spec.ForProvider.SharedSpaces[i3].SpaceSelector,
+			To: reference.To{
+				List:    &SpaceList{},
+				Managed: &Space{},
+			},
+		})
+		if err != nil {
+			return errors.Wrap(err, "mg.Spec.ForProvider.SharedSpaces[i3].Space")
+		}
+		mg.Spec.ForProvider.SharedSpaces[i3].Space = reference.ToPtrValue(rsp.ResolvedValue)
+		mg.Spec.ForProvider.SharedSpaces[i3].SpaceRef = rsp.ResolvedReference
+
+	}
+
+	return nil
+}
+
+// ResolveReferences of this ServiceRouteBinding.
+func (mg *ServiceRouteBinding) ResolveReferences(ctx context.Context, c client.Reader) error {
+	r := reference.NewAPIResolver(c, mg)
+
+	var rsp reference.ResolutionResponse
+	var err error
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: mg.Spec.ForProvider.RouteReference.Route,
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.RouteReference.RouteRef,
+		Selector:     mg.Spec.ForProvider.RouteReference.RouteSelector,
+		To: reference.To{
+			List:    &RouteList{},
+			Managed: &Route{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.RouteReference.Route")
+	}
+	mg.Spec.ForProvider.RouteReference.Route = rsp.ResolvedValue
+	mg.Spec.ForProvider.RouteReference.RouteRef = rsp.ResolvedReference
+
+	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
+		CurrentValue: mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstance,
+		Extract:      resources.ExternalID(),
+		Reference:    mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstanceRef,
+		Selector:     mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstanceSelector,
+		To: reference.To{
+			List:    &ServiceInstanceList{},
+			Managed: &ServiceInstance{},
+		},
+	})
+	if err != nil {
+		return errors.Wrap(err, "mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstance")
+	}
+	mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstance = rsp.ResolvedValue
+	mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstanceRef = rsp.ResolvedReference
 
 	return nil
 }

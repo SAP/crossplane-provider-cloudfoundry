@@ -1,0 +1,30 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceRouteBinding
+metadata:
+  name: my-serviceroutebinding
+  namespace: default
+spec:
+  providerConfigRef:
+    name: default
+  forProvider:
+    # Route reference
+    routeRef:
+      name: my-cfapps-route
+      policy:
+        resolve: Always
+    # Optional: routeSelector for label-based selection
+    # routeSelector:
+    #   matchLabels:
+    #     cf.example/route: my-cfapps-route
+    
+    # ServiceInstance reference
+    serviceInstanceRef:
+      name: my-service-instance
+      policy:
+        resolve: Always
+    # Optional: serviceInstanceSelector for label-based selection
+    # serviceInstanceSelector:
+    #   matchLabels:
+    #     cf.example/serviceinstance: my-service-instance
+    
+    # Optional: Parameters to pass to the service broker (only for managed provided ServiceInstances)

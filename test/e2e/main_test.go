@@ -8,29 +8,40 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/crossplane-contrib/xp-testing/pkg/images"
 	"github.com/crossplane-contrib/xp-testing/pkg/logging"
 	"github.com/crossplane-contrib/xp-testing/pkg/setup"
 	"github.com/crossplane-contrib/xp-testing/pkg/vendored"
+	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
 
 	"sigs.k8s.io/e2e-framework/klient/decoder"
 	resources "sigs.k8s.io/e2e-framework/klient/k8s/resources"
-	"sigs.k8s.io/e2e-framework/support/kind"
-
 	"sigs.k8s.io/e2e-framework/pkg/env"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
+	"sigs.k8s.io/e2e-framework/pkg/envfuncs"
+	"sigs.k8s.io/e2e-framework/support/kind"
+)
+
+var (
+	testenv env.Environment
 )
 
 // TestMain creates the testing suite for the resource e2e-tests
 func TestMain(m *testing.M) {
 	var verbosity = 4
 	logging.EnableVerboseLogging(&verbosity)
-	testenv = env.New()
 
 	namespace := envconf.RandomName("test-ns", 16)
 
-	img := images.GetImagesFromEnvironmentOrPanic(UUT_CONFIG_KEY, &UUT_CONTROLLER_KEY)
+	SetupClusterWithCrossplane(namespace)
+
+	os.Exit(testenv.Run(m))
+}
+
+func SetupClusterWithCrossplane(namespace string) {
+	testenv = env.New()
 
 	secretData := getProviderConfigSecretData()
 	secretName := "cf-provider-secret"
@@ -39,40 +50,56 @@ func TestMain(m *testing.M) {
 		SecretData: secretData,
 		SecretName: &secretName,
 	}
-	// Enhance interface for one- based providers
-	clusterSetup := setup.ClusterSetup{
-		ProviderName:       "provider-cloudfoundry",
-		Images:             img,
-		ProviderCredential: &clusterCredentials,
-		CrossplaneSetup:    setup.CrossplaneSetup{Version: "1.16.0"},
-		ControllerConfig: &vendored.ControllerConfig{
-			Spec: vendored.ControllerConfigSpec{
-				Image: img.ControllerImage,
+
+	deploymentRuntimeConfig := vendored.DeploymentRuntimeConfig{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "cf-provider-runtime-config",
+		},
+		Spec: vendored.DeploymentRuntimeConfigSpec{
+			DeploymentTemplate: &vendored.DeploymentTemplate{
+				Spec: &appsv1.DeploymentSpec{
+					Selector: &metav1.LabelSelector{},
+					Template: corev1.PodTemplateSpec{
+						Spec: corev1.PodSpec{
+							Containers: []corev1.Container{
+								{
+									Name: "package-runtime",
+									Args: []string{"--debug", "--sync=10s"},
+								},
+							},
+						},
+					},
+				},
 			},
 		},
 	}
 
-	_ = clusterSetup.Configure(testenv, &kind.Cluster{})
+	clusterSetup := setup.ClusterSetup{
+		ProviderName:            "provider-cloudfoundry",
+		ProviderCredential:      &clusterCredentials,
+		CrossplaneSetup:         setup.CrossplaneSetup{Version: "1.20.1", Registry: setup.DockerRegistry},
+		DeploymentRuntimeConfig: &deploymentRuntimeConfig,
+	}
 
-	testenv.BeforeEachTest(
-		func(ctx context.Context, cfg *envconf.Config, t *testing.T) (context.Context, error) {
+	clusterSetup.Configure(testenv, &kind.Cluster{})
+
+	testenv.Setup(
+		envfuncs.CreateNamespace(namespace),
+		func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
+			cfg.WithNamespace(namespace)
+			return ctx, nil
+		},
+		func(ctx context.Context, cfg *envconf.Config) (context.Context, error) {
 			r, _ := resources.New(cfg.Client().RESTConfig())
-
-			errdecode := decoder.DecodeEachFile(
+			err := decoder.DecodeEachFile(
 				ctx, os.DirFS("./provider"), "*",
 				decoder.CreateHandler(r),
 				decoder.MutateNamespace(namespace),
 			)
-
-			resetTestOrg(ctx, t)
-
-			if errdecode != nil && !strings.Contains(errdecode.Error(), "already exists") {
-				klog.Error("Error Details:", "errdecode", errdecode)
+			if err != nil && !strings.Contains(err.Error(), "already exists") {
+				klog.Error("Error creating ProviderConfig:", "err", err)
 			}
-			// propagate context value
 			return ctx, nil
 		},
 	)
-
-	os.Exit(testenv.Run(m))
 }

@@ -1,0 +1,11 @@
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  name: e2e-org-import
+spec:
+  managementPolicies:
+    - Observe
+  forProvider:
+    # change to your testing org
+    name: cf-ci-e2e
