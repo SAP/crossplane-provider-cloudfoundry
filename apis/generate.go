@@ -11,4 +11,7 @@ Copyright 2023 SAP SE
 // Generate crossplane-runtime methodsets (resource.Claim, etc)
 //go:generate go run -tags generate github.com/crossplane/crossplane-tools/cmd/angryjet generate-methodsets --header-file=../hack/boilerplate.go.txt ./...
 
+// Generate documentation for the external-name
+//go:generate go run ../scripts/generate-external-name-docs.go -apis-dir=. -docs-file=../docs/end-user-guides/external-name.md
+
 package apis
