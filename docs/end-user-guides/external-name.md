@@ -47,12 +47,12 @@ metadata.annotations.crossplane.io/external-name: <resource_uniq_ID>
 
 ### OrgMembers
 
-- Follows Standard: no (uses compound key <org-guid>/<role-type>, not a single GUID)
-- Format: <org-guid>/<role-type>
+- Follows Standard: no (uses compound key `<org-guid>/<role-type>`, not a single GUID)
+- Format: `<org-guid>/<role-type>`
 - How to find:
 
   - UI: BTP Cockpit → Subaccounts → [Select Subaccount] → Cloud Foundry → Organization → Org ID + Settings → Org Members
-  - CLI: cf org <ORG_NAME> --guid (field: guid) combined with spec.forProvider.roleType
+  - CLI: `cf org <ORG_NAME> --guid` (field: guid) combined with spec.forProvider.roleType
 
 ### OrgQuota
 
@@ -60,8 +60,8 @@ metadata.annotations.crossplane.io/external-name: <resource_uniq_ID>
 - Format: GUID (UUID v4)
 - How to find:
 
-  - UI: Cloud Foundry > Quota Definitions > <quota name> (GUID in URL or details)
-  - CLI: cf curl /v3/organization_quotas?names=<name> (field: guid)
+  - UI: Cloud Foundry > Quota Definitions > `<quota name>` (GUID in URL or details)
+  - CLI: `cf curl /v3/organization_quotas?names=<name>` (field: guid)
 
 ### OrgRole
 
@@ -132,12 +132,12 @@ metadata.annotations.crossplane.io/external-name: <resource_uniq_ID>
 
 ### SpaceMembers
 
-- Follows Standard: no (uses compound key <space-guid>/<role-type>, not a single GUID)
-- Format: <space-guid>/<role-type>
+- Follows Standard: no (uses compound key `<space-guid>/<role-type>`, not a single GUID)
+- Format: `<space-guid>/<role-type>`
 - How to find:
 
   - UI: BTP Cockpit → Subaccounts → [Select Subaccount] → Cloud Foundry → Space → Space ID + Settings → Space Members
-  - CLI: cf space <SPACE_NAME> --guid (field: guid) combined with spec.forProvider.roleType
+  - CLI: `cf space <SPACE_NAME> --guid` (field: guid) combined with spec.forProvider.roleType
 
 ### SpaceQuota
 
