@@ -43,6 +43,16 @@ We have a growing backlog of features and improvements. You can follow along —
 
 ---
 
+## 👐 Support, Feedback
+
+Got a question or found an issue? We'd love to hear from you:
+
+- 🐛 **Open a GitHub issue:** [github.com/SAP/crossplane-provider-cloudfoundry/issues/new/choose](https://github.com/SAP/crossplane-provider-cloudfoundry/issues/new/choose)
+- 💬 **Chat on Slack:** [**#provider-sap-cloudfoundry**](https://crossplane.slack.com/archives/C08NBTJ1J05)
+- 📞 **Join the monthly community call** — last Wednesday of every month at 4 pm CET
+
+---
+
 ## 📦 Installation
 
 > ⚠️ **Crossplane v2 is not yet supported but coming soon.** Please use **Crossplane v1** for now.
