@@ -39,11 +39,11 @@ type SpaceMembersStatus struct {
 // SpaceMembers is the Schema for the SpaceMembers API. Provides a Cloud Foundry Space users resource.
 //
 // External-Name Configuration:
-//   - Follows Standard: no (uses compound key <space-guid>/<role-type>, not a single GUID)
-//   - Format: <space-guid>/<role-type>
+//   - Follows Standard: no (uses compound key `<space-guid>/<role-type>`, not a single GUID)
+//   - Format: `<space-guid>/<role-type>`
 //   - How to find:
 //   - UI: BTP Cockpit → Subaccounts → [Select Subaccount] → Cloud Foundry → Space → Space ID + Settings → Space Members
-//   - CLI: cf space <SPACE_NAME> --guid (field: guid) combined with spec.forProvider.roleType
+//   - CLI: `cf space <SPACE_NAME> --guid` (field: guid) combined with spec.forProvider.roleType
 //
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"

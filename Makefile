@@ -224,6 +224,12 @@ generate-test-crs:
 	done
 	@$(OK) CRS generated
 
+.PHONY: docs.generate-external-name
+docs.generate-external-name:
+	@$(INFO) Generating external-name documentation from *_types.go files
+	@$(GO) run ./scripts/generate-external-name-docs.go
+	@$(OK) External-name documentation generated
+
 ACCEPTANCE_DEPLOY ?= local-deploy
 
 .PHONY: test-acceptance
