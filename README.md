@@ -8,6 +8,8 @@
 
 `crossplane-provider-cloudfoundry` lets you define Cloud Foundry resources (Orgs, Spaces, Services, Applications, and more) as Kubernetes custom resources. Crossplane takes care of the rest: provisioning, drift detection, and reconciliation — no scripts, no manual clicks.
 
+All available CRDs can be found in the [API reference](https://doc.crds.dev/github.com/SAP/crossplane-provider-cloudfoundry).
+
 ---
 
 ## 🌍 Community
