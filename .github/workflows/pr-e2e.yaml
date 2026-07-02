@@ -27,7 +27,14 @@ jobs:
     needs: detect-non-doc-changes
     if: needs.detect-non-doc-changes.outputs.has-non-doc-changes == 'true'
     runs-on: ubuntu-latest
-    environment: ${{ github.event_name == 'pull_request_target' && contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association) && 'pr-e2e-no-approval' || 'pr-e2e-approval' }}
+    environment:
+      name: >-
+        ${{
+          (github.event.pull_request.author_association == 'OWNER' ||
+           github.event.pull_request.author_association == 'MEMBER' ||
+           github.event.pull_request.author_association == 'COLLABORATOR')
+          && 'pr-e2e-no-approval' || 'pr-e2e-approval'
+        }}
     steps:
       - run: echo "Approved"
 
