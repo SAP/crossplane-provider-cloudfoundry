@@ -1,0 +1,31 @@
+name: Detect Non-Doc Changes
+
+on:
+  workflow_call:
+    outputs:
+      has-non-doc-changes:
+        description: "'true' if the PR contains changes outside md/mdx files"
+        value: ${{ jobs.detect-non-doc-changes.outputs.has-non-doc-changes }}
+
+permissions:
+  contents: read
+
+jobs:
+  detect-non-doc-changes:
+    runs-on: ubuntu-latest
+    outputs:
+      has-non-doc-changes: ${{ steps.check.outputs.has-non-doc-changes }}
+
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          FILES=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files --paginate --jq '.[].filename')
+          if echo "$FILES" | grep -qvE '\.(md|mdx)$'; then
+            echo "has-non-doc-changes=true" >> "$GITHUB_OUTPUT"
+            echo "PR contains non-doc changes — running full checks"
+          else
+            echo "has-non-doc-changes=false" >> "$GITHUB_OUTPUT"
+            echo "PR contains only doc changes (md/mdx) — skipping non-doc checks"
+          fi
