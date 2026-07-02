@@ -22,6 +22,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           FILES=$(gh api repos/${{ github.repository }}/pulls/${{ github.event.pull_request.number }}/files --paginate --jq '.[].filename')
+          echo "Changed files:"
+          echo "$FILES"
           if echo "$FILES" | grep -qvE '\.(md|mdx)$'; then
             echo "has-non-doc-changes=true" >> "$GITHUB_OUTPUT"
             echo "PR contains non-doc changes — running full checks"
