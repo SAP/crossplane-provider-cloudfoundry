@@ -23,18 +23,31 @@ jobs:
   detect-non-doc-changes:
     uses: ./.github/workflows/detect-non-doc-changes.yaml
 
+  # see https://github.blog/changelog/2025-08-08-upcoming-changes-to-github-events-api-payloads/#whats-changing
+  # for deprecation of event.pull_request.author_association
+  # using this endpoint which returns 204 or 404 because it is available with the token's read permissions
+  # https://docs.github.com/en/rest/collaborators/collaborators?apiVersion=2026-03-10#check-if-a-user-is-a-repository-collaborator
+  get-author-association:
+    runs-on: self-hosted
+    outputs:
+      is-collaborator: ${{ steps.check.outputs.is-collaborator }}
+    steps:
+      - id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api repos/${{ github.repository }}/collaborators/${{ github.event.pull_request.user.login }} --silent 2>/dev/null; then
+            echo "is-collaborator=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "is-collaborator=false" >> "$GITHUB_OUTPUT"
+          fi
+
   approve:
-    needs: detect-non-doc-changes
+    needs: [detect-non-doc-changes, get-author-association]
     if: needs.detect-non-doc-changes.outputs.has-non-doc-changes == 'true'
     runs-on: ubuntu-latest
     environment:
-      name: >-
-        ${{
-          (github.event.pull_request.author_association == 'OWNER' ||
-           github.event.pull_request.author_association == 'MEMBER' ||
-           github.event.pull_request.author_association == 'COLLABORATOR')
-          && 'pr-e2e-no-approval' || 'pr-e2e-approval'
-        }}
+      name: ${{ needs.get-author-association.outputs.is-collaborator == 'true' && 'pr-e2e-no-approval' || 'pr-e2e-approval' }}
     steps:
       - run: echo "Approved"
 
