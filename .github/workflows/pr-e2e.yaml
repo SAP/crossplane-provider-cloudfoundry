@@ -52,9 +52,10 @@ jobs:
       - run: echo "Approved"
 
   run-e2e-test:
-    needs: approve
-    if: needs.approve.result == 'success'
+    needs: [approve, detect-non-doc-changes]
+    if: needs.approve.result == 'success' || needs.approve.result == 'skipped'
     uses: ./.github/workflows/e2e_test.yaml
     with:
       checkout-ref: ${{ github.event.pull_request.head.sha }}
+      skip: ${{ needs.detect-non-doc-changes.outputs.has-non-doc-changes != 'true' }}
     secrets: inherit

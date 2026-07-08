@@ -18,6 +18,11 @@ on:
         default: ''
         required: false
         type: string
+      skip:
+        description: 'skip all jobs (e.g. doc-only changes); workflow still runs for branch protection'
+        default: false
+        required: false
+        type: boolean
 
 
 permissions:
@@ -37,6 +42,7 @@ env:
 
 jobs:
   prepare-matrix:
+    if: ${{ !inputs.skip }}
     runs-on: ubuntu-latest
     outputs:
       test-names: ${{ steps.set-matrix.outputs.test-names }}
@@ -66,6 +72,7 @@ jobs:
   # "Re-run failed jobs" fails — build won't re-run, so the artifacts it
   # produced are gone. Use "Re-run all jobs" to rebuild them.
   build:
+    if: ${{ !inputs.skip }}
     runs-on: ubuntu-latest
     needs: prepare-matrix
     steps:
@@ -130,6 +137,7 @@ jobs:
           if-no-files-found: error
 
   e2e-test:
+    if: ${{ !inputs.skip }}
     runs-on: ubuntu-latest
     needs: [prepare-matrix, build]
     environment: pr-e2e-no-approval
@@ -195,7 +203,7 @@ jobs:
     runs-on: ubuntu-latest
     needs: [prepare-matrix, e2e-test]
     environment: pr-e2e-no-approval
-    if: always() && needs.prepare-matrix.result == 'success' # intentional: workflow cancellation skips cleanup; resources will persist until the next run
+    if: always() && !inputs.skip && needs.prepare-matrix.result == 'success' # intentional: workflow cancellation skips cleanup; resources will persist until the next run
     steps:
       - name: checkout repo
         uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -226,17 +234,20 @@ jobs:
     steps:
       - name: Fail for failed prepare-matrix job
         if: |
+          !inputs.skip && (
           needs.prepare-matrix.result == 'failure' ||
-          needs.prepare-matrix.result == 'cancelled'
+          needs.prepare-matrix.result == 'cancelled')
         run: exit 1
       - name: Fail for failed build job
         if: |
+          !inputs.skip && (
           needs.build.result == 'failure' ||
-          needs.build.result == 'cancelled'
+          needs.build.result == 'cancelled')
         run: exit 1
       - name: Fail for failed matrix jobs
         if: |
+          !inputs.skip && (
           needs.e2e-test.result == 'failure' ||
           needs.e2e-test.result == 'cancelled' ||
-          needs.e2e-test.result == 'skipped'
+          needs.e2e-test.result == 'skipped')
         run: exit 1
