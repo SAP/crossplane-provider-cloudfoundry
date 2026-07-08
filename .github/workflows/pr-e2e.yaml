@@ -28,7 +28,7 @@ jobs:
   # using this endpoint which returns 204 or 404 because it is available with the token's read permissions
   # https://docs.github.com/en/rest/collaborators/collaborators?apiVersion=2026-03-10#check-if-a-user-is-a-repository-collaborator
   get-author-association:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     outputs:
       is-collaborator: ${{ steps.check.outputs.is-collaborator }}
     steps:
