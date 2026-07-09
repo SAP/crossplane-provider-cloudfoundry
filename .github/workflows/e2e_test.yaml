@@ -230,24 +230,21 @@ jobs:
       - build
       - e2e-test
     timeout-minutes: 1
-    if: always()
+    if: always() && !inputs.skip
     steps:
       - name: Fail for failed prepare-matrix job
         if: |
-          !inputs.skip && (
           needs.prepare-matrix.result == 'failure' ||
-          needs.prepare-matrix.result == 'cancelled')
+          needs.prepare-matrix.result == 'cancelled'
         run: exit 1
       - name: Fail for failed build job
         if: |
-          !inputs.skip && (
           needs.build.result == 'failure' ||
-          needs.build.result == 'cancelled')
+          needs.build.result == 'cancelled'
         run: exit 1
       - name: Fail for failed matrix jobs
         if: |
-          !inputs.skip && (
           needs.e2e-test.result == 'failure' ||
           needs.e2e-test.result == 'cancelled' ||
-          needs.e2e-test.result == 'skipped')
+          needs.e2e-test.result == 'skipped'
         run: exit 1
