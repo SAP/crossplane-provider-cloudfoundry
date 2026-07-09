@@ -44,7 +44,7 @@ jobs:
 
   approve:
     needs: [detect-non-doc-changes, get-author-association]
-    if: needs.detect-non-doc-changes.outputs.has-non-doc-changes == 'true'
+    if: needs.detect-non-doc-changes.outputs.has-only-doc-changes != 'true'
     runs-on: ubuntu-latest
     environment:
       name: ${{ needs.get-author-association.outputs.is-collaborator == 'true' && 'pr-e2e-no-approval' || 'pr-e2e-approval' }}
@@ -57,5 +57,5 @@ jobs:
     uses: ./.github/workflows/e2e_test.yaml
     with:
       checkout-ref: ${{ github.event.pull_request.head.sha }}
-      skip: ${{ needs.detect-non-doc-changes.outputs.has-non-doc-changes != 'true' }}
+      skip: ${{ needs.detect-non-doc-changes.outputs.has-only-doc-changes == 'true' }}
     secrets: inherit
