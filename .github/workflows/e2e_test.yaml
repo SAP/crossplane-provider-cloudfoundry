@@ -19,7 +19,7 @@ on:
         required: false
         type: string
       skip:
-        description: 'skip all jobs (e.g. doc-only changes); workflow still runs for branch protection'
+        description: 'skip all jobs (e.g. for doc-only changes); workflow still runs to satisfy branch protection'
         default: false
         required: false
         type: boolean
