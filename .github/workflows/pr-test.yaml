@@ -25,10 +25,10 @@ jobs:
 
   run-unit-test:
     needs: detect-non-doc-changes
-    if: needs.detect-non-doc-changes.outputs.has-non-doc-changes == 'true'
+    if: needs.detect-non-doc-changes.outputs.has-only-doc-changes != 'true'
     uses: ./.github/workflows/unit_test.yaml
 
   run-make-reviewable-and-check-diff:
     needs: detect-non-doc-changes
-    if: needs.detect-non-doc-changes.outputs.has-non-doc-changes == 'true'
+    if: needs.detect-non-doc-changes.outputs.has-only-doc-changes != 'true'
     uses: ./.github/workflows/reviewable_check_diff.yaml

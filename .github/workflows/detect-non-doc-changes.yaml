@@ -3,9 +3,9 @@ name: Detect Non-Doc Changes
 on:
   workflow_call:
     outputs:
-      has-non-doc-changes:
-        description: "'true' if the PR contains changes outside md/mdx files"
-        value: ${{ jobs.detect-non-doc-changes.outputs.has-non-doc-changes }}
+      has-only-doc-changes:
+        description: "'true' if the PR contains only md/mdx changes"
+        value: ${{ jobs.detect-non-doc-changes.outputs.has-only-doc-changes }}
 
 permissions:
   contents: read
@@ -14,7 +14,7 @@ jobs:
   detect-non-doc-changes:
     runs-on: ubuntu-latest
     outputs:
-      has-non-doc-changes: ${{ steps.check.outputs.has-non-doc-changes }}
+      has-only-doc-changes: ${{ steps.check.outputs.has-only-doc-changes }}
 
     steps:
       - id: check
@@ -25,9 +25,9 @@ jobs:
           echo "Changed files:"
           echo "$FILES"
           if echo "$FILES" | grep -qvE '\.(md|mdx)$'; then
-            echo "has-non-doc-changes=true" >> "$GITHUB_OUTPUT"
+            echo "has-only-doc-changes=false" >> "$GITHUB_OUTPUT"
             echo "PR contains non-doc changes — running full checks"
           else
-            echo "has-non-doc-changes=false" >> "$GITHUB_OUTPUT"
+            echo "has-only-doc-changes=true" >> "$GITHUB_OUTPUT"
             echo "PR contains only doc changes (md/mdx) — skipping non-doc checks"
           fi
