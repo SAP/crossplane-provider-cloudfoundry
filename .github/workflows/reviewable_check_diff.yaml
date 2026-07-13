@@ -5,6 +5,12 @@ name: Reviewable&Check-Diff
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      skip:
+        description: 'skip all jobs (e.g. for doc-only changes); workflow still runs to satisfy branch protection'
+        default: false
+        required: false
+        type: boolean
 
 permissions:
   contents: read
@@ -14,6 +20,7 @@ env:
 
 jobs:
   reviewable-checkdiff:
+    if: ${{ !inputs.skip }}
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7

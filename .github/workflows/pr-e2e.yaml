@@ -37,7 +37,7 @@ jobs:
 
   run-e2e-test:
     needs: [approve, detect-non-doc-changes]
-    if: needs.approve.result == 'success' || needs.approve.result == 'skipped'
+    if: always() && (needs.approve.result == 'success' || needs.approve.result == 'skipped')
     uses: ./.github/workflows/e2e_test.yaml
     with:
       checkout-ref: ${{ github.event.pull_request.head.sha }}
