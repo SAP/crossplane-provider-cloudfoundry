@@ -6,6 +6,12 @@ name: Unit-Tests
 on:
   workflow_dispatch:
   workflow_call:
+    inputs:
+      skip:
+        description: 'skip all jobs (e.g. for doc-only changes); workflow still runs to satisfy branch protection'
+        default: false
+        required: false
+        type: boolean
 
 permissions:
   contents: read
@@ -13,6 +19,7 @@ permissions:
 jobs:
 
   unit-tests:
+    if: ${{ inputs.skip != 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4.1.7
