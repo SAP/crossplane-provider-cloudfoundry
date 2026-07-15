@@ -14,6 +14,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/google/uuid"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
@@ -222,6 +223,7 @@ func newUpdateOption(mg xpresource.Managed, forProvider v1alpha1.ServiceCredenti
 // UpdateObservation updates the CR's AtProvider status from the observed resource
 func UpdateObservation(observation *v1alpha1.ServiceCredentialBindingObservation, r *resource.ServiceCredentialBinding) {
 	observation.GUID = r.GUID
+	observation.Name = ptr.Deref(r.Name, "")
 	observation.LastOperation = &v1alpha1.LastOperation{
 		Type:        r.LastOperation.Type,
 		State:       r.LastOperation.State,

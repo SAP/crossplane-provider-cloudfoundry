@@ -109,6 +109,8 @@ type ServiceCredentialBindingStatus struct {
 type SCBResource struct {
 	// The GUID of the Cloud Foundry resource
 	GUID string `json:"guid,omitempty"`
+	// The name of the Cloud Foundry resource
+	Name string `json:"name,omitempty"`
 	// The date and time when the resource was created.
 	CreatedAt *metav1.Time `json:"createdAt,omitempty"`
 }

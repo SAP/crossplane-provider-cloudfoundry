@@ -81,6 +81,7 @@ func withObservedLabels(labels map[string]*string) modifier {
 func withObservation(guid string, lastOp *v1alpha1.LastOperation) modifier {
 	return func(r *v1alpha1.ServiceCredentialBinding) {
 		r.Status.AtProvider.GUID = guid
+		r.Status.AtProvider.Name = name
 		r.Status.AtProvider.CreatedAt = &metav1.Time{}
 		r.Status.AtProvider.LastOperation = lastOp
 	}
