@@ -56,7 +56,7 @@ func (r *SCBKeyRotator) RetireBinding(cr *v1alpha1.ServiceCredentialBinding, ser
 		}
 		cr.Status.AtProvider.RetiredKeys = append(cr.Status.AtProvider.RetiredKeys, &v1alpha1.SCBResource{
 			GUID:      serviceBinding.GUID,
-			Name:      ptr.Deref(serviceBinding.Name, ""),
+			Name:      ptr.Deref(serviceBinding.Name, ""), // only set during retirement; already retired keys are not backfilled
 			CreatedAt: &metav1.Time{Time: serviceBinding.CreatedAt},
 		})
 		return true
