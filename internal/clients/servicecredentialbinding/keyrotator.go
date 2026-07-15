@@ -9,6 +9,7 @@ import (
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
@@ -55,6 +56,7 @@ func (r *SCBKeyRotator) RetireBinding(cr *v1alpha1.ServiceCredentialBinding, ser
 		}
 		cr.Status.AtProvider.RetiredKeys = append(cr.Status.AtProvider.RetiredKeys, &v1alpha1.SCBResource{
 			GUID:      serviceBinding.GUID,
+			Name:      ptr.Deref(serviceBinding.Name, ""), // only set during retirement; already retired keys are not backfilled
 			CreatedAt: &metav1.Time{Time: serviceBinding.CreatedAt},
 		})
 		return true

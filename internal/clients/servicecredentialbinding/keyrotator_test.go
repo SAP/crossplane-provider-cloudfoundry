@@ -9,6 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/mock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/utils/ptr"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 
@@ -84,6 +85,7 @@ func TestSCBKeyRotator_RetireBinding(t *testing.T) {
 
 	serviceBindingResource := &cfresource.ServiceCredentialBinding{
 		Resource: cfresource.Resource{GUID: "test-guid"},
+		Name:     ptr.To("my-binding-abc12"),
 	}
 
 	cases := map[string]struct {
@@ -134,6 +136,10 @@ func TestSCBKeyRotator_RetireBinding(t *testing.T) {
 				for _, retiredKey := range tc.args.cr.Status.AtProvider.RetiredKeys {
 					if retiredKey.GUID == serviceBindingResource.GUID {
 						found = true
+						if retiredKey.Name != ptr.Deref(serviceBindingResource.Name, "") {
+							t.Errorf("RetireBinding(...): Name mismatch in retired key, want %q, got %q",
+								ptr.Deref(serviceBindingResource.Name, ""), retiredKey.Name)
+						}
 						break
 					}
 				}

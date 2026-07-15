@@ -376,30 +376,58 @@ func TestNewCreateOption(t *testing.T) {
 }
 
 func TestUpdateObservation(t *testing.T) {
-	observation := &v1alpha1.ServiceCredentialBindingObservation{}
-
 	now := time.Now()
-	resource := &cfresource.ServiceCredentialBinding{
-		Resource: cfresource.Resource{GUID: testGUID},
-		LastOperation: cfresource.LastOperation{
-			Type:        v1alpha1.LastOperationCreate,
-			State:       v1alpha1.LastOperationSucceeded,
-			Description: "Create succeeded",
-			UpdatedAt:   now,
-			CreatedAt:   now,
+
+	cases := map[string]struct {
+		resource *cfresource.ServiceCredentialBinding
+		wantName string
+	}{
+		"WithName": {
+			resource: &cfresource.ServiceCredentialBinding{
+				Resource: cfresource.Resource{GUID: testGUID},
+				Name:     ptr.To("my-binding-abc12"),
+				LastOperation: cfresource.LastOperation{
+					Type:      v1alpha1.LastOperationCreate,
+					State:     v1alpha1.LastOperationSucceeded,
+					UpdatedAt: now,
+					CreatedAt: now,
+				},
+			},
+			wantName: "my-binding-abc12",
+		},
+		"WithoutName": {
+			resource: &cfresource.ServiceCredentialBinding{
+				Resource: cfresource.Resource{GUID: testGUID},
+				Name:     nil,
+				LastOperation: cfresource.LastOperation{
+					Type:      v1alpha1.LastOperationCreate,
+					State:     v1alpha1.LastOperationSucceeded,
+					UpdatedAt: now,
+					CreatedAt: now,
+				},
+			},
+			wantName: "",
 		},
 	}
 
-	UpdateObservation(observation, resource)
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			observation := &v1alpha1.ServiceCredentialBindingObservation{}
+			UpdateObservation(observation, tc.resource)
 
-	if observation.GUID != testGUID {
-		t.Errorf("UpdateObservation(...): GUID mismatch, want %s, got %s", testGUID, observation.GUID)
-	}
-	if observation.LastOperation.Type != v1alpha1.LastOperationCreate {
-		t.Errorf("UpdateObservation(...): LastOperation.Type mismatch")
-	}
-	if observation.LastOperation.State != v1alpha1.LastOperationSucceeded {
-		t.Errorf("UpdateObservation(...): LastOperation.State mismatch")
+			if observation.GUID != testGUID {
+				t.Errorf("UpdateObservation(...): GUID mismatch, want %s, got %s", testGUID, observation.GUID)
+			}
+			if observation.Name != tc.wantName {
+				t.Errorf("UpdateObservation(...): Name mismatch, want %q, got %q", tc.wantName, observation.Name)
+			}
+			if observation.LastOperation.Type != v1alpha1.LastOperationCreate {
+				t.Errorf("UpdateObservation(...): LastOperation.Type mismatch")
+			}
+			if observation.LastOperation.State != v1alpha1.LastOperationSucceeded {
+				t.Errorf("UpdateObservation(...): LastOperation.State mismatch")
+			}
+		})
 	}
 }
 
