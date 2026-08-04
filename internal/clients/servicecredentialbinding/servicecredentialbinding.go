@@ -172,7 +172,10 @@ func newCreateOption(mg xpresource.Managed, forProvider v1alpha1.ServiceCredenti
 			return nil, errors.New(ErrNameMissing)
 		}
 
-		name := randomName(*forProvider.Name)
+		name := *forProvider.Name
+		if forProvider.Rotation != nil {
+			name = randomName(name)
+		}
 
 		opt = resource.NewServiceCredentialBindingCreateKey(*forProvider.ServiceInstance, name)
 	case "app":
