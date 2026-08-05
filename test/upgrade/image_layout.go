@@ -18,6 +18,10 @@ const (
 	firstSingleImageVersion = "1.0.1"
 )
 
+// firstSingleImageSemver is parsed once at init so invalid cutoffs fail
+// immediately rather than on first layout resolution.
+var firstSingleImageSemver = mustParseSemver(firstSingleImageVersion)
+
 type imageLayout struct {
 	packageImage    string
 	controllerImage *string
@@ -41,16 +45,19 @@ func resolveImageLayout(tag, localPackage string, localController *string, packa
 // tags (for example commit or channel tags) are assumed to refer to the
 // current single-image build; layout detection never depends on a failed pull.
 func isSingleImageVersion(tag string) bool {
-	threshold, err := semver.Parse(firstSingleImageVersion)
-	if err != nil {
-		panic(fmt.Errorf("invalid single-image version cutoff %q: %w", firstSingleImageVersion, err))
-	}
-
 	version, err := semver.Parse(strings.TrimPrefix(tag, "v"))
 	if err != nil {
 		return true
 	}
-	return version.GTE(threshold)
+	return version.GTE(firstSingleImageSemver)
+}
+
+func mustParseSemver(version string) semver.Version {
+	v, err := semver.Parse(version)
+	if err != nil {
+		panic(fmt.Errorf("invalid single-image version cutoff %q: %w", version, err))
+	}
+	return v
 }
 
 func providerInstallOptions(providerName string, layout imageLayout) xpenvfuncs.InstallCrossplaneProviderOptions {

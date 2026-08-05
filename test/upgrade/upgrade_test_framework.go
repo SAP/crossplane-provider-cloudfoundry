@@ -186,7 +186,7 @@ func (b *CustomUpgradeTestBuilder) Feature() features.Feature {
 		panic("Both fromTag and toTag must be specified before building an upgrade test feature")
 	}
 
-	fromLayout, toLayout := loadPackages(b.fromTag, b.toTag)
+	fromLayout, toLayout := resolveImagePaths(b.fromTag, b.toTag)
 
 	upgradeTest := upgrade.UpgradeTest{
 		ProviderName:        providerName,
@@ -271,10 +271,6 @@ func (b *CustomUpgradeTestBuilder) Feature() features.Feature {
 	)
 
 	return feature.Feature()
-}
-
-func loadPackages(fromTag, toTag string) (imageLayout, imageLayout) {
-	return resolveImagePaths(fromTag, toTag)
 }
 
 // Helper to get ProviderConfig setup function
