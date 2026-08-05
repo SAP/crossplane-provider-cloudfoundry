@@ -18,7 +18,6 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/test"
 	"github.com/crossplane-contrib/xp-testing/pkg/upgrade"
-	"github.com/crossplane-contrib/xp-testing/pkg/xpenvfuncs"
 	kubeErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	res "sigs.k8s.io/e2e-framework/klient/k8s/resources"
@@ -187,21 +186,24 @@ func (b *CustomUpgradeTestBuilder) Feature() features.Feature {
 		panic("Both fromTag and toTag must be specified before building an upgrade test feature")
 	}
 
-	fromProviderPackage, toProviderPackage := loadPackages(b.fromTag, b.toTag)
+	fromLayout, toLayout := loadPackages(b.fromTag, b.toTag)
 
 	upgradeTest := upgrade.UpgradeTest{
 		ProviderName:        providerName,
 		ClusterName:         kindClusterName,
-		FromProviderPackage: fromProviderPackage,
-		ToProviderPackage:   toProviderPackage,
+		FromProviderPackage: fromLayout.packageImage,
+		ToProviderPackage:   toLayout.packageImage,
 		ResourceDirectories: b.resourceDirectories,
 	}
+
+	fromProviderOptions := providerInstallOptions(providerName, fromLayout)
+	toProviderOptions := providerInstallOptions(providerName, toLayout)
 
 	featureName := fmt.Sprintf("%s: Upgrade %s from %s to %s", b.testName, providerName, b.fromTag, b.toTag)
 	feature := features.New(featureName).
 		WithSetup(
 			"Install provider with version "+b.fromTag,
-			upgrade.ApplyProvider(upgradeTest.ClusterName, upgradeTest.FromProviderInstallOptions()),
+			upgrade.ApplyProvider(upgradeTest.ClusterName, fromProviderOptions),
 		).
 		WithSetup(
 			"Apply ProviderConfig",
@@ -227,11 +229,8 @@ func (b *CustomUpgradeTestBuilder) Feature() features.Feature {
 	feature = feature.Assess(
 		"Upgrade provider to version "+b.toTag,
 		upgrade.UpgradeProvider(upgrade.UpgradeProviderOptions{
-			ClusterName: upgradeTest.ClusterName,
-			ProviderOptions: xpenvfuncs.InstallCrossplaneProviderOptions{
-				Name:    providerName,
-				Package: upgradeTest.ToProviderPackage,
-			},
+			ClusterName:         upgradeTest.ClusterName,
+			ProviderOptions:     toProviderOptions,
 			ResourceDirectories: upgradeTest.ResourceDirectories,
 			WaitForPause:        b.waitForPause,
 		}),
@@ -274,11 +273,8 @@ func (b *CustomUpgradeTestBuilder) Feature() features.Feature {
 	return feature.Feature()
 }
 
-func loadPackages(fromTag, toTag string) (string, string) {
-	return test.LoadUpgradePackages(
-		fromTag, toTag,
-		fromPackage, toPackage,
-	)
+func loadPackages(fromTag, toTag string) (imageLayout, imageLayout) {
+	return resolveImagePaths(fromTag, toTag)
 }
 
 // Helper to get ProviderConfig setup function

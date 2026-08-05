@@ -68,7 +68,6 @@ const (
 	defaultResourceDirectory = "./testdata/baseCrs"
 	defaultVerifyTimeout     = 30
 	defaultWaitForPause      = 1
-	localTagName             = "local"
 )
 
 var (
@@ -87,12 +86,10 @@ var (
 )
 
 var (
-	fromTag               string
-	toTag                 string
-	fromPackage           string
-	toPackage             string
-	fromControllerPackage string
-	toControllerPackage   string
+	fromTag    string
+	toTag      string
+	fromLayout imageLayout
+	toLayout   imageLayout
 )
 
 // TestMain is the entry point for all upgrade tests
@@ -127,11 +124,12 @@ func SetupClusterWithCrossplane(namespace string) {
 	loadResourceDirectories()
 	klog.V(4).Infof("found resource directories: %s", resourceDirectories)
 
-	// Resolve image paths (handles both "local" and registry tags)
-	fromPackage, fromControllerPackage, toPackage, toControllerPackage = resolveImagePaths(fromTag, toTag)
+	// Resolve image layouts independently (handles local and registry tags).
+	fromLayout, toLayout = resolveImagePaths(fromTag, toTag)
 
-	// Pull images from registry if needed (skip if local)
-	pullImagesIfNeeded(fromTag, toTag, fromPackage, fromControllerPackage, toPackage, toControllerPackage)
+	// Pull images from registry if needed (skip if local). Controller images are
+	// optional for single-image layouts.
+	pullImagesIfNeeded(fromTag, toTag, fromLayout, toLayout)
 
 	// Configure provider deployment with debug logging and faster sync
 	deploymentRuntimeConfig := getDeploymentRuntimeConfig()
@@ -140,8 +138,8 @@ func SetupClusterWithCrossplane(namespace string) {
 	cfg := setup.ClusterSetup{
 		ProviderName: providerName,
 		Images: images.ProviderImages{
-			Package:         fromPackage,
-			ControllerImage: &fromControllerPackage,
+			Package:         fromLayout.packageImage,
+			ControllerImage: fromLayout.controllerImage,
 		},
 		CrossplaneSetup: setup.CrossplaneSetup{
 			Version:  crossplaneVersion,
@@ -155,9 +153,14 @@ func SetupClusterWithCrossplane(namespace string) {
 		kindClusterName = clusterName
 		return func(ctx context.Context, config *envconf.Config) (context.Context, error) {
 			klog.V(4).Infof("upgrade cluster %s has been created", clusterName)
-			// Load registry images into kind (xp-testing uses PackagePullPolicy: Never)
-			// Local images are already loaded by xp-testing automatically
-			if err := loadRegistryImagesIntoKind(clusterName, fromTag, toTag); err != nil {
+			// xp-testing copies local package metadata into Crossplane's cache but
+			// does not load the local xpkg image when ControllerImage is nil. Load
+			// the package image explicitly; this is not a controller-image load.
+			if err := loadLocalPackageImagesIntoKind(clusterName, fromTag, toTag, fromLayout, toLayout); err != nil {
+				return ctx, fmt.Errorf("failed to load local package images into kind: %w", err)
+			}
+			// Load registry images into kind (xp-testing uses PackagePullPolicy: Never).
+			if err := loadRegistryImagesIntoKind(clusterName, fromTag, toTag, fromLayout, toLayout); err != nil {
 				return ctx, fmt.Errorf("failed to load registry images into kind: %w", err)
 			}
 			return ctx, nil
@@ -173,104 +176,81 @@ func SetupClusterWithCrossplane(namespace string) {
 	)
 }
 
-// resolveImagePaths determines the correct image paths for FROM and TO versions
-// based on whether they're using "local" builds or registry tags
-func resolveImagePaths(fromTag, toTag string) (fromPkg, fromCtrl, toPkg, toCtrl string) {
+// resolveImagePaths determines the correct package-plus-optional-controller
+// layout independently for FROM and TO versions.
+func resolveImagePaths(fromTag, toTag string) (imageLayout, imageLayout) {
 	isLocalFromTag := fromTag == localTagName
 	isLocalToTag := toTag == localTagName
 
-	// Get local image paths if needed
-	var localProviderPackage, localControllerPackage string
+	var localPackage string
+	var localController *string
 	if isLocalFromTag || isLocalToTag {
 		uutImages := os.Getenv(uutImagesEnvVar)
 		if uutImages == "" {
 			panic(fmt.Errorf("%s environment variable is required when FROM_TAG or TO_TAG is 'local'", uutImagesEnvVar))
 		}
 
-		localProviderPackage, localControllerPackage = testutil.GetImagesFromJsonOrPanic(uutImages)
+		localPackage, localController = testutil.GetImagesFromJsonOrPanic(uutImages)
 		klog.V(4).Infof("Loaded local images from %s", uutImagesEnvVar)
 	}
 
-	// Resolve FROM images
+	from := resolveImageLayout(fromTag, localPackage, localController, packageBasePath, controllerPackageBasePath)
+	to := resolveImageLayout(toTag, localPackage, localController, packageBasePath, controllerPackageBasePath)
 	if isLocalFromTag {
-		fromPkg = localProviderPackage
-		fromCtrl = localControllerPackage
-		klog.V(4).Infof("Using local images for FROM: %s", fromPkg)
-	} else {
-		fromPkg = fmt.Sprintf("%s:%s", packageBasePath, fromTag)
-		fromCtrl = fmt.Sprintf("%s:%s", controllerPackageBasePath, fromTag)
+		klog.V(4).Infof("Using local images for FROM: %s", from.packageImage)
 	}
-
-	// Resolve TO images
 	if isLocalToTag {
-		toPkg = localProviderPackage
-		toCtrl = localControllerPackage
-		klog.V(4).Infof("Using local images for TO: %s", toPkg)
-	} else {
-		toPkg = fmt.Sprintf("%s:%s", packageBasePath, toTag)
-		toCtrl = fmt.Sprintf("%s:%s", controllerPackageBasePath, toTag)
+		klog.V(4).Infof("Using local images for TO: %s", to.packageImage)
 	}
 
-	return fromPkg, fromCtrl, toPkg, toCtrl
+	return from, to
 }
 
-// pullImagesIfNeeded pulls images from registry if they're not local builds
-// Local images are already built by the Makefile and don't need pulling
-func pullImagesIfNeeded(fromTag, toTag, fromPackage, fromControllerPackage, toPackage, toControllerPackage string) {
-	// Pull FROM images if not local
-	if fromTag != localTagName {
-		klog.V(4).Infof("Pulling FROM images: %s", fromTag)
-		mustPullImage(fromPackage)
-		mustPullImage(fromControllerPackage)
-		klog.V(4).Infof("Successfully pulled FROM images: %s", fromTag)
-	} else {
-		klog.V(4).Infof("Skipping pull for FROM=local (using locally built images)")
-	}
-
-	// Pull TO images if not local
-	if toTag != localTagName {
-		klog.V(4).Infof("Pulling TO images: %s", toTag)
-		mustPullImage(toPackage)
-		mustPullImage(toControllerPackage)
-		klog.V(4).Infof("Successfully pulled TO images: %s", toTag)
-	} else {
-		klog.V(4).Infof("Skipping pull for TO=local (using locally built images)")
+// pullImagesIfNeeded pulls only the images resolved for each registry side.
+func pullImagesIfNeeded(fromTag, toTag string, from, to imageLayout) {
+	for _, side := range []struct {
+		tag    string
+		name   string
+		images imageLayout
+	}{
+		{fromTag, "FROM", from},
+		{toTag, "TO", to},
+	} {
+		if side.tag == localTagName {
+			klog.V(4).Infof("Skipping pull for %s=local (using locally built images)", side.name)
+			continue
+		}
+		klog.V(4).Infof("Pulling %s images: %s", side.name, side.tag)
+		for _, image := range imageNames(side.images) {
+			mustPullImage(image)
+		}
+		klog.V(4).Infof("Successfully pulled %s images: %s", side.name, side.tag)
 	}
 }
 
-// loadRegistryImagesIntoKind loads pulled registry images into the kind cluster
-// xp-testing uses PackagePullPolicy: Never, so all images must be pre-loaded
-func loadRegistryImagesIntoKind(clusterName, fromTag, toTag string) error {
+// loadLocalPackageImagesIntoKind loads local xpkg images into kind. The
+// package image must be available because ControllerImage is nil for a
+// single-image layout and xp-testing otherwise only copies its descriptor.
+func loadLocalPackageImagesIntoKind(clusterName, fromTag, toTag string, from, to imageLayout) error {
 	runner := gexe.New()
-
-	// Load FROM images if they're from a registry
-	if fromTag != localTagName {
-		klog.V(4).Infof("Loading FROM images into kind: %s", fromPackage)
-
-		if err := loadImageIntoKind(runner, clusterName, fromPackage); err != nil {
+	for _, image := range localPackageImagesToLoad(fromTag, toTag, from, to) {
+		if err := loadImageIntoKind(runner, clusterName, image); err != nil {
 			return err
 		}
-		if err := loadImageIntoKind(runner, clusterName, fromControllerPackage); err != nil {
-			return err
-		}
-
-		klog.V(4).Infof("Successfully loaded FROM images into kind")
 	}
+	return nil
+}
 
-	// Load TO images if they're from a registry and different from FROM
-	if toTag != localTagName && toTag != fromTag {
-		klog.V(4).Infof("Loading TO images into kind: %s", toPackage)
-
-		if err := loadImageIntoKind(runner, clusterName, toPackage); err != nil {
+// loadRegistryImagesIntoKind loads pulled registry images into the kind cluster.
+// xp-testing uses PackagePullPolicy: Never, so all resolved images must be
+// pre-loaded.
+func loadRegistryImagesIntoKind(clusterName, fromTag, toTag string, from, to imageLayout) error {
+	runner := gexe.New()
+	for _, image := range registryImagesToLoad(fromTag, toTag, from, to) {
+		if err := loadImageIntoKind(runner, clusterName, image); err != nil {
 			return err
 		}
-		if err := loadImageIntoKind(runner, clusterName, toControllerPackage); err != nil {
-			return err
-		}
-
-		klog.V(4).Infof("Successfully loaded TO images into kind")
 	}
-
 	return nil
 }
 
