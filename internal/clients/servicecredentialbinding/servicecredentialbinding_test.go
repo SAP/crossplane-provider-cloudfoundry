@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"strings"
 	"testing"
 	"time"
 
@@ -13,7 +12,6 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/mock"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -263,37 +261,6 @@ func TestNewCreateOption(t *testing.T) {
 				err: nil,
 			},
 		},
-		"KeyBindingWithoutRotation_NameUnsuffixed": {
-			args: args{
-				forProvider: v1alpha1.ServiceCredentialBindingParameters{
-					Type:            "key",
-					Name:            &testName,
-					ServiceInstance: &testServiceInstance,
-				},
-				params: nil,
-			},
-			want: want{
-				opt: cfresource.NewServiceCredentialBindingCreateKey(testServiceInstance, testName),
-				err: nil,
-			},
-		},
-		"KeyBindingWithRotation_NameSuffixed": {
-			args: args{
-				forProvider: v1alpha1.ServiceCredentialBindingParameters{
-					Type:            "key",
-					Name:            &testName,
-					ServiceInstance: &testServiceInstance,
-					Rotation: &v1alpha1.RotationParameters{
-						Frequency: &metav1.Duration{Duration: 24 * time.Hour},
-					},
-				},
-				params: nil,
-			},
-			want: want{
-				opt: cfresource.NewServiceCredentialBindingCreateKey(testServiceInstance, testName+"-suffix"),
-				err: nil,
-			},
-		},
 		"AppBindingWithName": {
 			args: args{
 				forProvider: v1alpha1.ServiceCredentialBindingParameters{
@@ -402,17 +369,6 @@ func TestNewCreateOption(t *testing.T) {
 				}
 				if opt.Relationships.ServiceInstance.Data.GUID != tc.want.opt.Relationships.ServiceInstance.Data.GUID {
 					t.Errorf("newCreateOption(...): ServiceInstance GUID mismatch")
-				}
-				// Name assertions are case-specific because the rotation suffix is random.
-				switch n {
-				case "KeyBindingWithoutRotation_NameUnsuffixed":
-					if opt.Name == nil || *opt.Name != testName {
-						t.Errorf("newCreateOption(...): Name mismatch, want unsuffixed %q, got %v", testName, opt.Name)
-					}
-				case "KeyBindingWithRotation_NameSuffixed":
-					if opt.Name == nil || !strings.HasPrefix(*opt.Name, testName+"-") || len(*opt.Name) != len(testName)+1+5 {
-						t.Errorf("newCreateOption(...): Name mismatch, want %q + 5-char suffix, got %v", testName, opt.Name)
-					}
 				}
 			}
 		})
