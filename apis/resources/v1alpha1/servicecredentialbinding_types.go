@@ -29,7 +29,14 @@ type ServiceCredentialBindingParameters struct {
 	// +kubebuilder:default=key
 	Type string `json:"type,omitempty"`
 
-	// (String) The name of the service credential binding in Cloud Foundry. Required if `type` is "key".
+	// (String) The base name of the service credential binding. Required if `type` is "key".
+	// For "key" bindings, Cloud Foundry does not use this value verbatim: a random
+	// suffix is always appended, regardless of whether rotation is configured. This
+	// is because CF service keys cannot be renamed, and rotation requires creating
+	// the new key before deleting the old one, which would collide on name otherwise.
+	// The actual name as it exists in Cloud Foundry is available at
+	// status.atProvider.name (and status.atProvider.retiredKeys[].name for
+	// rotated-out keys).
 	// +kubebuilder:validation:Optional
 	Name *string `json:"name,omitempty"`
 

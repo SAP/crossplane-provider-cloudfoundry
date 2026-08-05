@@ -173,7 +173,6 @@ func newCreateOption(mg xpresource.Managed, forProvider v1alpha1.ServiceCredenti
 		}
 
 		name := randomName(*forProvider.Name)
-
 		opt = resource.NewServiceCredentialBindingCreateKey(*forProvider.ServiceInstance, name)
 	case "app":
 		if forProvider.App == nil {
