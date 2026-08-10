@@ -63,6 +63,20 @@ UPTEST_VERSION = v0.11.1
 IMAGES = provider-cloudfoundry
 -include build/makelib/imagelight.mk
 
+# Local upgrade tests use the built Crossplane package, not the provider
+# runtime image. The package contains the controller in the single-image
+# layout, so UUT_IMAGES intentionally has no controller key.
+export UUT_CONFIG = $(BUILD_REGISTRY)/provider-cloudfoundry-$(ARCH):latest
+export UUT_XPKG = $(BUILD_REGISTRY)/provider-cloudfoundry-xpkg:latest
+export UUT_IMAGES = {"crossplane/provider-cloudfoundry":"$(UUT_XPKG)"}
+
+.PHONY: local-build
+local-build: build
+	@$(INFO) "Loading xpkg into docker as $(UUT_XPKG)"
+	@XPKG_FILE=$(XPKG_OUTPUT_DIR)/$(PLATFORM)/provider-cloudfoundry-$(VERSION).xpkg && \
+	XPKG_SHA=$$(docker load -i $$XPKG_FILE | sed -n 's/.*ID: //p') && \
+	docker tag $$XPKG_SHA $(UUT_XPKG)
+	@$(OK) "Built local package image: $(UUT_XPKG)"
 
 # Import upgrade test environment variables from shell
 export UPGRADE_TEST_FROM_TAG
@@ -274,8 +288,8 @@ check-upgrade-test-vars: ## Verify required upgrade test environment variables
 build-upgrade-test-images: ## Build local images if testing with 'local' tag
 	@if [ "$(UPGRADE_TEST_FROM_TAG)" == "local" ] || [ "$(UPGRADE_TEST_TO_TAG)" == "local" ]; then \
 		$(INFO) "Building local images (UPGRADE_TEST_FROM_TAG or UPGRADE_TEST_TO_TAG is \"local\")"; \
-		$(MAKE) build; \
-		$(OK) "Built local images: $(UUT_IMAGES)"; \
+		$(MAKE) local-build; \
+		$(OK) "Built local package image: $(UUT_IMAGES)"; \
 	fi
 
 
