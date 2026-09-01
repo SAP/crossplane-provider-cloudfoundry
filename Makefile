@@ -175,6 +175,10 @@ run: go.build
 # ====================================================================================
 
 -include build/makelib/local.xpkg.mk
+# controlplane.mk requires CROSSPLANE_VERSION — unlike BTP, CF calls controlplane.up directly from
+# local-deploy-prebuilt, so helm install needs a non-empty version. Pinned below 2.2.0: see
+# https://github.com/crossplane/crossplane/issues/6981 (spec.package resolution vs local cache).
+CROSSPLANE_VERSION ?= 2.1.8
 -include build/makelib/controlplane.mk
 
 uptest: $(UPTEST) $(KUBECTL) $(KUTTL)
