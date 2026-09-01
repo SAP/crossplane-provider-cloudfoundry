@@ -105,10 +105,11 @@ linters:
       - linters:
           - gosec
         text: 'G404:'
-      # G117: json.Marshal on credential structs in test utilities; Password field is CF API credentials
+      # G117: json.Marshal on CF credential struct; Password is a required API credential, not a hardcoded secret
       - linters:
           - gosec
         text: 'G117:'
+        path: test/test_utils\.go
     paths:
       - zz_generated\..+\.go$
       - third_party$
