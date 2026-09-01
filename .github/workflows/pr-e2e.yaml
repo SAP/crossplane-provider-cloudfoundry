@@ -48,3 +48,8 @@ jobs:
       checkout-ref: ${{ github.event.pull_request.head.sha }}
       skip: ${{ needs.detect-non-doc-changes.outputs.has-only-doc-changes == 'true' }}
     secrets: inherit
+
+  echo-pr-author-association:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "PR author association: ${{ github.event.pull_request.author_association }}"
