@@ -73,6 +73,7 @@ linters:
           - errcheck
           - exportloopref
           - gocyclo
+          - goconst
           - gosec
           - unparam
         path: _test(ing)?\.go
@@ -100,6 +101,10 @@ linters:
       - linters:
           - gosec
         text: 'G104:'
+      # G404: randomString() generates names/identifiers, not security tokens
+      - linters:
+          - gosec
+        text: 'G404:'
     paths:
       - zz_generated\..+\.go$
       - third_party$

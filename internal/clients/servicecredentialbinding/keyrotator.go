@@ -81,8 +81,8 @@ func (r *SCBKeyRotator) HasExpiredKeys(cr *v1alpha1.ServiceCredentialBinding) bo
 }
 
 func (c *SCBKeyRotator) DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) ([]*v1alpha1.SCBResource, error) {
-	var newRetiredKeys []*v1alpha1.SCBResource
-	var errs []error
+	newRetiredKeys := make([]*v1alpha1.SCBResource, 0, len(cr.Status.AtProvider.RetiredKeys))
+	errs := make([]error, 0, len(cr.Status.AtProvider.RetiredKeys))
 
 	for _, key := range cr.Status.AtProvider.RetiredKeys {
 
