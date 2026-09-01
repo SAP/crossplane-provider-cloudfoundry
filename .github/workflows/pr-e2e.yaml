@@ -52,4 +52,4 @@ jobs:
   echo-pr-author-association:
     runs-on: ubuntu-latest
     steps:
-      - run: echo "PR author association: ${{ github.event.pull_request.author_association }}"
+      - run: echo "PR author association ${{ github.event.pull_request.author_association }}"
