@@ -13,12 +13,7 @@
 name: PullRequest E2E Test
 
 on:
-  # pull_request_target:
-  # TEMPORARY: pull_request trigger so CI runs from the PR branch during the build-submodule
-  # update, allowing the combined Makefile + workflow + submodule changes to be tested atomically.
-  # Remove before or at merge — pull_request_target must be the sole trigger for fork PR security.
-  pull_request:
-    branches: [main]
+  pull_request_target:
 
 # on pull_request_target, the GITHUB_TOKEN has read/write access to the repository content by default, so restrict it to read only
 permissions:
