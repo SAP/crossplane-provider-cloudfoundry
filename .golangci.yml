@@ -105,6 +105,10 @@ linters:
       - linters:
           - gosec
         text: 'G404:'
+      # G117: json.Marshal on credential structs in test utilities; Password field is CF API credentials
+      - linters:
+          - gosec
+        text: 'G117:'
     paths:
       - zz_generated\..+\.go$
       - third_party$
