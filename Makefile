@@ -8,7 +8,7 @@ PROJECT_REPO := github.com/SAP/crossplane-$(PROJECT_NAME)
 
 
 PLATFORMS ?= linux_amd64 linux_arm64
-VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || git rev-parse HEAD)
+VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || echo "v0.0.0-$$(git rev-parse HEAD)")
 $(info VERSION is $(VERSION))
 
 # -include will silently skip missing files, which allows us
@@ -189,7 +189,7 @@ uptest: $(UPTEST) $(KUBECTL) $(KUTTL)
 local-deploy: build controlplane.up local.xpkg.deploy.provider.$(PROJECT_NAME)
 	@$(INFO) running locally built provider
 	@$(KUBECTL) wait provider.pkg $(PROJECT_NAME) --for condition=Healthy --timeout 5m
-	@$(KUBECTL) -n upbound-system wait --for=condition=Available deployment --all --timeout=5m
+	@$(KUBECTL) -n $(CROSSPLANE_NAMESPACE) wait --for=condition=Available deployment --all --timeout=5m
 	@$(OK) running locally built provider
 
 # Retry controlplane.up: the Crossplane chart pull from charts.crossplane.io can flake (transient 403/rate-limit) under matrix load.
@@ -208,7 +208,7 @@ controlplane.up.retry:
 local-deploy-prebuilt: controlplane.up.retry local.xpkg.deploy.provider.$(PROJECT_NAME)
 	@$(INFO) deploying prebuilt provider
 	@$(KUBECTL) wait provider.pkg $(PROJECT_NAME) --for condition=Healthy --timeout 5m
-	@$(KUBECTL) -n upbound-system wait --for=condition=Available deployment --all --timeout=5m
+	@$(KUBECTL) -n $(CROSSPLANE_NAMESPACE) wait --for=condition=Available deployment --all --timeout=5m
 	@$(OK) running prebuilt provider
 
 e2e: local-deploy uptest
