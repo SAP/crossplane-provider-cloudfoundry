@@ -86,14 +86,14 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
-      - name: Fetch CLI tools once (up, kind, kubectl)
+      - name: Fetch CLI tools once (kind, kubectl, crank)
         run: |
           set -euo pipefail
-          vars="$(make --no-print-directory build.vars | grep -E '^(UP|KIND|KUBECTL)=')"
+          vars="$(make --no-print-directory build.vars | grep -E '^(CROSSPLANE_CLI|KIND|KUBECTL)=')"
           eval "$vars"
-          : "${UP:?}" "${KIND:?}" "${KUBECTL:?}"
+          : "${CROSSPLANE_CLI:?}" "${KIND:?}" "${KUBECTL:?}"
           for attempt in 1 2 3 4 5; do
-            if make "$UP" "$KIND" "$KUBECTL"; then break; fi
+            if make "$CROSSPLANE_CLI" "$KIND" "$KUBECTL"; then break; fi
             if [ "$attempt" -eq 5 ]; then
               echo "::error::failed to fetch CLI tools from upstream CDNs after 5 attempts"
               exit 1

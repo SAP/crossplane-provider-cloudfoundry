@@ -8,7 +8,7 @@ PROJECT_REPO := github.com/SAP/crossplane-$(PROJECT_NAME)
 
 
 PLATFORMS ?= linux_amd64 linux_arm64
-VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || git rev-parse HEAD)
+VERSION ?= $(shell git describe --tags --exact-match 2>/dev/null || echo "v0.0.0-$$(git rev-parse HEAD)")
 $(info VERSION is $(VERSION))
 
 # -include will silently skip missing files, which allows us
@@ -34,18 +34,16 @@ NPROCS ?= 1
 # to half the number of CPU cores.
 GO_TEST_PARALLEL := $(shell echo $$(( $(NPROCS) / 2 )))
 
-GO_REQUIRED_VERSION ?= 1.23
+GO_REQUIRED_VERSION ?= 1.25
 GO_STATIC_PACKAGES = $(GO_PROJECT)/cmd/provider $(GO_PROJECT)/cmd/exporter
 GO_LDFLAGS += -X $(GO_PROJECT)/internal/version.Version=$(VERSION)
 GO_SUBDIRS += cmd internal apis
 GO111MODULE = on
-GOLANGCILINT_VERSION ?= 2.10.1
+GOLANGCILINT_VERSION ?= 2.13.2
+GOTOOLCHAIN = local
 -include build/makelib/golang.mk
 
-# --out-format is deprecated with v2, replace with --output.checkstyle.path
-ifeq ($(RUNNING_IN_CI),true)
 GO_LINT_ARGS := --timeout 10m0s --output.checkstyle.path=$(GO_LINT_OUTPUT)/checkstyle.xml
-endif
 
 # kind-related versions
 KIND_VERSION ?= v0.26.0
@@ -53,9 +51,6 @@ KIND_NODE_IMAGE_TAG ?= v1.32.0
 
 # Setup Kubernetes tools
 
-UP_VERSION = v0.31.0
-UP_CHANNEL = stable
-UPTEST_VERSION = v0.11.1
 -include build/makelib/k8s_tools.mk
 
 # ====================================================================================
@@ -91,7 +86,7 @@ export CF_ENDPOINT
 
 # NOTE(hasheddan): we ensure up is installed prior to running platform-specific
 # build steps in parallel to avoid encountering an installation race condition.
-build.init: $(UP)
+build.init: $(CROSSPLANE_CLI)
 
 # ====================================================================================
 # Fallthrough
@@ -179,9 +174,11 @@ run: go.build
 # End to End Testing
 # ====================================================================================
 
-CROSSPLANE_NAMESPACE = upbound-system
 -include build/makelib/local.xpkg.mk
-CROSSPLANE_ARGS = '--enable-usages'
+# controlplane.mk requires CROSSPLANE_VERSION — unlike BTP, CF calls controlplane.up directly from
+# local-deploy-prebuilt, so helm install needs a non-empty version. Pinned below 2.2.0: see
+# https://github.com/crossplane/crossplane/issues/6981 (spec.package resolution vs local cache).
+CROSSPLANE_VERSION ?= 2.1.8
 -include build/makelib/controlplane.mk
 
 uptest: $(UPTEST) $(KUBECTL) $(KUTTL)
@@ -192,10 +189,10 @@ uptest: $(UPTEST) $(KUBECTL) $(KUTTL)
 local-deploy: build controlplane.up local.xpkg.deploy.provider.$(PROJECT_NAME)
 	@$(INFO) running locally built provider
 	@$(KUBECTL) wait provider.pkg $(PROJECT_NAME) --for condition=Healthy --timeout 5m
-	@$(KUBECTL) -n upbound-system wait --for=condition=Available deployment --all --timeout=5m
+	@$(KUBECTL) -n $(CROSSPLANE_NAMESPACE) wait --for=condition=Available deployment --all --timeout=5m
 	@$(OK) running locally built provider
 
-# Retry controlplane.up: the UXP chart pull from charts.upbound.io can flake (transient 403/rate-limit) under matrix load.
+# Retry controlplane.up: the Crossplane chart pull from charts.crossplane.io can flake (transient 403/rate-limit) under matrix load.
 CONTROLPLANE_UP_ATTEMPTS ?= 5
 
 .PHONY: controlplane.up.retry
@@ -211,7 +208,7 @@ controlplane.up.retry:
 local-deploy-prebuilt: controlplane.up.retry local.xpkg.deploy.provider.$(PROJECT_NAME)
 	@$(INFO) deploying prebuilt provider
 	@$(KUBECTL) wait provider.pkg $(PROJECT_NAME) --for condition=Healthy --timeout 5m
-	@$(KUBECTL) -n upbound-system wait --for=condition=Available deployment --all --timeout=5m
+	@$(KUBECTL) -n $(CROSSPLANE_NAMESPACE) wait --for=condition=Available deployment --all --timeout=5m
 	@$(OK) running prebuilt provider
 
 e2e: local-deploy uptest
@@ -248,8 +245,6 @@ ACCEPTANCE_DEPLOY ?= local-deploy
 
 .PHONY: test-acceptance
 test-acceptance: $(ACCEPTANCE_DEPLOY) $(KUBECTL) generate-test-crs
-	@# xp-testing puts the provider secret in crossplane-system; local-deploy installs UXP in upbound-system, so the namespace isn't created upstream.
-	@$(KUBECTL) get namespace crossplane-system >/dev/null 2>&1 || $(KUBECTL) create namespace crossplane-system
 	@$(INFO) running integration tests
 	@$(INFO) Skipping long running tests
 	@TEST_CRS_PATH=$(abspath $(TEST_CRS_RENDERED_PATH)) \

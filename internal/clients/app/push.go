@@ -148,7 +148,7 @@ func configDocker(forProvider v1alpha1.AppParameters, dockerCredentials *DockerC
 //nolint:gocyclo
 func configProcess(forProvider v1alpha1.AppParameters) *operation.AppManifestProcesses {
 	if len(forProvider.Processes) > 0 {
-		var processes operation.AppManifestProcesses
+		processes := make(operation.AppManifestProcesses, 0, len(forProvider.Processes))
 		for _, process := range forProvider.Processes {
 			processManifest := operation.AppManifestProcess{}
 			if process.Type != nil {

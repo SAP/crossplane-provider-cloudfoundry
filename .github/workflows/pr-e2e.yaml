@@ -26,6 +26,7 @@ jobs:
   # see https://github.blog/changelog/2025-08-08-upcoming-changes-to-github-events-api-payloads/#whats-changing
   # for deprecation of event.pull_request.author_association
   # keeping it for now since the alternatice requires a PAT based approach
+  # Note that for MEMBER to work, org membership must be public and not private.
   approve:
     needs: [detect-non-doc-changes]
     if: needs.detect-non-doc-changes.outputs.has-only-doc-changes != 'true'

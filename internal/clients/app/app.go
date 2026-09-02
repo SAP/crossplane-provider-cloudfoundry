@@ -292,7 +292,7 @@ func DiffServiceBindings(spec v1alpha1.AppParameters, ymlManifest string) []v1al
 		}
 	}
 
-	var missingServices []v1alpha1.ServiceBindingConfiguration
+	missingServices := make([]v1alpha1.ServiceBindingConfiguration, 0, len(spec.Services))
 	for _, service := range spec.Services {
 		if _, ok := services[ptr.Deref(service.Name, "")]; !ok {
 			return append(missingServices, service)
