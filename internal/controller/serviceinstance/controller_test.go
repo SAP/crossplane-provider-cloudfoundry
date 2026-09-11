@@ -9,6 +9,7 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/mock"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
@@ -927,7 +928,7 @@ func TestCreate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("CreateManaged").Return(
+				m.On("CreateManaged", mock.Anything).Return(
 					"JOB123",
 					nil,
 				)
@@ -958,7 +959,7 @@ func TestCreate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("CreateManaged").Return(
+				m.On("CreateManaged", mock.Anything).Return(
 					"JOB123",
 					nil,
 				)
@@ -989,7 +990,7 @@ func TestCreate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("CreateManaged").Return(
+				m.On("CreateManaged", mock.Anything).Return(
 					"JOB123",
 					nil,
 				)
@@ -1022,7 +1023,7 @@ func TestCreate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("CreateManaged").Return(
+				m.On("CreateManaged", mock.Anything).Return(
 					"JOB123",
 					nil,
 				)
@@ -1053,7 +1054,7 @@ func TestCreate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("CreateManaged").Return(
+				m.On("CreateManaged", mock.Anything).Return(
 					"JOB123",
 					errBoom,
 				)
@@ -1094,7 +1095,7 @@ func TestCreate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("CreateManaged").Return(
+				m.On("CreateManaged", mock.Anything).Return(
 					"JOB123",
 					nil,
 				)
@@ -1143,7 +1144,7 @@ func TestCreate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("CreateManaged").Return(
+				m.On("CreateManaged", mock.Anything).Return(
 					"JOB123",
 					nil,
 				)
@@ -1182,7 +1183,7 @@ func TestCreate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("CreateManaged", mock.Anything).Return("JOB123", nil)
 				m.On("Single").Return(
 					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
 					nil,
@@ -1207,7 +1208,7 @@ func TestCreate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("CreateManaged", mock.Anything).Return("JOB123", nil)
 				m.On("Single").Return(
 					fake.ServiceInstanceNil,
 					fake.ErrNoResultReturned,
@@ -1239,7 +1240,7 @@ func TestCreate(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Delete", guid).Return("DELJOB", nil)
-				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("CreateManaged", mock.Anything).Return("JOB123", nil)
 				m.On("Single").Return(
 					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
 					nil,
@@ -1273,7 +1274,7 @@ func TestCreate(t *testing.T) {
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
 				m.On("Delete", guid).Return("DELJOB", nil)
-				m.On("CreateManaged").Return("JOB123", nil)
+				m.On("CreateManaged", mock.Anything).Return("JOB123", nil)
 				m.On("Single").Return(
 					fake.ServiceInstanceNil,
 					fake.ErrNoResultReturned,
@@ -1383,7 +1384,7 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("UpdateManaged", guid).Return(
+				m.On("UpdateManaged", guid, mock.Anything).Return(
 					"JOB123",
 					nil,
 				)
@@ -1418,7 +1419,7 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("UpdateManaged", guid).Return(
+				m.On("UpdateManaged", guid, mock.Anything).Return(
 					"JOB123",
 					nil,
 				)
@@ -1453,7 +1454,7 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("UpdateManaged", guid).Return("JOB123", nil)
+				m.On("UpdateManaged", guid, mock.Anything).Return("JOB123", nil)
 				m.On("Get", guid).Return(
 					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
 					nil,
@@ -1481,7 +1482,7 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("UpdateManaged", guid).Return(
+				m.On("UpdateManaged", guid, mock.Anything).Return(
 					"JOB123",
 					nil,
 				)
@@ -1518,7 +1519,7 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("UpdateManaged", guid).Return(
+				m.On("UpdateManaged", guid, mock.Anything).Return(
 					"JOB123",
 					nil,
 				)
@@ -1553,7 +1554,7 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("UpdateManaged").Return(
+				m.On("UpdateManaged", mock.Anything, mock.Anything).Return(
 					"JOB123",
 					errBoom,
 				)
@@ -1592,7 +1593,7 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("UpdateManaged", guid).Return(
+				m.On("UpdateManaged", guid, mock.Anything).Return(
 					"JOB123",
 					nil,
 				)
@@ -1643,7 +1644,7 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("UpdateManaged", guid).Return(
+				m.On("UpdateManaged", guid, mock.Anything).Return(
 					"JOB123",
 					nil,
 				)
@@ -1691,7 +1692,7 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("UpdateManaged", guid).Return(
+				m.On("UpdateManaged", guid, mock.Anything).Return(
 					"JOB123",
 					nil,
 				)
@@ -1741,7 +1742,7 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("UpdateManaged", guid).Return("JOB123", nil)
+				m.On("UpdateManaged", guid, mock.Anything).Return("JOB123", nil)
 				m.On("Get", guid).Return(
 					&fake.NewServiceInstance("managed").SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance,
 					nil,
@@ -1779,7 +1780,7 @@ func TestUpdate(t *testing.T) {
 			},
 			service: func() *fake.MockServiceInstance {
 				m := &fake.MockServiceInstance{}
-				m.On("UpdateManaged", guid).Return(
+				m.On("UpdateManaged", guid, mock.Anything).Return(
 					"JOB123",
 					nil,
 				)

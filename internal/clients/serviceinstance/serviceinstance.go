@@ -177,6 +177,7 @@ func (c *Client) createManaged(ctx context.Context, mg xpresource.Managed, spec 
 	}
 
 	opt := resource.NewServiceInstanceCreateManaged(*spec.Name, *spec.Space, *spec.ServicePlan.ID)
+	opt.Tags = derefTags(spec.Tags)
 	opt.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
 
 	if params != nil {
@@ -203,6 +204,7 @@ func (c *Client) createUserProvided(ctx context.Context, mg xpresource.Managed, 
 	}
 	// create the service instance
 	opt := resource.NewServiceInstanceCreateUserProvided(*spec.Name, *spec.Space)
+	opt.Tags = derefTags(spec.Tags)
 	opt.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
 	si, err := c.CreateUserProvided(ctx, opt)
 	if err != nil {
@@ -313,6 +315,36 @@ func LateInitialize(p *v1alpha1.ServicePlanParameters, r *resource.ServiceInstan
 	// nothing to do here
 }
 
+// derefTags converts the CR spec's []*string tags into the []string form the CF API expects.
+func derefTags(tags []*string) []string {
+	if tags == nil {
+		return nil
+	}
+	out := make([]string, 0, len(tags))
+	for _, t := range tags {
+		out = append(out, ptr.Deref(t, ""))
+	}
+	return out
+}
+
+// tagsEqual reports whether desired ([]*string) and observed ([]string) tags match,
+// ignoring order.
+func tagsEqual(desired []*string, observed []string) bool {
+	if len(desired) != len(observed) {
+		return false
+	}
+	want := make(map[string]struct{}, len(desired))
+	for _, t := range desired {
+		want[ptr.Deref(t, "")] = struct{}{}
+	}
+	for _, t := range observed {
+		if _, ok := want[t]; !ok {
+			return false
+		}
+	}
+	return true
+}
+
 // UpdateObservation updates CR status based on the observed managed resource status
 func UpdateObservation(in *v1alpha1.ServiceInstanceObservation, r *resource.ServiceInstance) {
 	if r == nil {
@@ -326,6 +358,7 @@ func UpdateObservation(in *v1alpha1.ServiceInstanceObservation, r *resource.Serv
 		Description: r.LastOperation.Description,
 		UpdatedAt:   r.LastOperation.UpdatedAt.String(),
 	}
+	in.Tags = refTags(r.Tags)
 
 	if r.Type == string(v1alpha1.ManagedService) {
 		in.ServicePlan = &r.Relationships.ServicePlan.Data.GUID
@@ -344,6 +377,10 @@ func specUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.Ser
 		return false
 	}
 
+	if !tagsEqual(in.Tags, observed.Tags) {
+		return false
+	}
+
 	switch in.Type {
 	case v1alpha1.ManagedService:
 		if in.ServicePlan != nil && in.ServicePlan.ID != nil && observed.Relationships.ServicePlan.Data.GUID != *in.ServicePlan.ID {
@@ -358,6 +395,19 @@ func specUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.Ser
 		}
 	}
 	return true
+}
+
+// refTags converts CF API tags ([]string) into the []*string form used by the CR's
+// status.atProvider.tags.
+func refTags(tags []string) []*string {
+	if tags == nil {
+		return nil
+	}
+	out := make([]*string, len(tags))
+	for i := range tags {
+		out[i] = &tags[i]
+	}
+	return out
 }
 
 // IsUpToDate checks if the managed resource is in sync with CR.
