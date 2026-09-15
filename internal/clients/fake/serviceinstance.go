@@ -41,7 +41,7 @@ func (m *MockServiceInstance) Single(ctx context.Context, opt *client.ServiceIns
 
 // CreateManaged mocks ServiceInstance.CreateManaged
 func (m *MockServiceInstance) CreateManaged(ctx context.Context, opt *resource.ServiceInstanceManagedCreate) (string, error) {
-	args := m.Called()
+	args := m.Called(opt)
 	return args.String(0), args.Error(1)
 }
 
@@ -53,13 +53,13 @@ func (m *MockServiceInstance) CreateUserProvided(ctx context.Context, opt *resou
 
 // UpdateManaged mocks ServiceInstance.UpdateManaged
 func (m *MockServiceInstance) UpdateManaged(ctx context.Context, guid string, opt *resource.ServiceInstanceManagedUpdate) (string, *resource.ServiceInstance, error) {
-	args := m.Called(guid)
+	args := m.Called(guid, opt)
 	return args.String(0), nil, args.Error(1)
 }
 
 // UpdateUserProvided mocks ServiceInstance.UpdateUserProvided
 func (m *MockServiceInstance) UpdateUserProvided(ctx context.Context, guid string, opt *resource.ServiceInstanceUserProvidedUpdate) (*resource.ServiceInstance, error) {
-	args := m.Called(guid)
+	args := m.Called(guid, opt)
 	return args.Get(0).(*resource.ServiceInstance), args.Error(1)
 }
 

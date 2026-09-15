@@ -579,3 +579,333 @@ func TestIsUpToDate_Metadata(t *testing.T) {
 		})
 	}
 }
+
+// --- tag helper conversions ---
+
+func TestDerefTags(t *testing.T) {
+	cases := map[string]struct {
+		in   []*string
+		want []string
+	}{
+		"nil":   {in: nil, want: nil},
+		"empty": {in: []*string{}, want: []string{}},
+		"values": {
+			in:   []*string{ptr.To("a"), ptr.To("b")},
+			want: []string{"a", "b"},
+		},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			got := derefTags(tc.in)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("derefTags(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestRefTags(t *testing.T) {
+	cases := map[string]struct {
+		in   []string
+		want []*string
+	}{
+		"nil":    {in: nil, want: nil},
+		"empty":  {in: []string{}, want: []*string{}},
+		"values": {in: []string{"a", "b"}, want: []*string{ptr.To("a"), ptr.To("b")}},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			got := refTags(tc.in)
+			if diff := cmp.Diff(tc.want, got); diff != "" {
+				t.Errorf("refTags(...): -want, +got:\n%s", diff)
+			}
+		})
+	}
+}
+
+func TestTagsEqual(t *testing.T) {
+	cases := map[string]struct {
+		desired  []*string
+		observed []string
+		want     bool
+	}{
+		"both nil":                  {desired: nil, observed: nil, want: true},
+		"both empty":                {desired: []*string{}, observed: []string{}, want: true},
+		"equal same order":          {desired: []*string{ptr.To("a"), ptr.To("b")}, observed: []string{"a", "b"}, want: true},
+		"equal diff order":          {desired: []*string{ptr.To("b"), ptr.To("a")}, observed: []string{"a", "b"}, want: true},
+		"length mismatch":           {desired: []*string{ptr.To("a")}, observed: []string{"a", "b"}, want: false},
+		"value mismatch":            {desired: []*string{ptr.To("a"), ptr.To("c")}, observed: []string{"a", "b"}, want: false},
+		"desired nil, observed set": {desired: nil, observed: []string{"a"}, want: false},
+		"desired set, observed nil": {desired: []*string{ptr.To("a")}, observed: nil, want: false},
+	}
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			got := tagsEqual(tc.desired, tc.observed)
+			if got != tc.want {
+				t.Errorf("tagsEqual(...): want %v, got %v", tc.want, got)
+			}
+		})
+	}
+}
+
+// --- drift detection via IsUpToDate ---
+
+func TestIsUpToDate_Tags(t *testing.T) {
+	cases := map[string]struct {
+		in       *v1alpha1.ServiceInstanceParameters
+		observed *resource.ServiceInstance
+		want     bool
+	}{
+		"Tags match": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Type: v1alpha1.ManagedService,
+				Tags: []*string{ptr.To("app"), ptr.To("prod")},
+			},
+			observed: &resource.ServiceInstance{
+				Name: "test-si",
+				Type: "managed",
+				Tags: []string{"app", "prod"},
+			},
+			want: true,
+		},
+		"Tags match, different order": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Type: v1alpha1.ManagedService,
+				Tags: []*string{ptr.To("prod"), ptr.To("app")},
+			},
+			observed: &resource.ServiceInstance{
+				Name: "test-si",
+				Type: "managed",
+				Tags: []string{"app", "prod"},
+			},
+			want: true,
+		},
+		"Tags drift - spec has tags, observed does not": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Type: v1alpha1.ManagedService,
+				Tags: []*string{ptr.To("app")},
+			},
+			observed: &resource.ServiceInstance{
+				Name: "test-si",
+				Type: "managed",
+			},
+			want: false,
+		},
+		"Tags drift - observed has tags, spec does not": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Type: v1alpha1.ManagedService,
+			},
+			observed: &resource.ServiceInstance{
+				Name: "test-si",
+				Type: "managed",
+				Tags: []string{"app"},
+			},
+			want: false,
+		},
+		"Tags drift - value changed": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Type: v1alpha1.ManagedService,
+				Tags: []*string{ptr.To("app")},
+			},
+			observed: &resource.ServiceInstance{
+				Name: "test-si",
+				Type: "managed",
+				Tags: []string{"web"},
+			},
+			want: false,
+		},
+		"UserProvided type still checks tags": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Type: v1alpha1.UserProvidedService,
+				Tags: []*string{ptr.To("app")},
+			},
+			observed: &resource.ServiceInstance{
+				Name: "test-si",
+				Type: "user-provided",
+				Tags: []string{"web"},
+			},
+			want: false,
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			result := IsUpToDate(nil, tc.in, tc.observed)
+			if result != tc.want {
+				t.Errorf("IsUpToDate(...): want %v, got %v", tc.want, result)
+			}
+		})
+	}
+}
+
+// --- observation round-trip ---
+
+func TestUpdateObservation_Tags(t *testing.T) {
+	cases := map[string]struct {
+		r    *resource.ServiceInstance
+		want []*string
+	}{
+		"tags copied from CF resource": {
+			r: &resource.ServiceInstance{
+				Resource: resource.Resource{GUID: serviceInstanceGUID},
+				Tags:     []string{"app", "prod"},
+			},
+			want: []*string{ptr.To("app"), ptr.To("prod")},
+		},
+		"no tags": {
+			r: &resource.ServiceInstance{
+				Resource: resource.Resource{GUID: serviceInstanceGUID},
+			},
+			want: nil,
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			in := &v1alpha1.ServiceInstanceObservation{}
+			UpdateObservation(in, tc.r)
+			if diff := cmp.Diff(tc.want, in.Tags); diff != "" {
+				t.Errorf("UpdateObservation(...): -want tags, +got tags:\n%s", diff)
+			}
+		})
+	}
+}
+
+// --- create path: tags sent to CF ---
+
+func TestCreateManaged_Tags(t *testing.T) {
+	spec := v1alpha1.ServiceInstanceParameters{
+		Name: ptr.To("test-si"),
+		Type: v1alpha1.ManagedService,
+		SpaceReference: v1alpha1.SpaceReference{
+			Space: ptr.To(spaceGUID1),
+		},
+		Managed: v1alpha1.Managed{
+			ServicePlan: &v1alpha1.ServicePlanParameters{ID: ptr.To("plan-guid")},
+		},
+		Tags: []*string{ptr.To("app"), ptr.To("prod")},
+	}
+
+	mockSI := &fake.MockServiceInstance{}
+	mockSI.On("CreateManaged", mock.MatchedBy(func(opt *resource.ServiceInstanceManagedCreate) bool {
+		return cmp.Diff([]string{"app", "prod"}, opt.Tags) == ""
+	})).Return("", nil)
+	mockSI.On("Single").Return(&resource.ServiceInstance{Resource: resource.Resource{GUID: serviceInstanceGUID}}, nil)
+
+	c := &Client{ServiceInstance: mockSI}
+	_, err := c.createManaged(context.Background(), nil, spec, nil)
+	if err != nil {
+		t.Fatalf("createManaged(...): unexpected error: %v", err)
+	}
+
+	mockSI.AssertExpectations(t)
+}
+
+func TestCreateUserProvided_Tags(t *testing.T) {
+	spec := v1alpha1.ServiceInstanceParameters{
+		Name: ptr.To("test-si"),
+		Type: v1alpha1.UserProvidedService,
+		SpaceReference: v1alpha1.SpaceReference{
+			Space: ptr.To(spaceGUID1),
+		},
+		Tags: []*string{ptr.To("app"), ptr.To("prod")},
+	}
+
+	mockSI := &fake.MockServiceInstance{}
+	mockSI.On("CreateUserProvided", mock.MatchedBy(func(opt *resource.ServiceInstanceUserProvidedCreate) bool {
+		return cmp.Diff([]string{"app", "prod"}, opt.Tags) == ""
+	})).Return(&resource.ServiceInstance{Resource: resource.Resource{GUID: serviceInstanceGUID}}, nil)
+	mockSI.On("UpdateUserProvided", serviceInstanceGUID, mock.Anything).Return(&resource.ServiceInstance{Resource: resource.Resource{GUID: serviceInstanceGUID}}, nil)
+
+	c := &Client{ServiceInstance: mockSI}
+	_, err := c.createUserProvided(context.Background(), nil, spec, nil)
+	if err != nil {
+		t.Fatalf("createUserProvided(...): unexpected error: %v", err)
+	}
+
+	mockSI.AssertExpectations(t)
+}
+
+// --- update path: tags drift triggers a CF update, no drift does not ---
+
+func TestUpdateManaged_Tags(t *testing.T) {
+	cases := map[string]struct {
+		observed    *resource.ServiceInstance
+		desired     *v1alpha1.ServiceInstanceParameters
+		wantTagsSet bool // whether WithTags should have been called with non-nil intent
+	}{
+		"drift - tags added": {
+			observed: &resource.ServiceInstance{
+				Resource: resource.Resource{GUID: serviceInstanceGUID},
+				Name:     "test-si",
+			},
+			desired: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Tags: []*string{ptr.To("app")},
+			},
+			wantTagsSet: true,
+		},
+		"no drift - tags already match": {
+			observed: &resource.ServiceInstance{
+				Resource: resource.Resource{GUID: serviceInstanceGUID},
+				Name:     "test-si",
+				Tags:     []string{"app"},
+			},
+			desired: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("test-si"),
+				Tags: []*string{ptr.To("app")},
+			},
+			wantTagsSet: false,
+		},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			mockSI := &fake.MockServiceInstance{}
+			mockSI.On("UpdateManaged", serviceInstanceGUID, mock.MatchedBy(func(opt *resource.ServiceInstanceManagedUpdate) bool {
+				if tc.wantTagsSet {
+					return cmp.Diff(derefTags(tc.desired.Tags), opt.Tags) == ""
+				}
+				return opt.Tags == nil
+			})).Return("", tc.observed, nil)
+
+			c := &Client{ServiceInstance: mockSI}
+			_, err := c.updateManaged(context.Background(), tc.observed, nil, tc.desired, nil)
+			if err != nil {
+				t.Fatalf("updateManaged(...): unexpected error: %v", err)
+			}
+
+			mockSI.AssertExpectations(t)
+		})
+	}
+}
+
+func TestUpdateUserProvided_Tags(t *testing.T) {
+	observed := &resource.ServiceInstance{
+		Resource: resource.Resource{GUID: serviceInstanceGUID},
+		Name:     "test-si",
+	}
+	desired := &v1alpha1.ServiceInstanceParameters{
+		Name: ptr.To("test-si"),
+		Tags: []*string{ptr.To("app"), ptr.To("prod")},
+	}
+
+	mockSI := &fake.MockServiceInstance{}
+	mockSI.On("UpdateUserProvided", serviceInstanceGUID, mock.MatchedBy(func(opt *resource.ServiceInstanceUserProvidedUpdate) bool {
+		return cmp.Diff([]string{"app", "prod"}, opt.Tags) == ""
+	})).Return(&resource.ServiceInstance{Resource: resource.Resource{GUID: serviceInstanceGUID}}, nil)
+
+	c := &Client{ServiceInstance: mockSI}
+	_, err := c.updateUserProvided(context.Background(), observed, nil, desired, nil)
+	if err != nil {
+		t.Fatalf("updateUserProvided(...): unexpected error: %v", err)
+	}
+
+	mockSI.AssertExpectations(t)
+}
