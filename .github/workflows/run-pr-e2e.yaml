@@ -47,8 +47,9 @@ jobs:
   run-e2e-test:
     needs: [approve, detect-only-doc-changes]
     if: always() && (needs.approve.result == 'success' || needs.approve.result == 'skipped')
-    uses: ./.github/workflows/e2e_test.yaml
+    uses: SAP/crossplane-provider-btp/.github/workflows/check-e2e-tests.lib.yaml@d574abcfa6be42adc099051969c0b6c33fa5ca87
     with:
       checkout-ref: ${{ github.event.pull_request.head.sha }}
       skip: ${{ needs.detect-only-doc-changes.outputs.has-only-doc-changes == 'true' }}
+      concurrency-group: e2e-cf-ci-e2e
     secrets: inherit

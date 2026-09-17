@@ -28,7 +28,7 @@ jobs:
         contents: read
 
     run-e2e-test:
-      uses: ./.github/workflows/e2e_test.yaml
+      uses: SAP/crossplane-provider-btp/.github/workflows/check-e2e-tests.lib.yaml@d574abcfa6be42adc099051969c0b6c33fa5ca87
       needs:
       - run-pre-checks
       secrets: inherit
