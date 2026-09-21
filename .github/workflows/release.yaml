@@ -23,12 +23,12 @@ permissions:
 
 jobs:
     run-pre-checks:
-      uses: SAP/crossplane-provider-btp/.github/workflows/check-all-pre-checks.lib.yaml@dd91b564627eacdf079df3905b5a6efa4a4e9a53
+      uses: SAP/crossplane-shared-workflows/.github/workflows/check-all-pre-checks.lib.yaml@main
       permissions:
         contents: read
 
     run-e2e-test:
-      uses: SAP/crossplane-provider-btp/.github/workflows/check-e2e-tests.lib.yaml@d574abcfa6be42adc099051969c0b6c33fa5ca87
+      uses: SAP/crossplane-shared-workflows/.github/workflows/check-e2e-tests.lib.yaml@main
       needs:
       - run-pre-checks
       secrets: inherit
@@ -37,7 +37,7 @@ jobs:
       needs:
       - run-pre-checks
       - run-e2e-test
-      uses: SAP/crossplane-provider-btp/.github/workflows/release-build-publish.lib.yaml@dd91b564627eacdf079df3905b5a6efa4a4e9a53
+      uses: SAP/crossplane-shared-workflows/.github/workflows/release-build-publish.lib.yaml@main
       with:
         version: ${{ github.event.inputs.nextVersion }}
         release_type: release

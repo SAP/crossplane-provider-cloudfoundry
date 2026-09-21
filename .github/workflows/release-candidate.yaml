@@ -32,7 +32,7 @@ jobs:
   build-and-publish:
     needs:
     - compute-version
-    uses: SAP/crossplane-provider-btp/.github/workflows/release-build-publish.lib.yaml@dd91b564627eacdf079df3905b5a6efa4a4e9a53
+    uses: SAP/crossplane-shared-workflows/.github/workflows/release-build-publish.lib.yaml@main
     with:
       version: ${{ needs.compute-version.outputs.version }}
       release_type: release_candidate
