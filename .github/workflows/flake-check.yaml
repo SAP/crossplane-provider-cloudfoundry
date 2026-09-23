@@ -1,3 +1,5 @@
+name: Check Nix flake and vendor hash
+
 on:
   pull_request:
 

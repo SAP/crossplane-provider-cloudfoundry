@@ -22,97 +22,23 @@ permissions:
   packages: write
 
 jobs:
-    run-go-license-check:
-      uses: ./.github/workflows/check-go-licenses.yaml
-
-    run-reuse-license-check:
-      uses: ./.github/workflows/reuse-scan.yaml
-
-    run-unit-test:
-      uses: ./.github/workflows/unit_test.yaml
-
-    run-make-reviewable-and-check-diff:
-      uses: ./.github/workflows/reviewable_check_diff.yaml
+    run-pre-checks:
+      uses: SAP/crossplane-shared-workflows/.github/workflows/check-all-pre-checks.lib.yaml@main
+      permissions:
+        contents: read
 
     run-e2e-test:
-      uses: ./.github/workflows/e2e_test.yaml
+      uses: SAP/crossplane-shared-workflows/.github/workflows/check-e2e-tests.lib.yaml@main
       needs:
-      - run-go-license-check
-      - run-reuse-license-check
-      - run-unit-test
-      - run-make-reviewable-and-check-diff
+      - run-pre-checks
       secrets: inherit
 
-    release:
-      runs-on: ubuntu-latest
+    build-and-publish:
       needs:
-      - run-go-license-check
-      - run-unit-test
-      - run-make-reviewable-and-check-diff
+      - run-pre-checks
       - run-e2e-test
-
-      steps:
-      - name: Print Version Number
-        run: echo "Building release version ${{ github.event.inputs.nextVersion }}"
-
-        # sets the github.event.inputs.nextVersion input as version tag
-      - name: Tag head with version
-        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7.0.1
-        with:
-          script: |
-            github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: 'refs/tags/${{ github.event.inputs.nextVersion }}',
-              sha: context.sha
-            })
-
-      - name: Setup Docker Buildx
-        uses: docker/setup-buildx-action@c47758b77c9736f4b2ef4073d4d51994fabfe349 # v3.4.0
-        with:
-          version: v0.15.1
-          install: true
-
-      - name: Checkout code
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          submodules: true
-
-      - name: Fetch History
-        run: git fetch --prune --unshallow
-
-      - name: Set up Go
-        uses: actions/setup-go@41dfa10bad2bb2ae585af6ee5bb4d7d973ad74ed # v5.1.0
-        with:
-          go-version: '1.25'
-
-      - name: Vendor Dependencies
-        run: make vendor vendor.check
-
-      - name: Build Images
-        run: |
-          make build PLATFORM=linux_amd64 VERSION=${{ github.event.inputs.nextVersion }}
-          make build PLATFORM=linux_arm64 VERSION=${{ github.event.inputs.nextVersion }}
-
-      - name: Login to Container Registry
-        uses: docker/login-action@9780b0c442fbb1117ed29e0efdff1e18412f7567 # v3.3.0
-        with:
-          registry: ${{ vars.REGISTRY_URL }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Publish Artifacts to DockerHub
-        run: |
-          make xpkg.build PLATFORM=linux_amd64 VERSION=${{ github.event.inputs.nextVersion }} BRANCH_NAME=${GITHUB_REF##*/}
-          make xpkg.build PLATFORM=linux_arm64 VERSION=${{ github.event.inputs.nextVersion }} BRANCH_NAME=${GITHUB_REF##*/}
-          make xpkg.release.publish VERSION=${{ github.event.inputs.nextVersion }}
-
-      - name: Run GoReleaser
-        uses: goreleaser/goreleaser-action@9ed2f89a662bf1735a48bc8557fd212fa902bebf # v6.1.0
-        with:
-          distribution: goreleaser
-          version: "~> v2"
-          args: release --clean
-        env:
-          # GitHub sets the GITHUB_TOKEN secret automatically.
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      uses: SAP/crossplane-shared-workflows/.github/workflows/release-build-publish.lib.yaml@main
+      with:
+        version: ${{ github.event.inputs.nextVersion }}
+        release_type: release
+      secrets: inherit
