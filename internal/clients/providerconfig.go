@@ -55,8 +55,9 @@ func GetCredentialConfig(ctx context.Context, client client.Client, mg resource.
 		return nil, errors.Wrap(err, errExtractEndpoint)
 	}
 
-	// Reuse an authenticated config per credential so we do not log in on every
-	// reconcile (see cf_auth_cache.go).
+	// Reuse a single UAA login per credential so we do not log in on every
+	// reconcile. cachedCFConfig returns a fresh config built from the shared,
+	// refreshing token source (see cf_auth_cache.go).
 	return cachedCFConfig(*url, cred.Email, cred.Password)
 }
 
