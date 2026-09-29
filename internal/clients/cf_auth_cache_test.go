@@ -11,10 +11,12 @@ package clients
 // Non-parallel: shares the package-global cfAuthCache / cfAuthSF.
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -27,12 +29,9 @@ import (
 // go-cfclient's jwt.ToOAuth2Token requires three "."-separated segments and
 // base64.RawURLEncoding-decodes the payload for its "exp" claim.
 func mintJWT(exp time.Time) string {
-	enc := func(v any) string {
-		b, _ := json.Marshal(v)
-		return base64.RawURLEncoding.EncodeToString(b)
-	}
-	header := enc(map[string]string{"alg": "none", "typ": "JWT"})
-	payload := enc(map[string]int64{"exp": exp.Unix()})
+	b64 := base64.RawURLEncoding.EncodeToString
+	header := b64([]byte(`{"alg":"none","typ":"JWT"}`))
+	payload := b64([]byte(`{"exp":` + strconv.FormatInt(exp.Unix(), 10) + `}`))
 	return header + "." + payload + ".sig"
 }
 
@@ -104,7 +103,7 @@ func resetCFCache() {
 
 // buildClient mirrors ClientFnBuilder: build a config from the cache, then a client.
 func buildClient(url, email, password string) error {
-	cfg, err := cachedCFConfig(url, email, password)
+	cfg, err := cachedCFConfig(context.Background(), url, email, password)
 	if err != nil {
 		return err
 	}
@@ -166,7 +165,7 @@ func TestCFCache_DistinctCredsDistinctLogins(t *testing.T) {
 func TestCFCache_FailedLoginNotCached(t *testing.T) {
 	resetCFCache()
 	// No server: discovery/login fails -> error, must not be cached.
-	if _, err := cachedCFConfig("http://127.0.0.1:1", "u@example.com", "pw"); err == nil {
+	if _, err := cachedCFConfig(context.Background(), "http://127.0.0.1:1", "u@example.com", "pw"); err == nil {
 		t.Fatal("expected login error")
 	}
 	if _, ok := cfAuthCache.Load(cfAuthKey("http://127.0.0.1:1", "u@example.com", "pw")); ok {
@@ -213,7 +212,7 @@ func TestCFCache_DeadRefreshTokenRebootstraps(t *testing.T) {
 	fake := &fakeCFAPI{accessTokenExpiry: -time.Minute, failRefresh: true}
 	url := fake.start(t)
 
-	_, err := cachedCFConfig(url, "u@example.com", "pw")
+	_, err := cachedCFConfig(context.Background(), url, "u@example.com", "pw")
 	if err == nil {
 		t.Fatal("expected error: refresh is dead and re-bootstrap still yields an expired token")
 	}

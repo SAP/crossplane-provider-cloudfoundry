@@ -66,10 +66,10 @@ func cfAuthKey(url, email, password string) string {
 // the current token (grant type refresh_token, so config.New performs no login) and
 // the pre-discovered auth URLs (so config.New performs no discovery GET). The build
 // is therefore fully local.
-func cachedCFConfig(url, email, password string) (*config.Config, error) {
+func cachedCFConfig(ctx context.Context, url, email, password string) (*config.Config, error) {
 	key := cfAuthKey(url, email, password)
 
-	entry, err := getOrBootstrap(key, url, email, password)
+	entry, err := getOrBootstrap(ctx, key, url, email, password)
 	if err != nil {
 		return nil, err
 	}
@@ -81,7 +81,7 @@ func cachedCFConfig(url, email, password string) (*config.Config, error) {
 		// with a fresh password login, then retry a single time.
 		cfAuthCache.Delete(key)
 		cfAuthSF.Forget(key)
-		entry, err = getOrBootstrap(key, url, email, password)
+		entry, err = getOrBootstrap(ctx, key, url, email, password)
 		if err != nil {
 			return nil, err
 		}
@@ -103,7 +103,7 @@ func cachedCFConfig(url, email, password string) (*config.Config, error) {
 
 // getOrBootstrap returns the cached entry for key, creating it (once, coalesced
 // across concurrent callers) via a single password login if absent.
-func getOrBootstrap(key, url, email, password string) (*cfAuthEntry, error) {
+func getOrBootstrap(ctx context.Context, key, url, email, password string) (*cfAuthEntry, error) {
 	if e, ok := cfAuthCache.Load(key); ok {
 		return e.(*cfAuthEntry), nil
 	}
@@ -113,7 +113,7 @@ func getOrBootstrap(key, url, email, password string) (*cfAuthEntry, error) {
 		if e, ok := cfAuthCache.Load(key); ok {
 			return e.(*cfAuthEntry), nil
 		}
-		entry, err := bootstrapCFAuth(url, email, password)
+		entry, err := bootstrapCFAuth(ctx, url, email, password)
 		if err != nil {
 			// Do not cache a failed login; the next reconcile retries
 			// (controller-runtime already backs off failing reconciles).
@@ -130,15 +130,21 @@ func getOrBootstrap(key, url, email, password string) (*cfAuthEntry, error) {
 
 // bootstrapCFAuth performs the one login per credential: discover the CF auth
 // endpoints, then obtain a refreshing token source via the password grant.
-func bootstrapCFAuth(url, email, password string) (*cfAuthEntry, error) {
+func bootstrapCFAuth(ctx context.Context, url, email, password string) (*cfAuthEntry, error) {
+	// The bootstrap is shared across reconciles (singleflight) and the resulting
+	// token source lives on to refresh long after this call returns, so it must
+	// not be tied to the triggering reconcile's cancellation. WithoutCancel keeps
+	// the request values but drops cancellation/deadline.
+	ctx = context.WithoutCancel(ctx)
+
 	httpClient := &http.Client{
 		Timeout: bootstrapTimeout,
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // mirrors config.SkipTLSValidation()
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // mirrors config.SkipTLSValidation(); making TLS verification configurable is tracked in #348
 		},
 	}
 
-	loginURL, uaaURL, err := discoverCFAuthEndpoints(httpClient, url)
+	loginURL, uaaURL, err := discoverCFAuthEndpoints(ctx, httpClient, url)
 	if err != nil {
 		return nil, err
 	}
@@ -152,17 +158,16 @@ func bootstrapCFAuth(url, email, password string) (*cfAuthEntry, error) {
 		},
 	}
 
-	// context.Background(), NOT a reconcile ctx: ReuseTokenSource captures this
-	// context for every future refresh, so it must outlive any single reconcile.
-	ctx := context.WithValue(context.Background(), oauth2.HTTPClient, httpClient)
+	// oauth2's ReuseTokenSource captures this context for every future refresh.
+	authCtx := context.WithValue(ctx, oauth2.HTTPClient, httpClient)
 
-	tok, err := oauthCfg.PasswordCredentialsToken(ctx, email, password)
+	tok, err := oauthCfg.PasswordCredentialsToken(authCtx, email, password)
 	if err != nil {
 		return nil, fmt.Errorf("cloudfoundry UAA login failed: %w", err)
 	}
 
 	return &cfAuthEntry{
-		src:      oauthCfg.TokenSource(ctx, tok),
+		src:      oauthCfg.TokenSource(authCtx, tok),
 		loginURL: loginURL,
 		uaaURL:   uaaURL,
 	}, nil
@@ -170,9 +175,13 @@ func bootstrapCFAuth(url, email, password string) (*cfAuthEntry, error) {
 
 // discoverCFAuthEndpoints reads the CF API root and returns the login and UAA
 // endpoints — the same discovery go-cfclient performs internally.
-func discoverCFAuthEndpoints(httpClient *http.Client, url string) (loginURL, uaaURL string, err error) {
+func discoverCFAuthEndpoints(ctx context.Context, httpClient *http.Client, url string) (loginURL, uaaURL string, err error) {
 	root := strings.TrimRight(url, "/") + "/"
-	resp, err := httpClient.Get(root)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, root, nil)
+	if err != nil {
+		return "", "", err
+	}
+	resp, err := httpClient.Do(req)
 	if err != nil {
 		return "", "", fmt.Errorf("error while discovering CF auth endpoints: %w", err)
 	}
