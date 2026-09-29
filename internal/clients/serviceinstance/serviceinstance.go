@@ -10,6 +10,7 @@ import (
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/pkg/errors"
+	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -178,6 +179,7 @@ func (c *Client) createManaged(ctx context.Context, mg xpresource.Managed, spec 
 
 	opt := resource.NewServiceInstanceCreateManaged(*spec.Name, *spec.Space, *spec.ServicePlan.ID)
 	opt.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
+	opt.WithTags(toTagSlice(spec.Tags))
 
 	if params != nil {
 		opt.Parameters = &params
@@ -204,6 +206,8 @@ func (c *Client) createUserProvided(ctx context.Context, mg xpresource.Managed, 
 	// create the service instance
 	opt := resource.NewServiceInstanceCreateUserProvided(*spec.Name, *spec.Space)
 	opt.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
+	opt.WithTags(toTagSlice(spec.Tags))
+
 	si, err := c.CreateUserProvided(ctx, opt)
 	if err != nil {
 		return nil, err
@@ -252,6 +256,8 @@ func (c *Client) updateManaged(ctx context.Context, observed *resource.ServiceIn
 		upd.WithParameters(params)
 	}
 
+	upd.WithTags(toTagSlice(desired.Tags))
+
 	upd.Metadata = metadata.BuildMetadata(mg, desired.Labels, desired.Annotations)
 
 	// Update the service instance
@@ -283,6 +289,9 @@ func (c *Client) updateUserProvided(ctx context.Context, observed *resource.Serv
 	if creds != nil {
 		upd.WithCredentials(creds)
 	}
+
+	upd.WithTags(toTagSlice(desired.Tags))
+
 	upd.WithRouteServiceURL(desired.RouteServiceURL).
 		WithSyslogDrainURL(desired.SyslogDrainURL)
 
@@ -320,6 +329,9 @@ func UpdateObservation(in *v1alpha1.ServiceInstanceObservation, r *resource.Serv
 	}
 
 	in.ID = &r.GUID
+
+	in.Tags = toTagPtrSlice(r.Tags)
+
 	in.LastOperation = v1alpha1.LastOperation{
 		Type:        r.LastOperation.Type,
 		State:       r.LastOperation.State,
@@ -341,6 +353,10 @@ func UpdateObservation(in *v1alpha1.ServiceInstanceObservation, r *resource.Serv
 // syslog drain URL) of a ServiceInstance are in sync with the observed CF resource.
 func specUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.ServiceInstance) bool {
 	if in.Name != nil && *in.Name != observed.Name {
+		return false
+	}
+
+	if !tagsUpToDate(in.Tags, observed.Tags) {
 		return false
 	}
 
@@ -440,6 +456,7 @@ func getDesiredSharedSpaces(refs []v1alpha1.SpaceReference) []string {
 	return guids
 }
 
+// REVISE: This can be simplified using the sets k8s helper, like in tagsToUpdate
 // diffSharedSpaces compares the current and desired shared spaces and returns the spaces to add and remove to match the desired state
 func diffSharedSpaces(current, desired []string) (toAdd, toRemove []string) {
 	currentSet := make(map[string]struct{}, len(current))
@@ -465,4 +482,29 @@ func diffSharedSpaces(current, desired []string) (toAdd, toRemove []string) {
 	}
 
 	return toAdd, toRemove
+}
+
+func toTagSlice(in []*string) []string {
+	out := make([]string, 0, len(in))
+	for _, t := range in {
+		if t != nil {
+			out = append(out, *t)
+		}
+	}
+	return out
+}
+
+func toTagPtrSlice(in []string) []*string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]*string, len(in))
+	for i := range in {
+		out[i] = &in[i]
+	}
+	return out
+}
+
+func tagsUpToDate(desired []*string, observed []string) bool {
+	return sets.New(toTagSlice(desired)...).Equal(sets.New(observed...))
 }
