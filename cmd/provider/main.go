@@ -7,6 +7,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"gopkg.in/alecthomas/kingpin.v2"
@@ -22,6 +23,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis"
 	provider "github.com/SAP/crossplane-provider-cloudfoundry/internal/controller"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/servicecredentialbinding"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
@@ -36,8 +38,14 @@ func main() {
 		maxReconcileRate = app.Flag("max-reconcile-rate", "The global maximum rate per second at which resources may checked for drift from the desired state.").Default("10").Int()
 
 		enableManagementPolicies = app.Flag("enable-management-policies", "Enable support for Management Policies.").Default("true").Envar("ENABLE_MANAGEMENT_POLICIES").Bool()
+
+		scbMaxCreateAttempts = app.Flag("scb-max-create-attempts", "Consecutive ServiceCredentialBinding create attempts before creation is paused.").
+					Default(strconv.Itoa(servicecredentialbinding.DefaultMaxCreateAttempts)).Envar("SCB_MAX_CREATE_ATTEMPTS").Int()
 	)
 	kingpin.MustParse(app.Parse(os.Args[1:]))
+	if *scbMaxCreateAttempts < 1 {
+		kingpin.Fatalf("--scb-max-create-attempts must be >= 1, got %d", *scbMaxCreateAttempts)
+	}
 
 	zl := zap.New(zap.UseDevMode(*debug))
 	log := logging.NewLogrLogger(zl.WithName("provider-cloudfoundry"))
@@ -87,6 +95,6 @@ func main() {
 		log.Info("Alpha feature enabled", "flag", features.EnableBetaManagementPolicies)
 	}
 
-	kingpin.FatalIfError(provider.CustomSetup(mgr, o), "Cannot setup custom controllers")
+	kingpin.FatalIfError(provider.CustomSetup(mgr, o, provider.Config{SCBMaxCreateAttempts: *scbMaxCreateAttempts}), "Cannot setup custom controllers")
 	kingpin.FatalIfError(mgr.Start(ctrl.SetupSignalHandler()), "Cannot start controller manager")
 }
