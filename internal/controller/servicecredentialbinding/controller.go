@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"strconv"
+	"time"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
@@ -45,45 +46,60 @@ const (
 	errExtractParams         = "cannot extract specified parameters: %w"
 	errUnknownState          = "unknown last operation state for " + resourceType + " in " + externalSystem
 	errUpdateCR              = "cannot update managed resource"
-	maxCreateAttempts        = 5
 	createAttemptsAnnotation = "crossplane-provider-cloudfoundry/create-attempts"
+	// MaxRetryExceededKey pauses reconciliation once create attempts are
+	// exhausted. Removing it resumes with a fresh budget.
+	MaxRetryExceededKey = "servicecredentialbinding.cloudfoundry.crossplane.io/max-retry-exceeded"
+	errPaused           = "reconciliation of " + resourceType + " is paused by the " + MaxRetryExceededKey + " annotation"
 )
 
-// Setup adds a controller that reconciles ServiceCredentialBinding CR.
-func Setup(mgr ctrl.Manager, o controller.Options) error {
-	name := managed.ControllerName(v1alpha1.ServiceCredentialBindingGroupKind)
+// DefaultMaxCreateAttempts is the default create-attempt limit.
+const DefaultMaxCreateAttempts = 5
 
-	options := []managed.ReconcilerOption{
-		managed.WithInitializers(),
-		managed.WithExternalConnector(&connector{
-			kube:  mgr.GetClient(),
-			usage: resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
-		}),
-		managed.WithLogger(o.Logger.WithValues("controller", name)),
-		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
-		managed.WithPollInterval(o.PollInterval),
+const reasonCreateAttemptsExhausted event.Reason = "CreateAttemptsExhausted"
+
+// SetupWithMaxCreateAttempts returns the controller setup for the given create-attempt limit.
+func SetupWithMaxCreateAttempts(maxCreateAttempts int) func(ctrl.Manager, controller.Options) error {
+	return func(mgr ctrl.Manager, o controller.Options) error {
+		name := managed.ControllerName(v1alpha1.ServiceCredentialBindingGroupKind)
+		recorder := event.NewAPIRecorder(mgr.GetEventRecorderFor(name))
+
+		options := []managed.ReconcilerOption{
+			managed.WithInitializers(),
+			managed.WithExternalConnector(&connector{
+				kube:              mgr.GetClient(),
+				usage:             resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
+				recorder:          recorder,
+				maxCreateAttempts: maxCreateAttempts,
+			}),
+			managed.WithLogger(o.Logger.WithValues("controller", name)),
+			managed.WithRecorder(recorder),
+			managed.WithPollInterval(o.PollInterval),
+		}
+
+		if o.Features.Enabled(features.EnableBetaManagementPolicies) {
+			options = append(options, managed.WithManagementPolicies())
+		}
+
+		r := managed.NewReconciler(mgr,
+			resource.ManagedKind(v1alpha1.ServiceCredentialBindingGroupVersionKind),
+			options...)
+
+		return ctrl.NewControllerManagedBy(mgr).
+			Named(name).
+			WithOptions(o.ForControllerRuntime()).
+			For(&v1alpha1.ServiceCredentialBinding{}).
+			Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 	}
-
-	if o.Features.Enabled(features.EnableBetaManagementPolicies) {
-		options = append(options, managed.WithManagementPolicies())
-	}
-
-	r := managed.NewReconciler(mgr,
-		resource.ManagedKind(v1alpha1.ServiceCredentialBindingGroupVersionKind),
-		options...)
-
-	return ctrl.NewControllerManagedBy(mgr).
-		Named(name).
-		WithOptions(o.ForControllerRuntime()).
-		For(&v1alpha1.ServiceCredentialBinding{}).
-		Complete(ratelimiter.NewReconciler(name, r, o.GlobalRateLimiter))
 }
 
 // A connector is expected to produce an external client when its Connect method
 // is called.
 type connector struct {
-	kube  k8s.Client
-	usage resource.LegacyTracker
+	kube              k8s.Client
+	usage             resource.LegacyTracker
+	recorder          event.Recorder
+	maxCreateAttempts int
 }
 
 // Connect typically produces an ExternalClient by:
@@ -92,12 +108,18 @@ type connector struct {
 // 3. Getting the credentials specified by the ProviderConfig.
 // 4. Using the credentials to form a client.
 func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.ExternalClient, error) {
-	if _, ok := mg.(*v1alpha1.ServiceCredentialBinding); !ok {
+	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
+	if !ok {
 		return nil, errors.New(errWrongCRType)
 	}
 
 	if err := c.usage.Track(ctx, mg.(resource.LegacyManaged)); err != nil {
 		return nil, fmt.Errorf(errTrackPCUsage, err)
+	}
+
+	// Building the CF client already calls the CF API, so check the pause first.
+	if isCreatePaused(cr) {
+		return &pausedExternal{maxCreateAttempts: c.maxCreateAttempts}, nil
 	}
 
 	cf, err := clients.ClientFnBuilder(ctx, c.kube)(mg)
@@ -112,6 +134,8 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 		keyRotator: &scb.SCBKeyRotator{
 			SCBClient: client,
 		},
+		recorder:          c.recorder,
+		maxCreateAttempts: c.maxCreateAttempts,
 	}
 	ext.observationStateHandler = ext // Use self as the default handler
 	return ext, nil
@@ -135,6 +159,8 @@ type external struct {
 	scbClient               scb.ServiceCredentialBinding
 	keyRotator              scb.KeyRotator
 	observationStateHandler ObservationStateHandler
+	recorder                event.Recorder
+	maxCreateAttempts       int
 }
 
 // isBindingNotFoundError returns true if the error indicates the binding was not found
@@ -155,18 +181,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	guid := meta.GetExternalName(cr)
 	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, cr.Spec.ForProvider)
 	if isBindingNotFoundError(err) {
-		// The binding does not exist in Cloud Foundry. If we have exhausted the
-		// create attempts, settle into an Unavailable state instead of triggering
-		// another Create. Returning ResourceExists: true with a nil error stops the
-		// reconciler from calling Create again, which avoids an endless
-		// create-fail-requeue loop and prevents flooding CF with orphaned bindings.
-		if isCircuitBreakerTripped(cr) {
-			cr.SetConditions(xpv1.Unavailable().WithMessage(
-				fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
-			))
-			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
-		}
-		return managed.ExternalObservation{ResourceExists: false}, nil
+		return c.observeMissing(ctx, cr)
 	}
 	if err != nil {
 		return managed.ExternalObservation{}, fmt.Errorf(errGet, err)
@@ -185,16 +200,29 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	cr.Status.AtProvider.GUID = serviceBinding.GUID
 	cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: serviceBinding.CreatedAt}
 
-	if c.keyRotator.RetireBinding(cr, serviceBinding) {
+	// Retiring during deletion would skip Delete() and leak the binding.
+	if cr.GetDeletionTimestamp().IsZero() && c.keyRotator.RetireBinding(cr, serviceBinding) {
 		if err := c.kube.Status().Update(ctx, cr); err != nil {
 			return managed.ExternalObservation{}, fmt.Errorf(errUpdateStatus, err)
 		}
-		return managed.ExternalObservation{ResourceExists: false}, nil
+		return c.notExists(ctx, cr)
 	}
 
 	scb.UpdateObservation(&cr.Status.AtProvider, serviceBinding)
 
 	return c.observationStateHandler.HandleObservationState(serviceBinding, ctx, cr)
+}
+
+// observeMissing handles a binding that is not found in Cloud Foundry.
+func (c *external) observeMissing(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error) {
+	// Delete() is not called for a missing binding, so remove retired keys here.
+	if !cr.GetDeletionTimestamp().IsZero() {
+		if err := c.keyRotator.DeleteRetiredKeys(ctx, cr); err != nil {
+			return managed.ExternalObservation{}, fmt.Errorf(errDeleteRetiredKeys, err)
+		}
+		return managed.ExternalObservation{ResourceExists: false}, nil
+	}
+	return c.notExists(ctx, cr)
 }
 
 // Create a ServiceCredentialBinding resource.
@@ -370,13 +398,72 @@ func resetCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) {
 	meta.RemoveAnnotations(cr, createAttemptsAnnotation)
 }
 
+// notExists reports a missing binding and pauses creation once the limit is
+// reached. Marker and counter removal share one Update, so a resource with
+// neither was resumed by a human.
+func (c *external) notExists(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error) {
+	if getCreateAttempts(cr) < c.maxCreateAttempts {
+		return managed.ExternalObservation{ResourceExists: false}, nil
+	}
+	meta.AddAnnotations(cr, map[string]string{MaxRetryExceededKey: time.Now().UTC().Format(time.RFC3339)})
+	resetCreateAttempts(cr)
+	if err := c.kube.Update(ctx, cr); err != nil {
+		// The counter is still at the limit, so the next Observe trips again.
+		return managed.ExternalObservation{}, fmt.Errorf("%s: %w", errUpdateCR, err)
+	}
+	msg := recoveryMessage(c.maxCreateAttempts)
+	c.recorder.Event(cr, event.Warning(reasonCreateAttemptsExhausted, errors.New(msg)))
+	cr.SetConditions(xpv1.Unavailable().WithMessage(msg))
+	return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
+}
+
 // isValidUUID returns true if the given string is a valid UUID
 func isValidUUID(s string) bool {
 	return uuid.Validate(s) == nil
 }
 
-// isCircuitBreakerTripped returns true if the maximum number of create attempts has been reached.
-// If the resource is being deleted, the circuit breaker is bypassed to allow cleanup.
-func isCircuitBreakerTripped(cr *v1alpha1.ServiceCredentialBinding) bool {
-	return getCreateAttempts(cr) >= maxCreateAttempts && cr.GetDeletionTimestamp().IsZero()
+// isCreatePaused reports whether the pause marker is set and the resource is not being deleted.
+func isCreatePaused(cr *v1alpha1.ServiceCredentialBinding) bool {
+	_, marked := cr.GetAnnotations()[MaxRetryExceededKey]
+	return marked && cr.GetDeletionTimestamp().IsZero()
+}
+
+// recoveryMessage tells a human how to resume a paused resource.
+func recoveryMessage(limit int) string {
+	return fmt.Sprintf("Creation failed after %d attempts; reconciliation paused. Verify the binding in Cloud Foundry "+
+		"(orphaned bindings, parameters), then remove annotation %s to retry with %d fresh attempts.",
+		limit, MaxRetryExceededKey, limit)
+}
+
+var _ managed.ExternalClient = &pausedExternal{}
+
+// pausedExternal makes no Cloud Foundry calls and reports the resource as up
+// to date, so Create, Update and Delete are never called.
+type pausedExternal struct {
+	maxCreateAttempts int
+}
+
+func (p *pausedExternal) Observe(_ context.Context, mg resource.Managed) (managed.ExternalObservation, error) {
+	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
+	if !ok {
+		return managed.ExternalObservation{}, errors.New(errWrongCRType)
+	}
+	cr.SetConditions(xpv1.Unavailable().WithMessage(recoveryMessage(p.maxCreateAttempts)))
+	return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
+}
+
+func (p *pausedExternal) Create(context.Context, resource.Managed) (managed.ExternalCreation, error) {
+	return managed.ExternalCreation{}, errors.New(errPaused)
+}
+
+func (p *pausedExternal) Update(context.Context, resource.Managed) (managed.ExternalUpdate, error) {
+	return managed.ExternalUpdate{}, errors.New(errPaused)
+}
+
+func (p *pausedExternal) Delete(context.Context, resource.Managed) (managed.ExternalDelete, error) {
+	return managed.ExternalDelete{}, errors.New(errPaused)
+}
+
+func (p *pausedExternal) Disconnect(context.Context) error {
+	return nil
 }

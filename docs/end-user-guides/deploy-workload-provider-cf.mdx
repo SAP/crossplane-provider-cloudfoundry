@@ -271,6 +271,69 @@ metadata:
 - A TTL that's too long may increase security risks by keeping old credentials active longer than necessary
 :::
 
+#### Create failure protection
+
+If creating a `ServiceCredentialBinding` keeps failing, the provider stops after a limited number of consecutive attempts (default `5`) instead of retrying forever. An attempt is counted each time the provider has to create a new binding: the binding is not found in Cloud Foundry, or a rotation replacement is due.
+
+**Recognising a paused binding:**
+
+- The `Ready` condition is `False` with the message `Creation failed after <N> attempts; reconciliation paused. ...`
+- A `CreateAttemptsExhausted` warning event is recorded on the resource (`kubectl describe servicecredentialbinding <name>`).
+- The resource has the annotation `servicecredentialbinding.cloudfoundry.crossplane.io/max-retry-exceeded`, set to the time it was paused.
+
+While paused, the provider makes no Cloud Foundry calls for this resource.
+
+**Recovering:**
+
+1. Check Cloud Foundry for bindings left behind by the failed attempts and delete the ones that don't belong to the resource:
+   - `type: key`: list keys with `cf service-keys <service-instance>` and delete them with `cf delete-service-key <service-instance> <key>`.
+   - `type: app`: check the bound apps section of `cf service <service-instance>` and unbind with `cf unbind-service <app> <service-instance>`.
+
+   Keep any binding whose GUID matches the resource's `crossplane.io/external-name` annotation, `status.atProvider.guid`, or an entry in `status.atProvider.retiredKeys`. These are still in use; for example, when a rotation replacement is what failed, the previous key is still the one your applications use. `cf service-key <service-instance> <key> --guid` prints a key's GUID.
+2. Fix the cause, for example the binding parameters or the service instance the binding points to.
+3. Remove the annotation:
+
+   ```shell
+   kubectl annotate servicecredentialbinding <name> servicecredentialbinding.cloudfoundry.crossplane.io/max-retry-exceeded-
+   ```
+
+   The provider reconciles the resource straight away, with a full set of attempts.
+
+You can also delete a paused resource. Deleting it removes its bindings from Cloud Foundry, including retired rotation keys.
+
+:::warning Adding the annotation yourself pauses all reconciliation
+You can add the same annotation (any value) to stop the provider from working on a binding. This pauses more than creation: while the annotation is present, the provider makes no Cloud Foundry calls for the resource. It doesn't apply spec changes, rotate keys, delete expired retired keys, or refresh the connection secret. The resource also shows `Ready=False` with the `Creation failed after <N> attempts; reconciliation paused. ...` message, even though nothing failed. Deleting the resource still works. Remove the annotation to resume.
+:::
+
+:::note Failed binding kept by Cloud Foundry
+With some brokers a binding fails after Cloud Foundry has already created it, and Cloud Foundry keeps the failed binding. The resource then shows `Ready=False` with the broker's message. Fixing the parameters alone does not trigger a retry. Delete the failed binding in Cloud Foundry (`cf delete-service-key <service-instance> <key>` for `type: key`, `cf unbind-service <app> <service-instance>` for `type: app`); the provider then creates a new one.
+
+Each of these retries is a create attempt and counts toward the limit. A failed binding never resets the count; it resets only when a binding succeeds or is adopted. Once the limit is reached, the binding pauses as described above; follow **Recovering** to resume it.
+:::
+
+**Changing the limit:**
+
+Set the limit for the whole provider with the `--scb-max-create-attempts` flag or the `SCB_MAX_CREATE_ATTEMPTS` environment variable. It must be at least `1`. For example, with a `DeploymentRuntimeConfig`:
+
+```yaml title="Example: raise the create attempt limit"
+apiVersion: pkg.crossplane.io/v1beta1
+kind: DeploymentRuntimeConfig
+metadata:
+  name: provider-cloudfoundry
+spec:
+  deploymentTemplate:
+    spec:
+      selector: {}
+      template:
+        spec:
+          containers:
+            - name: package-runtime
+              args:
+                - --scb-max-create-attempts=10
+```
+
+Reference it from the `Provider` with `spec.runtimeConfigRef.name: provider-cloudfoundry`.
+
 ### Configure `Route`  <Badge isHeadline={true} type={READY}/>
 
 A route is a unique address/URL that enables our end users to reach our sample applications.
