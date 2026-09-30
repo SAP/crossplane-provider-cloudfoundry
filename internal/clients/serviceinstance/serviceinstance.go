@@ -360,6 +360,12 @@ func specUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.Ser
 		return false
 	}
 
+	return typeSpecUpToDate(in, observed)
+}
+
+// typeSpecUpToDate checks the type-specific spec fields (service plan for managed,
+// route service and syslog drain URLs for user-provided) against the observed CF resource.
+func typeSpecUpToDate(in *v1alpha1.ServiceInstanceParameters, observed *resource.ServiceInstance) bool {
 	switch in.Type {
 	case v1alpha1.ManagedService:
 		if in.ServicePlan != nil && in.ServicePlan.ID != nil && observed.Relationships.ServicePlan.Data.GUID != *in.ServicePlan.ID {
