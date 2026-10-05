@@ -206,7 +206,6 @@ func (c *Client) createUserProvided(ctx context.Context, mg xpresource.Managed, 
 	// create the service instance
 	opt := resource.NewServiceInstanceCreateUserProvided(*spec.Name, *spec.Space)
 	opt.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
-	opt.WithTags(toTagSlice(spec.Tags))
 
 	si, err := c.CreateUserProvided(ctx, opt)
 	if err != nil {
@@ -218,7 +217,8 @@ func (c *Client) createUserProvided(ctx context.Context, mg xpresource.Managed, 
 	if creds != nil {
 		upt.WithCredentials(creds)
 	}
-	upt.WithRouteServiceURL(spec.RouteServiceURL).
+	upt.WithTags(toTagSlice(spec.Tags)).
+		WithRouteServiceURL(spec.RouteServiceURL).
 		WithSyslogDrainURL(spec.SyslogDrainURL)
 
 	return c.UpdateUserProvided(ctx, si.GUID, upt)
@@ -462,7 +462,7 @@ func getDesiredSharedSpaces(refs []v1alpha1.SpaceReference) []string {
 	return guids
 }
 
-// REVISE: This can be simplified using the sets k8s helper, like in tagsToUpdate
+// REVISE: This can be simplified using the sets k8s helper, like in tagsUpToDate
 // diffSharedSpaces compares the current and desired shared spaces and returns the spaces to add and remove to match the desired state
 func diffSharedSpaces(current, desired []string) (toAdd, toRemove []string) {
 	currentSet := make(map[string]struct{}, len(current))
