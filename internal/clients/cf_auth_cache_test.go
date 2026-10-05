@@ -46,6 +46,11 @@ type fakeCFAPI struct {
 	accessTokenExpiry time.Duration
 	// failRefresh makes the token endpoint reject refresh_token grants.
 	failRefresh bool
+	// firstPasswordExpired issues an already-expired access token for the first
+	// password login and a long-lived one for every subsequent login. Combined
+	// with failRefresh it models a dead shared token source that a fresh
+	// password re-login recovers.
+	firstPasswordExpired bool
 }
 
 func (f *fakeCFAPI) start(t *testing.T) string {
@@ -57,6 +62,7 @@ func (f *fakeCFAPI) start(t *testing.T) string {
 		if r.URL.Path == "/oauth/token" {
 			_ = r.ParseForm()
 			grant := r.Form.Get("grant_type")
+			exp := f.accessTokenExpiry
 			switch grant {
 			case "refresh_token":
 				if f.failRefresh {
@@ -66,16 +72,23 @@ func (f *fakeCFAPI) start(t *testing.T) string {
 				}
 				f.refreshLogins.Add(1)
 			default: // "password"
-				f.passwordLogins.Add(1)
+				n := f.passwordLogins.Add(1)
+				if f.firstPasswordExpired {
+					if n == 1 {
+						exp = -time.Minute // first login's token is already expired
+					} else {
+						exp = time.Hour // re-login recovers with a long-lived token
+					}
+				}
 			}
 			w.Header().Set("Content-Type", "application/json")
 			_ = json.NewEncoder(w).Encode(map[string]any{
 				// expires_in drives oauth2's ReuseTokenSource refresh decision;
 				// the JWT exp drives go-cfclient's config.Token parsing. Keep both
-				// consistent with accessTokenExpiry.
-				"access_token":  mintJWT(time.Now().Add(f.accessTokenExpiry)),
+				// consistent.
+				"access_token":  mintJWT(time.Now().Add(exp)),
 				"token_type":    "bearer",
-				"expires_in":    int64(f.accessTokenExpiry.Seconds()),
+				"expires_in":    int64(exp.Seconds()),
 				"refresh_token": "rt",
 			})
 			return
@@ -223,5 +236,39 @@ func TestCFCache_DeadRefreshTokenRebootstraps(t *testing.T) {
 	// The known-bad entry must not linger.
 	if _, ok := cfAuthCache.Load(cfAuthKey(url, "u@example.com", "pw")); ok {
 		t.Error("unusable entry must be dropped, not wedged")
+	}
+}
+
+// When the shared token source dies and many reconciles fail at once, recovery
+// must coalesce to a single re-login — not one password login per caller — and
+// the freshly recovered entry must not be evicted by a straggler still holding
+// the dead one. This is the concurrent counterpart to the re-bootstrap path:
+// CompareAndDelete (not Delete) and keeping the singleflight key are what make
+// it hold. Run under -race.
+func TestCFCache_ConcurrentDeadTokenSingleRelogin(t *testing.T) {
+	resetCFCache()
+	// First password login issues an already-expired token and the refresh grant
+	// is dead, so the shared source fails for every concurrent caller at once;
+	// the second password login recovers with a long-lived token.
+	fake := &fakeCFAPI{failRefresh: true, firstPasswordExpired: true}
+	url := fake.start(t)
+
+	var wg sync.WaitGroup
+	errs := make([]error, 50)
+	for i := 0; i < 50; i++ {
+		wg.Add(1)
+		go func(i int) { defer wg.Done(); errs[i] = buildClient(url, "u@example.com", "pw") }(i)
+	}
+	wg.Wait()
+
+	for i, err := range errs {
+		if err != nil {
+			t.Fatalf("reconcile %d failed; recovery should succeed for all callers: %v", i, err)
+		}
+	}
+	// Exactly one dead bootstrap + one coalesced re-login. More would mean a
+	// straggler clobbered the recovered entry and forced extra password logins.
+	if got := fake.passwordLogins.Load(); got != 2 {
+		t.Errorf("password logins = %d, want 2 (one dead bootstrap + one coalesced re-login)", got)
 	}
 }

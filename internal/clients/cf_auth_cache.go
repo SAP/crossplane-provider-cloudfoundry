@@ -77,19 +77,27 @@ func cachedCFConfig(ctx context.Context, url, email, password string) (*config.C
 	tok, err := entry.src.Token()
 	if err != nil {
 		// The refresh token is dead/revoked (or bootstrap produced a token that
-		// can no longer refresh). Drop the wedged entry and bootstrap once more
+		// can no longer refresh). Drop this wedged entry and bootstrap once more
 		// with a fresh password login, then retry a single time.
-		cfAuthCache.Delete(key)
-		cfAuthSF.Forget(key)
+		//
+		// CompareAndDelete (not Delete) so we only evict the exact bad entry we
+		// observed: when N reconciles share a dying token source they all fail
+		// here at once, and an unconditional Delete would let a late caller wipe
+		// the fresh entry an earlier one just re-bootstrapped. We also must not
+		// Forget the singleflight key — leaving it lets the concurrent
+		// re-bootstraps coalesce into a single password login instead of each
+		// starting its own.
+		cfAuthCache.CompareAndDelete(key, entry)
 		entry, err = getOrBootstrap(ctx, key, url, email, password)
 		if err != nil {
 			return nil, err
 		}
 		tok, err = entry.src.Token()
 		if err != nil {
-			// Still unusable: drop the entry so the next reconcile starts clean
-			// rather than reusing a known-bad login.
-			cfAuthCache.Delete(key)
+			// Still unusable: drop this entry (again only if it's still the one
+			// we saw) so the next reconcile starts clean rather than reusing a
+			// known-bad login.
+			cfAuthCache.CompareAndDelete(key, entry)
 			return nil, err
 		}
 	}
