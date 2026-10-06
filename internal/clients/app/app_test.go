@@ -230,7 +230,7 @@ func TestDetectChanges_DefaultMetadataDrift(t *testing.T) {
 		t.Fatalf("DetectChanges() error = %v", err)
 	}
 	if !changes.HasField("metadata") {
-		t.Fatal("DetectChanges() did not report metadata drift for missing default labels")
+		t.Fatal("DetectChanges() did not report metadata drift for missing default annotations")
 	}
 }
 

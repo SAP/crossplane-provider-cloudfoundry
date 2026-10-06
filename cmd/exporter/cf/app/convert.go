@@ -157,8 +157,8 @@ func convertAppResource(ctx context.Context, cfClient *client.Client, app *res, 
 					Space: &app.Relationships.Space.Data.GUID,
 				},
 				ResourceMetadata: v1alpha1.ResourceMetadata{
-					Labels:      metadata.StripDefaultLabels(app.Metadata.Labels),
-					Annotations: app.Metadata.Annotations,
+					Labels:      metadata.StripDefaultTags(app.Metadata.Labels),
+					Annotations: metadata.StripDefaultTags(app.Metadata.Annotations),
 				},
 				// Buildpacks:                        []string{}, // not supported yet
 				// Stack:                             new(string), // not supported yet

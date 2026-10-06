@@ -204,26 +204,28 @@ func checkSRBResourceLabelsAndAnnotations(ctx context.Context, t *testing.T, cfg
 			t.Errorf("error getting SI for label check: %s", err.Error())
 			return
 		}
-		if err := AssertDefaultLabels(
+		if err := AssertDefaultAnnotations(
 			v.Status.AtProvider.Labels,
+			v.Status.AtProvider.Annotations,
 			v.GetName(),
 			"serviceinstance.cloudfoundry.crossplane.io",
 			v.GetProviderConfigReference().Name,
 		); err != nil {
-			t.Errorf("SI %s default labels check failed: %s", v.GetName(), err.Error())
+			t.Errorf("SI %s default annotations check failed: %s", v.GetName(), err.Error())
 		}
 	case *v1alpha1.Route:
 		if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), v); err != nil {
 			t.Errorf("error getting Route for label check: %s", err.Error())
 			return
 		}
-		if err := AssertDefaultLabels(
+		if err := AssertDefaultAnnotations(
 			v.Status.AtProvider.Labels,
+			v.Status.AtProvider.Annotations,
 			v.GetName(),
 			"route.cloudfoundry.crossplane.io",
 			v.GetProviderConfigReference().Name,
 		); err != nil {
-			t.Errorf("Route %s default labels check failed: %s", v.GetName(), err.Error())
+			t.Errorf("Route %s default annotations check failed: %s", v.GetName(), err.Error())
 		}
 	default:
 		// Observe-only resources (Space, Domain, Organization) and non-eligible types — skip

@@ -83,7 +83,7 @@ type MockSpaceFeature struct {
 	*fake.MockFeature
 }
 
-func withDefaultMetadataLabels() modifier {
+func withDefaultMetadata() modifier {
 	return func(r *v1alpha1.Space) {
 		r.SetGroupVersionKind(v1alpha1.Space_GroupVersionKind)
 	}
@@ -185,10 +185,10 @@ func TestObserve(t *testing.T) {
 		},
 		"UnsetExternalNameSuccessful": {
 			args: args{
-				mg: fakeSpace(withName(name), withOrg(orgGuid), withDefaultMetadataLabels()),
+				mg: fakeSpace(withName(name), withOrg(orgGuid), withDefaultMetadata()),
 			},
 			want: want{
-				mg:  fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withAllowSSH(false), withConditions(xpv1.Available()), withDefaultMetadataLabels()),
+				mg:  fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withAllowSSH(false), withConditions(xpv1.Available()), withDefaultMetadata()),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
@@ -197,12 +197,12 @@ func TestObserve(t *testing.T) {
 				f := &fake.MockFeature{}
 
 				m.On("Single").Return(
-					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("space.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-space")}).Space,
+					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).SetAnnotations(map[string]*string{"crossplane-kind": ptr.To("space.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-space")}).Space,
 					nil,
 				)
 
 				m.On("Get", guid).Return(
-					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("space.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-space")}).Space,
+					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).SetAnnotations(map[string]*string{"crossplane-kind": ptr.To("space.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-space")}).Space,
 					nil,
 				)
 
@@ -239,10 +239,10 @@ func TestObserve(t *testing.T) {
 		},
 		"SetExternalNameSuccessful": {
 			args: args{
-				mg: fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withDefaultMetadataLabels()),
+				mg: fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withDefaultMetadata()),
 			},
 			want: want{
-				mg:  fakeSpace(withName(name), withOrg(orgGuid), withAllowSSH(false), withExternalName(guid), withConditions(xpv1.Available()), withDefaultMetadataLabels()),
+				mg:  fakeSpace(withName(name), withOrg(orgGuid), withAllowSSH(false), withExternalName(guid), withConditions(xpv1.Available()), withDefaultMetadata()),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
 				err: nil,
 			},
@@ -251,7 +251,36 @@ func TestObserve(t *testing.T) {
 				f := &fake.MockFeature{}
 
 				m.On("Get", guid).Return(
-					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("space.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-space")}).Space,
+					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).SetAnnotations(map[string]*string{"crossplane-kind": ptr.To("space.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-space")}).Space,
+					nil,
+				)
+
+				f.On("IsSSHEnabled").Return(
+					false,
+					nil,
+				)
+				return &MockSpaceFeature{m, f}
+			},
+		},
+		"LegacyDefaultLabelsNotUpToDate": {
+			args: args{
+				mg: fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withDefaultMetadata()),
+			},
+			want: want{
+				mg:  fakeSpace(withName(name), withOrg(orgGuid), withAllowSSH(false), withExternalName(guid), withConditions(xpv1.Available()), withDefaultMetadata()),
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ResourceLateInitialized: false},
+				err: nil,
+			},
+			service: func() *MockSpaceFeature {
+				legacy := map[string]*string{
+					"crossplane-kind": ptr.To("space.cloudfoundry.crossplane.io"),
+					"crossplane-name": ptr.To("my-space"),
+				}
+				m := &fake.MockSpace{}
+				f := &fake.MockFeature{}
+
+				m.On("Get", guid).Return(
+					&fake.NewSpace().SetName(name).SetGUID(guid).SetRelationships(orgGuid).SetLabels(legacy).SetAnnotations(legacy).Space,
 					nil,
 				)
 

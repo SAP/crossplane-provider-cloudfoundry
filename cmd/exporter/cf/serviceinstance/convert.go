@@ -136,8 +136,8 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 				// },
 				Tags: convertServiceInstanceTags(serviceInstance.Tags),
 				ResourceMetadata: v1alpha1.ResourceMetadata{
-					Annotations: serviceInstance.Metadata.Annotations,
-					Labels:      metadata.StripDefaultLabels(serviceInstance.Metadata.Labels),
+					Annotations: metadata.StripDefaultTags(serviceInstance.Metadata.Annotations),
+					Labels:      metadata.StripDefaultTags(serviceInstance.Metadata.Labels),
 				},
 			},
 		},
