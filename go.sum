@@ -80,8 +80,8 @@ github.com/charmbracelet/x/termios v0.1.1 h1:o3Q2bT8eqzGnGPOYheoYS8eEleT5ZVNYNy8
 github.com/charmbracelet/x/termios v0.1.1/go.mod h1:rB7fnv1TgOPOyyKRJ9o+AsTU/vK5WHJ2ivHeut/Pcwo=
 github.com/charmbracelet/x/xpty v0.1.2 h1:Pqmu4TEJ8KeA9uSkISKMU3f+C1F6OGBn8ABuGlqCbtI=
 github.com/charmbracelet/x/xpty v0.1.2/go.mod h1:XK2Z0id5rtLWcpeNiMYBccNNBrP2IJnzHI0Lq13Xzq4=
-github.com/cloudfoundry/go-cfclient/v3 v3.0.0-alpha.12 h1:6ejqaobIjUY+HJWrwUW1dqiGz7s4PlG/fIDznCZwlS8=
-github.com/cloudfoundry/go-cfclient/v3 v3.0.0-alpha.12/go.mod h1:JmRWZTZEEup+5BlR+YYhzPUfJABidYEpIBNS10KjXqk=
+github.com/cloudfoundry/go-cfclient/v3 v3.0.0-beta.1 h1:y0f4/xA3fn8WlUnA4dPpoRbhhL/65ktG8uHZe8aF4ZE=
+github.com/cloudfoundry/go-cfclient/v3 v3.0.0-beta.1/go.mod h1:cwg8bywOst/2c5huQgBIbA5gcI4g8DLov00cJaDaFy0=
 github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0 h1:sDMmm+q/3+BukdIpxwO365v/Rbspp2Nt5XntgQRXq8Q=
 github.com/codegangsta/inject v0.0.0-20150114235600-33e0aa1cb7c0/go.mod h1:4Zcjuz89kmFXt9morQgcfYZAYZ5n8WHjt81YYWIwtTM=
 github.com/containerd/errdefs v1.0.0 h1:tg5yIfIlQIrxYtu9ajqY42W3lpS19XqdxRQeEwYG8PI=
