@@ -13,11 +13,11 @@ import (
 	"github.com/stretchr/testify/mock"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -62,7 +62,7 @@ func withServiceInstanceID(guid string) modifier {
 	}
 }
 
-func withConditions(c ...xpv1.Condition) modifier {
+func withConditions(c ...xpv2.Condition) modifier {
 	return func(i *v1alpha1.ServiceRouteBinding) { i.Status.SetConditions(c...) }
 }
 
@@ -140,7 +140,7 @@ func TestObserve(t *testing.T) {
 		withStatus(guid),
 		withRouteID(routeGUID),
 		withServiceInstanceID(serviceInstanceGUID),
-		withConditions(xpv1.Available(), xpv1.ReconcileSuccess()),
+		withConditions(xpv2.Available(), xpv2.ReconcileSuccess()),
 		withDefaultMetadataLabels(),
 	)
 
@@ -154,7 +154,7 @@ func TestObserve(t *testing.T) {
 		withExternalName(guid),
 		withRouteID(routeGUID),
 		withServiceInstanceID(serviceInstanceGUID),
-		withConditions(xpv1.Deleting()),
+		withConditions(xpv2.Deleting()),
 	)
 
 	cfSucceeded := func() *cfresource.ServiceRouteBinding {
@@ -296,7 +296,7 @@ func TestObserve(t *testing.T) {
 					withStatus(guid),
 					withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
-					withConditions(xpv1.Unavailable().WithMessage("create in progress")),
+					withConditions(xpv2.Unavailable().WithMessage("create in progress")),
 					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -327,7 +327,7 @@ func TestObserve(t *testing.T) {
 					withStatus(guid),
 					withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
-					withConditions(xpv1.Unavailable().WithMessage("create failed")),
+					withConditions(xpv2.Unavailable().WithMessage("create failed")),
 					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
@@ -358,7 +358,7 @@ func TestObserve(t *testing.T) {
 					withStatus(guid),
 					withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
-					withConditions(xpv1.Deleting()),
+					withConditions(xpv2.Deleting()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
 				err: nil,
@@ -457,7 +457,7 @@ func TestCreate(t *testing.T) {
 				mg: serviceRouteBinding(withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
 					withExternalName(guid),
-					withConditions(xpv1.Creating()),
+					withConditions(xpv2.Creating()),
 				),
 				obs: managed.ExternalCreation{},
 				err: nil,
@@ -722,7 +722,7 @@ func TestDelete(t *testing.T) {
 				mg: serviceRouteBinding(withExternalName(guid), withStatus(guid)),
 			},
 			want: want{
-				mg:  serviceRouteBinding(withExternalName(guid), withStatus(guid), withConditions(xpv1.Deleting())),
+				mg:  serviceRouteBinding(withExternalName(guid), withStatus(guid), withConditions(xpv2.Deleting())),
 				err: nil,
 			},
 			service: func() *fake.MockServiceRouteBinding {
@@ -739,7 +739,7 @@ func TestDelete(t *testing.T) {
 				mg: serviceRouteBinding(withExternalName(guid), withStatus(guid)),
 			},
 			want: want{
-				mg:  serviceRouteBinding(withExternalName(guid), withStatus(guid), withConditions(xpv1.Deleting())),
+				mg:  serviceRouteBinding(withExternalName(guid), withStatus(guid), withConditions(xpv2.Deleting())),
 				err: fmt.Errorf(errDelete, errBoom),
 			},
 			service: func() *fake.MockServiceRouteBinding {
@@ -756,7 +756,7 @@ func TestDelete(t *testing.T) {
 				mg: serviceRouteBinding(withExternalName(guid), withStatus(guid)),
 			},
 			want: want{
-				mg:  serviceRouteBinding(withExternalName(guid), withStatus(guid), withConditions(xpv1.Deleting())),
+				mg:  serviceRouteBinding(withExternalName(guid), withStatus(guid), withConditions(xpv2.Deleting())),
 				err: nil,
 			},
 			service: func() *fake.MockServiceRouteBinding {

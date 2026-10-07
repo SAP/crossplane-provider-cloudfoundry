@@ -11,7 +11,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 // A ServiceInstanceType defines the type of Cloud Foundry service instance type
@@ -117,7 +117,7 @@ type UserProvided struct {
 
 // A SecretKeySelector is a reference to a secret key in an arbitrary namespace.
 type SecretKeySelector struct {
-	*v1.SecretReference `json:",inline"`
+	*xpv2.SecretReference `json:",inline"`
 
 	// The key to select.
 	// +kubebuilder:validation:Optional
@@ -221,8 +221,8 @@ type TimeoutsParameters struct {
 
 // ServiceInstanceSpec defines the desired state of ServiceInstance
 type ServiceInstanceSpec struct {
-	v1.ResourceSpec `json:",inline"`
-	ForProvider     ServiceInstanceParameters `json:"forProvider"`
+	xpv2.ClusterManagedResourceSpec `json:",inline"`
+	ForProvider                     ServiceInstanceParameters `json:"forProvider"`
 
 	// (Boolean) Enable drift detection for configuration parameters of managed service instance. Default is false.
 	// +kubebuilder:validation:Optional
@@ -232,8 +232,8 @@ type ServiceInstanceSpec struct {
 
 // ServiceInstanceStatus defines the observed state of ServiceInstance
 type ServiceInstanceStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        ServiceInstanceObservation `json:"atProvider,omitempty"`
+	xpv2.ManagedResourceStatus `json:",inline"`
+	AtProvider                 ServiceInstanceObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true

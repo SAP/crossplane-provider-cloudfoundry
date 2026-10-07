@@ -10,11 +10,11 @@ import (
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -61,7 +61,7 @@ func withSpace(space string) modifier {
 	}
 }
 
-func withConditions(c ...xpv1.Condition) modifier {
+func withConditions(c ...xpv2.Condition) modifier {
 	return func(i *v1alpha1.App) { i.Status.SetConditions(c...) }
 }
 
@@ -304,7 +304,7 @@ func TestObserve(t *testing.T) {
 					withStatus(guid, "STARTED"),
 					withObservedName(name),
 					withAppManifest("applications:\n- name: "+name),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 					withObservedLabels(map[string]*string{
 						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
 						"crossplane-name": ptr.To("my-app"),
@@ -350,7 +350,7 @@ func TestObserve(t *testing.T) {
 						Path:     "",
 						Protocol: "http",
 					}),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 					withObservedLabels(map[string]*string{
 						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
 						"crossplane-name": ptr.To("my-app"),
@@ -417,7 +417,7 @@ func TestObserve(t *testing.T) {
 					withStatus(guid, "STARTED"),
 					withObservedName("other-name"),
 					withAppManifest("applications:\n- name: other-name"),
-					withConditions(xpv1.Available())),
+					withConditions(xpv2.Available())),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
@@ -456,7 +456,7 @@ func TestObserve(t *testing.T) {
 						Host:     "stale",
 						Protocol: "http",
 					}),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 					withObservedLabels(map[string]*string{
 						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
 						"crossplane-name": ptr.To("my-app"),
@@ -555,7 +555,7 @@ func TestCreate(t *testing.T) {
 			want: want{
 				mg: newApp("docker", withImage("docker-image"),
 					withSpace(spaceGUID),
-					withConditions(xpv1.Creating()),
+					withConditions(xpv2.Creating()),
 					withExternalName(guid)),
 				obs: managed.ExternalCreation{},
 				err: nil,
@@ -586,7 +586,7 @@ func TestCreate(t *testing.T) {
 			want: want{
 				mg: newApp("docker", withImage("docker-image"),
 					withSpace(spaceGUID),
-					withConditions(xpv1.Creating())),
+					withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreateResource),
 			},
@@ -611,7 +611,7 @@ func TestCreate(t *testing.T) {
 			want: want{
 				mg: newApp("docker", withImage("docker-image"),
 					withSpace(spaceGUID),
-					withConditions(xpv1.Creating())),
+					withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreateResource),
 			},
@@ -1072,7 +1072,7 @@ func TestDelete(t *testing.T) {
 				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 			},
 			want: want{
-				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID), withConditions(xpv1.Deleting())),
+				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -1093,7 +1093,7 @@ func TestDelete(t *testing.T) {
 				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 			},
 			want: want{
-				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID), withConditions(xpv1.Deleting())),
+				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -1112,7 +1112,7 @@ func TestDelete(t *testing.T) {
 				mg: newApp("docker", withSpace(spaceGUID)),
 			},
 			want: want{
-				mg:  newApp("docker", withSpace(spaceGUID), withConditions(xpv1.Deleting())),
+				mg:  newApp("docker", withSpace(spaceGUID), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -1129,7 +1129,7 @@ func TestDelete(t *testing.T) {
 				mg: newApp("docker", withExternalName(guid), withSpace(spaceGUID)),
 			},
 			want: want{
-				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID), withConditions(xpv1.Deleting())),
+				mg:  newApp("docker", withExternalName(guid), withSpace(spaceGUID), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: errors.Wrap(errBoom, errDeleteResource),
 			},

@@ -12,11 +12,11 @@ import (
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -66,7 +66,7 @@ func withSpace(spaceGUID string) modifier {
 	}
 }
 
-func withConditions(c ...xpv1.Condition) modifier {
+func withConditions(c ...xpv2.Condition) modifier {
 	return func(i *v1alpha1.ServiceInstance) { i.Status.SetConditions(c...) }
 }
 
@@ -270,7 +270,7 @@ func TestObserve(t *testing.T) {
 							},
 						},
 					}),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -318,7 +318,7 @@ func TestObserve(t *testing.T) {
 								"crossplane-name": ptr.To("my-service-instance"),
 							},
 						}}),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -380,7 +380,7 @@ func TestObserve(t *testing.T) {
 						ID: &guid, ServicePlan: &servicePlan,
 						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed, Description: "create failed"},
 					}),
-					withConditions(xpv1.Unavailable().WithMessage("create failed")),
+					withConditions(xpv2.Unavailable().WithMessage("create failed")),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
 				err: nil,
@@ -415,7 +415,7 @@ func TestObserve(t *testing.T) {
 						ID: &guid, ServicePlan: &servicePlan,
 						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationUpdate, State: v1alpha1.LastOperationFailed, Description: "update failed"},
 					}),
-					withConditions(xpv1.Unavailable().WithMessage("update failed")),
+					withConditions(xpv2.Unavailable().WithMessage("update failed")),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
@@ -450,7 +450,7 @@ func TestObserve(t *testing.T) {
 						ID: &guid, ServicePlan: &servicePlan,
 						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationInProgress, Description: "create in progress"},
 					}),
-					withConditions(xpv1.Unavailable().WithMessage("create in progress")),
+					withConditions(xpv2.Unavailable().WithMessage("create in progress")),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -529,7 +529,7 @@ func TestObserve(t *testing.T) {
 						Credentials:   iSha256(*fake.JSONRawMessage("{\"foo\":\"bar\"}")),
 						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
 					}),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 					withParameters("{\"foo\":\"bar\", \"baz\": 1}"),
 					withDriftDetection(true),
 				),
@@ -577,7 +577,7 @@ func TestObserve(t *testing.T) {
 							},
 						},
 					}),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 					withParameters("{\"foo\":\"bar\", \"baz\": 1}"),
 					withDriftDetection(false),
 					withDefaultMetadataLabels(),
@@ -628,7 +628,7 @@ func TestObserve(t *testing.T) {
 							},
 						},
 					}),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -685,7 +685,7 @@ func TestObserve(t *testing.T) {
 							},
 						},
 					}),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -730,7 +730,7 @@ func TestObserve(t *testing.T) {
 						ID: &guid, ServicePlan: &servicePlan,
 						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
 					}),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
@@ -777,7 +777,7 @@ func TestObserve(t *testing.T) {
 							},
 						},
 					}),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 					withDefaultMetadataLabels(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
@@ -824,7 +824,7 @@ func TestObserve(t *testing.T) {
 						ID: &guid, ServicePlan: &servicePlan,
 						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationSucceeded, Description: "create succeeded"},
 					}),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true},
 				err: errors.New("cannot check shared spaces: cannot get shared space relationships: boom"),
@@ -921,7 +921,7 @@ func TestCreate(t *testing.T) {
 				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating()), withExternalName(guid)),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv2.Creating()), withExternalName(guid)),
 				obs: managed.ExternalCreation{},
 				err: nil,
 			},
@@ -952,7 +952,7 @@ func TestCreate(t *testing.T) {
 				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials)),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv1.Creating()), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte(jsonCredentials))})),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv2.Creating()), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte(jsonCredentials))})),
 				obs: managed.ExternalCreation{},
 				err: nil,
 			},
@@ -983,7 +983,7 @@ func TestCreate(t *testing.T) {
 				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials)),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv1.Creating()), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte(jsonCredentials))})),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withCredentials(&jsonCredentials), withConditions(xpv2.Creating()), withExternalName(guid), withStatus(v1alpha1.ServiceInstanceObservation{Credentials: iSha256([]byte(jsonCredentials))})),
 				obs: managed.ExternalCreation{},
 				err: nil,
 			},
@@ -1016,7 +1016,7 @@ func TestCreate(t *testing.T) {
 				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating())),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -1047,7 +1047,7 @@ func TestCreate(t *testing.T) {
 				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating())),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -1086,7 +1086,7 @@ func TestCreate(t *testing.T) {
 					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
 					withSharedSpaces(sharedSpaceGUID),
-					withConditions(xpv1.Creating()),
+					withConditions(xpv2.Creating()),
 					withExternalName(guid),
 				),
 				obs: managed.ExternalCreation{},
@@ -1135,7 +1135,7 @@ func TestCreate(t *testing.T) {
 					withSpace(spaceGUID),
 					withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}),
 					withSharedSpaces(sharedSpaceGUID),
-					withConditions(xpv1.Creating()),
+					withConditions(xpv2.Creating()),
 					withExternalName(guid),
 				),
 				obs: managed.ExternalCreation{},
@@ -1176,7 +1176,7 @@ func TestCreate(t *testing.T) {
 				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating()), withExternalName(guid)),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv2.Creating()), withExternalName(guid)),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errUpdateCR),
 			},
@@ -1201,7 +1201,7 @@ func TestCreate(t *testing.T) {
 				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Creating())),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.New(errCreateIncomplete),
 			},
@@ -1232,7 +1232,7 @@ func TestCreate(t *testing.T) {
 					withStatus(v1alpha1.ServiceInstanceObservation{
 						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
 					}),
-					withConditions(xpv1.Creating())),
+					withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{},
 				err: nil,
 			},
@@ -1266,7 +1266,7 @@ func TestCreate(t *testing.T) {
 						LastOperation: v1alpha1.LastOperation{Type: v1alpha1.LastOperationCreate, State: v1alpha1.LastOperationFailed},
 					}),
 					withExternalName(""),
-					withConditions(xpv1.Creating())),
+					withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.New(errCreateIncomplete),
 			},
@@ -1889,7 +1889,7 @@ func TestDelete(t *testing.T) {
 				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -1909,7 +1909,7 @@ func TestDelete(t *testing.T) {
 				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -1928,7 +1928,7 @@ func TestDelete(t *testing.T) {
 				mg: serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				mg:  serviceInstance("managed", withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -1946,7 +1946,7 @@ func TestDelete(t *testing.T) {
 				mg: serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				mg:  serviceInstance("managed", withExternalName(guid), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: errors.Wrap(errBoom, errDelete),
 			},
@@ -1965,7 +1965,7 @@ func TestDelete(t *testing.T) {
 				mg: serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan})),
 			},
 			want: want{
-				mg:  serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv1.Deleting())),
+				mg:  serviceInstance("managed", withExternalName("not-guid"), withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: errors.Errorf("external-name '%s' is not a valid GUID format", "not-guid"),
 			},

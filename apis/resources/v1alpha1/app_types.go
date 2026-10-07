@@ -8,7 +8,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type AppObservation struct {
@@ -129,7 +129,7 @@ type DockerConfiguration struct {
 
 	// (Attributes) Defines login credentials for private docker repositories
 	// +kubebuilder:validation:Optional
-	Credentials *v1.SecretReference `json:"credentialsSecretRef,omitempty"`
+	Credentials *xpv2.SecretReference `json:"credentialsSecretRef,omitempty"`
 }
 
 // RouteConfiguration defines the route for the application
@@ -146,11 +146,11 @@ type RouteConfiguration struct {
 
 	// Reference to a Route in route to populate route.
 	// +kubebuilder:validation:Optional
-	RouteRef *v1.Reference `json:"routeRef,omitempty"`
+	RouteRef *xpv2.Reference `json:"routeRef,omitempty"`
 
 	// Selector for a Route in route to populate route.
 	// +kubebuilder:validation:Optional
-	RouteSelector *v1.Selector `json:"routeSelector,omitempty"`
+	RouteSelector *xpv2.Selector `json:"routeSelector,omitempty"`
 }
 
 // ServiceBindingConfiguration defines the service instance to bind to the application
@@ -164,11 +164,11 @@ type ServiceBindingConfiguration struct {
 
 	// Reference to a ServiceInstance in service to populate serviceInstance.
 	// +kubebuilder:validation:Optional
-	ServiceInstanceRef *v1.Reference `json:"serviceInstanceRef,omitempty"`
+	ServiceInstanceRef *xpv2.Reference `json:"serviceInstanceRef,omitempty"`
 
 	// Selector for a ServiceInstance in service to populate serviceInstance.
 	// +kubebuilder:validation:Optional
-	ServiceInstanceSelector *v1.Selector `json:"serviceInstanceSelector,omitempty"`
+	ServiceInstanceSelector *xpv2.Selector `json:"serviceInstanceSelector,omitempty"`
 
 	// The name of the service instance to bind to the application.
 	// +kubebuilder:validation:Optional
@@ -267,14 +267,14 @@ type SidecarConfiguration struct {
 
 // AppSpec defines the desired state of App
 type AppSpec struct {
-	v1.ResourceSpec `json:",inline"`
-	ForProvider     AppParameters `json:"forProvider"`
+	xpv2.ClusterManagedResourceSpec `json:",inline"`
+	ForProvider                     AppParameters `json:"forProvider"`
 }
 
 // AppStatus defines the observed state of App.
 type AppStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        AppObservation `json:"atProvider,omitempty"`
+	xpv2.ManagedResourceStatus `json:",inline"`
+	AtProvider                 AppObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 )
@@ -36,7 +36,7 @@ func TestOrgImportFlow(t *testing.T) {
 			MustGetResource(t, cfg, it.GetPrefixedName(), nil, resource)
 
 			// Switch to observe-only so teardown does not delete the shared external resource.
-			resource.SetManagementPolicies(xpv1.ManagementPolicies{xpv1.ManagementActionObserve})
+			resource.SetManagementPolicies(xpv2.ManagementPolicies{xpv2.ManagementActionObserve})
 			if err := cfg.Client().Resources().Update(ctx, resource); err != nil {
 				t.Fatalf("Failed to switch imported resource to observe-only before teardown: %v", err)
 			}

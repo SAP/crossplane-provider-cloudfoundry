@@ -7,13 +7,13 @@ import (
 	"github.com/pkg/errors"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -199,7 +199,7 @@ func (e *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	meta.SetExternalName(cr, binding.GUID)
-	cr.SetConditions(xpv1.Creating())
+	cr.SetConditions(xpv2.Creating())
 	return managed.ExternalCreation{}, nil
 }
 
@@ -250,7 +250,7 @@ func (e *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalDelete{}, errors.New(errWrongCRType)
 	}
 
-	cr.SetConditions(xpv1.Deleting())
+	cr.SetConditions(xpv2.Deleting())
 
 	guid := meta.GetExternalName(cr)
 
@@ -280,13 +280,13 @@ func handleObservationState(binding *cfresource.ServiceRouteBinding, cr *v1alpha
 
 	switch state {
 	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
-		cr.SetConditions(xpv1.Unavailable().WithMessage(binding.LastOperation.Description))
+		cr.SetConditions(xpv2.Unavailable().WithMessage(binding.LastOperation.Description))
 		return managed.ExternalObservation{
 			ResourceExists:   true,
 			ResourceUpToDate: true, // Do not update the resource while the last operation is in progress
 		}, nil
 	case v1alpha1.LastOperationFailed:
-		cr.SetConditions(xpv1.Unavailable().WithMessage(binding.LastOperation.Description))
+		cr.SetConditions(xpv2.Unavailable().WithMessage(binding.LastOperation.Description))
 		// Service Route Bindings do not support updates, only create and delete operations
 		return managed.ExternalObservation{
 			ResourceExists:   typ != v1alpha1.LastOperationCreate, // Retry create if creation failed
@@ -296,7 +296,7 @@ func handleObservationState(binding *cfresource.ServiceRouteBinding, cr *v1alpha
 		if typ == v1alpha1.LastOperationDelete {
 			return managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true}, nil
 		}
-		cr.SetConditions(xpv1.Available(), xpv1.ReconcileSuccess())
+		cr.SetConditions(xpv2.Available(), xpv2.ReconcileSuccess())
 
 		// Check if metadata (labels/annotations) needs to be updated
 		var actualLabels, actualAnnotations map[string]*string

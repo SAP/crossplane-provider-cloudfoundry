@@ -6,13 +6,13 @@ import (
 	"crypto/sha256"
 	"time"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/nsf/jsondiff"
 	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -173,7 +173,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	switch r.LastOperation.State {
 	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
 		// Set the CR to unavailable and signal that the reconciler should not update the resource
-		cr.SetConditions(xpv1.Unavailable().WithMessage(r.LastOperation.Description))
+		cr.SetConditions(xpv2.Unavailable().WithMessage(r.LastOperation.Description))
 		return managed.ExternalObservation{
 			ResourceExists:   true,
 			ResourceUpToDate: true, // Set to true so that the reconciler do not schedule another update while the last operation is in progress
@@ -181,7 +181,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	// If the last operation failed, set the CR to unavailable and signal that the reconciler should retry the last operation
 	case v1alpha1.LastOperationFailed:
 		// If the last operation failed, set the CR to unavailable and signal that the reconciler should retry the last operation
-		cr.SetConditions(xpv1.Unavailable().WithMessage(r.LastOperation.Description))
+		cr.SetConditions(xpv2.Unavailable().WithMessage(r.LastOperation.Description))
 		return managed.ExternalObservation{
 			ResourceExists:   r.LastOperation.Type != v1alpha1.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
 			ResourceUpToDate: r.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
@@ -189,7 +189,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	case v1alpha1.LastOperationSucceeded, "":
 		// If the last operation succeeded, set the CR to available
 		// Empty state is treated as succeeded (happens with user-provided services that have no async operations)
-		cr.SetConditions(xpv1.Available())
+		cr.SetConditions(xpv2.Available())
 		var credentialsUpToDate bool
 		desiredCredentials, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
 		if err != nil {
@@ -223,7 +223,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
 	default:
 		// should never reach here
-		cr.SetConditions(xpv1.Unavailable().WithMessage(r.LastOperation.Description))
+		cr.SetConditions(xpv2.Unavailable().WithMessage(r.LastOperation.Description))
 		// If the last operation is unknown, error out
 		return managed.ExternalObservation{}, errors.New("unknown last operation state")
 	}
@@ -250,7 +250,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		}
 	}
 
-	cr.SetConditions(xpv1.Creating())
+	cr.SetConditions(xpv2.Creating())
 
 	// Extract the parameters or credentials from the spec as a json.RawMessage
 	creds, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
@@ -343,7 +343,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	if !ok {
 		return managed.ExternalDelete{}, errors.New(errWrongCRType)
 	}
-	cr.SetConditions(xpv1.Deleting())
+	cr.SetConditions(xpv2.Deleting())
 
 	// ADR: the external-name (GUID) identifies the resource to delete; nothing to do if unset.
 	guid := meta.GetExternalName(cr)

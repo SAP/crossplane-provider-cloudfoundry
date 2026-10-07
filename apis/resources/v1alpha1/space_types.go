@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type SpaceObservation struct {
@@ -67,14 +67,14 @@ type SpaceParameters struct {
 
 // SpaceSpec defines the desired state of Space.
 type SpaceSpec struct {
-	v1.ResourceSpec `json:",inline"`
-	ForProvider     SpaceParameters `json:"forProvider"`
+	xpv2.ClusterManagedResourceSpec `json:",inline"`
+	ForProvider                     SpaceParameters `json:"forProvider"`
 }
 
 // SpaceStatus defines the observed state of Space.
 type SpaceStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        SpaceObservation `json:"atProvider,omitempty"`
+	xpv2.ManagedResourceStatus `json:",inline"`
+	AtProvider                 SpaceObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true

@@ -20,7 +20,7 @@ import (
 	"github.com/SAP/xp-clifford/yaml"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 var (
@@ -125,7 +125,7 @@ func ResolveReference(ctx context.Context, cfClient *client.Client, spaceRef *v1
 	if space == nil {
 		return erratt.New("space reference not found", "GUID", *spaceRef.Space)
 	}
-	spaceRef.SpaceRef = &v1.Reference{
+	spaceRef.SpaceRef = &xpv2.Reference{
 		Name: space.(mkcontainer.ItemWithName).GetName(),
 	}
 	spaceRef.Space = nil
