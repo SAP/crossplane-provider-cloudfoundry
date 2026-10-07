@@ -8,8 +8,8 @@ import (
 	"os"
 
 	meta "github.com/SAP/crossplane-provider-cloudfoundry/apis"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	v1 "k8s.io/api/core/v1"
 	wait2 "k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/klog/v2"
@@ -56,7 +56,7 @@ func ResourceReady(cfg *envconf.Config, object k8s.Object) wait2.ConditionWithCo
 	return conditions.New(cr).ResourceMatch(object, func(object k8s.Object) bool {
 		mg := object.(resource.Managed)
 		klog.V(4).Infof("Waiting %s to become ready...", mg.GetName())
-		condition := mg.GetCondition(xpv1.TypeReady)
+		condition := mg.GetCondition(xpv2.TypeReady)
 		result := condition.Status == v1.ConditionTrue
 		klog.V(4).Infof(
 			"%s ready status is %v",

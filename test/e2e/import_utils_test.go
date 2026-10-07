@@ -10,9 +10,9 @@ import (
 	meta "github.com/SAP/crossplane-provider-cloudfoundry/apis"
 	"github.com/crossplane-contrib/xp-testing/pkg/envvar"
 	"github.com/crossplane-contrib/xp-testing/pkg/resources"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	xpmeta "github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	res "sigs.k8s.io/e2e-framework/klient/k8s/resources"
 
 	"k8s.io/klog/v2"
@@ -21,11 +21,11 @@ import (
 	"sigs.k8s.io/e2e-framework/pkg/features"
 )
 
-var importManagementPolicies = []xpv1.ManagementAction{
-	xpv1.ManagementActionObserve,
-	xpv1.ManagementActionCreate,
-	xpv1.ManagementActionUpdate,
-	xpv1.ManagementActionLateInitialize,
+var importManagementPolicies = []xpv2.ManagementAction{
+	xpv2.ManagementActionObserve,
+	xpv2.ManagementActionCreate,
+	xpv2.ManagementActionUpdate,
+	xpv2.ManagementActionLateInitialize,
 }
 
 const (
@@ -167,7 +167,7 @@ func (it *ImportTester[T]) BuildTestFeature(name string) *features.FeatureBuilde
 			//preare the resource for import
 			resource := it.BaseResource.DeepCopyObject().(T)
 			xpmeta.SetExternalName(resource, externalName)
-			resource.SetManagementPolicies(xpv1.ManagementPolicies{xpv1.ManagementActionAll})
+			resource.SetManagementPolicies(xpv2.ManagementPolicies{xpv2.ManagementActionAll})
 
 			//create the resource again for importing, should match the external resource
 			log("Create MR for importing", resource, func() {

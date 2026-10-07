@@ -5,7 +5,7 @@ Copyright 2023 SAP SE.
 package v1alpha1
 
 import (
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -47,11 +47,11 @@ type ServiceCredentialBindingParameters struct {
 
 	// (Attributes) Reference to a managed service instance to populate `serviceInstance`.
 	// +kubebuilder:validation:Optional
-	ServiceInstanceRef *v1.Reference `json:"serviceInstanceRef,omitempty"`
+	ServiceInstanceRef *xpv2.Reference `json:"serviceInstanceRef,omitempty"`
 
 	// (Attributes) Selector for a managed service instance to populate `serviceInstance`.
 	// +kubebuilder:validation:Optional
-	ServiceInstanceSelector *v1.Selector `json:"serviceInstanceSelector,omitempty"`
+	ServiceInstanceSelector *xpv2.Selector `json:"serviceInstanceSelector,omitempty"`
 
 	// (String) The ID of an app that should be bound to. Required if `type` is "app".
 	// +crossplane:generate:reference:type=App
@@ -60,11 +60,11 @@ type ServiceCredentialBindingParameters struct {
 
 	// (Attributes) Reference to an app CR to populate `app`.
 	// +kubebuilder:validation:Optional
-	AppRef *v1.Reference `json:"appRef,omitempty"`
+	AppRef *xpv2.Reference `json:"appRef,omitempty"`
 
 	// (Attributes) Selector for an app CR to populate `app`.
 	// +kubebuilder:validation:Optional
-	AppSelector *v1.Selector `json:"appSelector,omitempty"`
+	AppSelector *xpv2.Selector `json:"appSelector,omitempty"`
 
 	// (Attributes) An optional JSON object to pass `parameters` to the service broker.
 	// +kubebuilder:validation:Optional
@@ -72,7 +72,7 @@ type ServiceCredentialBindingParameters struct {
 
 	// (Attributes) Use a reference to a secret to pass `parameters` to the service broker. Ignored if `parameters` is set.
 	// +kubebuilder:validation:Optional
-	ParametersSecretRef *v1.SecretReference `json:"paramsSecretRef,omitempty"`
+	ParametersSecretRef *xpv2.SecretReference `json:"paramsSecretRef,omitempty"`
 
 	// (Boolean, Deprecated) True to write `connectionDetails` as a single key-value in a secret rather than a map. The key is the metadata.name of the service credential binding CR itself. This is deprecated in favor of the `spec.connectionDetailsAsJSON` field.
 	// +kubebuilder:validation:Optional
@@ -87,7 +87,7 @@ type ServiceCredentialBindingParameters struct {
 }
 
 type ServiceCredentialBindingSpec struct {
-	v1.ResourceSpec `json:",inline"`
+	xpv2.ClusterManagedResourceSpec `json:",inline"`
 
 	// (Boolean) True to write `connectionDetails` as a single key-value in a secret rather than a map. The key is the metadata.name of the service credential binding CR itself.
 	// +kubebuilder:validation:Optional
@@ -109,8 +109,8 @@ type RotationParameters struct {
 	TTL *metav1.Duration `json:"ttl,omitempty"`
 }
 type ServiceCredentialBindingStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        ServiceCredentialBindingObservation `json:"atProvider,omitempty"`
+	xpv2.ManagedResourceStatus `json:",inline"`
+	AtProvider                 ServiceCredentialBindingObservation `json:"atProvider,omitempty"`
 }
 
 type SCBResource struct {

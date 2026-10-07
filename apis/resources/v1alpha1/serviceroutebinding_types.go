@@ -1,7 +1,7 @@
 package v1alpha1
 
 import (
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -63,7 +63,7 @@ type ServiceRouteBindingParameters struct {
 
 	// (Attributes) Use a reference to a secret to pass `parameters` to the service broker. Ignored if `parameters` is set.
 	// +kubebuilder:validation:Optional
-	ParametersSecretRef *xpv1.SecretReference `json:"paramsSecretRef,omitempty"`
+	ParametersSecretRef *xpv2.SecretReference `json:"paramsSecretRef,omitempty"`
 }
 
 type ServiceRouteBindingObservation struct {
@@ -119,14 +119,14 @@ type Links map[string]Link
 
 // ServiceRouteBindingSpec defines the desired state of ServiceRouteBinding
 type ServiceRouteBindingSpec struct {
-	xpv1.ResourceSpec `json:",inline"`
-	ForProvider       ServiceRouteBindingParameters `json:"forProvider"`
+	xpv2.ClusterManagedResourceSpec `json:",inline"`
+	ForProvider                     ServiceRouteBindingParameters `json:"forProvider"`
 }
 
 // ServiceRouteBindingStatus defines the observed state of ServiceRouteBinding
 type ServiceRouteBindingStatus struct {
-	xpv1.ResourceStatus `json:",inline"`
-	AtProvider          ServiceRouteBindingObservation `json:"atProvider,omitempty"`
+	xpv2.ManagedResourceStatus `json:",inline"`
+	AtProvider                 ServiceRouteBindingObservation `json:"atProvider,omitempty"`
 }
 
 // Repository type metadata for registration.
@@ -147,9 +147,9 @@ type ServiceInstanceReference struct {
 	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	ServiceInstance string `json:"serviceInstance,omitempty"`
 	// If set will overwrite ServiceInstance
-	ServiceInstanceRef *xpv1.Reference `json:"serviceInstanceRef,omitempty"`
+	ServiceInstanceRef *xpv2.Reference `json:"serviceInstanceRef,omitempty"`
 	// If set will overwrite ServiceInstance
-	ServiceInstanceSelector *xpv1.Selector `json:"serviceInstanceSelector,omitempty"`
+	ServiceInstanceSelector *xpv2.Selector `json:"serviceInstanceSelector,omitempty"`
 }
 
 type RouteReference struct {
@@ -158,7 +158,7 @@ type RouteReference struct {
 	// +crossplane:generate:reference:extractor=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources.ExternalID()
 	Route string `json:"route,omitempty"`
 	// If set will overwrite Route
-	RouteRef *xpv1.Reference `json:"routeRef,omitempty"`
+	RouteRef *xpv2.Reference `json:"routeRef,omitempty"`
 	// If set will overwrite Route
-	RouteSelector *xpv1.Selector `json:"routeSelector,omitempty"`
+	RouteSelector *xpv2.Selector `json:"routeSelector,omitempty"`
 }

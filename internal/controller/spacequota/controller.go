@@ -13,12 +13,12 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reference"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/pkg/errors"
 	"k8s.io/utils/ptr"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/google/go-cmp/cmp"
 
 	resources "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources"
@@ -302,7 +302,7 @@ func (e *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 
 	currentSpec := cr.Spec.ForProvider.DeepCopy()
 	GenerateSpaceQuota(resp).Status.AtProvider.DeepCopyInto(&cr.Status.AtProvider)
-	cr.SetConditions(xpv1.Available())
+	cr.SetConditions(xpv2.Available())
 
 	upToDate := true
 	if !meta.WasDeleted(cr) { // There is no need to run isUpToDate if the resource is deleted
@@ -326,7 +326,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errUnexpectedObject)
 	}
 
-	cr.SetConditions(xpv1.Creating())
+	cr.SetConditions(xpv2.Creating())
 
 	resp, err := c.client.Create(ctx, GenerateCreateSpaceQuota(cr))
 	if err != nil {
@@ -383,7 +383,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	if !ok {
 		return managed.ExternalDelete{}, errors.New(errUnexpectedObject)
 	}
-	cr.SetConditions(xpv1.Deleting())
+	cr.SetConditions(xpv2.Deleting())
 
 	guid := meta.GetExternalName(cr)
 

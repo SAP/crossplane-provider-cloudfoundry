@@ -6,13 +6,13 @@ import (
 	"fmt"
 	"strconv"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/google/uuid"
 
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -161,7 +161,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		// reconciler from calling Create again, which avoids an endless
 		// create-fail-requeue loop and prevents flooding CF with orphaned bindings.
 		if isCircuitBreakerTripped(cr) {
-			cr.SetConditions(xpv1.Unavailable().WithMessage(
+			cr.SetConditions(xpv2.Unavailable().WithMessage(
 				fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
 			))
 			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
@@ -267,7 +267,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	if !ok {
 		return managed.ExternalDelete{}, errors.New(errWrongCRType)
 	}
-	cr.SetConditions(xpv1.Deleting())
+	cr.SetConditions(xpv2.Deleting())
 
 	if err := c.keyRotator.DeleteRetiredKeys(ctx, cr); err != nil {
 		return managed.ExternalDelete{}, fmt.Errorf(errDeleteRetiredKeys, err)
@@ -314,13 +314,13 @@ func extractParameters(ctx context.Context, kube k8s.Client, spec v1alpha1.Servi
 func (c *external) HandleObservationState(serviceBinding *cfresource.ServiceCredentialBinding, ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error) {
 	switch serviceBinding.LastOperation.State {
 	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
-		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
+		cr.SetConditions(xpv2.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
 		return managed.ExternalObservation{
 			ResourceExists:   true,
 			ResourceUpToDate: true, // Do not update the resource while the last operation is in progress
 		}, nil
 	case v1alpha1.LastOperationFailed:
-		cr.SetConditions(xpv1.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
+		cr.SetConditions(xpv2.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
 		return managed.ExternalObservation{
 			ResourceExists:   true,
 			ResourceUpToDate: serviceBinding.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
@@ -334,7 +334,7 @@ func (c *external) HandleObservationState(serviceBinding *cfresource.ServiceCred
 			}
 		}
 
-		cr.SetConditions(xpv1.Available())
+		cr.SetConditions(xpv2.Available())
 
 		return managed.ExternalObservation{
 			ResourceExists:    true,

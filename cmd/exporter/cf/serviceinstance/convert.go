@@ -13,7 +13,7 @@ import (
 	"github.com/SAP/xp-clifford/yaml"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
@@ -110,9 +110,9 @@ func convertServiceInstanceResource(ctx context.Context, cfClient *client.Client
 			},
 		},
 		Spec: v1alpha1.ServiceInstanceSpec{
-			ResourceSpec: v1.ResourceSpec{
-				ManagementPolicies: []v1.ManagementAction{
-					v1.ManagementActionObserve,
+			ClusterManagedResourceSpec: xpv2.ClusterManagedResourceSpec{
+				ManagementPolicies: []xpv2.ManagementAction{
+					xpv2.ManagementActionObserve,
 				},
 			},
 			ForProvider: v1alpha1.ServiceInstanceParameters{

@@ -12,8 +12,8 @@ import (
 	"github.com/crossplane-contrib/xp-testing/pkg/logging"
 	"github.com/crossplane-contrib/xp-testing/pkg/resources"
 	"github.com/crossplane-contrib/xp-testing/pkg/xpenvfuncs"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	kubeErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -250,9 +250,9 @@ func CreateProviderConfig(
 			APIEndpoint: &cfEndpoint,
 			Credentials: cloudfoundryv1beta1.ProviderCredentials{
 				Source: "Secret",
-				CommonCredentialSelectors: xpv1.CommonCredentialSelectors{
-					SecretRef: &xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+				CommonCredentialSelectors: xpv2.CommonCredentialSelectors{
+					SecretRef: &xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      secretName,
 							Namespace: crossplaneSystemNamespace,
 						},

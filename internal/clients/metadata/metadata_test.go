@@ -3,7 +3,7 @@ package metadata
 import (
 	"testing"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 
 	v1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
@@ -12,7 +12,7 @@ func newTestManaged(name, providerCfg string) *v1alpha1.Space {
 	s := &v1alpha1.Space{}
 	s.SetName(name)
 	if providerCfg != "" {
-		s.SetProviderConfigReference(&xpv1.Reference{Name: providerCfg})
+		s.SetProviderConfigReference(&xpv2.Reference{Name: providerCfg})
 	}
 	return s
 }
