@@ -8,7 +8,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type DomainObservation struct {
@@ -80,14 +80,14 @@ type DomainParameters struct {
 
 // DomainSpec defines the desired state of Domain
 type DomainSpec struct {
-	v1.ResourceSpec `json:",inline"`
-	ForProvider     DomainParameters `json:"forProvider"`
+	xpv2.ClusterManagedResourceSpec `json:",inline"`
+	ForProvider                     DomainParameters `json:"forProvider"`
 }
 
 // DomainStatus defines the observed state of Domain.
 type DomainStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        DomainObservation `json:"atProvider,omitempty"`
+	xpv2.ManagedResourceStatus `json:",inline"`
+	AtProvider                 DomainObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true

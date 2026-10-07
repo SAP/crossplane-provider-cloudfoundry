@@ -10,7 +10,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type SpaceQuotaInitParameters struct {
@@ -28,11 +28,11 @@ type SpaceQuotaInitParameters struct {
 
 	// (Attributes) Reference to an Org in resources to populate `org`.
 	// +kubebuilder:validation:Optional
-	OrgRef *v1.Reference `json:"orgRef,omitempty" tf:"-"`
+	OrgRef *xpv2.Reference `json:"orgRef,omitempty" tf:"-"`
 
 	// (Attributes) Selector for an Org in resources to populate `org`.
 	// +kubebuilder:validation:Optional
-	OrgSelector *v1.Selector `json:"orgSelector,omitempty" tf:"-"`
+	OrgSelector *xpv2.Selector `json:"orgSelector,omitempty" tf:"-"`
 
 	// (Set of String) Set of space GUIDs to which this space quota would be assigned.
 	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1.Space
@@ -42,11 +42,11 @@ type SpaceQuotaInitParameters struct {
 
 	// (Attributes) References to Space in cloudfoundry to populate `spaces`.
 	// +kubebuilder:validation:Optional
-	SpacesRefs []v1.Reference `json:"spacesRefs,omitempty" tf:"-"`
+	SpacesRefs []xpv2.Reference `json:"spacesRefs,omitempty" tf:"-"`
 
 	// (Attributes) Selector for a list of Space in cloudfoundry to populate `spaces`.
 	// +kubebuilder:validation:Optional
-	SpacesSelector *v1.Selector `json:"spacesSelector,omitempty" tf:"-"`
+	SpacesSelector *xpv2.Selector `json:"spacesSelector,omitempty" tf:"-"`
 
 	// (Number) Maximum app instances allowed.
 	TotalAppInstances *float64 `json:"totalAppInstances,omitempty" tf:"total_app_instances,omitempty"`
@@ -143,11 +143,11 @@ type SpaceQuotaParameters struct {
 
 	// (Attributes) Reference to an Org in resources to populate `org`.
 	// +kubebuilder:validation:Optional
-	OrgRef *v1.Reference `json:"orgRef,omitempty" tf:"-"`
+	OrgRef *xpv2.Reference `json:"orgRef,omitempty" tf:"-"`
 
 	// (Attributes) Selector for an Org in resources to populate `org`.
 	// +kubebuilder:validation:Optional
-	OrgSelector *v1.Selector `json:"orgSelector,omitempty" tf:"-"`
+	OrgSelector *xpv2.Selector `json:"orgSelector,omitempty" tf:"-"`
 
 	// (Set of String) Set of space GUIDs to which this space quota would be assigned.
 	// +crossplane:generate:reference:type=github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1.Space
@@ -158,11 +158,11 @@ type SpaceQuotaParameters struct {
 
 	// (Attributes) References to Space in cloudfoundry to populate `spaces`.
 	// +kubebuilder:validation:Optional
-	SpacesRefs []v1.Reference `json:"spacesRefs,omitempty" tf:"-"`
+	SpacesRefs []xpv2.Reference `json:"spacesRefs,omitempty" tf:"-"`
 
 	// (Attributes) Selector for a list of Space in cloudfoundry to populate `spaces`.
 	// +kubebuilder:validation:Optional
-	SpacesSelector *v1.Selector `json:"spacesSelector,omitempty" tf:"-"`
+	SpacesSelector *xpv2.Selector `json:"spacesSelector,omitempty" tf:"-"`
 
 	// (Number) Maximum app instances allowed.
 	// +kubebuilder:validation:Optional
@@ -199,8 +199,8 @@ type SpaceQuotaParameters struct {
 
 // SpaceQuotaSpec defines the desired state of SpaceQuota
 type SpaceQuotaSpec struct {
-	v1.ResourceSpec `json:",inline"`
-	ForProvider     SpaceQuotaParameters `json:"forProvider"`
+	xpv2.ClusterManagedResourceSpec `json:",inline"`
+	ForProvider                     SpaceQuotaParameters `json:"forProvider"`
 	// THIS IS A BETA FIELD. It will be honored
 	// unless the Management Policies feature flag is disabled.
 	// InitProvider holds the same fields as ForProvider, with the exception
@@ -216,8 +216,8 @@ type SpaceQuotaSpec struct {
 
 // SpaceQuotaStatus defines the observed state of SpaceQuota.
 type SpaceQuotaStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        SpaceQuotaObservation `json:"atProvider,omitempty"`
+	xpv2.ManagedResourceStatus `json:",inline"`
+	AtProvider                 SpaceQuotaObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true

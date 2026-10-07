@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 )
@@ -25,11 +25,11 @@ func TestServiceCredentialBindingImportFlow(t *testing.T) {
 				ForProvider: v1alpha1.ServiceCredentialBindingParameters{
 					Type: "key",
 					Name: &scbImportTestName,
-					ServiceInstanceRef: &v1.Reference{
+					ServiceInstanceRef: &xpv2.Reference{
 						Name: scbImportTestServiceInstRef,
-						Policy: &v1.Policy{
-							Resolution: ptr.To(v1.ResolutionPolicyRequired),
-							Resolve:    ptr.To(v1.ResolvePolicyAlways),
+						Policy: &xpv2.Policy{
+							Resolution: ptr.To(xpv2.ResolutionPolicyRequired),
+							Resolve:    ptr.To(xpv2.ResolvePolicyAlways),
 						},
 					},
 				},

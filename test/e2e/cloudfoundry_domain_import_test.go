@@ -10,7 +10,7 @@ import (
 	"k8s.io/utils/ptr"
 	"sigs.k8s.io/e2e-framework/klient/wait"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 var (
@@ -26,11 +26,11 @@ func TestDomainImportFlow(t *testing.T) {
 				ForProvider: v1alpha1.DomainParameters{
 					Name: domainImportTestName,
 					OrgReference: v1alpha1.OrgReference{
-						OrgRef: &v1.Reference{
+						OrgRef: &xpv2.Reference{
 							Name: domainImportTestOrgName,
-							Policy: &v1.Policy{
-								Resolution: ptr.To(v1.ResolutionPolicyRequired),
-								Resolve:    ptr.To(v1.ResolvePolicyAlways),
+							Policy: &xpv2.Policy{
+								Resolution: ptr.To(xpv2.ResolutionPolicyRequired),
+								Resolve:    ptr.To(xpv2.ResolvePolicyAlways),
 							},
 						},
 					},

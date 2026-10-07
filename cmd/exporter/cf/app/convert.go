@@ -16,7 +16,7 @@ import (
 	"github.com/SAP/xp-clifford/yaml"
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -47,7 +47,7 @@ func convertDockerField(app *res, managedApp *v1alpha1.App, appManifest *operati
 		} else {
 			secretName := secretNames[0]
 			evHandler.Resource(generateDockerCredentialSecret(secretName, username))
-			managedApp.Spec.ForProvider.Docker.Credentials = &v1.SecretReference{
+			managedApp.Spec.ForProvider.Docker.Credentials = &xpv2.SecretReference{
 				Name: secretName,
 			}
 		}
@@ -145,9 +145,9 @@ func convertAppResource(ctx context.Context, cfClient *client.Client, app *res, 
 			},
 		},
 		Spec: v1alpha1.AppSpec{
-			ResourceSpec: v1.ResourceSpec{
-				ManagementPolicies: []v1.ManagementAction{
-					v1.ManagementActionObserve,
+			ClusterManagedResourceSpec: xpv2.ClusterManagedResourceSpec{
+				ManagementPolicies: []xpv2.ManagementAction{
+					xpv2.ManagementActionObserve,
 				},
 			},
 			ForProvider: v1alpha1.AppParameters{

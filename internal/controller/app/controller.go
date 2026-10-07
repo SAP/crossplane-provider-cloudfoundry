@@ -5,13 +5,13 @@ import (
 	"context"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/docker/cli/cli/config/configfile"
 	"github.com/pkg/errors"
 	"k8s.io/klog/v2"
@@ -178,11 +178,11 @@ func (c *external) updateObservedStatus(ctx context.Context, cr *v1alpha1.App, r
 	// Set condition according to app State
 	switch cr.Status.AtProvider.State {
 	case "STARTED":
-		cr.SetConditions(xpv1.Available())
+		cr.SetConditions(xpv2.Available())
 	case "STOPPED":
-		cr.SetConditions(xpv1.Unavailable())
+		cr.SetConditions(xpv2.Unavailable())
 	default:
-		cr.SetConditions(xpv1.Unavailable())
+		cr.SetConditions(xpv2.Unavailable())
 	}
 
 	return app.IsUpToDate(cr, cr.Spec.ForProvider, cr.Status.AtProvider)
@@ -200,7 +200,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.Wrap(err, errSecret)
 	}
 
-	cr.SetConditions(xpv1.Creating())
+	cr.SetConditions(xpv2.Creating())
 
 	application, err := c.client.CreateAndPush(ctx, cr, cr.Spec.ForProvider, dockerCredentials)
 	if err != nil {
@@ -327,7 +327,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalDelete{}, errors.New(errWrongKind)
 	}
 
-	cr.SetConditions(xpv1.Deleting())
+	cr.SetConditions(xpv2.Deleting())
 
 	if meta.GetExternalName(cr) == "" {
 		return managed.ExternalDelete{}, nil

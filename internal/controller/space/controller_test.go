@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"testing"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
@@ -15,6 +14,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -56,7 +56,7 @@ func withOrg(org string) modifier {
 	}
 }
 
-func withConditions(c ...xpv1.Condition) modifier {
+func withConditions(c ...xpv2.Condition) modifier {
 	return func(i *v1alpha1.Space) { i.Status.SetConditions(c...) }
 }
 
@@ -188,7 +188,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeSpace(withName(name), withOrg(orgGuid), withDefaultMetadata()),
 			},
 			want: want{
-				mg:  fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withAllowSSH(false), withConditions(xpv1.Available()), withDefaultMetadata()),
+				mg:  fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withAllowSSH(false), withConditions(xpv2.Available()), withDefaultMetadataLabels()),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
@@ -242,7 +242,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withDefaultMetadata()),
 			},
 			want: want{
-				mg:  fakeSpace(withName(name), withOrg(orgGuid), withAllowSSH(false), withExternalName(guid), withConditions(xpv1.Available()), withDefaultMetadata()),
+				mg:  fakeSpace(withName(name), withOrg(orgGuid), withAllowSSH(false), withExternalName(guid), withConditions(xpv2.Available()), withDefaultMetadataLabels()),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
 				err: nil,
 			},
@@ -296,7 +296,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeSpace(withExternalName(guid), withName("existing-space"), withOrg(orgGuid)),
 			},
 			want: want{
-				mg:  fakeSpace(withName("existing-space"), withExternalName(guid), withAllowSSH(false), withOrg(orgGuid), withConditions(xpv1.Available())),
+				mg:  fakeSpace(withName("existing-space"), withExternalName(guid), withAllowSSH(false), withOrg(orgGuid), withConditions(xpv2.Available())),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ResourceLateInitialized: false},
 				err: nil,
 			},
@@ -382,7 +382,7 @@ func TestCreate(t *testing.T) {
 				mg: fakeSpace(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeSpace(withExternalName(guid), withConditions(xpv1.Creating())),
+				mg:  fakeSpace(withExternalName(guid), withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{ConnectionDetails: managed.ConnectionDetails{}},
 				err: nil,
 			},
@@ -404,7 +404,7 @@ func TestCreate(t *testing.T) {
 				mg: fakeSpace(),
 			},
 			want: want{
-				mg:  fakeSpace(withExternalName(guid), withConditions(xpv1.Creating())),
+				mg:  fakeSpace(withExternalName(guid), withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{ConnectionDetails: managed.ConnectionDetails{}},
 				err: nil,
 			},
@@ -426,7 +426,7 @@ func TestCreate(t *testing.T) {
 				mg: fakeSpace(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeSpace(withExternalName(guid), withConditions(xpv1.Creating())),
+				mg:  fakeSpace(withExternalName(guid), withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -449,7 +449,7 @@ func TestCreate(t *testing.T) {
 				mg: fakeSpace(),
 			},
 			want: want{
-				mg:  fakeSpace(withConditions(xpv1.Creating())),
+				mg:  fakeSpace(withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -641,7 +641,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeSpace(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeSpace(withExternalName(guid), withConditions(xpv1.Deleting())),
+				mg:  fakeSpace(withExternalName(guid), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -660,7 +660,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeSpace(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeSpace(withExternalName(guid), withConditions(xpv1.Deleting())),
+				mg:  fakeSpace(withExternalName(guid), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -679,7 +679,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeSpace(withExternalName(invalidGuid)),
 			},
 			want: want{
-				mg:  fakeSpace(withExternalName(invalidGuid), withConditions(xpv1.Deleting())),
+				mg:  fakeSpace(withExternalName(invalidGuid), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: errors.Wrap(errors.New(errDelete), fmt.Sprintf("external-name '%s' is not a valid GUID format", invalidGuid)),
 			},

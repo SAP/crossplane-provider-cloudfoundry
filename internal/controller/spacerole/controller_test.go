@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -95,7 +95,7 @@ func withID(id string) modifier {
 	}
 }
 
-func withConditions(c ...xpv1.Condition) modifier {
+func withConditions(c ...xpv2.Condition) modifier {
 	return func(i *v1alpha1.SpaceRole) { i.Status.SetConditions(c...) }
 }
 
@@ -536,7 +536,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
 			},
 			want: want{
-				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id"), withConditions(xpv1.Deleting())),
+				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id"), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -554,7 +554,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
 			},
 			want: want{
-				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id"), withConditions(xpv1.Deleting())),
+				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id"), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -572,7 +572,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeSpaceRole(withExternalName(guidRole), withID("resource-id")),
 			},
 			want: want{
-				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id"), withConditions(xpv1.Deleting())),
+				mg:  fakeSpaceRole(withExternalName(guidRole), withID("resource-id"), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: errors.Wrap(errors.New("CF-ResourceNotDeleted: The role could not be deleted"), errDelete),
 			},
