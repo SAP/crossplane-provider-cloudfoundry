@@ -285,10 +285,6 @@ var (
 	ServiceInstance_GroupVersionKind = CRDGroupVersion.WithKind(ServiceInstance_Kind)
 )
 
-func init() {
-	SchemeBuilder.Register(&ServiceInstance{}, &ServiceInstanceList{})
-}
-
 // GetName implements Nameable interface
 func (r *ServiceInstance) GetCloudFoundryName() string {
 	if r.Spec.ForProvider.Name == nil {

@@ -13,6 +13,7 @@ import (
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
@@ -56,6 +57,14 @@ func main() {
 		// The recommended way is to move it to cache.Options instead
 		Cache: cache.Options{
 			SyncPeriod: syncInterval,
+		},
+		// Opt out of the priority queue introduced with controller-runtime
+		// v0.25.0. The initial LIST enqueues every resource at LowPriority,
+		// which gets starved when workers are saturated by self-requeuing
+		// normal-priority items. The crossplane-runtime options do not set
+		// this per controller, so it is set as the manager-wide default.
+		Controller: config.Controller{
+			UsePriorityQueue: new(false),
 		},
 
 		// controller-runtime uses both ConfigMaps and Leases for leader
