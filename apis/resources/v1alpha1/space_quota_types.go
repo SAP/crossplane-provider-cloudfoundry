@@ -263,7 +263,3 @@ var (
 	SpaceQuota_KindAPIVersion   = SpaceQuota_Kind + "." + CRDGroupVersion.String()
 	SpaceQuota_GroupVersionKind = CRDGroupVersion.WithKind(SpaceQuota_Kind)
 )
-
-func init() {
-	SchemeBuilder.Register(&SpaceQuota{}, &SpaceQuotaList{})
-}

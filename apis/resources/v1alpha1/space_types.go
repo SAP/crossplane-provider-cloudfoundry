@@ -122,10 +122,6 @@ var (
 	Space_GroupVersionKind = CRDGroupVersion.WithKind(Space_Kind)
 )
 
-func init() {
-	SchemeBuilder.Register(&Space{}, &SpaceList{})
-}
-
 // GetID returns ID of external resource managed by this CR.
 func (r *Space) GetID() string {
 	return r.Status.AtProvider.ID

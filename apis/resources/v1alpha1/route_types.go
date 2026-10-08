@@ -154,10 +154,6 @@ var (
 	RouteGroupVersionKind = CRDGroupVersion.WithKind(RouteKind)
 )
 
-func init() {
-	SchemeBuilder.Register(&Route{}, &RouteList{})
-}
-
 // GetID returns the ID of the route
 func (r *Route) GetID() string {
 	return r.Status.AtProvider.GUID
