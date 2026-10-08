@@ -321,10 +321,6 @@ var (
 	App_GroupVersionKind = CRDGroupVersion.WithKind(App_Kind)
 )
 
-func init() {
-	SchemeBuilder.Register(&App{}, &AppList{})
-}
-
 // implement Referenceable interface
 func (s *App) GetID() string {
 	return s.Status.AtProvider.GUID

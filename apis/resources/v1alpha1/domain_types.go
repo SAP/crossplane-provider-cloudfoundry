@@ -133,10 +133,6 @@ var (
 	Domain_GroupVersionKind = CRDGroupVersion.WithKind(Domain_Kind)
 )
 
-func init() {
-	SchemeBuilder.Register(&Domain{}, &DomainList{})
-}
-
 // GetID returns the ID of the domain
 func (d *Domain) GetID() string {
 	if d.Status.AtProvider.ID != nil {

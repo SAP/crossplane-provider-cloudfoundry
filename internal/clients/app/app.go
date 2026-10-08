@@ -324,7 +324,7 @@ func newCreateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resour
 	case "buildpack":
 		appCreate.Lifecycle = &resource.Lifecycle{
 			Type: spec.Lifecycle,
-			BuildpackData: resource.BuildpackLifecycle{
+			Data: resource.BuildpackLifecycle{
 				Buildpacks: spec.Buildpacks,
 				Stack:      ptr.Deref(spec.Stack, ""),
 			},
@@ -332,6 +332,7 @@ func newCreateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resour
 	case "docker":
 		appCreate.Lifecycle = &resource.Lifecycle{
 			Type: spec.Lifecycle,
+			Data: resource.DockerLifecycle{},
 		}
 	default:
 		appCreate.Lifecycle = nil
@@ -347,7 +348,7 @@ func newUpdateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resour
 	case "buildpack":
 		lifecycle = &resource.Lifecycle{
 			Type: spec.Lifecycle,
-			BuildpackData: resource.BuildpackLifecycle{
+			Data: resource.BuildpackLifecycle{
 				Buildpacks: spec.Buildpacks,
 				Stack:      ptr.Deref(spec.Stack, ""),
 			},
@@ -355,6 +356,7 @@ func newUpdateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resour
 	case "docker":
 		lifecycle = &resource.Lifecycle{
 			Type: spec.Lifecycle,
+			Data: resource.DockerLifecycle{},
 		}
 	default:
 		lifecycle = nil

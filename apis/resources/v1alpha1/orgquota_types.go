@@ -227,7 +227,3 @@ var (
 	OrgQuota_KindAPIVersion   = OrgQuota_Kind + "." + CRDGroupVersion.String()
 	OrgQuota_GroupVersionKind = CRDGroupVersion.WithKind(OrgQuota_Kind)
 )
-
-func init() {
-	SchemeBuilder.Register(&OrgQuota{}, &OrgQuotaList{})
-}
