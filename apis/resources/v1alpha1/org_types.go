@@ -105,10 +105,6 @@ var (
 	Org_GroupVersionKind = CRDGroupVersion.WithKind(Org_Kind)
 )
 
-func init() {
-	SchemeBuilder.Register(&Organization{}, &OrganizationList{})
-}
-
 // GetID returns ID of underlying resource of this App
 func (tr *Organization) GetID() string {
 	if tr.Status.AtProvider.ID == nil {
