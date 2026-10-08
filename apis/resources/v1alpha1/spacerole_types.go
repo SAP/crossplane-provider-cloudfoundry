@@ -111,6 +111,10 @@ var (
 	SpaceRole_GroupVersionKind = CRDGroupVersion.WithKind(SpaceRole_Kind)
 )
 
+func init() {
+	SchemeBuilder.Register(&SpaceRole{}, &SpaceRoleList{})
+}
+
 // GetSpaceRef returns the reference to the space
 func (s *SpaceRole) GetSpaceRef() *SpaceReference {
 	return &s.Spec.ForProvider.SpaceReference

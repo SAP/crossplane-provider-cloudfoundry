@@ -2,7 +2,6 @@ package fake
 
 import (
 	"context"
-	"encoding/json"
 	"time"
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
@@ -37,9 +36,9 @@ func (m *MockServiceCredentialBinding) GetDetails(ctx context.Context, guid stri
 }
 
 // GetParameters mocks ServiceCredentialBinding.GetParameters
-func (m *MockServiceCredentialBinding) GetParameters(ctx context.Context, guid string) (*json.RawMessage, error) {
+func (m *MockServiceCredentialBinding) GetParameters(ctx context.Context, guid string) (map[string]string, error) {
 	args := m.Called(ctx, guid)
-	return args.Get(0).(*json.RawMessage), args.Error(1)
+	return args.Get(0).(map[string]string), args.Error(1)
 }
 
 // Update mocks ServiceCredentialBinding.Update

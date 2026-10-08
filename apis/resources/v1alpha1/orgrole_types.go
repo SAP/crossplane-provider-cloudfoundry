@@ -108,6 +108,10 @@ var (
 	OrgRole_GroupVersionKind = CRDGroupVersion.WithKind(OrgRole_Kind)
 )
 
+func init() {
+	SchemeBuilder.Register(&OrgRole{}, &OrgRoleList{})
+}
+
 // implement OrgScoped interface
 func (s *OrgRole) GetOrgRef() *OrgReference {
 	return &s.Spec.ForProvider.OrgReference

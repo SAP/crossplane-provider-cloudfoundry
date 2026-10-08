@@ -5,8 +5,8 @@ Copyright 2023 SAP SE
 package v1alpha1
 
 import (
-	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"sigs.k8s.io/controller-runtime/pkg/scheme"
 )
 
 // Package type metadata.
@@ -20,5 +20,5 @@ var (
 	SchemeGroupVersion = schema.GroupVersion{Group: Group, Version: Version}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
-	SchemeBuilder = runtime.NewSchemeBuilder()
+	SchemeBuilder = &scheme.Builder{GroupVersion: SchemeGroupVersion}
 )

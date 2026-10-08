@@ -137,6 +137,10 @@ var (
 	ServiceRouteBinding_GroupVersionKind = CRDGroupVersion.WithKind(ServiceRouteBinding_Kind)
 )
 
+func init() {
+	SchemeBuilder.Register(&ServiceRouteBinding{}, &ServiceRouteBindingList{})
+}
+
 type ServiceInstanceReference struct {
 	// GUID of the ServiceInstance in CF if ServiceInstanceRef or ServiceInstanceSelector is set it will be overwritten
 	// +crossplane:generate:reference:type=ServiceInstance

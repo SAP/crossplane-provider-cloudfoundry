@@ -77,3 +77,7 @@ var (
 	SpaceMembersKindAPIVersion   = SpaceMembersKind + "." + CRDGroupVersion.String()
 	SpaceMembersGroupVersionKind = CRDGroupVersion.WithKind(SpaceMembersKind)
 )
+
+func init() {
+	SchemeBuilder.Register(&SpaceMembers{}, &SpaceMembersList{})
+}

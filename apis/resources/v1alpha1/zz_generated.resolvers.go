@@ -36,7 +36,6 @@ func (mg *App) ResolveReferences(ctx context.Context, c client.Reader) error {
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceReference.Space),
 		Extract:      resources.ExternalID(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.SpaceReference.SpaceRef,
 		Selector:     mg.Spec.ForProvider.SpaceReference.SpaceSelector,
 		To: reference.To{
@@ -54,7 +53,6 @@ func (mg *App) ResolveReferences(ctx context.Context, c client.Reader) error {
 		rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 			CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Routes[i3].Route),
 			Extract:      resources.CloudFoundryName(),
-			Namespace:    mg.GetNamespace(),
 			Reference:    mg.Spec.ForProvider.Routes[i3].RouteRef,
 			Selector:     mg.Spec.ForProvider.Routes[i3].RouteSelector,
 			To: reference.To{
@@ -73,7 +71,6 @@ func (mg *App) ResolveReferences(ctx context.Context, c client.Reader) error {
 		rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 			CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.Services[i3].Name),
 			Extract:      resources.CloudFoundryName(),
-			Namespace:    mg.GetNamespace(),
 			Reference:    mg.Spec.ForProvider.Services[i3].ServiceInstanceRef,
 			Selector:     mg.Spec.ForProvider.Services[i3].ServiceInstanceSelector,
 			To: reference.To{
@@ -102,7 +99,6 @@ func (mg *Domain) ResolveReferences(ctx context.Context, c client.Reader) error 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.OrgReference.Org),
 		Extract:      resources.ExternalID(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.OrgReference.OrgRef,
 		Selector:     mg.Spec.ForProvider.OrgReference.OrgSelector,
 		To: reference.To{
@@ -129,7 +125,6 @@ func (mg *OrgMembers) ResolveReferences(ctx context.Context, c client.Reader) er
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.OrgReference.Org),
 		Extract:      resources.ExternalID(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.OrgReference.OrgRef,
 		Selector:     mg.Spec.ForProvider.OrgReference.OrgSelector,
 		To: reference.To{
@@ -156,7 +151,6 @@ func (mg *OrgRole) ResolveReferences(ctx context.Context, c client.Reader) error
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.OrgReference.Org),
 		Extract:      resources.ExternalID(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.OrgReference.OrgRef,
 		Selector:     mg.Spec.ForProvider.OrgReference.OrgSelector,
 		To: reference.To{
@@ -183,7 +177,6 @@ func (mg *Route) ResolveReferences(ctx context.Context, c client.Reader) error {
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceReference.Space),
 		Extract:      resources.ExternalID(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.SpaceReference.SpaceRef,
 		Selector:     mg.Spec.ForProvider.SpaceReference.SpaceSelector,
 		To: reference.To{
@@ -200,7 +193,6 @@ func (mg *Route) ResolveReferences(ctx context.Context, c client.Reader) error {
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.DomainReference.Domain),
 		Extract:      resources.ExternalID(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.DomainReference.DomainRef,
 		Selector:     mg.Spec.ForProvider.DomainReference.DomainSelector,
 		To: reference.To{
@@ -227,7 +219,6 @@ func (mg *ServiceCredentialBinding) ResolveReferences(ctx context.Context, c cli
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.ServiceInstance),
 		Extract:      reference.ExternalName(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.ServiceInstanceRef,
 		Selector:     mg.Spec.ForProvider.ServiceInstanceSelector,
 		To: reference.To{
@@ -244,7 +235,6 @@ func (mg *ServiceCredentialBinding) ResolveReferences(ctx context.Context, c cli
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.App),
 		Extract:      reference.ExternalName(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.AppRef,
 		Selector:     mg.Spec.ForProvider.AppSelector,
 		To: reference.To{
@@ -271,7 +261,6 @@ func (mg *ServiceInstance) ResolveReferences(ctx context.Context, c client.Reade
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceReference.Space),
 		Extract:      resources.ExternalID(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.SpaceReference.SpaceRef,
 		Selector:     mg.Spec.ForProvider.SpaceReference.SpaceSelector,
 		To: reference.To{
@@ -289,7 +278,6 @@ func (mg *ServiceInstance) ResolveReferences(ctx context.Context, c client.Reade
 		rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 			CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SharedSpaces[i3].Space),
 			Extract:      resources.ExternalID(),
-			Namespace:    mg.GetNamespace(),
 			Reference:    mg.Spec.ForProvider.SharedSpaces[i3].SpaceRef,
 			Selector:     mg.Spec.ForProvider.SharedSpaces[i3].SpaceSelector,
 			To: reference.To{
@@ -318,7 +306,6 @@ func (mg *ServiceRouteBinding) ResolveReferences(ctx context.Context, c client.R
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: mg.Spec.ForProvider.RouteReference.Route,
 		Extract:      resources.ExternalID(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.RouteReference.RouteRef,
 		Selector:     mg.Spec.ForProvider.RouteReference.RouteSelector,
 		To: reference.To{
@@ -335,7 +322,6 @@ func (mg *ServiceRouteBinding) ResolveReferences(ctx context.Context, c client.R
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstance,
 		Extract:      resources.ExternalID(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstanceRef,
 		Selector:     mg.Spec.ForProvider.ServiceInstanceReference.ServiceInstanceSelector,
 		To: reference.To{
@@ -362,7 +348,6 @@ func (mg *Space) ResolveReferences(ctx context.Context, c client.Reader) error {
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.OrgReference.Org),
 		Extract:      resources.ExternalID(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.OrgReference.OrgRef,
 		Selector:     mg.Spec.ForProvider.OrgReference.OrgSelector,
 		To: reference.To{
@@ -389,7 +374,6 @@ func (mg *SpaceMembers) ResolveReferences(ctx context.Context, c client.Reader) 
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceReference.Space),
 		Extract:      resources.ExternalID(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.SpaceReference.SpaceRef,
 		Selector:     mg.Spec.ForProvider.SpaceReference.SpaceSelector,
 		To: reference.To{
@@ -416,7 +400,6 @@ func (mg *SpaceQuota) ResolveReferences(ctx context.Context, c client.Reader) er
 	mrsp, err = r.ResolveMultiple(ctx, reference.MultiResolutionRequest{
 		CurrentValues: reference.FromPtrValues(mg.Spec.ForProvider.Spaces),
 		Extract:       resources.ExternalID(),
-		Namespace:     mg.GetNamespace(),
 		References:    mg.Spec.ForProvider.SpacesRefs,
 		Selector:      mg.Spec.ForProvider.SpacesSelector,
 		To: reference.To{
@@ -433,7 +416,6 @@ func (mg *SpaceQuota) ResolveReferences(ctx context.Context, c client.Reader) er
 	mrsp, err = r.ResolveMultiple(ctx, reference.MultiResolutionRequest{
 		CurrentValues: reference.FromPtrValues(mg.Spec.InitProvider.Spaces),
 		Extract:       resources.ExternalID(),
-		Namespace:     mg.GetNamespace(),
 		References:    mg.Spec.InitProvider.SpacesRefs,
 		Selector:      mg.Spec.InitProvider.SpacesSelector,
 		To: reference.To{
@@ -460,7 +442,6 @@ func (mg *SpaceRole) ResolveReferences(ctx context.Context, c client.Reader) err
 	rsp, err = r.Resolve(ctx, reference.ResolutionRequest{
 		CurrentValue: reference.FromPtrValue(mg.Spec.ForProvider.SpaceReference.Space),
 		Extract:      resources.ExternalID(),
-		Namespace:    mg.GetNamespace(),
 		Reference:    mg.Spec.ForProvider.SpaceReference.SpaceRef,
 		Selector:     mg.Spec.ForProvider.SpaceReference.SpaceSelector,
 		To: reference.To{

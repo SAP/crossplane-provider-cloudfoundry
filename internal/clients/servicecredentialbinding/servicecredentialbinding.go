@@ -32,7 +32,7 @@ const (
 type serviceCredentialBinding interface {
 	Get(ctx context.Context, guid string) (*resource.ServiceCredentialBinding, error)
 	GetDetails(ctx context.Context, guid string) (*resource.ServiceCredentialBindingDetails, error)
-	GetParameters(ctx context.Context, guid string) (*json.RawMessage, error)
+	GetParameters(ctx context.Context, guid string) (map[string]string, error)
 	Single(ctx context.Context, opts *client.ServiceCredentialBindingListOptions) (*resource.ServiceCredentialBinding, error)
 	Create(ctx context.Context, r *resource.ServiceCredentialBindingCreate) (string, *resource.ServiceCredentialBinding, error)
 	Update(ctx context.Context, guid string, r *resource.ServiceCredentialBindingUpdate) (*resource.ServiceCredentialBinding, error)

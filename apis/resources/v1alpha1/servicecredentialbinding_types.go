@@ -173,6 +173,10 @@ var (
 	ServiceCredentialBindingGroupVersionKind = CRDGroupVersion.WithKind(ServiceCredentialBindingKind)
 )
 
+func init() {
+	SchemeBuilder.Register(&ServiceCredentialBinding{}, &ServiceCredentialBindingList{})
+}
+
 // Implements Referenceable interface
 func (s *ServiceCredentialBinding) GetID() string {
 	return s.Status.AtProvider.GUID

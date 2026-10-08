@@ -72,3 +72,7 @@ var (
 	OrgMembersKindAPIVersion   = OrgMembersKind + "." + CRDGroupVersion.String()
 	OrgMembersGroupVersionKind = CRDGroupVersion.WithKind(OrgMembersKind)
 )
+
+func init() {
+	SchemeBuilder.Register(&OrgMembers{}, &OrgMembersList{})
+}
