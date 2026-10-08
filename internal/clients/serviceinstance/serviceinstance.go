@@ -64,7 +64,7 @@ func (c *Client) pollJobComplete(ctx context.Context, job string) error {
 			// experienced timeout error
 			isTimeoutError = urlErr.Timeout()
 		}
-		if errors.Is(err, client.AsyncProcessTimeoutError) || isTimeoutError { // because we have logic to observe job state, we can safely ignore timeout error
+		if errors.Is(err, client.ErrAsyncProcessTimeout) || isTimeoutError { // because we have logic to observe job state, we can safely ignore timeout error
 			return nil
 		}
 	}
