@@ -187,15 +187,16 @@ func checkServiceResourceLabelsAndAnnotations(ctx context.Context, t *testing.T,
 				t.Errorf("ServiceInstance %s labels/annotations check failed: %s", v.GetName(), err.Error())
 			}
 		} else {
-			// UPS instances — no user labels in manifest, just check default labels
+			// UPS instances — no user labels in manifest, just check default annotations
 			if err := wait.For(func(ctx context.Context) (bool, error) {
 				cr := cfg.Client().Resources()
 				si := &v1alpha1.ServiceInstance{}
 				if err := cr.Get(ctx, v.GetName(), cfg.Namespace(), si); err != nil {
 					return false, err
 				}
-				if err := AssertDefaultLabels(
+				if err := AssertDefaultAnnotations(
 					si.Status.AtProvider.Labels,
+					si.Status.AtProvider.Annotations,
 					si.GetName(),
 					"serviceinstance.cloudfoundry.crossplane.io",
 					si.GetProviderConfigReference().Name,
@@ -204,7 +205,7 @@ func checkServiceResourceLabelsAndAnnotations(ctx context.Context, t *testing.T,
 				}
 				return true, nil
 			}, wait.WithTimeout(5*time.Minute)); err != nil {
-				t.Errorf("ServiceInstance %s default labels check failed: %s", v.GetName(), err.Error())
+				t.Errorf("ServiceInstance %s default annotations check failed: %s", v.GetName(), err.Error())
 			}
 		}
 	case *v1alpha1.ServiceCredentialBinding:

@@ -66,7 +66,7 @@ func fakeOrg(m ...modifier) *v1alpha1.Organization {
 	return r
 }
 
-func withDefaultMetadataLabels() modifier {
+func withDefaultMetadata() modifier {
 	return func(r *v1alpha1.Organization) {
 		r.SetGroupVersionKind(v1alpha1.Org_GroupVersionKind)
 	}
@@ -165,7 +165,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeOrg(
 					withExternalName(guid),
 					withName(name),
-					withDefaultMetadataLabels(),
+					withDefaultMetadata(),
 				),
 			},
 			want: want{
@@ -180,11 +180,11 @@ func TestObserve(t *testing.T) {
 				m := &fake.MockOrganization{}
 
 				m.On("Get", guid).Return(
-					&fake.NewOrganization().SetName(name).SetGUID(guid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-org")}).Organization,
+					&fake.NewOrganization().SetName(name).SetGUID(guid).SetAnnotations(map[string]*string{"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-org")}).Organization,
 					nil,
 				)
 				m.On("Single").Return(
-					&fake.NewOrganization().SetName(name).SetGUID(guid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-org")}).Organization,
+					&fake.NewOrganization().SetName(name).SetGUID(guid).SetAnnotations(map[string]*string{"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-org")}).Organization,
 					nil,
 				)
 				return m
@@ -221,10 +221,10 @@ func TestObserve(t *testing.T) {
 		},
 		"Successful when guid is not provided and org with name is found ": {
 			args: args{
-				mg: fakeOrg(withName(name), withDefaultMetadataLabels()),
+				mg: fakeOrg(withName(name), withDefaultMetadata()),
 			},
 			want: want{
-				mg: fakeOrg(withName(name), withExternalName(guid), withDefaultMetadataLabels()),
+				mg: fakeOrg(withName(name), withExternalName(guid), withDefaultMetadata()),
 				obs: managed.ExternalObservation{
 					ResourceExists:          true,
 					ResourceUpToDate:        true,
@@ -241,7 +241,7 @@ func TestObserve(t *testing.T) {
 				).Once()
 				// GetOrgByGUID calls Get with the discovered GUID
 				m.On("Get", guid).Return(
-					&fake.NewOrganization().SetName(name).SetGUID(guid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-org")}).Organization,
+					&fake.NewOrganization().SetName(name).SetGUID(guid).SetAnnotations(map[string]*string{"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-org")}).Organization,
 					nil,
 				)
 				return m
@@ -287,7 +287,7 @@ func TestObserve(t *testing.T) {
 		},
 		"SetExternalNameSuccessful": {
 			args: args{
-				mg: fakeOrg(withExternalName(guid), withName(name), withDefaultMetadataLabels()),
+				mg: fakeOrg(withExternalName(guid), withName(name), withDefaultMetadata()),
 			},
 			want: want{
 				mg: fakeOrg(withExternalName(guid), withName(name)),
@@ -301,7 +301,7 @@ func TestObserve(t *testing.T) {
 				m := &fake.MockOrganization{}
 				// GetOrgByGUID calls Get with the GUID
 				m.On("Get", guid).Return(
-					&fake.NewOrganization().SetName(name).SetGUID(guid).SetLabels(map[string]*string{"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-org")}).Organization,
+					&fake.NewOrganization().SetName(name).SetGUID(guid).SetAnnotations(map[string]*string{"crossplane-kind": ptr.To("organization.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-org")}).Organization,
 					nil,
 				)
 				return m
