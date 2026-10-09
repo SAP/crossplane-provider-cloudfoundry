@@ -4,21 +4,26 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/mock"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -125,6 +130,8 @@ func TestObserve(t *testing.T) {
 		mg  resource.Managed
 		obs managed.ExternalObservation
 		err error
+		// tripped: the kube Update received the marker and no counter.
+		tripped bool
 	}
 
 	scb := serviceCredentialBinding("key", withExternalName(guid), withServiceInstanceID(serviceInstanceGUID), withDefaultMetadata())
@@ -132,6 +139,21 @@ func TestObserve(t *testing.T) {
 	cfSucceeded := func() *cfresource.ServiceCredentialBinding {
 		return &fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetServiceInstanceRef(serviceInstanceGUID).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).SetAnnotations(map[string]*string{"crossplane-kind": ptr.To("servicecredentialbinding.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-service-credential-binding")}).ServiceCredentialBinding
 	}
+	cfNotFound := func() *fake.MockServiceCredentialBinding {
+		m := &fake.MockServiceCredentialBinding{}
+		m.On("Get", mock.Anything, guid).Return(
+			fake.ServiceCredentialBindingNil,
+			fake.ErrNoResultReturned,
+		)
+		return m
+	}
+	noKeyRotator := func() *fake.MockKeyRotator { return &fake.MockKeyRotator{} }
+	deletingOverLimit := serviceCredentialBinding("key",
+		withExternalName(guid),
+		withServiceInstanceID(serviceInstanceGUID),
+		withDeletionTimestamp(),
+		withCreateAttempts(DefaultMaxCreateAttempts),
+	)
 
 	cases := map[string]struct {
 		args                    args
@@ -140,6 +162,13 @@ func TestObserve(t *testing.T) {
 		kube                    k8s.Client
 		keyRotator              keyRotator
 		observationStateHandler observationStateHandler
+		limit                   int // 0 means DefaultMaxCreateAttempts
+		wantDeleteRetiredKeys   int
+		wantNoRetire            bool
+		updateErr               error
+		// wantKubeCalls is checked only on the default kube client.
+		wantKubeCalls []string
+		wantEvents    []string
 	}{
 		"Nil": {
 			args: args{
@@ -325,42 +354,143 @@ func TestObserve(t *testing.T) {
 				return m
 			},
 		},
-		"CircuitBreakerTripped_ResourceNotFound": {
+		"Trip_NotFound_LegacyCounter": {
+			// Also the upgrade path from the old counter-only breaker.
 			args: args{
 				mg: serviceCredentialBinding("key",
 					withExternalName(guid),
 					withServiceInstanceID(serviceInstanceGUID),
-					withCreateAttempts(maxCreateAttempts),
+					withCreateAttempts(DefaultMaxCreateAttempts),
 				),
 			},
 			want: want{
-				obs: managed.ExternalObservation{
-					ResourceExists:   true,
-					ResourceUpToDate: true,
-				},
-				err: nil,
+				obs:     managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				tripped: true,
+			},
+			service:       cfNotFound,
+			keyRotator:    noKeyRotator,
+			wantKubeCalls: []string{"Update"},
+			wantEvents:    []string{"Warning/CreateAttemptsExhausted"},
+		},
+		"BelowLimit_NotFound": {
+			args: args{
+				mg: serviceCredentialBinding("key",
+					withExternalName(guid),
+					withServiceInstanceID(serviceInstanceGUID),
+					withCreateAttempts(DefaultMaxCreateAttempts-1),
+				),
+			},
+			want: want{
+				obs: managed.ExternalObservation{ResourceExists: false},
+			},
+			service:    cfNotFound,
+			keyRotator: noKeyRotator,
+		},
+		"Trip_UpdateFails": {
+			args: args{
+				mg: serviceCredentialBinding("key",
+					withExternalName(guid),
+					withServiceInstanceID(serviceInstanceGUID),
+					withCreateAttempts(DefaultMaxCreateAttempts),
+				),
+			},
+			want: want{
+				obs: managed.ExternalObservation{},
+				err: fmt.Errorf("%s: %w", errUpdateCR, errCFClientError),
+			},
+			service:       cfNotFound,
+			keyRotator:    noKeyRotator,
+			updateErr:     errCFClientError,
+			wantKubeCalls: []string{"Update"},
+		},
+		"Trip_Retirement": {
+			// A forced rotation whose replacement keeps failing.
+			args: args{
+				mg: serviceCredentialBinding("key",
+					withExternalName(guid),
+					withServiceInstanceID(serviceInstanceGUID),
+					withCreateAttempts(DefaultMaxCreateAttempts),
+					withRetiredKeys(guid),
+				),
+			},
+			want: want{
+				obs:     managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				tripped: true,
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
-				// Resource is not found and create attempts are exhausted, so
-				// Observe() settles into an Unavailable state (ResourceExists: true)
-				// instead of triggering another Create.
-				m.On("Get", mock.Anything, guid).Return(
-					fake.ServiceCredentialBindingNil,
-					fake.ErrNoResultReturned,
-				)
+				m.On("Get", mock.Anything, guid).Return(cfSucceeded(), nil)
 				return m
 			},
 			keyRotator: func() *fake.MockKeyRotator {
-				return &fake.MockKeyRotator{}
+				m := &fake.MockKeyRotator{}
+				m.On("RetireBinding", mock.Anything, mock.Anything).Return(true)
+				return m
 			},
+			wantKubeCalls: []string{"StatusUpdate", "Update"},
+			wantEvents:    []string{"Warning/CreateAttemptsExhausted"},
 		},
-		"CircuitBreakerTripped_AdoptionSucceeds": {
+		"Retirement_BelowLimit": {
+			args: args{
+				mg: serviceCredentialBinding("key",
+					withExternalName(guid),
+					withServiceInstanceID(serviceInstanceGUID),
+				),
+			},
+			want: want{
+				obs: managed.ExternalObservation{ResourceExists: false},
+			},
+			service: func() *fake.MockServiceCredentialBinding {
+				m := &fake.MockServiceCredentialBinding{}
+				m.On("Get", mock.Anything, guid).Return(cfSucceeded(), nil)
+				return m
+			},
+			keyRotator: func() *fake.MockKeyRotator {
+				m := &fake.MockKeyRotator{}
+				m.On("RetireBinding", mock.Anything, mock.Anything).Return(true)
+				return m
+			},
+			wantKubeCalls: []string{"StatusUpdate"},
+		},
+		"LimitHonoured_Low": {
+			args: args{
+				mg: serviceCredentialBinding("key",
+					withExternalName(guid),
+					withServiceInstanceID(serviceInstanceGUID),
+					withCreateAttempts(2),
+				),
+			},
+			limit: 2,
+			want: want{
+				obs:     managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				tripped: true,
+			},
+			service:       cfNotFound,
+			keyRotator:    noKeyRotator,
+			wantKubeCalls: []string{"Update"},
+			wantEvents:    []string{"Warning/CreateAttemptsExhausted"},
+		},
+		"LimitHonoured_High": {
+			args: args{
+				mg: serviceCredentialBinding("key",
+					withExternalName(guid),
+					withServiceInstanceID(serviceInstanceGUID),
+					withCreateAttempts(5),
+				),
+			},
+			limit: 10,
+			want: want{
+				obs: managed.ExternalObservation{ResourceExists: false},
+			},
+			service:    cfNotFound,
+			keyRotator: noKeyRotator,
+		},
+		"Adoption_ResetsCounter": {
 			args: args{
 				mg: serviceCredentialBinding("key",
 					withExternalName("my-key-name"),
 					withServiceInstanceID(serviceInstanceGUID),
-					withCreateAttempts(maxCreateAttempts),
+					withCreateAttempts(DefaultMaxCreateAttempts),
 				),
 			},
 			want: want{
@@ -405,6 +535,7 @@ func TestObserve(t *testing.T) {
 				)
 				return m
 			},
+			wantKubeCalls: []string{"Update"},
 		},
 		"InvalidGUIDFormat_FallsBackToSpecSearch": {
 			args: args{
@@ -479,7 +610,94 @@ func TestObserve(t *testing.T) {
 				)
 				return m
 			},
-		}}
+		},
+		"Delete_Found_SkipsRetirement": {
+			// Found during deletion: must stay "exists" so Delete() runs.
+			args: args{
+				mg: serviceCredentialBinding("key",
+					withExternalName(guid),
+					withServiceInstanceID(serviceInstanceGUID),
+					withDeletionTimestamp(),
+				),
+			},
+			want: want{
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+			},
+			service: func() *fake.MockServiceCredentialBinding {
+				m := &fake.MockServiceCredentialBinding{}
+				m.On("Get", mock.Anything, guid).Return(cfSucceeded(), nil)
+				return m
+			},
+			keyRotator: func() *fake.MockKeyRotator {
+				m := &fake.MockKeyRotator{}
+				m.On("RetireBinding", mock.Anything, mock.Anything).Return(true)
+				return m
+			},
+			observationStateHandler: func() *MockObservationStateHandler {
+				m := &MockObservationStateHandler{}
+				m.On("HandleObservationState", mock.Anything, mock.Anything, mock.Anything).Return(
+					managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil,
+				)
+				return m
+			},
+			wantNoRetire: true,
+		},
+		"Delete_NotFound_DeletesRetiredKeys": {
+			args: args{
+				mg: serviceCredentialBinding("key",
+					withExternalName(guid),
+					withServiceInstanceID(serviceInstanceGUID),
+					withDeletionTimestamp(),
+					withRetiredKeys("11111111-1111-1111-1111-111111111111", "22222222-2222-2222-2222-222222222222"),
+				),
+			},
+			want: want{
+				obs: managed.ExternalObservation{ResourceExists: false},
+			},
+			service: cfNotFound,
+			keyRotator: func() *fake.MockKeyRotator {
+				m := &fake.MockKeyRotator{}
+				m.On("DeleteRetiredKeys", mock.Anything, mock.Anything).Return(nil)
+				return m
+			},
+			wantDeleteRetiredKeys: 1,
+		},
+		"Delete_NotFound_RetiredKeyCleanupFails": {
+			args: args{
+				mg: serviceCredentialBinding("key",
+					withExternalName(guid),
+					withServiceInstanceID(serviceInstanceGUID),
+					withDeletionTimestamp(),
+					withRetiredKeys("11111111-1111-1111-1111-111111111111"),
+				),
+			},
+			want: want{
+				obs: managed.ExternalObservation{},
+				err: fmt.Errorf(errDeleteRetiredKeys, errCFClientError),
+			},
+			service: cfNotFound,
+			keyRotator: func() *fake.MockKeyRotator {
+				m := &fake.MockKeyRotator{}
+				m.On("DeleteRetiredKeys", mock.Anything, mock.Anything).Return(errCFClientError)
+				return m
+			},
+			wantDeleteRetiredKeys: 1,
+		},
+		"Delete_NotFound_OverLimitDoesNotTrip": {
+			args: args{mg: deletingOverLimit.DeepCopy()},
+			want: want{
+				mg:  deletingOverLimit.DeepCopy(),
+				obs: managed.ExternalObservation{ResourceExists: false},
+			},
+			service: cfNotFound,
+			keyRotator: func() *fake.MockKeyRotator {
+				m := &fake.MockKeyRotator{}
+				m.On("DeleteRetiredKeys", mock.Anything, mock.Anything).Return(nil)
+				return m
+			},
+			wantDeleteRetiredKeys: 1,
+		},
+	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
@@ -488,17 +706,36 @@ func TestObserve(t *testing.T) {
 			if tc.observationStateHandler != nil {
 				obsHandler = tc.observationStateHandler()
 			}
+			var kubeCalls []string
+			// updated holds the annotations the last kube Update received.
+			var updated map[string]string
 			kubeClient := tc.kube
 			if kubeClient == nil {
 				kubeClient = &test.MockClient{
-					MockUpdate: test.NewMockUpdateFn(nil),
+					MockUpdate: func(_ context.Context, obj k8s.Object, _ ...k8s.UpdateOption) error {
+						kubeCalls = append(kubeCalls, "Update")
+						updated = maps.Clone(obj.GetAnnotations())
+						return tc.updateErr
+					},
+					MockStatusUpdate: func(context.Context, k8s.Object, ...k8s.SubResourceUpdateOption) error {
+						kubeCalls = append(kubeCalls, "StatusUpdate")
+						return nil
+					},
 				}
 			}
+			limit := tc.limit
+			if limit == 0 {
+				limit = DefaultMaxCreateAttempts
+			}
+			kr := tc.keyRotator()
+			rec := &fakeRecorder{}
 			c := &external{
 				kube:                    kubeClient,
 				scbClient:               tc.service(),
-				keyRotator:              tc.keyRotator(),
+				keyRotator:              kr,
 				observationStateHandler: obsHandler,
+				maxCreateAttempts:       limit,
+				recorder:                rec,
 			}
 			obs, err := c.Observe(context.Background(), tc.args.mg)
 
@@ -523,6 +760,50 @@ func TestObserve(t *testing.T) {
 				if diff := cmp.Diff(tc.want.mg, tc.args.mg, ignoreUpdateTime); diff != "" {
 					t.Errorf("Observe(...): -want, +got:\n%s", diff)
 				}
+			}
+			if cr, ok := tc.args.mg.(*v1alpha1.ServiceCredentialBinding); ok {
+				readyMsg := cr.GetCondition(xpv1.TypeReady).Message
+				switch {
+				case tc.want.err != nil:
+					// A failed Observe must not claim the resource is paused.
+					if strings.Contains(readyMsg, MaxRetryExceededKey) {
+						t.Errorf("Observe(...): Ready message %q names %s although Observe failed", readyMsg, MaxRetryExceededKey)
+					}
+				case tc.want.tripped:
+					// Check what was persisted, not the in-memory object.
+					marker, marked := updated[MaxRetryExceededKey]
+					if !marked {
+						t.Errorf("Observe(...): kube Update did not receive the %s marker", MaxRetryExceededKey)
+					} else if _, err := time.Parse(time.RFC3339, marker); err != nil {
+						t.Errorf("Observe(...): marker value %q is not RFC3339: %v", marker, err)
+					}
+					if _, counted := updated[createAttemptsAnnotation]; counted {
+						t.Errorf("Observe(...): kube Update must not receive the counter annotation on trip")
+					}
+					if !strings.Contains(readyMsg, MaxRetryExceededKey) {
+						t.Errorf("Observe(...): Ready message %q does not name %s", readyMsg, MaxRetryExceededKey)
+					}
+				default:
+					if _, marked := cr.GetAnnotations()[MaxRetryExceededKey]; marked {
+						t.Errorf("Observe(...): want no %s marker, got one", MaxRetryExceededKey)
+					}
+				}
+			}
+			if tc.kube == nil {
+				if diff := cmp.Diff(tc.wantKubeCalls, kubeCalls, cmpopts.EquateEmpty()); diff != "" {
+					t.Errorf("Observe(...): kube writes -want, +got:\n%s", diff)
+				}
+			}
+			gotEvents := make([]string, 0, len(rec.events))
+			for _, e := range rec.events {
+				gotEvents = append(gotEvents, string(e.Type)+"/"+string(e.Reason))
+			}
+			if diff := cmp.Diff(tc.wantEvents, gotEvents, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("Observe(...): events -want, +got:\n%s", diff)
+			}
+			kr.AssertNumberOfCalls(t, "DeleteRetiredKeys", tc.wantDeleteRetiredKeys)
+			if tc.wantNoRetire {
+				kr.AssertNotCalled(t, "RetireBinding", mock.Anything, mock.Anything)
 			}
 		})
 	}
@@ -720,58 +1001,111 @@ func TestUpdate(t *testing.T) {
 }
 
 func TestConnector(t *testing.T) {
-	type args struct {
-		ctx context.Context
-		mg  resource.Managed
+	errKube := errors.New("boom")
+	// Every Get fails, so a nil error proves Connect never built a CF client.
+	failingKube := func() k8s.Client {
+		return &test.MockClient{MockGet: test.NewMockGetFn(errKube)}
 	}
+	errClientBuild := errors.New("cannot create a client for Cloud Foundry: cannot config cloudfoundry client: cannot get referenced ProviderConfig: boom")
 
 	type want struct {
-		client managed.ExternalClient
-		err    error
+		paused  bool
+		tracked int
+		err     error
 	}
 
 	cases := map[string]struct {
-		args args
-		want want
+		mg   resource.Managed
 		kube k8s.Client
+		want want
 	}{
 		"WrongCRType": {
-			args: args{
-				ctx: context.Background(),
-				mg:  &v1alpha1.App{}, // Wrong type
-			},
-			want: want{
-				client: nil,
-				err:    errors.New(errWrongCRType),
-			},
+			mg:   &v1alpha1.App{},
 			kube: &test.MockClient{},
+			want: want{err: errors.New(errWrongCRType)},
+		},
+		"Paused": {
+			mg:   serviceCredentialBinding("key", withProviderConfigRef("default"), withMaxRetryExceeded()),
+			kube: failingKube(),
+			want: want{paused: true, tracked: 1},
+		},
+		"PausedButDeleting": {
+			mg:   serviceCredentialBinding("key", withProviderConfigRef("default"), withMaxRetryExceeded(), withDeletionTimestamp()),
+			kube: failingKube(),
+			want: want{tracked: 1, err: errClientBuild},
+		},
+		"NotPaused": {
+			mg:   serviceCredentialBinding("key", withProviderConfigRef("default")),
+			kube: failingKube(),
+			want: want{tracked: 1, err: errClientBuild},
 		},
 	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			t.Logf("Testing: %s", t.Name())
-
+			tracked := 0
 			c := &connector{
 				kube: tc.kube,
-				// Skip usage tracker testing for now as it requires more complex setup
+				usage: resource.LegacyTrackerFn(func(context.Context, resource.LegacyManaged) error {
+					tracked++
+					return nil
+				}),
+				maxCreateAttempts: DefaultMaxCreateAttempts,
 			}
 
-			client, err := c.Connect(tc.args.ctx, tc.args.mg)
+			client, err := c.Connect(context.Background(), tc.mg)
 
 			if tc.want.err != nil && err != nil {
 				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
 					t.Errorf("Connect(...): want error string != got error string:\n%s", diff)
 				}
-			} else {
-				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("Connect(...): want error != got error:\n%s", diff)
-				}
+			} else if diff := cmp.Diff(tc.want.err, err); diff != "" {
+				t.Errorf("Connect(...): want error != got error:\n%s", diff)
 			}
-			if tc.want.client == nil && client != nil {
-				t.Errorf("Connect(...): expected nil client, got non-nil")
+			if tc.want.err != nil && client != nil {
+				t.Errorf("Connect(...): expected nil client on error, got %T", client)
+			}
+			if _, paused := client.(*pausedExternal); paused != tc.want.paused {
+				t.Errorf("Connect(...): want paused client %t, got %T", tc.want.paused, client)
+			}
+			if tracked != tc.want.tracked {
+				t.Errorf("Connect(...): want %d usage tracking calls, got %d", tc.want.tracked, tracked)
 			}
 		})
+	}
+}
+
+func TestPausedExternal(t *testing.T) {
+	ctx := context.Background()
+	p := &pausedExternal{maxCreateAttempts: 3}
+	cr := serviceCredentialBinding("key", withMaxRetryExceeded())
+
+	obs, err := p.Observe(ctx, cr)
+	if err != nil {
+		t.Fatalf("Observe(...): unexpected error: %v", err)
+	}
+	if diff := cmp.Diff(managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, obs); diff != "" {
+		t.Errorf("Observe(...): -want, +got:\n%s", diff)
+	}
+	ready := cr.GetCondition(xpv1.TypeReady)
+	if ready.Reason != xpv1.ReasonUnavailable {
+		t.Errorf("Observe(...): want Ready reason %q, got %q", xpv1.ReasonUnavailable, ready.Reason)
+	}
+	for _, s := range []string{MaxRetryExceededKey, "after 3 attempts", "with 3 fresh attempts"} {
+		if !strings.Contains(ready.Message, s) {
+			t.Errorf("Observe(...): Ready message %q does not contain %q", ready.Message, s)
+		}
+	}
+
+	// Unreachable via the reconciler, but must still refuse to act.
+	for name, call := range map[string]func() error{
+		"Create": func() error { _, err := p.Create(ctx, cr); return err },
+		"Update": func() error { _, err := p.Update(ctx, cr); return err },
+		"Delete": func() error { _, err := p.Delete(ctx, cr); return err },
+	} {
+		if err := call(); err == nil || err.Error() != errPaused {
+			t.Errorf("%s(...): want error %q, got %v", name, errPaused, err)
+		}
 	}
 }
 
@@ -1423,3 +1757,38 @@ func withCreateAttempts(n int) modifier {
 		})
 	}
 }
+
+func withProviderConfigRef(name string) modifier {
+	return func(r *v1alpha1.ServiceCredentialBinding) {
+		r.Spec.ProviderConfigReference = &xpv1.Reference{Name: name}
+	}
+}
+
+func withMaxRetryExceeded() modifier {
+	return func(r *v1alpha1.ServiceCredentialBinding) {
+		meta.AddAnnotations(r, map[string]string{MaxRetryExceededKey: "2026-09-30T00:00:00Z"})
+	}
+}
+
+func withDeletionTimestamp() modifier {
+	return func(r *v1alpha1.ServiceCredentialBinding) {
+		now := metav1.Now()
+		r.SetDeletionTimestamp(&now)
+	}
+}
+
+func withRetiredKeys(guids ...string) modifier {
+	return func(r *v1alpha1.ServiceCredentialBinding) {
+		for _, g := range guids {
+			r.Status.AtProvider.RetiredKeys = append(r.Status.AtProvider.RetiredKeys, &v1alpha1.SCBResource{GUID: g})
+		}
+	}
+}
+
+type fakeRecorder struct {
+	events []event.Event
+}
+
+func (r *fakeRecorder) Event(_ runtime.Object, e event.Event) { r.events = append(r.events, e) }
+
+func (r *fakeRecorder) WithAnnotations(...string) event.Recorder { return r }

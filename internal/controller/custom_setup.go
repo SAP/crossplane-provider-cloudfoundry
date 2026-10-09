@@ -28,9 +28,15 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/providerconfig"
 )
 
+// Config holds provider settings that controller.Options does not cover.
+type Config struct {
+	// SCBMaxCreateAttempts is the ServiceCredentialBinding create-attempt limit.
+	SCBMaxCreateAttempts int
+}
+
 // CustomSetup creates all controllers with the supplied logger and adds them to
 // the supplied manager.
-func CustomSetup(mgr ctrl.Manager, o controller.Options) error {
+func CustomSetup(mgr ctrl.Manager, o controller.Options, cfg Config) error {
 	for _, setup := range []func(ctrl.Manager, controller.Options) error{
 		providerconfig.Setup,
 		app.Setup,
@@ -43,7 +49,7 @@ func CustomSetup(mgr ctrl.Manager, o controller.Options) error {
 		spacemembers.Setup,
 		route.Setup,
 		serviceinstance.Setup,
-		servicecredentialbinding.Setup,
+		servicecredentialbinding.SetupWithMaxCreateAttempts(cfg.SCBMaxCreateAttempts),
 		spacequota.Setup,
 		domain.Setup,
 		serviceroutebinding.Setup,
