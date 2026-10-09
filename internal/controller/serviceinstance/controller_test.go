@@ -1917,6 +1917,66 @@ func TestUpdate(t *testing.T) {
 	}
 }
 
+func TestUpdateSendsParametersOnlyOnDrift(t *testing.T) {
+	cases := map[string]struct {
+		typ        string
+		drift      bool
+		storedHash []byte
+		lastOp     v1alpha1.LastOperation
+		actual     string
+		wantSent   bool
+	}{
+		"UnchangedSkipsParameters":           {storedHash: iSha256([]byte(jsonCredentials))},
+		"ChangedSendsParameters":             {storedHash: iSha256([]byte(`{"json":"old"}`)), wantSent: true},
+		"NoStoredHashSendsParameters":        {wantSent: true},
+		"FailedUpdateResendsParameters":      {storedHash: iSha256([]byte(jsonCredentials)), lastOp: v1alpha1.LastOperation{Type: v1alpha1.LastOperationUpdate, State: v1alpha1.LastOperationFailed}, wantSent: true},
+		"DriftDetectionMatchSkipsParameters": {drift: true, actual: `{"json":"bar","default":"x"}`},
+		"DriftDetectionDiffSendsParameters":  {drift: true, actual: `{"json":"other"}`, wantSent: true},
+		"UserProvidedAlwaysSendsCredentials": {typ: "user-provided", drift: true, storedHash: iSha256([]byte(jsonCredentials)), actual: jsonCredentials, wantSent: true},
+	}
+
+	for n, tc := range cases {
+		t.Run(n, func(t *testing.T) {
+			typ := tc.typ
+			if typ == "" {
+				typ = "managed"
+			}
+			mg := serviceInstance(typ, withSpace(spaceGUID), withServicePlan(v1alpha1.ServicePlanParameters{ID: &servicePlan}), withExternalName(guid),
+				withCredentials(&jsonCredentials), withDriftDetection(tc.drift), withStatus(v1alpha1.ServiceInstanceObservation{ID: &guid, Credentials: tc.storedHash, LastOperation: tc.lastOp}))
+			observed := &fake.NewServiceInstance(typ).SetName(name).SetGUID(guid).SetServicePlan(servicePlan).ServiceInstance
+			svc := &fake.MockServiceInstance{}
+			svc.On("Get", guid).Return(observed, nil)
+			svc.On("GetManagedParameters", guid).Return(fake.JSONRawMessage(tc.actual), nil)
+			svc.On("GetUserProvidedCredentials", guid).Return(fake.JSONRawMessage(tc.actual), nil)
+			svc.On("UpdateManaged", guid).Return("", nil)
+			svc.On("UpdateUserProvided", guid).Return(observed, nil)
+			c := &external{
+				kube: &test.MockClient{
+					MockUpdate:       test.NewMockUpdateFn(nil),
+					MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
+				},
+				serviceinstance: &serviceinstance.Client{ServiceInstance: svc, Job: &fake.MockJob{}},
+			}
+
+			if _, err := c.Update(context.Background(), mg); err != nil {
+				t.Fatalf("Update(...): %v", err)
+			}
+			var sent bool
+			switch {
+			case svc.ManagedUpdate != nil:
+				sent = svc.ManagedUpdate.Parameters != nil
+			case svc.UserProvidedUpdate != nil:
+				sent = svc.UserProvidedUpdate.Credentials != nil
+			default:
+				t.Fatal("Update(...): no update request sent")
+			}
+			if sent != tc.wantSent {
+				t.Errorf("Update(...): parameters sent = %v, want %v", sent, tc.wantSent)
+			}
+		})
+	}
+}
+
 func TestDelete(t *testing.T) {
 	type service func() *fake.MockServiceInstance
 	type job func() *fake.MockJob
