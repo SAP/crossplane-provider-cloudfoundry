@@ -158,3 +158,10 @@ type RouteReference struct {
 	// If set will overwrite Route
 	RouteSelector *xpv2.Selector `json:"routeSelector,omitempty"`
 }
+
+func init() {
+	SchemeBuilder.Register(func(scheme *runtime.Scheme) error {
+		scheme.AddKnownTypes(CRDGroupVersion, &ServiceRouteBinding{}, &ServiceRouteBindingList{})
+		return nil
+	})
+}

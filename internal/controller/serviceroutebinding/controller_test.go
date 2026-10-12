@@ -141,7 +141,7 @@ func TestObserve(t *testing.T) {
 		withRouteID(routeGUID),
 		withServiceInstanceID(serviceInstanceGUID),
 		withConditions(xpv2.Available(), xpv2.ReconcileSuccess()),
-		withDefaultMetadataLabels(),
+		withDefaultMetadata(),
 	)
 
 	srbInvalid := serviceRouteBinding(
@@ -297,7 +297,7 @@ func TestObserve(t *testing.T) {
 					withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
 					withConditions(xpv2.Unavailable().WithMessage("create in progress")),
-					withDefaultMetadataLabels(),
+					withDefaultMetadata(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -328,7 +328,7 @@ func TestObserve(t *testing.T) {
 					withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
 					withConditions(xpv2.Unavailable().WithMessage("create failed")),
-					withDefaultMetadataLabels(),
+					withDefaultMetadata(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
 				err: nil,

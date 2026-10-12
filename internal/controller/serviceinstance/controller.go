@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"time"
 
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
@@ -195,7 +196,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, errSecret)
 		}
-		credentialsUpToDate, err := c.credentialsUpToDate(ctx, cr, r, desiredCredentials)
+		credentialsUpToDate, err = c.credentialsUpToDate(ctx, cr, r, desiredCredentials)
 		if err != nil {
 			return managed.ExternalObservation{ResourceExists: true}, err
 		}

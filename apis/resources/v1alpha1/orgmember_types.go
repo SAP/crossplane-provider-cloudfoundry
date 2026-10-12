@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
@@ -72,3 +73,10 @@ var (
 	OrgMembersKindAPIVersion   = OrgMembersKind + "." + CRDGroupVersion.String()
 	OrgMembersGroupVersionKind = CRDGroupVersion.WithKind(OrgMembersKind)
 )
+
+func init() {
+	SchemeBuilder.Register(func(scheme *runtime.Scheme) error {
+		scheme.AddKnownTypes(CRDGroupVersion, &OrgMembers{}, &OrgMembersList{})
+		return nil
+	})
+}

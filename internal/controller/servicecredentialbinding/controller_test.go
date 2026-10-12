@@ -16,7 +16,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	"github.com/crossplane/crossplane-runtime/pkg/event"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
@@ -762,7 +762,7 @@ func TestObserve(t *testing.T) {
 				}
 			}
 			if cr, ok := tc.args.mg.(*v1alpha1.ServiceCredentialBinding); ok {
-				readyMsg := cr.GetCondition(xpv1.TypeReady).Message
+				readyMsg := cr.GetCondition(xpv2.TypeReady).Message
 				switch {
 				case tc.want.err != nil:
 					// A failed Observe must not claim the resource is paused.
@@ -1087,9 +1087,9 @@ func TestPausedExternal(t *testing.T) {
 	if diff := cmp.Diff(managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, obs); diff != "" {
 		t.Errorf("Observe(...): -want, +got:\n%s", diff)
 	}
-	ready := cr.GetCondition(xpv1.TypeReady)
-	if ready.Reason != xpv1.ReasonUnavailable {
-		t.Errorf("Observe(...): want Ready reason %q, got %q", xpv1.ReasonUnavailable, ready.Reason)
+	ready := cr.GetCondition(xpv2.TypeReady)
+	if ready.Reason != xpv2.ReasonUnavailable {
+		t.Errorf("Observe(...): want Ready reason %q, got %q", xpv2.ReasonUnavailable, ready.Reason)
 	}
 	for _, s := range []string{MaxRetryExceededKey, "after 3 attempts", "with 3 fresh attempts"} {
 		if !strings.Contains(ready.Message, s) {
@@ -1760,7 +1760,7 @@ func withCreateAttempts(n int) modifier {
 
 func withProviderConfigRef(name string) modifier {
 	return func(r *v1alpha1.ServiceCredentialBinding) {
-		r.Spec.ProviderConfigReference = &xpv1.Reference{Name: name}
+		r.Spec.ProviderConfigReference = &xpv2.Reference{Name: name}
 	}
 }
 

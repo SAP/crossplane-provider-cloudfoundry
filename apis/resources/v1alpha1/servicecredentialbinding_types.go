@@ -177,3 +177,10 @@ var (
 func (s *ServiceCredentialBinding) GetID() string {
 	return s.Status.AtProvider.GUID
 }
+
+func init() {
+	SchemeBuilder.Register(func(scheme *runtime.Scheme) error {
+		scheme.AddKnownTypes(CRDGroupVersion, &ServiceCredentialBinding{}, &ServiceCredentialBindingList{})
+		return nil
+	})
+}

@@ -310,7 +310,7 @@ func TestObserve(t *testing.T) {
 					withStatus(guid, "STARTED"),
 					withObservedName(name),
 					withAppManifest("applications:\n- name: "+name),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 					withObservedAnnotations(map[string]*string{
 						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
 						"crossplane-name": ptr.To("my-app"),
@@ -399,7 +399,7 @@ func TestObserve(t *testing.T) {
 						Protocol: "http",
 					}),
 					withConditions(xpv2.Available()),
-					withObservedLabels(map[string]*string{
+					withObservedAnnotations(map[string]*string{
 						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
 						"crossplane-name": ptr.To("my-app"),
 					}),
@@ -505,7 +505,7 @@ func TestObserve(t *testing.T) {
 						Protocol: "http",
 					}),
 					withConditions(xpv2.Available()),
-					withObservedLabels(map[string]*string{
+					withObservedAnnotations(map[string]*string{
 						"crossplane-kind": ptr.To("app.cloudfoundry.crossplane.io"),
 						"crossplane-name": ptr.To("my-app"),
 					}),

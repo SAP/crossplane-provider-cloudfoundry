@@ -181,18 +181,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	guid := meta.GetExternalName(cr)
 	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, cr.Spec.ForProvider)
 	if isBindingNotFoundError(err) {
-		// The binding does not exist in Cloud Foundry. If we have exhausted the
-		// create attempts, settle into an Unavailable state instead of triggering
-		// another Create. Returning ResourceExists: true with a nil error stops the
-		// reconciler from calling Create again, which avoids an endless
-		// create-fail-requeue loop and prevents flooding CF with orphaned bindings.
-		if isCircuitBreakerTripped(cr) {
-			cr.SetConditions(xpv2.Unavailable().WithMessage(
-				fmt.Sprintf("Creation failed after %d attempts. Delete and recreate this resource to retry.", maxCreateAttempts),
-			))
-			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
-		}
-		return managed.ExternalObservation{ResourceExists: false}, nil
+		return c.observeMissing(ctx, cr)
 	}
 	if err != nil {
 		return managed.ExternalObservation{}, fmt.Errorf(errGet, err)
@@ -424,7 +413,7 @@ func (c *external) notExists(ctx context.Context, cr *v1alpha1.ServiceCredential
 	}
 	msg := recoveryMessage(c.maxCreateAttempts)
 	c.recorder.Event(cr, event.Warning(reasonCreateAttemptsExhausted, errors.New(msg)))
-	cr.SetConditions(xpv1.Unavailable().WithMessage(msg))
+	cr.SetConditions(xpv2.Unavailable().WithMessage(msg))
 	return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
 }
 
@@ -459,7 +448,7 @@ func (p *pausedExternal) Observe(_ context.Context, mg resource.Managed) (manage
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errWrongCRType)
 	}
-	cr.SetConditions(xpv1.Unavailable().WithMessage(recoveryMessage(p.maxCreateAttempts)))
+	cr.SetConditions(xpv2.Unavailable().WithMessage(recoveryMessage(p.maxCreateAttempts)))
 	return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
 }
 

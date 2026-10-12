@@ -305,3 +305,10 @@ func (r *ServiceInstance) GetID() string {
 func (s *ServiceInstance) GetSpaceRef() *SpaceReference {
 	return &s.Spec.ForProvider.SpaceReference
 }
+
+func init() {
+	SchemeBuilder.Register(func(scheme *runtime.Scheme) error {
+		scheme.AddKnownTypes(CRDGroupVersion, &ServiceInstance{}, &ServiceInstanceList{})
+		return nil
+	})
+}

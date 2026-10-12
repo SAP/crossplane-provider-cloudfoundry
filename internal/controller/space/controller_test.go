@@ -188,7 +188,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeSpace(withName(name), withOrg(orgGuid), withDefaultMetadata()),
 			},
 			want: want{
-				mg:  fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withAllowSSH(false), withConditions(xpv2.Available()), withDefaultMetadataLabels()),
+				mg:  fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withAllowSSH(false), withConditions(xpv2.Available()), withDefaultMetadata()),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
@@ -242,7 +242,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withDefaultMetadata()),
 			},
 			want: want{
-				mg:  fakeSpace(withName(name), withOrg(orgGuid), withAllowSSH(false), withExternalName(guid), withConditions(xpv2.Available()), withDefaultMetadataLabels()),
+				mg:  fakeSpace(withName(name), withOrg(orgGuid), withAllowSSH(false), withExternalName(guid), withConditions(xpv2.Available()), withDefaultMetadata()),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
 				err: nil,
 			},
@@ -267,7 +267,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeSpace(withName(name), withOrg(orgGuid), withExternalName(guid), withDefaultMetadata()),
 			},
 			want: want{
-				mg:  fakeSpace(withName(name), withOrg(orgGuid), withAllowSSH(false), withExternalName(guid), withConditions(xpv1.Available()), withDefaultMetadata()),
+				mg:  fakeSpace(withName(name), withOrg(orgGuid), withAllowSSH(false), withExternalName(guid), withConditions(xpv2.Available()), withDefaultMetadata()),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ResourceLateInitialized: false},
 				err: nil,
 			},

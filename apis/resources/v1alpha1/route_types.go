@@ -2,6 +2,7 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
@@ -175,4 +176,11 @@ func (r *Route) GetDomainRef() *DomainReference {
 // implement SpaceScoped interface
 func (r *Route) GetSpaceRef() *SpaceReference {
 	return &r.Spec.ForProvider.SpaceReference
+}
+
+func init() {
+	SchemeBuilder.Register(func(scheme *runtime.Scheme) error {
+		scheme.AddKnownTypes(CRDGroupVersion, &Route{}, &RouteList{})
+		return nil
+	})
 }
