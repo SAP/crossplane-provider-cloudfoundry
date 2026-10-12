@@ -1,15 +1,18 @@
 package metadata
 
 import (
+	"strings"
 	"testing"
 
 	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 
 	v1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 func newTestManaged(name, providerCfg string) *v1alpha1.Space {
 	s := &v1alpha1.Space{}
+	s.SetGroupVersionKind(v1alpha1.Space_GroupVersionKind)
 	s.SetName(name)
 	if providerCfg != "" {
 		s.SetProviderConfigReference(&xpv1.Reference{Name: providerCfg})
@@ -19,118 +22,147 @@ func newTestManaged(name, providerCfg string) *v1alpha1.Space {
 
 func ptrTo(s string) *string { return &s }
 
+func legacyKeys() []string {
+	return []string{
+		resource.ExternalResourceTagKeyKind,
+		resource.ExternalResourceTagKeyName,
+		resource.ExternalResourceTagKeyProvider,
+	}
+}
+
+func assertRemovalMarker(t *testing.T, labels map[string]*string, key string) {
+	t.Helper()
+	v, ok := labels[key]
+	if !ok {
+		t.Errorf("expected removal marker for label %q, key absent", key)
+		return
+	}
+	if v != nil {
+		t.Errorf("expected nil removal marker for label %q, got %q", key, *v)
+	}
+}
+
 func TestBuildMetadata(t *testing.T) {
 	t.Parallel()
 
-	t.Run("defaults only - no user labels or annotations", func(t *testing.T) {
+	t.Run("defaults go to annotations, legacy labels get removal markers", func(t *testing.T) {
 		mg := newTestManaged("my-space", "my-config")
 		m := BuildMetadata(mg, nil, nil)
 
-		if m == nil {
-			t.Fatal("expected non-nil metadata")
+		if len(m.Annotations) != 3 {
+			t.Fatalf("expected 3 default annotations, got %d: %v", len(m.Annotations), m.Annotations)
 		}
-		if len(m.Labels) != 3 {
-			t.Fatalf("expected 3 default labels, got %d: %v", len(m.Labels), m.Labels)
-		}
-		if v := m.Labels["crossplane-name"]; v == nil || *v != "my-space" {
+		if v := m.Annotations["crossplane-name"]; v == nil || *v != "my-space" {
 			t.Errorf("expected crossplane-name=my-space, got %v", v)
 		}
-		if v := m.Labels["crossplane-providerconfig"]; v == nil || *v != "my-config" {
+		if v := m.Annotations["crossplane-providerconfig"]; v == nil || *v != "my-config" {
 			t.Errorf("expected crossplane-providerconfig=my-config, got %v", v)
 		}
-		if _, ok := m.Labels["crossplane-kind"]; !ok {
-			t.Error("expected crossplane-kind label to be present")
+		if v := m.Annotations["crossplane-kind"]; v == nil || *v == "" {
+			t.Errorf("expected non-empty crossplane-kind annotation, got %v", v)
 		}
-		if len(m.Annotations) != 0 {
-			t.Errorf("expected no annotations, got %d", len(m.Annotations))
+		if len(m.Labels) != 3 {
+			t.Fatalf("expected only 3 removal markers in labels, got %d: %v", len(m.Labels), m.Labels)
+		}
+		for _, k := range legacyKeys() {
+			assertRemovalMarker(t, m.Labels, k)
 		}
 	})
 
-	t.Run("defaults plus user labels", func(t *testing.T) {
+	t.Run("name longer than 63 characters stays an annotation", func(t *testing.T) {
+		long := strings.Repeat("a", 70)
+		m := BuildMetadata(newTestManaged(long, "my-config"), nil, nil)
+
+		if v := m.Annotations["crossplane-name"]; v == nil || *v != long {
+			t.Errorf("expected full 70-char crossplane-name annotation, got %v", v)
+		}
+		for k, v := range m.Labels {
+			if v != nil {
+				t.Errorf("expected no label values, got %s=%q", k, *v)
+			}
+		}
+	})
+
+	t.Run("user labels kept alongside removal markers", func(t *testing.T) {
 		mg := newTestManaged("my-space", "my-config")
 		m := BuildMetadata(mg, map[string]*string{"env": ptrTo("production")}, nil)
 
-		if len(m.Labels) != 4 {
-			t.Fatalf("expected 4 labels (3 default + 1 user), got %d", len(m.Labels))
-		}
 		if v := m.Labels["env"]; v == nil || *v != "production" {
 			t.Errorf("expected env=production, got %v", v)
 		}
+		for _, k := range legacyKeys() {
+			assertRemovalMarker(t, m.Labels, k)
+		}
 	})
 
-	t.Run("user labels override defaults on collision", func(t *testing.T) {
+	t.Run("user label with a default key replaces the removal marker", func(t *testing.T) {
 		mg := newTestManaged("my-space", "my-config")
 		m := BuildMetadata(mg, map[string]*string{"crossplane-name": ptrTo("override-name")}, nil)
 
 		if v := m.Labels["crossplane-name"]; v == nil || *v != "override-name" {
-			t.Errorf("expected crossplane-name=override-name, got %v", v)
+			t.Errorf("expected crossplane-name label=override-name, got %v", v)
+		}
+		if v := m.Annotations["crossplane-name"]; v == nil || *v != "my-space" {
+			t.Errorf("expected crossplane-name annotation=my-space, got %v", v)
 		}
 	})
 
-	t.Run("no provider config ref - crossplane-providerconfig omitted", func(t *testing.T) {
+	t.Run("user nil label for a default key stays a deletion marker", func(t *testing.T) {
+		mg := newTestManaged("my-space", "my-config")
+		m := BuildMetadata(mg, map[string]*string{"crossplane-name": nil}, nil)
+
+		assertRemovalMarker(t, m.Labels, "crossplane-name")
+	})
+
+	t.Run("user annotation overrides default annotation", func(t *testing.T) {
+		mg := newTestManaged("my-space", "my-config")
+		m := BuildMetadata(mg, nil, map[string]*string{"crossplane-name": ptrTo("custom")})
+
+		if v := m.Annotations["crossplane-name"]; v == nil || *v != "custom" {
+			t.Errorf("expected crossplane-name annotation=custom, got %v", v)
+		}
+	})
+
+	t.Run("no provider config ref - providerconfig annotation omitted, marker kept", func(t *testing.T) {
 		mg := newTestManaged("my-space", "")
 		m := BuildMetadata(mg, nil, nil)
 
-		if len(m.Labels) != 2 {
-			t.Fatalf("expected 2 labels (no providerconfig), got %d: %v", len(m.Labels), m.Labels)
+		if len(m.Annotations) != 2 {
+			t.Fatalf("expected 2 annotations, got %d: %v", len(m.Annotations), m.Annotations)
 		}
-		if _, ok := m.Labels["crossplane-providerconfig"]; ok {
-			t.Error("expected crossplane-providerconfig to be absent")
+		if _, ok := m.Annotations["crossplane-providerconfig"]; ok {
+			t.Error("expected crossplane-providerconfig annotation to be absent")
 		}
+		assertRemovalMarker(t, m.Labels, "crossplane-providerconfig")
 	})
 
-	t.Run("defaults plus user labels and annotations", func(t *testing.T) {
+	t.Run("user annotations merged with defaults", func(t *testing.T) {
 		mg := newTestManaged("my-space", "my-config")
 		m := BuildMetadata(mg,
 			map[string]*string{"env": ptrTo("staging")},
 			map[string]*string{"description": ptrTo("my test space")},
 		)
 
-		if len(m.Labels) != 4 {
-			t.Fatalf("expected 4 labels, got %d", len(m.Labels))
-		}
-		if len(m.Annotations) != 1 {
-			t.Fatalf("expected 1 annotation, got %d", len(m.Annotations))
+		if len(m.Annotations) != 4 {
+			t.Fatalf("expected 4 annotations (3 default + 1 user), got %d", len(m.Annotations))
 		}
 		if v := m.Annotations["description"]; v == nil || *v != "my test space" {
 			t.Errorf("expected description='my test space', got %v", v)
 		}
 	})
 
-	t.Run("nil pointer values in userLabels produce deletion markers", func(t *testing.T) {
+	t.Run("nil pointer values in user maps produce deletion markers", func(t *testing.T) {
 		mg := newTestManaged("my-space", "my-config")
 		m := BuildMetadata(mg,
 			map[string]*string{"stale-key": nil},
 			map[string]*string{"stale-annotation": nil},
 		)
 
-		if v, ok := m.Labels["stale-key"]; !ok {
-			t.Error("expected stale-key to be present as deletion marker")
-		} else if v != nil {
-			t.Errorf("expected nil deletion marker for stale-key, got %v", v)
-		}
-		if v, ok := m.Annotations["stale-annotation"]; !ok {
-			t.Error("expected stale-annotation to be present as deletion marker")
-		} else if v != nil {
-			t.Errorf("expected nil deletion marker for stale-annotation, got %v", v)
-		}
-		if len(m.Labels) != 4 {
-			t.Errorf("expected 4 labels (3 default + 1 deletion marker), got %d: %v", len(m.Labels), m.Labels)
-		}
+		assertRemovalMarker(t, m.Labels, "stale-key")
+		assertRemovalMarker(t, m.Annotations, "stale-annotation")
 	})
 
-	t.Run("nil pointer value overrides default label", func(t *testing.T) {
-		mg := newTestManaged("my-space", "my-config")
-		m := BuildMetadata(mg, map[string]*string{"crossplane-name": nil}, nil)
-
-		if v, ok := m.Labels["crossplane-name"]; !ok {
-			t.Error("expected crossplane-name to be present")
-		} else if v != nil {
-			t.Errorf("expected nil deletion marker for crossplane-name, got %v", v)
-		}
-	})
-
-	t.Run("nil managed resource - no default labels", func(t *testing.T) {
+	t.Run("nil managed resource - no defaults, no markers", func(t *testing.T) {
 		m := BuildMetadata(nil, nil, nil)
 
 		if m == nil {
@@ -143,21 +175,6 @@ func TestBuildMetadata(t *testing.T) {
 			t.Fatalf("expected 0 annotations with nil mg, got %d", len(m.Annotations))
 		}
 	})
-}
-
-func TestBuildMetadata_ProducesValidCFMetadata(t *testing.T) {
-	mg := newTestManaged("test-space", "test-config")
-	m := BuildMetadata(mg,
-		map[string]*string{"env": ptrTo("prod")},
-		map[string]*string{"note": ptrTo("test")},
-	)
-
-	if len(m.Labels) != 4 {
-		t.Fatalf("expected 4 labels (3 default + 1 user), got %d", len(m.Labels))
-	}
-	if len(m.Annotations) != 1 {
-		t.Fatalf("expected 1 annotation, got %d", len(m.Annotations))
-	}
 }
 
 func TestMetadataMapEqual(t *testing.T) {
@@ -248,6 +265,27 @@ func TestIsMetadataUpToDate(t *testing.T) {
 				t.Errorf("IsMetadataUpToDate() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestIsMetadataUpToDate_LegacyLabelMigration(t *testing.T) {
+	t.Parallel()
+	mg := newTestManaged("my-space", "my-config")
+	desired := BuildMetadata(mg, nil, nil)
+	defaults := map[string]*string{
+		"crossplane-kind":           desired.Annotations["crossplane-kind"],
+		"crossplane-name":           ptrTo("my-space"),
+		"crossplane-providerconfig": ptrTo("my-config"),
+	}
+
+	if IsMetadataUpToDate(desired.Labels, desired.Annotations, defaults, nil) {
+		t.Error("v1.2.x resource (default labels, no annotations) must not be up to date")
+	}
+	if IsMetadataUpToDate(desired.Labels, desired.Annotations, defaults, defaults) {
+		t.Error("resource still carrying legacy labels must not be up to date")
+	}
+	if !IsMetadataUpToDate(desired.Labels, desired.Annotations, map[string]*string{"cf-system": ptrTo("x")}, defaults) {
+		t.Error("migrated resource (annotations only) must be up to date")
 	}
 }
 

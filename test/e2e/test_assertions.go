@@ -72,37 +72,23 @@ func ResourceDeleted(cfg *envconf.Config, object k8s.Object) wait2.ConditionWith
 	return conditions.New(cr).ResourceDeleted(object)
 }
 
-// AssertDefaultLabels checks that the observed labels on a CF resource contain
-// the three Crossplane default labels (crossplane-kind, crossplane-name,
-// crossplane-providerconfig) with the expected values.
-func AssertDefaultLabels(observedLabels map[string]*string, crName, expectedKind, providerConfigName string) error {
-	if observedLabels == nil {
-		return fmt.Errorf("observed labels map is nil for resource %s", crName)
+// AssertDefaultAnnotations checks that the Crossplane default tags are set as
+// annotations with the expected values and are no longer present as labels.
+func AssertDefaultAnnotations(observedLabels, observedAnnotations map[string]*string, crName, expectedKind, providerConfigName string) error {
+	if err := assertObservedValue(observedAnnotations, resource.ExternalResourceTagKeyKind, expectedKind, crName); err != nil {
+		return fmt.Errorf("default annotation check failed: %w", err)
 	}
-
-	type check struct {
-		key   string
-		value string
-	}
-	checks := []check{
-		{key: "crossplane-kind", value: expectedKind},
-		{key: "crossplane-name", value: crName},
+	if err := assertObservedValue(observedAnnotations, resource.ExternalResourceTagKeyName, crName, crName); err != nil {
+		return fmt.Errorf("default annotation check failed: %w", err)
 	}
 	if providerConfigName != "" {
-		checks = append(checks, check{key: "crossplane-providerconfig", value: providerConfigName})
-	}
-
-	for _, c := range checks {
-		val, exists := observedLabels[c.key]
-		if !exists {
-			return fmt.Errorf("resource %s missing default label %q", crName, c.key)
+		if err := assertObservedValue(observedAnnotations, resource.ExternalResourceTagKeyProvider, providerConfigName, crName); err != nil {
+			return fmt.Errorf("default annotation check failed: %w", err)
 		}
-		if val == nil || *val != c.value {
-			actual := "<nil>"
-			if val != nil {
-				actual = *val
-			}
-			return fmt.Errorf("resource %s label %q: expected %q, got %q", crName, c.key, c.value, actual)
+	}
+	for _, k := range []string{resource.ExternalResourceTagKeyKind, resource.ExternalResourceTagKeyName, resource.ExternalResourceTagKeyProvider} {
+		if _, ok := observedLabels[k]; ok {
+			return fmt.Errorf("resource %s still has legacy default label %q", crName, k)
 		}
 	}
 	return nil
@@ -127,7 +113,7 @@ func assertObservedValue(observed map[string]*string, key, value, crName string)
 	return nil
 }
 
-// AssertLabelsAndAnnotations checks both user-provided and default Crossplane labels,
+// AssertLabelsAndAnnotations checks both user-provided labels and default Crossplane annotations,
 // plus user-provided annotations on an eligible CF resource.
 // expectedLabels/expectedAnnotations are the user-provided key-value pairs expected in observation.
 // expectedKind is the lowercase GVK string like "space.cloudfoundry.crossplane.io".
@@ -138,8 +124,8 @@ func AssertLabelsAndAnnotations(
 	expectedAnnotations map[string]string,
 	crName, expectedKind, providerConfigName string,
 ) error {
-	// Check default Crossplane labels
-	if err := AssertDefaultLabels(observedLabels, crName, expectedKind, providerConfigName); err != nil {
+	// Check default Crossplane annotations and absence of legacy labels
+	if err := AssertDefaultAnnotations(observedLabels, observedAnnotations, crName, expectedKind, providerConfigName); err != nil {
 		return err
 	}
 	// Check user-provided labels

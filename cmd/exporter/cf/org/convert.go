@@ -33,8 +33,8 @@ func convertOrgResource(org *res) *yaml.ResourceWithComment {
 				},
 				ForProvider: v1alpha1.OrgParameters{
 					ResourceMetadata: v1alpha1.ResourceMetadata{
-						Annotations: org.Metadata.Annotations,
-						Labels:      metadata.StripDefaultLabels(org.Metadata.Labels),
+						Annotations: metadata.StripDefaultTags(org.Metadata.Annotations),
+						Labels:      metadata.StripDefaultTags(org.Metadata.Labels),
 					},
 					Name:      org.Name,
 					Suspended: &org.Suspended,

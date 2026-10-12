@@ -217,10 +217,8 @@ func envVarsChanged(spec v1alpha1.AppParameters, appManifest *operation.AppManif
 }
 
 // DetectChanges determines what fields have changed between spec and status.
-// Metadata drift is computed from the full desired metadata, including
-// Crossplane-owned/default labels derived from the managed resource. Passing
-// mg ensures missing or stale default labels trigger the Update path that
-// re-applies them to the Cloud Foundry app.
+// Metadata drift uses BuildMetadata(mg, ...), so missing default annotations
+// and leftover legacy default labels trigger an Update.
 func DetectChanges(mg xpresource.Managed, spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (*ChangeDetection, error) {
 	changes := &ChangeDetection{
 		ChangedFields: make(map[string]struct{}),

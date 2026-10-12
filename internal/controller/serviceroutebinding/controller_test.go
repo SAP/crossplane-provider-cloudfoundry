@@ -110,7 +110,7 @@ func serviceRouteBinding(m ...modifier) *v1alpha1.ServiceRouteBinding {
 	return r
 }
 
-func withDefaultMetadataLabels() modifier {
+func withDefaultMetadata() modifier {
 	return func(r *v1alpha1.ServiceRouteBinding) {
 		r.SetGroupVersionKind(v1alpha1.ServiceRouteBinding_GroupVersionKind)
 	}
@@ -132,7 +132,7 @@ func TestObserve(t *testing.T) {
 		withExternalName(guid),
 		withRouteID(routeGUID),
 		withServiceInstanceID(serviceInstanceGUID),
-		withDefaultMetadataLabels(),
+		withDefaultMetadata(),
 	)
 
 	srbAvailable := serviceRouteBinding(
@@ -141,7 +141,7 @@ func TestObserve(t *testing.T) {
 		withRouteID(routeGUID),
 		withServiceInstanceID(serviceInstanceGUID),
 		withConditions(xpv1.Available(), xpv1.ReconcileSuccess()),
-		withDefaultMetadataLabels(),
+		withDefaultMetadata(),
 	)
 
 	srbInvalid := serviceRouteBinding(
@@ -164,7 +164,7 @@ func TestObserve(t *testing.T) {
 			SetServiceInstanceRef(serviceInstanceGUID).
 			SetRouteServiceURL(routeServiceURL).
 			SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).
-			SetLabels(map[string]*string{"crossplane-kind": ptr.To("serviceroutebinding.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-service-route-binding")}).
+			SetAnnotations(map[string]*string{"crossplane-kind": ptr.To("serviceroutebinding.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-service-route-binding")}).
 			ServiceRouteBinding
 	}
 
@@ -219,7 +219,7 @@ func TestObserve(t *testing.T) {
 				mg: serviceRouteBinding(withExternalName(guid),
 					withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
-					withDefaultMetadataLabels(),
+					withDefaultMetadata(),
 				),
 				obs: managed.ExternalObservation{},
 				err: fmt.Errorf(errGet, errBoom),
@@ -245,7 +245,7 @@ func TestObserve(t *testing.T) {
 				mg: serviceRouteBinding(withExternalName(guid),
 					withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
-					withDefaultMetadataLabels(),
+					withDefaultMetadata(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false},
 				err: nil,
@@ -297,7 +297,7 @@ func TestObserve(t *testing.T) {
 					withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
 					withConditions(xpv1.Unavailable().WithMessage("create in progress")),
-					withDefaultMetadataLabels(),
+					withDefaultMetadata(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -328,7 +328,7 @@ func TestObserve(t *testing.T) {
 					withRouteID(routeGUID),
 					withServiceInstanceID(serviceInstanceGUID),
 					withConditions(xpv1.Unavailable().WithMessage("create failed")),
-					withDefaultMetadataLabels(),
+					withDefaultMetadata(),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: true},
 				err: nil,
@@ -886,12 +886,26 @@ func TestHandleObservationState(t *testing.T) {
 			args: args{
 				binding: &fake.NewServiceRouteBinding().
 					SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).
-					SetLabels(map[string]*string{"crossplane-kind": ptr.To("serviceroutebinding.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-service-route-binding")}).
+					SetAnnotations(map[string]*string{"crossplane-kind": ptr.To("serviceroutebinding.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-service-route-binding")}).
 					ServiceRouteBinding,
-				cr: serviceRouteBinding(withDefaultMetadataLabels()),
+				cr: serviceRouteBinding(withDefaultMetadata()),
 			},
 			want: want{
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
+				err: nil,
+			},
+		},
+		"LegacyDefaultLabelsNotUpToDate": {
+			args: args{
+				binding: &fake.NewServiceRouteBinding().
+					SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).
+					SetLabels(map[string]*string{"crossplane-kind": ptr.To("serviceroutebinding.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-service-route-binding")}).
+					SetAnnotations(map[string]*string{"crossplane-kind": ptr.To("serviceroutebinding.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("my-service-route-binding")}).
+					ServiceRouteBinding,
+				cr: serviceRouteBinding(withDefaultMetadata()),
+			},
+			want: want{
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
 		},
