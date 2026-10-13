@@ -9,8 +9,8 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/test"
 	"github.com/crossplane-contrib/xp-testing/pkg/resources"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/klog/v2"
@@ -35,7 +35,7 @@ func waitForResource(res k8s.Object, cfg *envconf.Config, t *testing.T, opts ...
 
 	match := c.ResourceMatch(res, func(object k8s.Object) bool {
 		d := object.(resource.Conditioned)
-		condition := d.GetCondition(xpv1.Available().Type)
+		condition := d.GetCondition(xpv2.Available().Type)
 		result := condition.Status == v1.ConditionTrue
 		klog.V(4).Infof(
 			"Checking %s on %v. result=%v",

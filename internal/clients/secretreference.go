@@ -12,13 +12,13 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 // ExtractSecret extracts parameters/credentials from a secret reference.
 // If a key is specified, returns the raw value for that key.
 // If no key is specified, returns all secret data as nested JSON/YAML.
-func ExtractSecret(ctx context.Context, kube k8s.Client, sr *xpv1.SecretReference, key string) ([]byte, error) {
+func ExtractSecret(ctx context.Context, kube k8s.Client, sr *xpv2.SecretReference, key string) ([]byte, error) {
 	if sr == nil {
 		return nil, nil
 	}

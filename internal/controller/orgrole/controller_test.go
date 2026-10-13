@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -96,7 +96,7 @@ func withExternalName(name string) modifier {
 	}
 }
 
-func withConditions(c ...xpv1.Condition) modifier {
+func withConditions(c ...xpv2.Condition) modifier {
 	return func(i *v1alpha1.OrgRole) { i.Status.SetConditions(c...) }
 }
 
@@ -214,7 +214,7 @@ func TestObserve(t *testing.T) {
 					withUsername("user1"),
 					withType(v1alpha1.OrgManager),
 					withExternalName(guidRole),
-					withConditions(xpv1.Available())),
+					withConditions(xpv2.Available())),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: true},
 				err: nil,
 			},
@@ -271,7 +271,7 @@ func TestObserve(t *testing.T) {
 					withUsername("user1"),
 					withType(v1alpha1.OrgManager),
 					withExternalName(guidRole),
-					withConditions(xpv1.Available())),
+					withConditions(xpv2.Available())),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true, ResourceLateInitialized: false},
 				err: nil,
 			},
@@ -644,7 +644,7 @@ func TestDelete(t *testing.T) {
 					withOrigin("sap.ids"),
 					withExternalName(guidRole),
 					withID("my-id"),
-					withConditions(xpv1.Deleting()),
+					withConditions(xpv2.Deleting()),
 				),
 				obs: managed.ExternalDelete{},
 				err: nil,
@@ -679,7 +679,7 @@ func TestDelete(t *testing.T) {
 					withOrigin("sap.ids"),
 					withExternalName(guidRole),
 					withID("my-id"),
-					withConditions(xpv1.Deleting()),
+					withConditions(xpv2.Deleting()),
 				),
 				obs: managed.ExternalDelete{},
 				err: nil,
@@ -713,7 +713,7 @@ func TestDelete(t *testing.T) {
 					withOrigin("sap.ids"),
 					withExternalName(guidRole),
 					withID("my-id"),
-					withConditions(xpv1.Deleting()),
+					withConditions(xpv2.Deleting()),
 				),
 				obs: managed.ExternalDelete{},
 				err: errors.Wrap(errors.New("CF-ResourceNotDeleted: The role could not be deleted"), errDelete),

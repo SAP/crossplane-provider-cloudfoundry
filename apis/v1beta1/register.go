@@ -23,7 +23,7 @@ var (
 	SchemeGroupVersion = schema.GroupVersion{Group: Group, Version: Version}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
-	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
+	SchemeBuilder = runtime.NewSchemeBuilder(addGroupVersion)
 )
 
 // ProviderConfig type metadata.
@@ -47,14 +47,7 @@ var (
 	ProviderConfigUsageListGroupVersionKind = SchemeGroupVersion.WithKind(ProviderConfigUsageListKind)
 )
 
-// addKnownTypes registers the types of this group version with the scheme.
-func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(SchemeGroupVersion,
-		&ProviderConfig{},
-		&ProviderConfigList{},
-		&ProviderConfigUsage{},
-		&ProviderConfigUsageList{},
-	)
+func addGroupVersion(scheme *runtime.Scheme) error {
 	metav1.AddToGroupVersion(scheme, SchemeGroupVersion)
 	return nil
 }

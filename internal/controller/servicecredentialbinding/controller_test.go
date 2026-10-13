@@ -16,12 +16,12 @@ import (
 	"github.com/stretchr/testify/mock"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/utils/ptr"
@@ -64,7 +64,7 @@ func withServiceInstanceID(guid string) modifier {
 	}
 }
 
-func withConditions(c ...xpv1.Condition) modifier {
+func withConditions(c ...xpv2.Condition) modifier {
 	return func(i *v1alpha1.ServiceCredentialBinding) { i.Status.SetConditions(c...) }
 }
 
@@ -100,7 +100,7 @@ func serviceCredentialBinding(typ string, m ...modifier) *v1alpha1.ServiceCreden
 			Annotations: map[string]string{},
 		},
 		Spec: v1alpha1.ServiceCredentialBindingSpec{
-			ForProvider: v1alpha1.ServiceCredentialBindingParameters{Type: typ, Name: &name, ServiceInstanceRef: &xpv1.Reference{}},
+			ForProvider: v1alpha1.ServiceCredentialBindingParameters{Type: typ, Name: &name, ServiceInstanceRef: &xpv2.Reference{}},
 		},
 		Status: v1alpha1.ServiceCredentialBindingStatus{
 			AtProvider: v1alpha1.ServiceCredentialBindingObservation{},
@@ -762,7 +762,7 @@ func TestObserve(t *testing.T) {
 				}
 			}
 			if cr, ok := tc.args.mg.(*v1alpha1.ServiceCredentialBinding); ok {
-				readyMsg := cr.GetCondition(xpv1.TypeReady).Message
+				readyMsg := cr.GetCondition(xpv2.TypeReady).Message
 				switch {
 				case tc.want.err != nil:
 					// A failed Observe must not claim the resource is paused.
@@ -1087,9 +1087,9 @@ func TestPausedExternal(t *testing.T) {
 	if diff := cmp.Diff(managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, obs); diff != "" {
 		t.Errorf("Observe(...): -want, +got:\n%s", diff)
 	}
-	ready := cr.GetCondition(xpv1.TypeReady)
-	if ready.Reason != xpv1.ReasonUnavailable {
-		t.Errorf("Observe(...): want Ready reason %q, got %q", xpv1.ReasonUnavailable, ready.Reason)
+	ready := cr.GetCondition(xpv2.TypeReady)
+	if ready.Reason != xpv2.ReasonUnavailable {
+		t.Errorf("Observe(...): want Ready reason %q, got %q", xpv2.ReasonUnavailable, ready.Reason)
 	}
 	for _, s := range []string{MaxRetryExceededKey, "after 3 attempts", "with 3 fresh attempts"} {
 		if !strings.Contains(ready.Message, s) {
@@ -1563,7 +1563,7 @@ func TestDelete(t *testing.T) {
 	}
 
 	mgArg := serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName(guid), withStatus(guid))
-	mgWant := serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName(guid), withStatus(guid), withConditions(xpv1.Deleting()))
+	mgWant := serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName(guid), withStatus(guid), withConditions(xpv2.Deleting()))
 
 	cases := map[string]struct {
 		args       args
@@ -1588,7 +1588,7 @@ func TestDelete(t *testing.T) {
 				m := &fake.MockKeyRotator{}
 				// The object will have Deleting condition set when DeleteRetiredKeys is called
 				m.On("DeleteRetiredKeys", mock.Anything, mock.MatchedBy(func(cr *v1alpha1.ServiceCredentialBinding) bool {
-					return cr.GetCondition(xpv1.TypeReady).Reason == xpv1.ReasonDeleting
+					return cr.GetCondition(xpv2.TypeReady).Reason == xpv2.ReasonDeleting
 				})).Return(nil)
 				return m
 			},
@@ -1610,7 +1610,7 @@ func TestDelete(t *testing.T) {
 				m := &fake.MockKeyRotator{}
 				// The object will have Deleting condition set when DeleteRetiredKeys is called
 				m.On("DeleteRetiredKeys", mock.Anything, mock.MatchedBy(func(cr *v1alpha1.ServiceCredentialBinding) bool {
-					return cr.GetCondition(xpv1.TypeReady).Reason == xpv1.ReasonDeleting
+					return cr.GetCondition(xpv2.TypeReady).Reason == xpv2.ReasonDeleting
 				})).Return(nil)
 				return m
 			},
@@ -1632,7 +1632,7 @@ func TestDelete(t *testing.T) {
 				m := &fake.MockKeyRotator{}
 				// The object will have Deleting condition set when DeleteRetiredKeys is called
 				m.On("DeleteRetiredKeys", mock.Anything, mock.MatchedBy(func(cr *v1alpha1.ServiceCredentialBinding) bool {
-					return cr.GetCondition(xpv1.TypeReady).Reason == xpv1.ReasonDeleting
+					return cr.GetCondition(xpv2.TypeReady).Reason == xpv2.ReasonDeleting
 				})).Return(errCFClientError)
 				return m
 			},
@@ -1653,7 +1653,7 @@ func TestDelete(t *testing.T) {
 			keyRotator: func() *fake.MockKeyRotator {
 				m := &fake.MockKeyRotator{}
 				m.On("DeleteRetiredKeys", mock.Anything, mock.MatchedBy(func(cr *v1alpha1.ServiceCredentialBinding) bool {
-					return cr.GetCondition(xpv1.TypeReady).Reason == xpv1.ReasonDeleting
+					return cr.GetCondition(xpv2.TypeReady).Reason == xpv2.ReasonDeleting
 				})).Return(nil)
 				return m
 			},
@@ -1663,7 +1663,7 @@ func TestDelete(t *testing.T) {
 				mg: serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName("my-key-name"), withStatus(guid)),
 			},
 			want: want{
-				mg:  serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName("my-key-name"), withStatus(guid), withConditions(xpv1.Deleting())),
+				mg:  serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName("my-key-name"), withStatus(guid), withConditions(xpv2.Deleting())),
 				err: nil,
 			},
 			service: func() *fake.MockServiceCredentialBinding {
@@ -1675,7 +1675,7 @@ func TestDelete(t *testing.T) {
 			keyRotator: func() *fake.MockKeyRotator {
 				m := &fake.MockKeyRotator{}
 				m.On("DeleteRetiredKeys", mock.Anything, mock.MatchedBy(func(cr *v1alpha1.ServiceCredentialBinding) bool {
-					return cr.GetCondition(xpv1.TypeReady).Reason == xpv1.ReasonDeleting
+					return cr.GetCondition(xpv2.TypeReady).Reason == xpv2.ReasonDeleting
 				})).Return(nil)
 				return m
 			},
@@ -1685,7 +1685,7 @@ func TestDelete(t *testing.T) {
 				mg: serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName("my-key-name")),
 			},
 			want: want{
-				mg:  serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName("my-key-name"), withConditions(xpv1.Deleting())),
+				mg:  serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName("my-key-name"), withConditions(xpv2.Deleting())),
 				err: nil,
 			},
 			service: func() *fake.MockServiceCredentialBinding {
@@ -1696,7 +1696,7 @@ func TestDelete(t *testing.T) {
 			keyRotator: func() *fake.MockKeyRotator {
 				m := &fake.MockKeyRotator{}
 				m.On("DeleteRetiredKeys", mock.Anything, mock.MatchedBy(func(cr *v1alpha1.ServiceCredentialBinding) bool {
-					return cr.GetCondition(xpv1.TypeReady).Reason == xpv1.ReasonDeleting
+					return cr.GetCondition(xpv2.TypeReady).Reason == xpv2.ReasonDeleting
 				})).Return(nil)
 				return m
 			},
@@ -1760,7 +1760,7 @@ func withCreateAttempts(n int) modifier {
 
 func withProviderConfigRef(name string) modifier {
 	return func(r *v1alpha1.ServiceCredentialBinding) {
-		r.Spec.ProviderConfigReference = &xpv1.Reference{Name: name}
+		r.Spec.ProviderConfigReference = &xpv2.Reference{Name: name}
 	}
 }
 

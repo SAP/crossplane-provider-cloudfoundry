@@ -1,7 +1,7 @@
 package v1alpha1
 
 import (
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 // SpaceReference defines a reference to a Cloud Foundry space.
@@ -21,11 +21,11 @@ type SpaceReference struct {
 
 	// (Attributes) Reference to a `Space` CR to lookup the GUID of the Cloud Foundry space. Preferred if the referenced space is managed by Crossplane.
 	// +kubebuilder:validation:Optional
-	SpaceRef *v1.Reference `json:"spaceRef,omitempty"`
+	SpaceRef *xpv2.Reference `json:"spaceRef,omitempty"`
 
 	// (Attributes) Selector for a `Space` CR to lookup the GUID of the Cloud Foundry space. Preferred if the referenced space is managed by Crossplane.
 	// +kubebuilder:validation:Optional
-	SpaceSelector *v1.Selector `json:"spaceSelector,omitempty"`
+	SpaceSelector *xpv2.Selector `json:"spaceSelector,omitempty"`
 }
 
 // OrgReference is a struct that represents the reference to an Organization CR.
@@ -41,11 +41,11 @@ type OrgReference struct {
 
 	// (Attributes) Reference to an `Org` CR to retrieve the external GUID of the organization.
 	// +kubebuilder:validation:Optional
-	OrgRef *v1.Reference `json:"orgRef,omitempty"`
+	OrgRef *xpv2.Reference `json:"orgRef,omitempty"`
 
 	// (Attributes) Selector to an `Org` CR to retrieve the external GUID of the organization.
 	// +kubebuilder:validation:Optional
-	OrgSelector *v1.Selector `json:"orgSelector,omitempty"`
+	OrgSelector *xpv2.Selector `json:"orgSelector,omitempty"`
 }
 
 // DomainReference defines a reference to a Cloud Foundry Domain.
@@ -61,9 +61,9 @@ type DomainReference struct {
 
 	// (Attributes) Reference to a `domain` CR to lookup the GUID of the Cloud Foundry domain. Preferred if the referenced domain is managed by Crossplane.
 	// +kubebuilder:validation:Optional
-	DomainRef *v1.Reference `json:"domainRef,omitempty"`
+	DomainRef *xpv2.Reference `json:"domainRef,omitempty"`
 
 	// (Attributes) Selector for a `domain` CR to lookup the GUID of the Cloud Foundry domain. Preferred if the referenced domain is managed by Crossplane.
 	// +kubebuilder:validation:Optional
-	DomainSelector *v1.Selector `json:"domainSelector,omitempty"`
+	DomainSelector *xpv2.Selector `json:"domainSelector,omitempty"`
 }

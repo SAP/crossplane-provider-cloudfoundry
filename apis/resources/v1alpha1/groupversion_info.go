@@ -26,44 +26,13 @@ var (
 	CRDGroupVersion = schema.GroupVersion{Group: CRDGroup, Version: CRDVersion}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
-	SchemeBuilder = runtime.NewSchemeBuilder(addKnownTypes)
+	SchemeBuilder = runtime.NewSchemeBuilder(addGroupVersion)
 
 	// AddToScheme adds the types in this group-version to the given scheme.
 	AddToScheme = SchemeBuilder.AddToScheme
 )
 
-// addKnownTypes registers the types of this group version with the scheme.
-func addKnownTypes(scheme *runtime.Scheme) error {
-	scheme.AddKnownTypes(CRDGroupVersion,
-		&App{},
-		&AppList{},
-		&Domain{},
-		&DomainList{},
-		&Organization{},
-		&OrganizationList{},
-		&OrgMembers{},
-		&OrgMembersList{},
-		&OrgQuota{},
-		&OrgQuotaList{},
-		&OrgRole{},
-		&OrgRoleList{},
-		&Route{},
-		&RouteList{},
-		&ServiceCredentialBinding{},
-		&ServiceCredentialBindingList{},
-		&ServiceInstance{},
-		&ServiceInstanceList{},
-		&ServiceRouteBinding{},
-		&ServiceRouteBindingList{},
-		&SpaceQuota{},
-		&SpaceQuotaList{},
-		&Space{},
-		&SpaceList{},
-		&SpaceMembers{},
-		&SpaceMembersList{},
-		&SpaceRole{},
-		&SpaceRoleList{},
-	)
+func addGroupVersion(scheme *runtime.Scheme) error {
 	metav1.AddToGroupVersion(scheme, CRDGroupVersion)
 	return nil
 }
