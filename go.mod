@@ -10,7 +10,7 @@ require (
 	github.com/crossplane/crossplane-runtime/v2 v2.4.2
 	github.com/crossplane/crossplane-tools v0.0.0-20260719180100-659f1dc036c5
 	github.com/crossplane/crossplane/apis/v2 v2.4.2
-	github.com/docker/cli v29.8.2+incompatible
+	github.com/docker/cli v29.9.0+incompatible
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/nsf/jsondiff v0.0.0-20260207060731-8e8d90c4c0ac
