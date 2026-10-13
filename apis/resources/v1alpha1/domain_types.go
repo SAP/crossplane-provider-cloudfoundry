@@ -6,9 +6,10 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type DomainObservation struct {
@@ -80,14 +81,14 @@ type DomainParameters struct {
 
 // DomainSpec defines the desired state of Domain
 type DomainSpec struct {
-	v1.ResourceSpec `json:",inline"`
-	ForProvider     DomainParameters `json:"forProvider"`
+	xpv2.ClusterManagedResourceSpec `json:",inline"`
+	ForProvider                     DomainParameters `json:"forProvider"`
 }
 
 // DomainStatus defines the observed state of Domain.
 type DomainStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        DomainObservation `json:"atProvider,omitempty"`
+	xpv2.ManagedResourceStatus `json:",inline"`
+	AtProvider                 DomainObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -133,10 +134,6 @@ var (
 	Domain_GroupVersionKind = CRDGroupVersion.WithKind(Domain_Kind)
 )
 
-func init() {
-	SchemeBuilder.Register(&Domain{}, &DomainList{})
-}
-
 // GetID returns the ID of the domain
 func (d *Domain) GetID() string {
 	if d.Status.AtProvider.ID != nil {
@@ -148,4 +145,11 @@ func (d *Domain) GetID() string {
 // GetOrgRef returns the OrgReference of the domain. Implements OrgScoped interface.
 func (d *Domain) GetOrgRef() *OrgReference {
 	return &d.Spec.ForProvider.OrgReference
+}
+
+func init() {
+	SchemeBuilder.Register(func(scheme *runtime.Scheme) error {
+		scheme.AddKnownTypes(CRDGroupVersion, &Domain{}, &DomainList{})
+		return nil
+	})
 }

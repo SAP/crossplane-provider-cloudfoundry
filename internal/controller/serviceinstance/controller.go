@@ -6,13 +6,14 @@ import (
 	"crypto/sha256"
 	"time"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/nsf/jsondiff"
 	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
@@ -173,7 +174,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	switch r.LastOperation.State {
 	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
 		// Set the CR to unavailable and signal that the reconciler should not update the resource
-		cr.SetConditions(xpv1.Unavailable().WithMessage(r.LastOperation.Description))
+		cr.SetConditions(xpv2.Unavailable().WithMessage(r.LastOperation.Description))
 		return managed.ExternalObservation{
 			ResourceExists:   true,
 			ResourceUpToDate: true, // Set to true so that the reconciler do not schedule another update while the last operation is in progress
@@ -181,7 +182,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	// If the last operation failed, set the CR to unavailable and signal that the reconciler should retry the last operation
 	case v1alpha1.LastOperationFailed:
 		// If the last operation failed, set the CR to unavailable and signal that the reconciler should retry the last operation
-		cr.SetConditions(xpv1.Unavailable().WithMessage(r.LastOperation.Description))
+		cr.SetConditions(xpv2.Unavailable().WithMessage(r.LastOperation.Description))
 		return managed.ExternalObservation{
 			ResourceExists:   r.LastOperation.Type != v1alpha1.LastOperationCreate, // set to false when the last operation is create, hence the reconciler will retry create
 			ResourceUpToDate: r.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
@@ -189,24 +190,15 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	case v1alpha1.LastOperationSucceeded, "":
 		// If the last operation succeeded, set the CR to available
 		// Empty state is treated as succeeded (happens with user-provided services that have no async operations)
-		cr.SetConditions(xpv1.Available())
+		cr.SetConditions(xpv2.Available())
 		var credentialsUpToDate bool
 		desiredCredentials, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
 		if err != nil {
 			return managed.ExternalObservation{}, errors.Wrap(err, errSecret)
 		}
-		// If parameter drift detection is enable, get actual credentials from the service instance
-		if cr.Spec.EnableParameterDriftDetection {
-			// Get the parameters of the service instance for drift detection
-			cred, err := c.serviceinstance.GetServiceCredentials(ctx, r)
-			if err != nil {
-				return managed.ExternalObservation{ResourceExists: true}, errors.Wrap(err, errGetParameters)
-			}
-			cr.Status.AtProvider.Credentials = iSha256(cred)
-			credentialsUpToDate = jsonContain(cred, desiredCredentials)
-		} else {
-			desiredHash := iSha256(desiredCredentials)
-			credentialsUpToDate = bytes.Equal(desiredHash, cr.Status.AtProvider.Credentials)
+		credentialsUpToDate, err = c.credentialsUpToDate(ctx, cr, r, desiredCredentials)
+		if err != nil {
+			return managed.ExternalObservation{ResourceExists: true}, err
 		}
 		// Check if the credentials in the spec match the credentials in the external resource
 		upToDate := credentialsUpToDate && serviceinstance.IsUpToDate(cr, &cr.Spec.ForProvider, r)
@@ -223,7 +215,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: upToDate}, nil
 	default:
 		// should never reach here
-		cr.SetConditions(xpv1.Unavailable().WithMessage(r.LastOperation.Description))
+		cr.SetConditions(xpv2.Unavailable().WithMessage(r.LastOperation.Description))
 		// If the last operation is unknown, error out
 		return managed.ExternalObservation{}, errors.New("unknown last operation state")
 	}
@@ -250,7 +242,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		}
 	}
 
-	cr.SetConditions(xpv1.Creating())
+	cr.SetConditions(xpv2.Creating())
 
 	// Extract the parameters or credentials from the spec as a json.RawMessage
 	creds, err := extractCredentialSpec(ctx, c.kube, cr.Spec.ForProvider)
@@ -316,7 +308,12 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalUpdate{}, errors.Wrap(err, errSecret)
 	}
 
-	if _, err := c.serviceinstance.Update(ctx, guid, cr, &cr.Spec.ForProvider, creds); err != nil {
+	sendCreds, err := c.parametersToSend(ctx, cr, guid, creds)
+	if err != nil {
+		return managed.ExternalUpdate{}, err
+	}
+
+	if _, err := c.serviceinstance.Update(ctx, guid, cr, &cr.Spec.ForProvider, sendCreds); err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdate)
 	}
 
@@ -337,13 +334,33 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	return managed.ExternalUpdate{}, nil
 }
 
+// parametersToSend returns nil when a managed instance's parameters are already
+// applied, so a metadata-only change stays a synchronous PATCH. A failed update
+// is always retried with its parameters.
+func (c *external) parametersToSend(ctx context.Context, cr *v1alpha1.ServiceInstance, guid string, creds []byte) ([]byte, error) {
+	if cr.Spec.ForProvider.Type != v1alpha1.ManagedService {
+		return creds, nil
+	}
+	last := cr.Status.AtProvider.LastOperation
+	if last.Type == v1alpha1.LastOperationUpdate && last.State == v1alpha1.LastOperationFailed {
+		return creds, nil
+	}
+	// GetServiceCredentials only needs the GUID and type.
+	r := &cfresource.ServiceInstance{Resource: cfresource.Resource{GUID: guid}, Type: string(v1alpha1.ManagedService)}
+	upToDate, err := c.credentialsUpToDate(ctx, cr, r, creds)
+	if err != nil || upToDate {
+		return nil, err
+	}
+	return creds, nil
+}
+
 // Delete attempts to delete the external resource.
 func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.ExternalDelete, error) {
 	cr, ok := mg.(*v1alpha1.ServiceInstance)
 	if !ok {
 		return managed.ExternalDelete{}, errors.New(errWrongCRType)
 	}
-	cr.SetConditions(xpv1.Deleting())
+	cr.SetConditions(xpv2.Deleting())
 
 	// ADR: the external-name (GUID) identifies the resource to delete; nothing to do if unset.
 	guid := meta.GetExternalName(cr)
@@ -360,6 +377,20 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalDelete{}, errors.Wrap(err, errDelete)
 	}
 	return managed.ExternalDelete{}, nil
+}
+
+// credentialsUpToDate compares desired against the actual values from r when
+// drift detection is on (recording their hash), else against the stored hash.
+func (c *external) credentialsUpToDate(ctx context.Context, cr *v1alpha1.ServiceInstance, r *cfresource.ServiceInstance, desired []byte) (bool, error) {
+	if !cr.Spec.EnableParameterDriftDetection {
+		return bytes.Equal(iSha256(desired), cr.Status.AtProvider.Credentials), nil
+	}
+	actual, err := c.serviceinstance.GetServiceCredentials(ctx, r)
+	if err != nil {
+		return false, errors.Wrap(err, errGetParameters)
+	}
+	cr.Status.AtProvider.Credentials = iSha256(actual)
+	return jsonContain(actual, desired), nil
 }
 
 // extractCredentialSpec returns the parameters or credentials from the spec

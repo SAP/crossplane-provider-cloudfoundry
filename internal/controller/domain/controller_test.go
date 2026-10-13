@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -51,7 +51,7 @@ func withName(name string) modifier {
 	}
 }
 
-func withConditions(c ...xpv1.Condition) modifier {
+func withConditions(c ...xpv2.Condition) modifier {
 	return func(i *v1alpha1.Domain) { i.Status.SetConditions(c...) }
 }
 
@@ -143,7 +143,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeDomain(withName(name)),
 			},
 			want: want{
-				mg:  fakeDomain(withName(name), withExternalName(guid), withConditions(xpv1.Available())),
+				mg:  fakeDomain(withName(name), withExternalName(guid), withConditions(xpv2.Available())),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false, ResourceLateInitialized: true},
 				err: nil,
 			},
@@ -197,7 +197,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeDomain(withExternalName(guid), withName(name)),
 			},
 			want: want{
-				mg:  fakeDomain(withExternalName(guid), withName(name), withConditions(xpv1.Available())),
+				mg:  fakeDomain(withExternalName(guid), withName(name), withConditions(xpv2.Available())),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
 			},
@@ -313,7 +313,7 @@ func TestCreate(t *testing.T) {
 				mg: fakeDomain(withName(name)),
 			},
 			want: want{
-				mg: fakeDomain(withName(name), withExternalName(guid), withConditions(xpv1.Creating())),
+				mg: fakeDomain(withName(name), withExternalName(guid), withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{
 					ConnectionDetails: managed.ConnectionDetails{},
 				},
@@ -332,7 +332,7 @@ func TestCreate(t *testing.T) {
 				mg: fakeDomain(withName(name)),
 			},
 			want: want{
-				mg:  fakeDomain(withName(name), withConditions(xpv1.Creating())),
+				mg:  fakeDomain(withName(name), withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -487,7 +487,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeDomain(withExternalName(guid), withID(guid)),
 			},
 			want: want{
-				mg:  fakeDomain(withExternalName(guid), withID(guid), withConditions(xpv1.Deleting())),
+				mg:  fakeDomain(withExternalName(guid), withID(guid), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -504,7 +504,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeDomain(withExternalName(guid), withID(guid)),
 			},
 			want: want{
-				mg:  fakeDomain(withExternalName(guid), withID(guid), withConditions(xpv1.Deleting())),
+				mg:  fakeDomain(withExternalName(guid), withID(guid), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -521,7 +521,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeDomain(withName(name)),
 			},
 			want: want{
-				mg:  fakeDomain(withName(name), withConditions(xpv1.Deleting())),
+				mg:  fakeDomain(withName(name), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -534,7 +534,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeDomain(withExternalName(guid), withID(guid)),
 			},
 			want: want{
-				mg:  fakeDomain(withExternalName(guid), withID(guid), withConditions(xpv1.Deleting())),
+				mg:  fakeDomain(withExternalName(guid), withID(guid), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: errors.Wrap(errBoom, errDelete),
 			},

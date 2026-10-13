@@ -6,10 +6,12 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
+	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -381,7 +383,15 @@ func TestGenerateObservation(t *testing.T) {
 }
 
 func TestIsUpToDate(t *testing.T) {
+	mg := &v1alpha1.Domain{ObjectMeta: metav1.ObjectMeta{Name: "test-domain"}}
+	mg.SetGroupVersionKind(v1alpha1.Domain_GroupVersionKind)
+	defaultTags := map[string]*string{}
+	for k, v := range xpresource.GetExternalTags(mg) {
+		defaultTags[k] = ptr.To(v)
+	}
+
 	cases := map[string]struct {
+		mg       xpresource.Managed
 		spec     v1alpha1.DomainParameters
 		observed *resource.Domain
 		want     bool
@@ -447,11 +457,29 @@ func TestIsUpToDate(t *testing.T) {
 			observed: &resource.Domain{Name: "test.domain.com"},
 			want:     true,
 		},
+		"DefaultAnnotationsWithLegacyLabels": {
+			mg:   mg,
+			spec: v1alpha1.DomainParameters{Name: "test.domain.com"},
+			observed: &resource.Domain{
+				Name:     "test.domain.com",
+				Metadata: &resource.Metadata{Labels: defaultTags, Annotations: defaultTags},
+			},
+			want: false,
+		},
+		"DefaultAnnotationsOnly": {
+			mg:   mg,
+			spec: v1alpha1.DomainParameters{Name: "test.domain.com"},
+			observed: &resource.Domain{
+				Name:     "test.domain.com",
+				Metadata: &resource.Metadata{Annotations: defaultTags},
+			},
+			want: true,
+		},
 	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			result := IsUpToDate(nil, tc.spec, tc.observed)
+			result := IsUpToDate(tc.mg, tc.spec, tc.observed)
 			if result != tc.want {
 				t.Errorf("IsUpToDate(...): want %v, got %v", tc.want, result)
 			}

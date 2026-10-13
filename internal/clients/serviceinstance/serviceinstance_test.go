@@ -568,6 +568,84 @@ func TestIsUpToDate_Metadata(t *testing.T) {
 			},
 			want: false,
 		},
+		"Tags match same order": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("name"),
+				Type: v1alpha1.ManagedService,
+				Tags: []*string{ptr.To("tag1"), ptr.To("tag2"), ptr.To("tag3")},
+			},
+			observed: &resource.ServiceInstance{
+				Name: "name",
+				Type: "managed",
+				Tags: []string{"tag1", "tag2", "tag3"},
+			},
+			want: true,
+		},
+		"Tags match different order": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("name"),
+				Type: v1alpha1.ManagedService,
+				Tags: []*string{ptr.To("tag2"), ptr.To("tag3"), ptr.To("tag1")},
+			},
+			observed: &resource.ServiceInstance{
+				Name: "name",
+				Type: "managed",
+				Tags: []string{"tag1", "tag2", "tag3"},
+			},
+			want: true,
+		},
+		"Tags drift nil vs non-empty": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("name"),
+				Type: v1alpha1.ManagedService,
+				Tags: nil,
+			},
+			observed: &resource.ServiceInstance{
+				Name: "name",
+				Type: "managed",
+				Tags: []string{"tag"},
+			},
+			want: false,
+		},
+		"Tags match nil vs empty": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("name"),
+				Type: v1alpha1.ManagedService,
+				Tags: nil,
+			},
+			observed: &resource.ServiceInstance{
+				Name: "name",
+				Type: "managed",
+				Tags: []string{},
+			},
+			want: true,
+		},
+		"Tags match empty tags": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("name"),
+				Type: v1alpha1.ManagedService,
+				Tags: []*string{},
+			},
+			observed: &resource.ServiceInstance{
+				Name: "name",
+				Type: "managed",
+				Tags: []string{},
+			},
+			want: true,
+		},
+		"Tags drift empty vs observed non-empty": {
+			in: &v1alpha1.ServiceInstanceParameters{
+				Name: ptr.To("name"),
+				Type: v1alpha1.ManagedService,
+				Tags: []*string{},
+			},
+			observed: &resource.ServiceInstance{
+				Name: "name",
+				Type: "managed",
+				Tags: []string{"tag"},
+			},
+			want: false,
+		},
 	}
 
 	for n, tc := range cases {

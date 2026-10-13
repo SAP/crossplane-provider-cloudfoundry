@@ -3,13 +3,13 @@ package orgquota
 import (
 	"context"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/pkg/errors"
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
@@ -153,7 +153,7 @@ func (e *externalClient) Observe(ctx context.Context, res resource.Managed) (man
 		return managed.ExternalObservation{}, errors.Wrap(err, errGet)
 	}
 
-	managedOrgQuota.SetConditions(xpv1.Available())
+	managedOrgQuota.SetConditions(xpv2.Available())
 	lateInitialized := orgquota.LateInitialize(&managedOrgQuota.Spec.ForProvider, externalOrgQuota)
 	managedOrgQuota.Status.AtProvider = orgquota.GenerateObservation(externalOrgQuota)
 
@@ -173,7 +173,7 @@ func (e *externalClient) Create(ctx context.Context, res resource.Managed) (mana
 		return managed.ExternalCreation{}, errors.New(errNotOrgQuota)
 	}
 
-	managedOrgQuota.SetConditions(xpv1.Creating())
+	managedOrgQuota.SetConditions(xpv2.Creating())
 
 	externalOrgQuota, err := e.cloudFoundryClient.Create(ctx, orgquota.GenerateCreateOrUpdate(managedOrgQuota.Spec.ForProvider))
 	if err != nil {
@@ -209,7 +209,7 @@ func (e *externalClient) Delete(ctx context.Context, res resource.Managed) (mana
 	if !ok {
 		return managed.ExternalDelete{}, errors.New(errNotOrgQuota)
 	}
-	managedOrgQuota.SetConditions(xpv1.Deleting())
+	managedOrgQuota.SetConditions(xpv2.Deleting())
 
 	if meta.GetExternalName(managedOrgQuota) == "" {
 		return managed.ExternalDelete{}, nil

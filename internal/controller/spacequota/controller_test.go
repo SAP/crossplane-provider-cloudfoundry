@@ -7,11 +7,11 @@ import (
 	"time"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
@@ -63,7 +63,7 @@ func withSpace(guid string) modifier {
 	}
 }
 
-func withConditions(c ...xpv1.Condition) modifier {
+func withConditions(c ...xpv2.Condition) modifier {
 	return func(i *v1alpha1.SpaceQuota) { i.Status.SetConditions(c...) }
 }
 
@@ -214,7 +214,7 @@ func TestObserve(t *testing.T) {
 					withName(name),
 					withOrg(differentGuid),
 					withSpace(guid),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: false, ResourceUpToDate: false},
 				err: errors.Wrap(errors.New(errUpdateOrg), "isUpToDate check failed"),
@@ -246,7 +246,7 @@ func TestObserve(t *testing.T) {
 					withName(name),
 					withOrg(guid),
 					withSpace(differentGuid),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
 				err: nil,
@@ -275,7 +275,7 @@ func TestObserve(t *testing.T) {
 					withExternalName(guid),
 					withName(name),
 					withOrg(guid),
-					withConditions(xpv1.Available()),
+					withConditions(xpv2.Available()),
 				),
 				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true},
 				err: nil,
@@ -351,7 +351,7 @@ func TestCreate(t *testing.T) {
 				mg: fakeSpaceQuota(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeSpaceQuota(withExternalName(guid), withConditions(xpv1.Creating())),
+				mg:  fakeSpaceQuota(withExternalName(guid), withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{},
 				err: nil,
 			},
@@ -369,7 +369,7 @@ func TestCreate(t *testing.T) {
 				mg: fakeSpaceQuota(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeSpaceQuota(withExternalName(guid), withConditions(xpv1.Creating())),
+				mg:  fakeSpaceQuota(withExternalName(guid), withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -388,7 +388,7 @@ func TestCreate(t *testing.T) {
 				mg: fakeSpaceQuota(withName(name)),
 			},
 			want: want{
-				mg:  fakeSpaceQuota(withName(name), withConditions(xpv1.Creating())),
+				mg:  fakeSpaceQuota(withName(name), withConditions(xpv2.Creating())),
 				obs: managed.ExternalCreation{},
 				err: errors.Wrap(errBoom, errCreate),
 			},
@@ -584,7 +584,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeSpaceQuota(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeSpaceQuota(withExternalName(guid), withConditions(xpv1.Deleting())),
+				mg:  fakeSpaceQuota(withExternalName(guid), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -602,7 +602,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeSpaceQuota(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeSpaceQuota(withExternalName(guid), withConditions(xpv1.Deleting())),
+				mg:  fakeSpaceQuota(withExternalName(guid), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -620,7 +620,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeSpaceQuota(),
 			},
 			want: want{
-				mg:  fakeSpaceQuota(withConditions(xpv1.Deleting())),
+				mg:  fakeSpaceQuota(withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: errors.New(errDelete + ": " + errExternalName),
 			},

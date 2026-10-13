@@ -13,6 +13,10 @@ import (
 // MockServiceInstance mocks ServiceInstance interfaces
 type MockServiceInstance struct {
 	mock.Mock
+	// ManagedUpdate and UserProvidedUpdate are the last requests passed to
+	// UpdateManaged and UpdateUserProvided.
+	ManagedUpdate      *resource.ServiceInstanceManagedUpdate
+	UserProvidedUpdate *resource.ServiceInstanceUserProvidedUpdate
 }
 
 // Get mocks ServiceInstance.Get
@@ -53,12 +57,14 @@ func (m *MockServiceInstance) CreateUserProvided(ctx context.Context, opt *resou
 
 // UpdateManaged mocks ServiceInstance.UpdateManaged
 func (m *MockServiceInstance) UpdateManaged(ctx context.Context, guid string, opt *resource.ServiceInstanceManagedUpdate) (string, *resource.ServiceInstance, error) {
+	m.ManagedUpdate = opt
 	args := m.Called(guid)
 	return args.String(0), nil, args.Error(1)
 }
 
 // UpdateUserProvided mocks ServiceInstance.UpdateUserProvided
 func (m *MockServiceInstance) UpdateUserProvided(ctx context.Context, guid string, opt *resource.ServiceInstanceUserProvidedUpdate) (*resource.ServiceInstance, error) {
+	m.UserProvidedUpdate = opt
 	args := m.Called(guid)
 	return args.Get(0).(*resource.ServiceInstance), args.Error(1)
 }

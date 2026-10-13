@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/mock"
@@ -75,7 +75,7 @@ func withHost(host string) modifier {
 	}
 }
 
-func withConditions(c ...xpv1.Condition) modifier {
+func withConditions(c ...xpv2.Condition) modifier {
 	return func(r *v1alpha1.Route) { r.Status.SetConditions(c...) }
 }
 
@@ -113,13 +113,13 @@ func fakeRouteObservation(id string) *v1alpha1.RouteObservation {
 	r := &v1alpha1.RouteObservation{
 		Resource: res,
 		ResourceMetadata: v1alpha1.ResourceMetadata{
-			Labels: map[string]*string{"crossplane-kind": ptr.To("route.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("test-route")},
+			Annotations: map[string]*string{"crossplane-kind": ptr.To("route.cloudfoundry.crossplane.io"), "crossplane-name": ptr.To("test-route")},
 		},
 	}
 	return r
 }
 
-func withDefaultMetadataLabels() modifier {
+func withDefaultMetadata() modifier {
 	return func(r *v1alpha1.Route) {
 		r.SetGroupVersionKind(v1alpha1.RouteGroupVersionKind)
 	}
@@ -178,7 +178,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeRoute(
 					withExternalName(guid),
 					withHost(name),
-					withDefaultMetadataLabels(),
+					withDefaultMetadata(),
 				),
 			},
 			want: want{
@@ -196,7 +196,7 @@ func TestObserve(t *testing.T) {
 		},
 		"Adopt and set external-name ": {
 			args: args{
-				mg: fakeRoute(withHost(name), withDefaultMetadataLabels()),
+				mg: fakeRoute(withHost(name), withDefaultMetadata()),
 			},
 			want: want{
 				obs: managed.ExternalObservation{
@@ -238,7 +238,7 @@ func TestObserve(t *testing.T) {
 				mg: fakeRoute(
 					withExternalName(guid),
 					withHost(name),
-					withDefaultMetadataLabels(),
+					withDefaultMetadata(),
 				),
 			},
 			want: want{
@@ -249,6 +249,32 @@ func TestObserve(t *testing.T) {
 				m := &Mock{}
 				m.On("GetRouteByGUID", guid).Return(
 					fakeRouteObservation(guid), true, nil,
+				)
+				return m
+			},
+		},
+		"LegacyDefaultLabelsNotUpToDate": {
+			args: args{
+				mg: fakeRoute(
+					withExternalName(guid),
+					withHost(name),
+					withDefaultMetadata(),
+				),
+			},
+			want: want{
+				obs: managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: false},
+				err: nil,
+			},
+			service: func() *Mock {
+				legacy := map[string]*string{
+					"crossplane-kind": ptr.To("route.cloudfoundry.crossplane.io"),
+					"crossplane-name": ptr.To("test-route"),
+				}
+				obs := fakeRouteObservation(guid)
+				obs.ResourceMetadata = v1alpha1.ResourceMetadata{Labels: legacy, Annotations: legacy}
+				m := &Mock{}
+				m.On("GetRouteByGUID", guid).Return(
+					obs, true, nil,
 				)
 				return m
 			},
@@ -424,7 +450,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeRoute(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeRoute(withExternalName(guid), withConditions(xpv1.Deleting())),
+				mg:  fakeRoute(withExternalName(guid), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -439,7 +465,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeRoute(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeRoute(withExternalName(guid), withConditions(xpv1.Deleting())),
+				mg:  fakeRoute(withExternalName(guid), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},
@@ -454,7 +480,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeRoute(withExternalName(guid)),
 			},
 			want: want{
-				mg:  fakeRoute(withExternalName(guid), withConditions(xpv1.Deleting())),
+				mg:  fakeRoute(withExternalName(guid), withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: errors.Wrap(errBoom, errDelete),
 			},
@@ -469,7 +495,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeRoute(),
 			},
 			want: want{
-				mg:  fakeRoute(withConditions(xpv1.Deleting())),
+				mg:  fakeRoute(withConditions(xpv2.Deleting())),
 				obs: managed.ExternalDelete{},
 				err: nil,
 			},

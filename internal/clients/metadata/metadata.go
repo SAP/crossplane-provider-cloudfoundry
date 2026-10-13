@@ -7,37 +7,30 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 )
 
-// BuildMetadata constructs a *cfresource.Metadata for a Create or Update call
-// by merging Crossplane default labels with user-specified labels and
-// annotations.
+// BuildMetadata builds the CF metadata for a Create or Update call.
 //
-// Default labels are obtained from resource.GetExternalTags(mg), which returns
-// the three canonical keys (crossplane-kind, crossplane-name,
-// crossplane-providerconfig). User-provided labels take precedence over
-// defaults when keys collide.
+// The Crossplane default tags (resource.GetExternalTags) are written as
+// annotations because CF caps label values at 63 characters. Older provider
+// versions wrote them as labels, so each default key not set in userLabels
+// gets a nil label marker: Update removes the legacy label, and
+// IsMetadataUpToDate reports drift until it is gone.
 //
-// The mg parameter must implement resource.Managed so that GetExternalTags can
-// extract the GVK, name, and ProviderConfig reference.
-//
-// Nil pointer values in userLabels and userAnnotations are treated as deletion
-// markers per CF API convention: they are passed through to the resulting
-// Metadata via RemoveLabel/RemoveAnnotation (setting the key's value to nil).
-// On Create calls, nil values are no-ops (you cannot delete a label that does
-// not yet exist). On Update calls, include nil values for keys you want to
-// explicitly remove from the CF resource.
+// User labels and annotations override defaults. Nil values are CF deletion
+// markers (no-ops on Create). A nil mg applies only the user maps.
 func BuildMetadata(mg resource.Managed, userLabels, userAnnotations map[string]*string) *cfresource.Metadata {
-	var tags map[string]string
-	if mg != nil {
-		tags = resource.GetExternalTags(mg)
-	}
 	m := cfresource.NewMetadata()
 
-	// Set default labels from Crossplane (map[string]string -> map[string]*string)
-	for k, v := range tags {
-		m.SetLabel("", k, v)
+	if mg != nil {
+		for k, v := range resource.GetExternalTags(mg) {
+			m.SetAnnotation("", k, v)
+		}
+		for _, k := range defaultTagKeys {
+			if _, ok := userLabels[k]; !ok {
+				m.RemoveLabel("", k)
+			}
+		}
 	}
 
-	// Merge user labels (override defaults on collision)
 	for k, v := range userLabels {
 		if v == nil {
 			m.RemoveLabel("", k)
@@ -46,7 +39,6 @@ func BuildMetadata(mg resource.Managed, userLabels, userAnnotations map[string]*
 		m.SetLabel("", k, *v)
 	}
 
-	// Set user annotations
 	for k, v := range userAnnotations {
 		if v == nil {
 			m.RemoveAnnotation("", k)
@@ -56,6 +48,14 @@ func BuildMetadata(mg resource.Managed, userLabels, userAnnotations map[string]*
 	}
 
 	return m
+}
+
+// defaultTagKeys are the Crossplane default tag keys, written as annotations
+// and removed as legacy labels.
+var defaultTagKeys = []string{
+	resource.ExternalResourceTagKeyKind,
+	resource.ExternalResourceTagKeyName,
+	resource.ExternalResourceTagKeyProvider,
 }
 
 // MetadataMapEqual reports whether two metadata maps (labels or annotations)
@@ -123,8 +123,8 @@ func MetadataMapContains(desired, actual map[string]*string) bool {
 // other actors).
 //
 // Callers should pass the full desired set (from BuildMetadata, which
-// includes Crossplane default labels) as desiredLabels/desiredAnnotations,
-// not just the CR spec's user labels.
+// includes Crossplane default annotations and legacy-label removal markers)
+// as desiredLabels/desiredAnnotations, not just the CR spec's user labels.
 func IsMetadataUpToDate(desiredLabels, desiredAnnotations, actualLabels, actualAnnotations map[string]*string) bool {
 	return MetadataMapContains(desiredLabels, actualLabels) && MetadataMapContains(desiredAnnotations, actualAnnotations)
 }
@@ -182,11 +182,8 @@ func diffMap(desired, actual map[string]*string) map[string]*string {
 // include it in the desired map with a nil pointer value. For example, to
 // remove label "env" from a CF resource, set desiredLabels["env"] = nil.
 //
-// Important: BuildMetadata always includes Crossplane default labels
-// (crossplane-kind, crossplane-name, crossplane-providerconfig) in the
-// desired set, so they are automatically maintained on every Update. Callers
-// must ensure desiredLabels and desiredAnnotations come from BuildMetadata
-// (or an equivalent merge) to avoid accidentally reverting default labels.
+// Important: pass desired maps from BuildMetadata so the default annotations
+// and legacy-label removal markers are kept.
 func DiffMetadata(desiredLabels, desiredAnnotations, actualLabels, actualAnnotations map[string]*string) *cfresource.Metadata {
 	labels := diffMap(desiredLabels, actualLabels)
 	annotations := diffMap(desiredAnnotations, actualAnnotations)
@@ -198,28 +195,4 @@ func DiffMetadata(desiredLabels, desiredAnnotations, actualLabels, actualAnnotat
 	m.Labels = labels
 	m.Annotations = annotations
 	return m
-}
-
-// StripDefaultLabels removes Crossplane default label keys from a label map.
-// The default labels (crossplane-kind, crossplane-name, crossplane-providerconfig)
-// are infrastructure metadata computed by the controller from the CR identity.
-// They should not be late-initialized into spec.ForProvider.Labels because
-// the controller recomputes them on every reconcile via BuildMetadata.
-func StripDefaultLabels(labels map[string]*string) map[string]*string {
-	if labels == nil {
-		return nil
-	}
-	result := make(map[string]*string, len(labels))
-	for k, v := range labels {
-		if k == resource.ExternalResourceTagKeyKind ||
-			k == resource.ExternalResourceTagKeyName ||
-			k == resource.ExternalResourceTagKeyProvider {
-			continue
-		}
-		result[k] = v
-	}
-	if len(result) == 0 {
-		return nil
-	}
-	return result
 }

@@ -8,9 +8,10 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type SpaceRoleObservation struct {
@@ -56,14 +57,14 @@ type SpaceRoleParameters struct {
 
 // SpaceRoleSpec defines the desired state of SpaceRole
 type SpaceRoleSpec struct {
-	v1.ResourceSpec `json:",inline"`
-	ForProvider     SpaceRoleParameters `json:"forProvider"`
+	xpv2.ClusterManagedResourceSpec `json:",inline"`
+	ForProvider                     SpaceRoleParameters `json:"forProvider"`
 }
 
 // SpaceRoleStatus defines the observed state of SpaceRole.
 type SpaceRoleStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        SpaceRoleObservation `json:"atProvider,omitempty"`
+	xpv2.ManagedResourceStatus `json:",inline"`
+	AtProvider                 SpaceRoleObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -111,11 +112,14 @@ var (
 	SpaceRole_GroupVersionKind = CRDGroupVersion.WithKind(SpaceRole_Kind)
 )
 
-func init() {
-	SchemeBuilder.Register(&SpaceRole{}, &SpaceRoleList{})
-}
-
 // GetSpaceRef returns the reference to the space
 func (s *SpaceRole) GetSpaceRef() *SpaceReference {
 	return &s.Spec.ForProvider.SpaceReference
+}
+
+func init() {
+	SchemeBuilder.Register(func(scheme *runtime.Scheme) error {
+		scheme.AddKnownTypes(CRDGroupVersion, &SpaceRole{}, &SpaceRoleList{})
+		return nil
+	})
 }
