@@ -17,6 +17,8 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.12.1
 	github.com/vladimirvivien/gexe v0.5.0
+	golang.org/x/oauth2 v0.36.0
+	golang.org/x/sync v0.22.0
 	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.37.1
@@ -158,8 +160,6 @@ require (
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/mod v0.41.0 // indirect
 	golang.org/x/net v0.58.0 // indirect
-	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/term v0.45.0 // indirect
 	golang.org/x/text v0.41.0 // indirect
