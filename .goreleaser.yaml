@@ -6,6 +6,9 @@ builds:
   - id: binary-build
     env:
       - CGO_ENABLED=0
+      # FIPS 140-3: link the CMVP-certified Go Cryptographic Module (#5247) in
+      # approved mode, matching the container image build.
+      - GOFIPS140=certified
     mod_timestamp: "{{ .CommitTimestamp }}"
     main: ./cmd/provider
     flags:
