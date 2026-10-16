@@ -1,9 +1,7 @@
 package main
 
 import (
-	"crypto/fips140"
 	"fmt"
-	"os"
 
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/app"
 	_ "github.com/SAP/crossplane-provider-cloudfoundry/cmd/exporter/cf/org"
@@ -55,9 +53,6 @@ func (c cliConfig) CommandUse(*cli.ConfigSchema) string {
 }
 
 func main() {
-	// FIPS 140-3 runtime proof: with GOFIPS140 set at build time the binary links
-	// the CMVP-validated Go Cryptographic Module (#5247) in approved mode.
-	fmt.Fprintf(os.Stderr, "FIPS 140-3: enabled=%v module=%s\n", fips140.Enabled(), fips140.Version())
 	cli.Configuration.ConfiguratorCLI = cliConfig{cli.DefaultConfiguratorCLI{}}
 	cli.Configuration.ShortName = ShortName
 	cli.Configuration.ObservedSystem = observedSystem
