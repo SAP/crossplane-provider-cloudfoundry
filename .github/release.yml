@@ -1,21 +1,27 @@
+# Release notes configuration for GitHub's auto-generated release notes
+# (used by GoReleaser via changelog.use: github-native in .goreleaser.yaml).
+# Not a workflow. The release workflow lives in .github/workflows/release.yaml.
+#
+# Categories map to the repo's existing release-notes/* labels.
+# PRs without a matching label land in "Other changes".
 changelog:
   exclude:
     labels:
-      - ignore-for-release
+      - release-notes/ignore
   categories:
     - title: ⚠️ Breaking changes
       labels:
-        - breaking-change
-    - title: 🚀 Features
+        - release-notes/breaking-change
+    - title: 🚀 New features
       labels:
-        - enhancement
-        - feature
+        - release-notes/new-feature
     - title: 🐛 Bug fixes
       labels:
-        - bug
+        - release-notes/bugfix
     - title: 📦 Dependencies
       labels:
-        - dependencies
+        - release-notes/dependencies
     - title: 🔧 Other changes
       labels:
+        - release-notes/others
         - "*"
