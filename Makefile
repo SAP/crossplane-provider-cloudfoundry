@@ -41,6 +41,14 @@ GO_SUBDIRS += cmd internal apis
 GO111MODULE = on
 GOLANGCILINT_VERSION ?= 2.14.0
 GOTOOLCHAIN = local
+
+# FIPS 140-3: build with the Go Cryptographic Module (CMVP cert #5247) in approved
+# mode. `certified` links the latest CMVP-certified module (today v1.0.0; rolls
+# forward automatically once v1.26.0 certifies). Exported so it reaches every
+# `go build`/`go test` invocation in the shared build submodule. Override with
+# `GOFIPS140=off` only for local troubleshooting.
+export GOFIPS140 ?= certified
+
 -include build/makelib/golang.mk
 
 GO_LINT_ARGS := --timeout 10m0s --output.checkstyle.path=$(GO_LINT_OUTPUT)/checkstyle.xml
