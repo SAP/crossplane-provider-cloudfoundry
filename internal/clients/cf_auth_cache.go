@@ -145,11 +145,11 @@ func bootstrapCFAuth(ctx context.Context, url, email, password string) (*cfAuthE
 	// the request values but drops cancellation/deadline.
 	ctx = context.WithoutCancel(ctx)
 
+	transport := http.DefaultTransport.(*http.Transport).Clone()
+	transport.TLSClientConfig = &tls.Config{InsecureSkipVerify: true} //nolint:gosec // mirrors config.SkipTLSValidation(); making TLS verification configurable is tracked in #348
 	httpClient := &http.Client{
-		Timeout: bootstrapTimeout,
-		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true}, //nolint:gosec // mirrors config.SkipTLSValidation(); making TLS verification configurable is tracked in #348
-		},
+		Timeout:   bootstrapTimeout,
+		Transport: transport,
 	}
 
 	loginURL, uaaURL, err := discoverCFAuthEndpoints(ctx, httpClient, url)
