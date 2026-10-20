@@ -51,10 +51,15 @@ func main() {
 
 	zl := zap.New(zap.UseDevMode(*debug))
 	log := logging.NewLogrLogger(zl.WithName("provider-cloudfoundry"))
-	// FIPS 140-3 runtime proof: with GOFIPS140 set at build time the binary links
-	// the CMVP-validated Go Cryptographic Module (#5247) in approved mode. This
-	// line records that in the pod logs as self-evidence of approved-mode crypto.
-	log.Info("FIPS 140-3", "enabled", fips140.Enabled(), "module", fips140.Version())
+
+	// Record FIPS 140-3 status at startup as runtime compliance evidence. When
+	// built with GOFIPS140=certified this reports the linked CMVP-validated Go
+	// Cryptographic Module version and approved-mode status.
+	log.Info("FIPS 140-3 mode", "enabled", fips140.Enabled(), "module", fips140.Version())
+	if !fips140.Enabled() {
+		kingpin.Fatalf("FIPS 140-3 approved mode is not enabled; this binary must be built with GOFIPS140=certified and must not be run with GODEBUG=fips140=off")
+	}
+
 	if *debug {
 		// The controller-runtime runs with a no-op logger by default. It is
 		// *very* verbose even at info level, so we only provide it a real
