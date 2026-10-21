@@ -991,6 +991,33 @@ func TestUpdate(t *testing.T) {
 			},
 		},
 
+		"DockerImageOnNonDockerApp": {
+			args: args{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withAppManifest("applications:\n- name: "+name+"\n  buildpacks:\n  - java_buildpack"),
+					withImage("new-image:v2")),
+			},
+			want: want{
+				mg: newApp("docker",
+					withSpace(spaceGUID),
+					withExternalName(guid),
+					withStatus(guid, "STARTED"),
+					withObservedName(name),
+					withAppManifest("applications:\n- name: "+name+"\n  buildpacks:\n  - java_buildpack"),
+					withImage("new-image:v2")),
+				obs: managed.ExternalUpdate{},
+				err: errors.New(errUpdateResource + ": " + errNotDockerApp),
+			},
+			service: func() *fake.MockApp {
+				// No Update or Push call is expected: the app must stay a buildpack app.
+				return &fake.MockApp{}
+			},
+		},
+
 		"EnvVarUpdate_StopFails": {
 			args: args{
 				mg: newApp("docker",

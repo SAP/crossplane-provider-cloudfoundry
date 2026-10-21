@@ -5,11 +5,18 @@ Copyright 2025 SAP SE.
 package app
 
 import (
+	"context"
+	"encoding/base64"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 
 	"github.com/SAP/xp-clifford/yaml"
+	"github.com/cloudfoundry/go-cfclient/v3/client"
+	"github.com/cloudfoundry/go-cfclient/v3/config"
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	cpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
@@ -674,3 +681,59 @@ func TestConvertReadinessHealthCheckConfiguration(t *testing.T) {
 // since it calls getAppManifest which makes external API calls.
 // The helper functions (convertDockerField, convertProcessesField, convertProcessConfiguration,
 // convertReadinessHealthCheckConfiguration) are unit tested above.
+
+// fakeJWT returns an unsigned token with a far-future expiry, enough for the CF client to accept it.
+func fakeJWT() string {
+	enc := base64.RawURLEncoding
+	header := enc.EncodeToString([]byte(`{"alg":"none","typ":"JWT"}`))
+	payload := enc.EncodeToString([]byte(`{"exp":4102444800}`))
+	return header + "." + payload + ".sig"
+}
+
+func TestConvertAppResourceNonDockerLifecycle(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/" {
+			// API root used by the CF client for service discovery.
+			_, _ = w.Write([]byte("{}"))
+			return
+		}
+		w.Header().Set("Content-Type", "application/x-yaml")
+		_, _ = w.Write([]byte("applications:\n- name: test-app\n  buildpacks:\n  - java_buildpack\n"))
+	}))
+	defer srv.Close()
+
+	cfg, err := config.New(srv.URL, config.Token(fakeJWT(), "refresh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfClient, err := client.New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	for _, lifecycle := range []string{"buildpack", "cnb"} {
+		t.Run(lifecycle, func(t *testing.T) {
+			evHandler := &mockEventHandler{}
+			app := createTestApp("test-app", "guid-1", "space-guid", lifecycle)
+			app.Metadata = &resource.Metadata{}
+
+			got := convertAppResource(context.Background(), cfClient, app, evHandler, false)
+			if got == nil {
+				t.Fatalf("expected %s app to be exported", lifecycle)
+			}
+			comment, ok := got.Comment()
+			if !ok || !strings.Contains(comment, "app uses the \""+lifecycle+"\" lifecycle") {
+				t.Errorf("expected lifecycle warning comment, got %q", comment)
+			}
+			if strings.Contains(comment, "missing docker") {
+				t.Errorf("unexpected missing docker comment: %q", comment)
+			}
+			if len(evHandler.warnings) != 0 {
+				t.Errorf("expected no warnings, got %v", evHandler.warnings)
+			}
+			if managed, ok := got.Resource().(*v1alpha1.App); !ok || managed.Spec.ForProvider.Docker != nil {
+				t.Errorf("expected docker to stay unset, got %+v", got.Resource())
+			}
+		})
+	}
+}
