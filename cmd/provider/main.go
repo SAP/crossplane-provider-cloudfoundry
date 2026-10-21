@@ -5,14 +5,17 @@ Copyright 2023 SAP SE
 package main
 
 import (
+	"crypto/fips140"
 	"os"
 	"path/filepath"
+	"strconv"
 	"time"
 
 	"gopkg.in/alecthomas/kingpin.v2"
 	"k8s.io/client-go/tools/leaderelection/resourcelock"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/cache"
+	"sigs.k8s.io/controller-runtime/pkg/config"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
@@ -22,6 +25,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis"
 	provider "github.com/SAP/crossplane-provider-cloudfoundry/internal/controller"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/controller/servicecredentialbinding"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/features"
 )
 
@@ -36,11 +40,26 @@ func main() {
 		maxReconcileRate = app.Flag("max-reconcile-rate", "The global maximum rate per second at which resources may checked for drift from the desired state.").Default("10").Int()
 
 		enableManagementPolicies = app.Flag("enable-management-policies", "Enable support for Management Policies.").Default("true").Envar("ENABLE_MANAGEMENT_POLICIES").Bool()
+
+		scbMaxCreateAttempts = app.Flag("scb-max-create-attempts", "Consecutive ServiceCredentialBinding create attempts before creation is paused.").
+					Default(strconv.Itoa(servicecredentialbinding.DefaultMaxCreateAttempts)).Envar("SCB_MAX_CREATE_ATTEMPTS").Int()
 	)
 	kingpin.MustParse(app.Parse(os.Args[1:]))
+	if *scbMaxCreateAttempts < 1 {
+		kingpin.Fatalf("--scb-max-create-attempts must be >= 1, got %d", *scbMaxCreateAttempts)
+	}
 
 	zl := zap.New(zap.UseDevMode(*debug))
 	log := logging.NewLogrLogger(zl.WithName("provider-cloudfoundry"))
+
+	// Record FIPS 140-3 status at startup as runtime compliance evidence. When
+	// built with GOFIPS140=certified this reports the linked CMVP-validated Go
+	// Cryptographic Module version and approved-mode status.
+	log.Info("FIPS 140-3 mode", "enabled", fips140.Enabled(), "module", fips140.Version())
+	if !fips140.Enabled() {
+		kingpin.Fatalf("FIPS 140-3 approved mode is not enabled; this binary must be built with GOFIPS140=certified and must not be run with GODEBUG=fips140=off")
+	}
+
 	if *debug {
 		// The controller-runtime runs with a no-op logger by default. It is
 		// *very* verbose even at info level, so we only provide it a real
@@ -56,6 +75,14 @@ func main() {
 		// The recommended way is to move it to cache.Options instead
 		Cache: cache.Options{
 			SyncPeriod: syncInterval,
+		},
+		// Opt out of the priority queue introduced with controller-runtime
+		// v0.25.0. The initial LIST enqueues every resource at LowPriority,
+		// which gets starved when workers are saturated by self-requeuing
+		// normal-priority items. The crossplane-runtime options do not set
+		// this per controller, so it is set as the manager-wide default.
+		Controller: config.Controller{
+			UsePriorityQueue: new(false),
 		},
 
 		// controller-runtime uses both ConfigMaps and Leases for leader
@@ -87,6 +114,6 @@ func main() {
 		log.Info("Alpha feature enabled", "flag", features.EnableBetaManagementPolicies)
 	}
 
-	kingpin.FatalIfError(provider.CustomSetup(mgr, o), "Cannot setup custom controllers")
+	kingpin.FatalIfError(provider.CustomSetup(mgr, o, provider.Config{SCBMaxCreateAttempts: *scbMaxCreateAttempts}), "Cannot setup custom controllers")
 	kingpin.FatalIfError(mgr.Start(ctrl.SetupSignalHandler()), "Cannot start controller manager")
 }

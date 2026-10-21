@@ -6,13 +6,14 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"strings"
 
 	"github.com/crossplane-contrib/xp-testing/pkg/envvar"
 	"github.com/crossplane-contrib/xp-testing/pkg/logging"
 	"github.com/crossplane-contrib/xp-testing/pkg/resources"
 	"github.com/crossplane-contrib/xp-testing/pkg/xpenvfuncs"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/errors"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	kubeErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -116,20 +117,42 @@ func ApplySecretInCrossplaneNamespace(name string, data map[string]string) env.F
 	)
 }
 
-func GetImagesFromJsonOrPanic(imagesJson string) (string, string) {
-
+// ParseImagesFromJSON validates the UUT_IMAGES mapping and returns the required
+// package image and the optional controller image. A missing controller key is
+// represented by nil; a supplied empty controller value is invalid.
+func ParseImagesFromJSON(imagesJSON string) (string, *string, error) {
 	imageMap := map[string]string{}
-
-	err := json.Unmarshal([]byte(imagesJson), &imageMap)
-
-	if err != nil {
-		panic(errors.Wrap(err, "failed to unmarshal json from UUT_IMAGE"))
+	if err := json.Unmarshal([]byte(imagesJSON), &imageMap); err != nil {
+		return "", nil, fmt.Errorf("failed to unmarshal JSON from %s: %w", UUT_IMAGES_KEY, err)
 	}
 
-	uutConfig := imageMap[UUT_CONFIG_KEY]
-	uutController := imageMap[UUT_CONTROLLER_KEY]
+	packageImage, ok := imageMap[UUT_CONFIG_KEY]
+	if !ok || strings.TrimSpace(packageImage) == "" {
+		return "", nil, fmt.Errorf("%s must contain a non-empty %q value", UUT_IMAGES_KEY, UUT_CONFIG_KEY)
+	}
+	packageImage = strings.TrimSpace(packageImage)
 
-	return uutConfig, uutController
+	controllerImage, ok := imageMap[UUT_CONTROLLER_KEY]
+	if !ok {
+		return packageImage, nil, nil
+	}
+	if strings.TrimSpace(controllerImage) == "" {
+		return "", nil, fmt.Errorf("%s contains an empty %q value", UUT_IMAGES_KEY, UUT_CONTROLLER_KEY)
+	}
+	controllerImage = strings.TrimSpace(controllerImage)
+
+	return packageImage, &controllerImage, nil
+}
+
+// GetImagesFromJsonOrPanic retrieves and validates the package and optional
+// controller images from UUT_IMAGES.
+func GetImagesFromJsonOrPanic(imagesJSON string) (string, *string) {
+	packageImage, controllerImage, err := ParseImagesFromJSON(imagesJSON)
+	if err != nil {
+		panic(errors.Wrap(err, "invalid UUT_IMAGES"))
+	}
+
+	return packageImage, controllerImage
 }
 
 func DeleteResourcesFromDirsGracefully(ctx context.Context, cfg *envconf.Config, resourceDirs []string, timeout wait.Option) error {
@@ -227,9 +250,9 @@ func CreateProviderConfig(
 			APIEndpoint: &cfEndpoint,
 			Credentials: cloudfoundryv1beta1.ProviderCredentials{
 				Source: "Secret",
-				CommonCredentialSelectors: xpv1.CommonCredentialSelectors{
-					SecretRef: &xpv1.SecretKeySelector{
-						SecretReference: xpv1.SecretReference{
+				CommonCredentialSelectors: xpv2.CommonCredentialSelectors{
+					SecretRef: &xpv2.SecretKeySelector{
+						SecretReference: xpv2.SecretReference{
 							Name:      secretName,
 							Namespace: crossplaneSystemNamespace,
 						},

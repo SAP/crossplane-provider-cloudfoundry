@@ -17,7 +17,7 @@
         in
           {
             packages = rec {
-              exporter = pkgs.buildGoModule {
+              exporter = pkgs.buildGo127Module {
                 inherit (config.exporter-cli) version;
                 pname = config.exporter-cli.name;
                 ldflags = ["-X main.ShortName=${config.exporter-cli.name}"];
@@ -32,7 +32,7 @@
             '';
             };
             devShells.default = pkgs.mkShell {
-              packages = with pkgs; [go];
+              packages = with pkgs; [go_1_27];
             };
             apps.exporter = {
               meta = config.exporter-cli.meta;

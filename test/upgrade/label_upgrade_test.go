@@ -1,14 +1,8 @@
 //go:build upgrade
 
-//
-// This file (label_upgrade_test.go) contains Test_Label_Migration,
-// which validates that default Crossplane labels (crossplane-kind,
-// crossplane-name, crossplane-providerconfig) are correctly applied
-// to existing resources after a provider upgrade.
-//
-// Pre-upgrade: Resources created by the old provider version do not have
-// default Crossplane labels. Post-upgrade: The new provider reconciles and
-// adds the 3 default labels to the external CF resource.
+// Test_Label_Migration checks that the Crossplane default tags, written as CF
+// labels by the old provider, become CF annotations after the upgrade and the
+// legacy labels are removed.
 
 package upgrade
 
@@ -18,8 +12,12 @@ import (
 
 	v1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog/v2"
+	"sigs.k8s.io/e2e-framework/klient/k8s"
 	res "sigs.k8s.io/e2e-framework/klient/k8s/resources"
+	"sigs.k8s.io/e2e-framework/klient/wait"
+	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 )
 
@@ -38,7 +36,7 @@ func Test_Label_Migration(t *testing.T) {
 		ToVersion(toTag).
 		WithResourceDirectories(labelResourceDirectories).
 		WithCustomPreUpgradeAssessment(
-			"Verify no crossplane labels before upgrade",
+			"Verify crossplane default labels before upgrade",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 				r, err := res.New(cfg.Client().RESTConfig())
 				if err != nil {
@@ -56,22 +54,17 @@ func Test_Label_Migration(t *testing.T) {
 					t.Fatalf("Failed to get Space resource: %v", err)
 				}
 
-				// Verify no crossplane-* default labels exist in observation
 				labels := space.Status.AtProvider.Labels
-				for key := range labels {
-					if key == resource.ExternalResourceTagKeyKind ||
-						key == resource.ExternalResourceTagKeyName ||
-						key == resource.ExternalResourceTagKeyProvider {
-						t.Errorf("Pre-upgrade resource unexpectedly has crossplane label: %s", key)
-					}
+				if v, ok := labels[resource.ExternalResourceTagKeyName]; !ok || v == nil || *v != spaceName {
+					t.Errorf("Pre-upgrade resource expected label %s=%s, got %v", resource.ExternalResourceTagKeyName, spaceName, v)
 				}
 
-				klog.V(4).Infof("Pre-upgrade label check passed: no crossplane-* labels found on Space %s", spaceName)
+				klog.V(4).Infof("Pre-upgrade check passed: crossplane-name label found on Space %s", spaceName)
 				return ctx
 			},
 		).
 		WithCustomPostUpgradeAssessment(
-			"Verify default crossplane labels after upgrade",
+			"Verify default crossplane annotations after upgrade",
 			func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
 				r, err := res.New(cfg.Client().RESTConfig())
 				if err != nil {
@@ -83,40 +76,46 @@ func Test_Label_Migration(t *testing.T) {
 					t.Fatalf("Failed to add CloudFoundry scheme: %v", err)
 				}
 
-				space := &v1alpha1.Space{}
+				// Synced only proves one reconcile, and AtProvider is refreshed
+				// before Update: wait for the next Observe.
+				space := &v1alpha1.Space{ObjectMeta: metav1.ObjectMeta{Name: spaceName, Namespace: cfg.Namespace()}}
+				err = wait.For(conditions.New(r).ResourceMatch(space, func(obj k8s.Object) bool {
+					atProvider := obj.(*v1alpha1.Space).Status.AtProvider
+					_, hasAnnotation := atProvider.Annotations[resource.ExternalResourceTagKeyName]
+					_, hasLabel := atProvider.Labels[resource.ExternalResourceTagKeyName]
+					return hasAnnotation && !hasLabel
+				}), wait.WithTimeout(verifyTimeout))
+				if err != nil {
+					t.Logf("Space %s metadata did not converge after upgrade: %v", spaceName, err)
+				}
+
 				err = r.Get(ctx, spaceName, cfg.Namespace(), space)
 				if err != nil {
 					t.Fatalf("Failed to get Space resource after upgrade: %v", err)
 				}
 
 				labels := space.Status.AtProvider.Labels
+				annotations := space.Status.AtProvider.Annotations
 
-				// Verify crossplane-kind
-				expectedKind := "space.cloudfoundry.crossplane.io"
-				if val, ok := labels[resource.ExternalResourceTagKeyKind]; !ok {
-					t.Errorf("Missing %s label after upgrade", resource.ExternalResourceTagKeyKind)
-				} else if val == nil || *val != expectedKind {
-					t.Errorf("Expected %s=%s, got %v", resource.ExternalResourceTagKeyKind, expectedKind, val)
+				expected := map[string]string{
+					resource.ExternalResourceTagKeyKind: "space.cloudfoundry.crossplane.io",
+					resource.ExternalResourceTagKeyName: spaceName,
 				}
-
-				// Verify crossplane-name
-				if val, ok := labels[resource.ExternalResourceTagKeyName]; !ok {
-					t.Errorf("Missing %s label after upgrade", resource.ExternalResourceTagKeyName)
-				} else if val == nil || *val != spaceName {
-					t.Errorf("Expected %s=%s, got %v", resource.ExternalResourceTagKeyName, spaceName, val)
+				if ref := space.GetProviderConfigReference(); ref != nil {
+					expected[resource.ExternalResourceTagKeyProvider] = ref.Name
 				}
-
-				// Verify crossplane-providerconfig
-				if space.GetProviderConfigReference() != nil {
-					expectedPC := space.GetProviderConfigReference().Name
-					if val, ok := labels[resource.ExternalResourceTagKeyProvider]; !ok {
-						t.Errorf("Missing %s label after upgrade", resource.ExternalResourceTagKeyProvider)
-					} else if val == nil || *val != expectedPC {
-						t.Errorf("Expected %s=%s, got %v", resource.ExternalResourceTagKeyProvider, expectedPC, val)
+				for k, want := range expected {
+					if val, ok := annotations[k]; !ok || val == nil || *val != want {
+						t.Errorf("Expected annotation %s=%s after upgrade, got %v", k, want, val)
+					}
+				}
+				for _, k := range []string{resource.ExternalResourceTagKeyKind, resource.ExternalResourceTagKeyName, resource.ExternalResourceTagKeyProvider} {
+					if _, ok := labels[k]; ok {
+						t.Errorf("Legacy label %s still present after upgrade", k)
 					}
 				}
 
-				klog.V(4).Infof("Post-upgrade label check passed: all 3 crossplane-* labels found on Space %s", spaceName)
+				klog.V(4).Infof("Post-upgrade check passed: default annotations set, legacy labels removed on Space %s", spaceName)
 				return ctx
 			},
 		)

@@ -9,13 +9,13 @@ import (
 	ctrl "sigs.k8s.io/controller-runtime"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/controller"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/ratelimiter"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	pcv1beta1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/v1beta1"
@@ -160,7 +160,7 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	}
 
 	cr.Status.AtProvider = domain.GenerateObservation(d)
-	cr.SetConditions(xpv1.Available())
+	cr.SetConditions(xpv2.Available())
 
 	return managed.ExternalObservation{
 		ResourceExists:          cr.Status.AtProvider.ID != nil,
@@ -199,7 +199,7 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, errors.New(errNotDomainKind)
 	}
 
-	cr.SetConditions(xpv1.Creating())
+	cr.SetConditions(xpv2.Creating())
 
 	o, err := c.client.Create(ctx, domain.GenerateCreate(cr, cr.Spec.ForProvider))
 	if err != nil {
@@ -242,7 +242,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalDelete{}, errors.New(errNotDomainKind)
 	}
 
-	cr.SetConditions(xpv1.Deleting())
+	cr.SetConditions(xpv2.Deleting())
 
 	if meta.GetExternalName(cr) == "" {
 		return managed.ExternalDelete{}, nil

@@ -8,9 +8,10 @@ package v1alpha1
 
 import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
-	v1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 )
 
 type OrgRoleObservation struct {
@@ -53,14 +54,14 @@ type OrgRoleParameters struct {
 
 // OrgRoleSpec defines the desired state of OrgRole
 type OrgRoleSpec struct {
-	v1.ResourceSpec `json:",inline"`
-	ForProvider     OrgRoleParameters `json:"forProvider"`
+	xpv2.ClusterManagedResourceSpec `json:",inline"`
+	ForProvider                     OrgRoleParameters `json:"forProvider"`
 }
 
 // OrgRoleStatus defines the observed state of OrgRole.
 type OrgRoleStatus struct {
-	v1.ResourceStatus `json:",inline"`
-	AtProvider        OrgRoleObservation `json:"atProvider,omitempty"`
+	xpv2.ManagedResourceStatus `json:",inline"`
+	AtProvider                 OrgRoleObservation `json:"atProvider,omitempty"`
 }
 
 // +kubebuilder:object:root=true
@@ -108,11 +109,14 @@ var (
 	OrgRole_GroupVersionKind = CRDGroupVersion.WithKind(OrgRole_Kind)
 )
 
-func init() {
-	SchemeBuilder.Register(&OrgRole{}, &OrgRoleList{})
-}
-
 // implement OrgScoped interface
 func (s *OrgRole) GetOrgRef() *OrgReference {
 	return &s.Spec.ForProvider.OrgReference
+}
+
+func init() {
+	SchemeBuilder.Register(func(scheme *runtime.Scheme) error {
+		scheme.AddKnownTypes(CRDGroupVersion, &OrgRole{}, &OrgRoleList{})
+		return nil
+	})
 }

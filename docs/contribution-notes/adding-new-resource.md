@@ -17,14 +17,14 @@ type Route struct {
 
 // RouteSpec defines the desired state of Route
 type XxxSpec struct {
-    xpv1.ResourceSpec `json:",inline"`
-    ForProvider       RouteParameters `json:"forProvider"`
+    xpv2.ClusterManagedResourceSpec `json:",inline"`
+    ForProvider                     RouteParameters `json:"forProvider"`
 }
 
 // RouteStatus defines the observed state of Route
 type RouteStatus struct {
-    xpv1.ResourceStatus `json:",inline"`
-    AtProvider          RouteObservation `json:"atProvider,omitempty"`
+    xpv2.ManagedResourceStatus `json:",inline"`
+    AtProvider                  RouteObservation `json:"atProvider,omitempty"`
 }
 ```
 In most cases, `ForProvider` and `AtProvider` are the only variable definitions you need to provide when defining a new type for your new resources, based on the API reference.
@@ -80,4 +80,3 @@ Resource configuration is largely done. You should be abel to manually test it u
 ### Implement the Controller
 
 The resource is not yet functional. You need to implement the controller for the new resource. The controller is responsible for reconciling the desired state of the resource with the actual state of the resource in Cloud Foundry. The controller should be implemented in the `controllers` directory. The controller should implement the `Reconciler` interface and should be registered with the manager in the `setup.go` file.
-

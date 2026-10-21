@@ -42,7 +42,7 @@ func PollJobComplete(ctx context.Context, job Job, jobGUID string) error {
 
 	err := job.PollComplete(ctx, jobGUID, newPollingOptions())
 
-	if err != nil && errors.Is(err, client.AsyncProcessTimeoutError) { // because we have logic to observe job state, we can safely ignore timeout error
+	if err != nil && errors.Is(err, client.ErrAsyncProcessTimeout) { // because we have logic to observe job state, we can safely ignore timeout error
 		return nil
 	}
 

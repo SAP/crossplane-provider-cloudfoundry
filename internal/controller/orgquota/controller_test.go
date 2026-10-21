@@ -6,8 +6,8 @@ import (
 
 	"github.com/cloudfoundry/go-cfclient/v3/client"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
-	xpv1 "github.com/crossplane/crossplane-runtime/v2/apis/common/v1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/google/go-cmp/cmp"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/mock"
@@ -50,7 +50,7 @@ func withAllowPaidServicePlans(allow bool) modifier {
 	}
 }
 
-func withConditions(c ...xpv1.Condition) modifier {
+func withConditions(c ...xpv2.Condition) modifier {
 	return func(r *v1alpha1.OrgQuota) { r.Status.SetConditions(c...) }
 }
 
@@ -523,7 +523,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeOrgQuota(
 					withExternalName(guid),
 					withName("test-quota"),
-					withConditions(xpv1.Deleting()),
+					withConditions(xpv2.Deleting()),
 				),
 				err: nil,
 			},
@@ -547,7 +547,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeOrgQuota(
 					withExternalName(guid),
 					withName("test-quota"),
-					withConditions(xpv1.Deleting()),
+					withConditions(xpv2.Deleting()),
 				),
 				err: errors.Wrap(errBoom, errDelete),
 			},
@@ -569,7 +569,7 @@ func TestDelete(t *testing.T) {
 			want: want{
 				mg: fakeOrgQuota(
 					withName("test-quota"),
-					withConditions(xpv1.Deleting()),
+					withConditions(xpv2.Deleting()),
 				),
 				err: nil,
 			},
@@ -589,7 +589,7 @@ func TestDelete(t *testing.T) {
 				mg: fakeOrgQuota(
 					withExternalName(guid),
 					withName("test-quota"),
-					withConditions(xpv1.Deleting()),
+					withConditions(xpv2.Deleting()),
 				),
 				err: nil,
 			},

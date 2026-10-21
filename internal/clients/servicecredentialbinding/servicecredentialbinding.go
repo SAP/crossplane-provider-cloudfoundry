@@ -14,6 +14,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	"github.com/google/uuid"
+	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/job"
@@ -31,7 +32,7 @@ const (
 type serviceCredentialBinding interface {
 	Get(ctx context.Context, guid string) (*resource.ServiceCredentialBinding, error)
 	GetDetails(ctx context.Context, guid string) (*resource.ServiceCredentialBindingDetails, error)
-	GetParameters(ctx context.Context, guid string) (map[string]string, error)
+	GetParameters(ctx context.Context, guid string) (*json.RawMessage, error)
 	Single(ctx context.Context, opts *client.ServiceCredentialBindingListOptions) (*resource.ServiceCredentialBinding, error)
 	Create(ctx context.Context, r *resource.ServiceCredentialBindingCreate) (string, *resource.ServiceCredentialBinding, error)
 	Update(ctx context.Context, guid string, r *resource.ServiceCredentialBindingUpdate) (*resource.ServiceCredentialBinding, error)
@@ -172,7 +173,6 @@ func newCreateOption(mg xpresource.Managed, forProvider v1alpha1.ServiceCredenti
 		}
 
 		name := randomName(*forProvider.Name)
-
 		opt = resource.NewServiceCredentialBindingCreateKey(*forProvider.ServiceInstance, name)
 	case "app":
 		if forProvider.App == nil {
@@ -222,6 +222,7 @@ func newUpdateOption(mg xpresource.Managed, forProvider v1alpha1.ServiceCredenti
 // UpdateObservation updates the CR's AtProvider status from the observed resource
 func UpdateObservation(observation *v1alpha1.ServiceCredentialBindingObservation, r *resource.ServiceCredentialBinding) {
 	observation.GUID = r.GUID
+	observation.Name = ptr.Deref(r.Name, "")
 	observation.LastOperation = &v1alpha1.LastOperation{
 		Type:        r.LastOperation.Type,
 		State:       r.LastOperation.State,

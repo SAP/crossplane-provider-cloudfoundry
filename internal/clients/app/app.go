@@ -217,10 +217,8 @@ func envVarsChanged(spec v1alpha1.AppParameters, appManifest *operation.AppManif
 }
 
 // DetectChanges determines what fields have changed between spec and status.
-// Metadata drift is computed from the full desired metadata, including
-// Crossplane-owned/default labels derived from the managed resource. Passing
-// mg ensures missing or stale default labels trigger the Update path that
-// re-applies them to the Cloud Foundry app.
+// Metadata drift uses BuildMetadata(mg, ...), so missing default annotations
+// and leftover legacy default labels trigger an Update.
 func DetectChanges(mg xpresource.Managed, spec v1alpha1.AppParameters, status v1alpha1.AppObservation) (*ChangeDetection, error) {
 	changes := &ChangeDetection{
 		ChangedFields: make(map[string]struct{}),
@@ -292,7 +290,7 @@ func DiffServiceBindings(spec v1alpha1.AppParameters, ymlManifest string) []v1al
 		}
 	}
 
-	var missingServices []v1alpha1.ServiceBindingConfiguration
+	missingServices := make([]v1alpha1.ServiceBindingConfiguration, 0, len(spec.Services))
 	for _, service := range spec.Services {
 		if _, ok := services[ptr.Deref(service.Name, "")]; !ok {
 			return append(missingServices, service)
@@ -326,7 +324,7 @@ func newCreateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resour
 	case "buildpack":
 		appCreate.Lifecycle = &resource.Lifecycle{
 			Type: spec.Lifecycle,
-			BuildpackData: resource.BuildpackLifecycle{
+			Data: resource.BuildpackLifecycle{
 				Buildpacks: spec.Buildpacks,
 				Stack:      ptr.Deref(spec.Stack, ""),
 			},
@@ -334,6 +332,7 @@ func newCreateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resour
 	case "docker":
 		appCreate.Lifecycle = &resource.Lifecycle{
 			Type: spec.Lifecycle,
+			Data: resource.DockerLifecycle{},
 		}
 	default:
 		appCreate.Lifecycle = nil
@@ -349,7 +348,7 @@ func newUpdateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resour
 	case "buildpack":
 		lifecycle = &resource.Lifecycle{
 			Type: spec.Lifecycle,
-			BuildpackData: resource.BuildpackLifecycle{
+			Data: resource.BuildpackLifecycle{
 				Buildpacks: spec.Buildpacks,
 				Stack:      ptr.Deref(spec.Stack, ""),
 			},
@@ -357,6 +356,7 @@ func newUpdateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resour
 	case "docker":
 		lifecycle = &resource.Lifecycle{
 			Type: spec.Lifecycle,
+			Data: resource.DockerLifecycle{},
 		}
 	default:
 		lifecycle = nil

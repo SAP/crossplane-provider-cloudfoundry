@@ -15,3 +15,8 @@ spec:
     servicePlan:
       offering: destination
       plan: lite
+    # tags are applied to the instance and surfaced in apps' VCAP_SERVICES.
+    # Omitting this field or setting it to [] results in no tags.
+    tags:
+      - prod
+      - eu-central

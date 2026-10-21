@@ -1,5 +1,5 @@
 [![Slack](https://img.shields.io/badge/Slack-4A154B?logo=slack)](https://crossplane.slack.com/archives/C08NBTJ1J05)
-![Golang](https://img.shields.io/badge/Go-1.23-informational)
+![Golang](https://img.shields.io/badge/Go-1.27-informational)
 [![REUSE status](https://api.reuse.software/badge/github.com/SAP/crossplane-provider-cloudfoundry)](https://api.reuse.software/info/github.com/SAP/crossplane-provider-cloudfoundry)
 
 # Crossplane Provider for Cloud Foundry
@@ -16,26 +16,33 @@ All available CRDs can be found in the [API reference](https://doc.crds.dev/gith
 
 We're building this in the open and we'd love your involvement — whether you're using the provider in production, experimenting with it, or just curious about how it works.
 
+We keep things async-first, so you can join in whenever it suits you, from any time zone.
+
+### 📰 Monthly Updates
+
+On the **last Wednesday of every month**, we post an update in [GitHub Discussions](https://github.com/SAP/crossplane-provider-cloudfoundry/discussions/categories/announcements):
+
+- 🚀 What shipped in this month's release
+- 🔜 What's coming next
+- 💬 An open thread for your questions, ideas, and yes, complaints too. Something bugging you? We want to hear it.
+
 ---
 
-### 📞 Monthly Community Call
+### 🗳️ You Decide What We Build
 
-We hold a community call on the **last Wednesday of every month at 4 pm CET**.
+Every quarter, we run a [community poll](https://github.com/SAP/crossplane-provider-cloudfoundry/discussions/categories/polls) to choose the next big features. The winners become our north star for the quarter, and every release brings a piece of them closer.
 
-- 👀 See what everyone's been working on
-- 💡 Share ideas and feedback
-- ❓ Ask questions — no question is too basic
-- 🔬 Dive into technical details together
+Our last poll got 56 votes, and **credential rotation** and **zero-downtime app updates** came out on top. Thank you to everyone who voted! 💙
 
-🔗 **Join:** : [Click Here](https://teams.microsoft.com/meet/38649588898748?p=ctg4uzLFVdSWRU2ZJQ)
-
-🎬 **Can't make it?** Recordings are shared after each call.
+Between polls, add a 👍 to the issues you care about. We look at those when we shortlist the next candidates.
 
 ---
 
 ### 💬 Chat with us
 
 Join us on Slack: [**#provider-sap-cloudfoundry**](https://crossplane.slack.com/archives/C08NBTJ1J05) — for questions, ideas, or just to say hi.
+
+**Rather talk it through live?** Every monthly update comes with a 48-hour Slack thread. Drop a message there (or anytime in the channel) and we'll happily set up a call.
 
 ---
 
@@ -51,7 +58,7 @@ Got a question or found an issue? We'd love to hear from you:
 
 - 🐛 **Open a GitHub issue:** [github.com/SAP/crossplane-provider-cloudfoundry/issues/new/choose](https://github.com/SAP/crossplane-provider-cloudfoundry/issues/new/choose)
 - 💬 **Chat on Slack:** [**#provider-sap-cloudfoundry**](https://crossplane.slack.com/archives/C08NBTJ1J05)
-- 📞 **Join the monthly community call** — last Wednesday of every month at 4 pm CET
+- 📰 **Comment on the monthly update** in [GitHub Discussions](https://github.com/SAP/crossplane-provider-cloudfoundry/discussions), where every question and idea is welcome
 
 ---
 
@@ -149,7 +156,7 @@ The provider ships an export CLI that generates managed resource definitions fro
 Contributions are very welcome — from bug reports to new features to docs improvements. Here's how to get involved:
 
 - 🐛 **Found a bug?** [Open an issue](https://github.com/SAP/crossplane-provider-cloudfoundry/issues)
-- 💡 **Have an idea?** Start a [Discussion](https://github.com/SAP/crossplane-provider-cloudfoundry/discussions) or drop by the community call
+- 💡 **Have an idea?** Start a [Discussion](https://github.com/SAP/crossplane-provider-cloudfoundry/discussions), vote in our quarterly poll, or 👍 the issues that matter to you
 - 🛠️ **Want to contribute code?** Check out the [CONTRIBUTING.md](CONTRIBUTING.md) and [DEVELOPER.md](DEVELOPER.md) guides
 
 Not sure where to start? Come chat on [Slack](https://crossplane.slack.com/archives/C08NBTJ1J05) — we're happy to help you find something.
@@ -170,4 +177,4 @@ We're committed to a welcoming, harassment-free community for everyone. By parti
 
 ## 📋 Licensing
 
-Copyright 2024 SAP SE or an SAP affiliate company and crossplane-provider-cloudfoundry contributors. See [LICENSE](LICENSE) for details. Third-party component licensing is available via the [REUSE tool](https://api.reuse.software/info/github.com/SAP/crossplane-provider-btp).
+Copyright 2024 SAP SE or an SAP affiliate company and crossplane-provider-cloudfoundry contributors. See [LICENSE](LICENSE) for details. Third-party component licensing is available via the [REUSE tool](https://api.reuse.software/info/github.com/SAP/crossplane-provider-cloudfoundry).

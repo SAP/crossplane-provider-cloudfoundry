@@ -64,6 +64,10 @@ labels:
     color: '#E0E4CC'
     description: Dependencies need to be updated.
 
+  - name: release-notes/breaking-change
+    color: "d73a4a"
+    description: "Changes existing behavior; listed under Breaking changes in the release notes"
+
 # Milestones: define milestones for Issues and Pull Requests
 milestones:
 #  - title: milestone-title
