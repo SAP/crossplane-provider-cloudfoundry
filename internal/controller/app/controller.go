@@ -34,6 +34,7 @@ var (
 	errObserveResource = "Cannot observe" + resourceKind + " by ID or using forProvider spec"
 	errCreateResource  = "Cannot create " + resourceKind + " resource in Cloud Foundry"
 	errUpdateResource  = "Cannot update " + resourceKind + " in Cloud Foundry"
+	errNotDockerApp    = "app is not a docker app, refusing to push a docker image over its existing lifecycle"
 	errDeleteResource  = "Cannot delete " + resourceKind + " in Cloud Foundry"
 	errSecret          = "Cannot extract credentials from secret"
 )
@@ -273,7 +274,15 @@ func (c *external) updateEnvironmentIfChanged(ctx context.Context, guid string, 
 }
 
 // updateDockerImage pushes a new docker image for the app.
+// It refuses to convert an app that is not a docker app (for example an adopted buildpack app).
 func (c *external) updateDockerImage(ctx context.Context, guid string, cr *v1alpha1.App) error {
+	isDocker, err := app.IsDockerApp(cr.Status.AtProvider)
+	if err != nil {
+		return errors.Wrap(err, errUpdateResource)
+	}
+	if !isDocker {
+		return errors.New(errUpdateResource + ": " + errNotDockerApp)
+	}
 	dockerCredentials, err := getDockerCredential(ctx, c.kube, cr.Spec.ForProvider)
 	if err != nil {
 		return errors.Wrap(err, errSecret)
@@ -372,8 +381,8 @@ func (c *external) resolveExternalName(ctx context.Context, cr *v1alpha1.App) (b
 
 // getDockerCredential extracts the Docker credentials from the secret
 func getDockerCredential(ctx context.Context, kube k8s.Client, forProvider v1alpha1.AppParameters) (*app.DockerCredentials, error) {
-	// return immediately if the lifecycle is not docker or credentials are not provided
-	if forProvider.Lifecycle != "docker" || forProvider.Docker == nil || forProvider.Docker.Credentials == nil {
+	// return immediately if the docker config or credentials are not provided
+	if forProvider.Docker == nil || forProvider.Docker.Credentials == nil {
 		return nil, nil
 	}
 
