@@ -9,7 +9,7 @@ require (
 	github.com/crossplane-contrib/xp-testing v1.10.1
 	github.com/crossplane/crossplane-runtime/v2 v2.4.3
 	github.com/crossplane/crossplane-tools v0.0.0-20260719180100-659f1dc036c5
-	github.com/crossplane/crossplane/apis/v2 v2.4.2
+	github.com/crossplane/crossplane/apis/v2 v2.4.3
 	github.com/docker/cli v29.9.2+incompatible
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
