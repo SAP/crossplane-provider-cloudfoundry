@@ -89,7 +89,9 @@ func (a app) Export(ctx context.Context, cfClient *client.Client, evHandler expo
 	defer cancel()
 	for _, app := range apps.AllByGUIDs() {
 		slog.Debug("exporting app", "name", app.Name)
-		evHandler.Resource(convertAppResource(ctx, cfClient, app, evHandler, resolveReferences))
+		if converted := convertAppResource(ctx, cfClient, app, evHandler, resolveReferences); converted != nil {
+			evHandler.Resource(converted)
+		}
 	}
 
 	return nil

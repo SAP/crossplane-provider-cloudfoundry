@@ -77,10 +77,10 @@ func TestDetectChanges(t *testing.T) {
 			expectedFields: []string{"docker_image", "name"},
 		},
 		{
-			name: "Non-docker app name change",
+			name: "App name change without docker spec",
 			spec: v1alpha1.AppParameters{
 				Name:      "new-app-name",
-				Lifecycle: "buildpack",
+				Lifecycle: "docker",
 			},
 			status: v1alpha1.AppObservation{
 				Name: "test-app",
@@ -388,6 +388,41 @@ func TestIsUpToDate_Metadata(t *testing.T) {
 			}
 			if result != tt.expected {
 				t.Errorf("IsUpToDate() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestNewUpdateOptionLeavesLifecycleUnset(t *testing.T) {
+	got := newUpdateOption(&v1alpha1.App{}, v1alpha1.AppParameters{Name: "test-app", Lifecycle: "docker"})
+	if got.Lifecycle != nil {
+		t.Errorf("expected lifecycle to be left unset on update, got %+v", got.Lifecycle)
+	}
+	if got.Name != "test-app" {
+		t.Errorf("name = %q, want test-app", got.Name)
+	}
+}
+
+func TestIsDockerApp(t *testing.T) {
+	tests := []struct {
+		name     string
+		manifest string
+		want     bool
+		wantErr  bool
+	}{
+		{name: "no manifest observed", manifest: "", want: true},
+		{name: "docker app", manifest: "applications:\n- name: test-app\n  docker:\n    image: nginx:latest", want: true},
+		{name: "buildpack app", manifest: "applications:\n- name: test-app\n  buildpacks:\n  - java_buildpack", want: false},
+		{name: "app missing in manifest", manifest: "applications:\n- name: other", wantErr: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := IsDockerApp(v1alpha1.AppObservation{Name: "test-app", AppManifest: tt.manifest})
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("IsDockerApp() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if got != tt.want {
+				t.Errorf("IsDockerApp() = %v, want %v", got, tt.want)
 			}
 		})
 	}

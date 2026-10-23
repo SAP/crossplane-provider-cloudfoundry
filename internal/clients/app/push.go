@@ -69,13 +69,11 @@ func (p *pushClient) GenerateManifest(ctx context.Context, appGUID string) (stri
 func newManifestFromSpec(forProvider v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*operation.AppManifest, error) {
 	manifest := operation.NewAppManifest(forProvider.Name)
 
-	if forProvider.Lifecycle == "docker" {
-		docker, err := configDocker(forProvider, dockerCredentials)
-		if err != nil {
-			return nil, err
-		}
-		manifest.Docker = docker
+	docker, err := configDocker(forProvider, dockerCredentials)
+	if err != nil {
+		return nil, err
 	}
+	manifest.Docker = docker
 
 	services, err := configServices(forProvider)
 	if err != nil {
@@ -125,8 +123,11 @@ func newManifestFromSpec(forProvider v1alpha1.AppParameters, dockerCredentials *
 
 func configDocker(forProvider v1alpha1.AppParameters, dockerCredentials *DockerCredentials) (*operation.AppManifestDocker, error) {
 
-	if forProvider.Docker == nil {
-		return nil, errors.New("docker lifecycle requires docker spec")
+	if forProvider.Lifecycle != "" && forProvider.Lifecycle != "docker" {
+		return nil, errors.Errorf("unsupported lifecycle %q: only docker is supported", forProvider.Lifecycle)
+	}
+	if forProvider.Docker == nil || forProvider.Docker.Image == "" {
+		return nil, errors.New("docker image is required: set spec.forProvider.docker.image, only the docker lifecycle is supported")
 	}
 	docker := &operation.AppManifestDocker{
 		Image: forProvider.Docker.Image,

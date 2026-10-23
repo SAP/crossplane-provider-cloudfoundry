@@ -52,26 +52,14 @@ type AppParameters struct {
 	// +kubebuilder:validation:Required
 	Name string `json:"name,omitempty"`
 
-	// Type of the lifecycle; valid values are `buildpack`, `cnb`, `docker`
-	// +kubebuilder:validation:Enum=buildpack;cnb;docker
-	// +kubebuilder:default=buildpack
+	// Type of the lifecycle; only `docker` is supported
+	// +kubebuilder:validation:Enum=docker
+	// +kubebuilder:default=docker
 	Lifecycle string `json:"lifecycle,omitempty"`
 
 	SpaceReference `json:",inline"`
 
-	// (NOT SUPPORTED YET) An array of one ore more installed buildpack names, e.g., ruby_buildpack, java_buildpack.
-	// +kubebuilder:validation:Optional
-	Buildpacks []string `json:"buildpacks,omitempty"`
-
-	// (NOT SUPPORTED YET) The root filesystem to use with the buildpack, for example, cflinuxfs4.
-	// +kubebuilder:validation:Optional
-	Stack *string `json:"stack,omitempty"`
-
-	// (NOT SUPPORTED YET) The path to the app directory or zip file to push.
-	// +kubebuilder:validation:Optional
-	Path *string `json:"path,omitempty"`
-
-	// Specifies docker image and optional docker credentials when lifecycle is set to docker
+	// Specifies docker image and optional docker credentials. Required, as docker is the only supported lifecycle
 	// +kubebuilder:validation:Optional
 	Docker *DockerConfiguration `json:"docker,omitempty"`
 

@@ -113,21 +113,6 @@ func (in *AppObservation) DeepCopy() *AppObservation {
 func (in *AppParameters) DeepCopyInto(out *AppParameters) {
 	*out = *in
 	in.SpaceReference.DeepCopyInto(&out.SpaceReference)
-	if in.Buildpacks != nil {
-		in, out := &in.Buildpacks, &out.Buildpacks
-		*out = make([]string, len(*in))
-		copy(*out, *in)
-	}
-	if in.Stack != nil {
-		in, out := &in.Stack, &out.Stack
-		*out = new(string)
-		**out = **in
-	}
-	if in.Path != nil {
-		in, out := &in.Path, &out.Path
-		*out = new(string)
-		**out = **in
-	}
 	if in.Docker != nil {
 		in, out := &in.Docker, &out.Docker
 		*out = new(DockerConfiguration)
