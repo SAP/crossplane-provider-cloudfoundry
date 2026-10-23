@@ -7,10 +7,10 @@ require (
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cloudfoundry/go-cfclient/v3 v3.0.0-beta.1
 	github.com/crossplane-contrib/xp-testing v1.10.1
-	github.com/crossplane/crossplane-runtime/v2 v2.4.2
+	github.com/crossplane/crossplane-runtime/v2 v2.4.3
 	github.com/crossplane/crossplane-tools v0.0.0-20260719180100-659f1dc036c5
-	github.com/crossplane/crossplane/apis/v2 v2.4.2
-	github.com/docker/cli v29.9.0+incompatible
+	github.com/crossplane/crossplane/apis/v2 v2.4.3
+	github.com/docker/cli v29.9.2+incompatible
 	github.com/google/go-cmp v0.7.0
 	github.com/google/uuid v1.6.0
 	github.com/nsf/jsondiff v0.0.0-20260207060731-8e8d90c4c0ac
@@ -26,7 +26,7 @@ require (
 	k8s.io/klog/v2 v2.140.0
 	k8s.io/utils v0.0.0-20260707023825-cf1189d6abe3
 	sigs.k8s.io/controller-runtime v0.25.2
-	sigs.k8s.io/controller-tools v0.22.0
+	sigs.k8s.io/controller-tools v0.23.0
 	sigs.k8s.io/e2e-framework v0.7.0
 )
 
@@ -157,14 +157,14 @@ require (
 	go.yaml.in/yaml/v3 v3.0.5 // indirect
 	golang.org/x/exp v0.0.0-20260410095643-746e56fc9e2f // indirect
 	golang.org/x/mod v0.41.0 // indirect
-	golang.org/x/net v0.58.0 // indirect
+	golang.org/x/net v0.60.0 // indirect
 	golang.org/x/oauth2 v0.36.0 // indirect
-	golang.org/x/sync v0.22.0 // indirect
-	golang.org/x/sys v0.47.0 // indirect
-	golang.org/x/term v0.45.0 // indirect
-	golang.org/x/text v0.41.0 // indirect
+	golang.org/x/sync v0.23.0 // indirect
+	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/term v0.46.0 // indirect
+	golang.org/x/text v0.42.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
-	golang.org/x/tools v0.49.0 // indirect
+	golang.org/x/tools v0.51.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.5.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260803160001-6ac0973c030d // indirect
 	google.golang.org/grpc v1.83.2 // indirect

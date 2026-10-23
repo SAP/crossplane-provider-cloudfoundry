@@ -127,9 +127,13 @@ func convertReadinessHealthCheckConfiguration(appManifest *operation.AppManifest
 	return rhcConfig
 }
 
+// lifecycleDocker is the only app lifecycle type supported by the App resource.
+const lifecycleDocker = "docker"
+
 // convertAppResource converts a CF application to a Crossplane App resource with manifest data.
 // Fetches the app manifest, converts Docker config and processes, and optionally resolves space references.
 // Returns a ResourceWithComment containing the converted App and any warning comments.
+// Apps with a non-docker lifecycle are still exported, with a comment explaining the limits.
 func convertAppResource(ctx context.Context, cfClient *client.Client, app *res, evHandler export.EventHandler, resolveReferences bool) *yaml.ResourceWithComment {
 	slog.Debug("converting app", "name", app.Name)
 
@@ -152,7 +156,7 @@ func convertAppResource(ctx context.Context, cfClient *client.Client, app *res, 
 			},
 			ForProvider: v1alpha1.AppParameters{
 				Name:      app.Name,
-				Lifecycle: app.Lifecycle.Type,
+				Lifecycle: lifecycleDocker,
 				SpaceReference: v1alpha1.SpaceReference{
 					Space: &app.Relationships.Space.Data.GUID,
 				},
@@ -174,6 +178,13 @@ func convertAppResource(ctx context.Context, cfClient *client.Client, app *res, 
 	appWithComment := yaml.NewResourceWithComment(managedApp)
 	appWithComment.CloneComment(app.ResourceWithComment)
 
+	isDocker := app.Lifecycle.Type == lifecycleDocker
+	if !isDocker {
+		appWithComment.AddComment(fmt.Sprintf(
+			"app uses the %q lifecycle: it can be adopted for drift detection and metadata/env updates, but not re-created or updated via docker image",
+			app.Lifecycle.Type))
+	}
+
 	appManifest, err := getAppManifest(ctx, cfClient, app.GetGUID())
 	if err != nil {
 		erra := erratt.Errorf("cannot get app manifest: %w", err).With("app-name", app.GetName())
@@ -182,7 +193,7 @@ func convertAppResource(ctx context.Context, cfClient *client.Client, app *res, 
 	} else if appManifest != nil {
 		slog.Debug("app manifest fetched", "app-manifest", appManifest, "app-name", app.GetName())
 
-		if app.Lifecycle.Type == "docker" {
+		if isDocker {
 			err = convertDockerField(app, managedApp, appManifest, evHandler)
 			if err != nil {
 				evHandler.Warn(err)

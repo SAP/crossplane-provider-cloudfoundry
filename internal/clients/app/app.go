@@ -216,6 +216,20 @@ func envVarsChanged(spec v1alpha1.AppParameters, appManifest *operation.AppManif
 	return !reflect.DeepEqual(specEnv, currentEnv)
 }
 
+// IsDockerApp reports whether the observed manifest describes a docker app.
+// A manifest without a docker section belongs to a buildpack or cnb app.
+// An empty manifest means nothing has been observed, so it is not rejected.
+func IsDockerApp(status v1alpha1.AppObservation) (bool, error) {
+	if status.AppManifest == "" {
+		return true, nil
+	}
+	m, err := getAppManifest(status.Name, status.AppManifest)
+	if err != nil {
+		return false, err
+	}
+	return m.Docker != nil, nil
+}
+
 // DetectChanges determines what fields have changed between spec and status.
 // Metadata drift uses BuildMetadata(mg, ...), so missing default annotations
 // and leftover legacy default labels trigger an Update.
@@ -235,7 +249,7 @@ func DetectChanges(mg xpresource.Managed, spec v1alpha1.AppParameters, status v1
 	}
 
 	// Check if Docker image changed
-	if spec.Lifecycle == "docker" && spec.Docker != nil {
+	if spec.Docker != nil {
 		if appManifest.Docker == nil || spec.Docker.Image != appManifest.Docker.Image {
 			changes.ChangedFields["docker_image"] = struct{}{}
 		}
@@ -320,52 +334,21 @@ func newCreateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resour
 	name := spec.Name
 	space := ptr.Deref(spec.Space, "")
 	appCreate := resource.NewAppCreate(name, space)
-	switch spec.Lifecycle {
-	case "buildpack":
-		appCreate.Lifecycle = &resource.Lifecycle{
-			Type: spec.Lifecycle,
-			Data: resource.BuildpackLifecycle{
-				Buildpacks: spec.Buildpacks,
-				Stack:      ptr.Deref(spec.Stack, ""),
-			},
-		}
-	case "docker":
-		appCreate.Lifecycle = &resource.Lifecycle{
-			Type: spec.Lifecycle,
-			Data: resource.DockerLifecycle{},
-		}
-	default:
-		appCreate.Lifecycle = nil
+	appCreate.Lifecycle = &resource.Lifecycle{
+		Type: "docker",
+		Data: resource.DockerLifecycle{},
 	}
 	appCreate.Metadata = metadata.BuildMetadata(mg, spec.Labels, spec.Annotations)
 	return appCreate
 }
 
-// newUpdateOption map spec to AppCreate option
+// newUpdateOption map spec to AppUpdate option.
+// The lifecycle is chosen when the app is created and is left unset here, so
+// updating an adopted buildpack or cnb app does not change its lifecycle.
 func newUpdateOption(mg xpresource.Managed, spec v1alpha1.AppParameters) *resource.AppUpdate {
-	var lifecycle *resource.Lifecycle
-	switch spec.Lifecycle {
-	case "buildpack":
-		lifecycle = &resource.Lifecycle{
-			Type: spec.Lifecycle,
-			Data: resource.BuildpackLifecycle{
-				Buildpacks: spec.Buildpacks,
-				Stack:      ptr.Deref(spec.Stack, ""),
-			},
-		}
-	case "docker":
-		lifecycle = &resource.Lifecycle{
-			Type: spec.Lifecycle,
-			Data: resource.DockerLifecycle{},
-		}
-	default:
-		lifecycle = nil
-	}
-
 	return &resource.AppUpdate{
-		Name:      spec.Name,
-		Lifecycle: lifecycle,
-		Metadata:  metadata.BuildMetadata(mg, spec.Labels, spec.Annotations),
+		Name:     spec.Name,
+		Metadata: metadata.BuildMetadata(mg, spec.Labels, spec.Annotations),
 	}
 }
 

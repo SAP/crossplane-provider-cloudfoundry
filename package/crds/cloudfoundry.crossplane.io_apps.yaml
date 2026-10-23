@@ -3,7 +3,7 @@ apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
   annotations:
-    controller-gen.kubebuilder.io/version: v0.22.0
+    controller-gen.kubebuilder.io/version: v0.23.0
   name: apps.cloudfoundry.crossplane.io
 spec:
   group: cloudfoundry.crossplane.io
@@ -87,12 +87,6 @@ spec:
                       resource. Add as described [here](https://docs.cloudfoundry.org/adminguide/metadata.html#-view-metadata-for-an-object).
                     type: object
                     x-kubernetes-map-type: granular
-                  buildpacks:
-                    description: (NOT SUPPORTED YET) An array of one ore more installed
-                      buildpack names, e.g., ruby_buildpack, java_buildpack.
-                    items:
-                      type: string
-                    type: array
                   default-route:
                     description: When set to true, a route for the app will be created
                       using the app name as the hostname and the containing org's
@@ -100,8 +94,8 @@ spec:
                       or if no-route is set to true.
                     type: boolean
                   docker:
-                    description: Specifies docker image and optional docker credentials
-                      when lifecycle is set to docker
+                    description: Specifies docker image and optional docker credentials.
+                      Required, as docker is the only supported lifecycle
                     properties:
                       credentialsSecretRef:
                         description: (Attributes) Defines login credentials for private
@@ -138,12 +132,9 @@ spec:
                     type: object
                     x-kubernetes-map-type: granular
                   lifecycle:
-                    default: buildpack
-                    description: Type of the lifecycle; valid values are `buildpack`,
-                      `cnb`, `docker`
+                    default: docker
+                    description: Type of the lifecycle; only `docker` is supported
                     enum:
-                    - buildpack
-                    - cnb
                     - docker
                     type: string
                   log-rate-limit-per-second:
@@ -162,10 +153,6 @@ spec:
                   orgName:
                     description: (String) The name of the Cloud Foundry organization
                       containing the space.
-                    type: string
-                  path:
-                    description: (NOT SUPPORTED YET) The path to the app directory
-                      or zip file to push.
                     type: string
                   processes:
                     description: Configures multiple processes to run for an App.
@@ -523,10 +510,6 @@ spec:
                             type: string
                         type: object
                     type: object
-                  stack:
-                    description: (NOT SUPPORTED YET) The root filesystem to use with
-                      the buildpack, for example, cflinuxfs4.
-                    type: string
                 required:
                 - name
                 type: object
