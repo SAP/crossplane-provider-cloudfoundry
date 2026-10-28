@@ -56,11 +56,11 @@ func TestSCBKeyRotator_RetireBinding(t *testing.T) {
 	crWithForceRotation := &v1alpha1.ServiceCredentialBinding{
 		ObjectMeta: metav1.ObjectMeta{
 			Annotations: map[string]string{
-				ForceRotationKey: "true",
+				ForceRotationKey: "11111111-1111-4111-8111-111111111111",
 			},
 		},
 		Spec: v1alpha1.ServiceCredentialBindingSpec{
-			ForProvider: v1alpha1.ServiceCredentialBindingParameters{},
+			ForProvider: v1alpha1.ServiceCredentialBindingParameters{Type: "key"},
 		},
 		Status: v1alpha1.ServiceCredentialBindingStatus{
 			AtProvider: v1alpha1.ServiceCredentialBindingObservation{},
@@ -84,7 +84,7 @@ func TestSCBKeyRotator_RetireBinding(t *testing.T) {
 	}
 
 	serviceBindingResource := &cfresource.ServiceCredentialBinding{
-		Resource: cfresource.Resource{GUID: "test-guid"},
+		Resource: cfresource.Resource{GUID: "11111111-1111-4111-8111-111111111111"},
 		Name:     ptr.To("my-binding-abc12"),
 	}
 
