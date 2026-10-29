@@ -10,6 +10,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -46,9 +47,13 @@ func TestRotationCleanupNilSafety(t *testing.T) {
 			cf.On("Update", mock.Anything, rotationTestK1, mock.Anything).Return(
 				&cfresource.ServiceCredentialBinding{Resource: cfresource.Resource{GUID: rotationTestK1}}, nil,
 			)
+			cf.On("Get", mock.Anything, rotationTestK1).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil).Maybe()
 			rotator := &servicecredentialbinding.SCBKeyRotator{SCBClient: cf}
 			ext := &external{
-				kube:       &test.MockClient{MockUpdate: test.NewMockUpdateFn(nil)},
+				kube: &test.MockClient{
+					MockUpdate:       test.NewMockUpdateFn(nil),
+					MockStatusUpdate: func(context.Context, k8s.Object, ...k8s.SubResourceUpdateOption) error { return nil },
+				},
 				scbClient:  cf,
 				keyRotator: rotator,
 			}
@@ -73,10 +78,12 @@ func TestRotationCleanupPartialProgress(t *testing.T) {
 	cf.On("Update", mock.Anything, rotationTestK1, mock.Anything).Return(
 		&cfresource.ServiceCredentialBinding{Resource: cfresource.Resource{GUID: rotationTestK1}}, nil,
 	)
+	cf.On("Get", mock.Anything, rotationTestK1).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil)
 	cf.On("Delete", mock.Anything, removed.GUID).Return("", nil)
 	cf.On("Delete", mock.Anything, failed.GUID).Return("", assert.AnError)
+	store := newRotationStoredClient(cr)
 	ext := &external{
-		kube:       &test.MockClient{MockUpdate: test.NewMockUpdateFn(nil)},
+		kube:       store,
 		scbClient:  cf,
 		keyRotator: &servicecredentialbinding.SCBKeyRotator{SCBClient: cf},
 	}
@@ -85,5 +92,7 @@ func TestRotationCleanupPartialProgress(t *testing.T) {
 	assert.ErrorContains(t, err, "cannot delete expired key "+failed.GUID+": assert.AnError general error for testing")
 	assert.Equal(t, []*v1alpha1.SCBResource{failed}, cr.Status.AtProvider.RetiredKeys,
 		"successfully deleted and not-found keys should be removed even when another deletion fails")
+	assert.Equal(t, []*v1alpha1.SCBResource{failed}, store.get().Status.AtProvider.RetiredKeys,
+		"successful deletion progress must be persisted even when another deletion fails")
 	cf.AssertExpectations(t)
 }
