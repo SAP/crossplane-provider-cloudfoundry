@@ -1,0 +1,16 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: rotation-instance-$BUILD_ID
+  namespace: default
+spec:
+  forProvider:
+    type: managed
+    name: rotation-instance-$BUILD_ID
+    spaceRef:
+      name: rotation-space-$BUILD_ID
+      policy:
+        resolve: Always
+    servicePlan:
+      offering: alert-notification
+      plan: standard
