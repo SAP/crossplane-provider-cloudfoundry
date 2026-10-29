@@ -238,37 +238,48 @@ spec:
 **Rotation Parameters:**
 
 - **`frequency`** (required): Defines how often the active key should be rotated (e.g., `24h`, `168h`, `720h`)
-- **`ttl`** (optional): Time-To-Live for retired keys before they are permanently deleted. Must be greater than or equal to `frequency`. If not specified, retired keys are kept indefinitely.
+- **`ttl`** (optional): Total lifetime of a key, measured from its Cloud Foundry creation time. Retired keys become eligible for deletion when `createdAt + ttl` is reached, after a replacement has been safely handed over. It must be greater than or equal to `frequency`. For example, `1440h` is 60 days of total key lifetime; it does not promise 60 days of overlap after rotation. If `ttl` is absent (including when `rotation` is absent), retired keys use the 48-hour fallback described below.
 
 **How Rotation Works:**
 
 1. **Active Key Management**: The `metadata.annotations['crossplane.io/external-name']` always points to the currently active key GUID
 2. **Secret Updates**: The connection secret is always populated with credentials from the active key
-3. **Retired Key Tracking**: When a key is rotated, the old key is moved to `status.atProvider.retiredKeys[]` and remains valid until its TTL expires
-4. **Automatic Cleanup**: Expired retired keys are automatically deleted from Cloud Foundry based on the TTL configuration
+3. **Retired Key Tracking**: When a key is rotated, the old key is moved to `status.atProvider.retiredKeys[]`.
+4. **Automatic Cleanup**: Eligible retired keys are deleted from Cloud Foundry during a later permitted reconciliation. The active key is never removed by routine retired-key cleanup.
 
 **Force Rotation:**
 
-You can force an immediate rotation by adding an annotation:
+Force rotation is an operational action for `type: key` bindings. Read the current GUID from the live resource and target that exact key generation:
 
-```yaml
-metadata:
-  annotations:
-    servicecredentialbinding.cloudfoundry.crossplane.io/force-rotation: ""
+```shell
+name=my-service-key
+key_guid=$(kubectl get servicecredentialbinding "$name" -o jsonpath='{.status.atProvider.guid}')
+test -n "$key_guid" || { echo "no active key GUID found" >&2; exit 1; }
+kubectl annotate servicecredentialbinding "$name" \
+  servicecredentialbinding.cloudfoundry.crossplane.io/force-rotation="$key_guid" --overwrite
 ```
 
-**Important Notes:**
+Do not commit this annotation to Git. If it is accidentally present in a Git-managed manifest, repeated synchronization of the same old GUID is inert after that key has been replaced. Do not continuously template the annotation from the current GUID: every newly observed active GUID is a distinct rotation target. Remove an accidentally committed annotation from the source of truth as cleanup, not as the completion signal.
+
+The value must be the active Cloud Foundry binding GUID. Empty values and values such as `true`, timestamps, or arbitrary nonces are ignored with a warning; a syntactically valid but stale GUID is silently ignored. App-binding annotations are also ignored with a warning. Existing `spec.forProvider.rotation` remains restricted to key bindings by the API validation rule.
+
+The annotation is a compare-and-rotate request: if scheduled rotation or another operation replaces the key between reading its GUID and applying the annotation, the old target no longer matches and does nothing. To intentionally rotate again, read the then-current GUID and issue a new live annotation operation. An accepted retirement is persisted before replacement and continues if the annotation is later removed. A request targeting a replacement that is still provisioning or whose configured credentials have not been published is deferred; removing it before acceptance cancels that deferred request.
+
+**Retired-key retention and handover:**
+
+- Without an explicit TTL, each retired key receives a durable 48-hour deletion deadline after its replacement has succeeded and handover is confirmed. For a configured connection Secret, handover requires successful credential retrieval and a Secret containing those credentials; an unchanged, correct Secret counts. Without a Secret reference, successful binding observation is the boundary. This starts the overlap window; it does not mean every workload has reloaded its credentials.
+- Legacy retired keys without a deadline are initialized conservatively after a safe handover. Their old creation time is not used to immediately expire them. Removing a configured TTL moves eligible retirees to this fallback at the next safe handover; adding a TTL applies the configured creation-based deadline and can shorten retention.
+- With an explicit TTL, its creation-based deadline is preserved, but cleanup still waits until a usable replacement is handed over. Cleanup occurs on a later reconciliation permitted to update the resource; pausing reconciliation or disallowing Update can delay cleanup. Full deletion of the managed resource is separate and removes its bindings without waiting for the overlap period.
+- A short scheduled frequency can leave several retired keys valid during the 48-hour window and may consume broker key quotas. Retention is not immediate revocation: if a key is compromised, assess operator-directed Cloud Foundry revocation. Retaining a key does not guarantee its credentials remain valid, and publishing a Secret does not guarantee consumers have reloaded it.
 
 :::note Rotation Details
-- Key rotation is only supported for `type: key` bindings, not for `type: app` bindings
-- The rotation feature maintains backward compatibility - existing bindings without rotation configuration continue to work as static keys
-- During rotation, there may be a brief period where both old and new keys are valid, ensuring zero-downtime credential updates
+- Key rotation is supported only for `type: key`, not `type: app`.
+- Bindings without a rotation configuration remain static unless an operational force-rotation request targets their current GUID.
+- During handover, old and replacement keys can overlap. Neither this overlap nor Secret publication guarantees zero downtime.
 :::
 
-:::warning TTL Considerations
-- Set TTL appropriately to allow sufficient time for applications to pick up new credentials
-- A TTL that's too short may cause service disruptions if applications don't refresh credentials quickly enough
-- A TTL that's too long may increase security risks by keeping old credentials active longer than necessary
+:::warning Upgrade and rollback
+Install the updated ServiceCredentialBinding CRD before upgrading the provider controller so the `deleteAfter` retired-key deadline is preserved. A legacy retired key without this field gets a one-time 48-hour window after the first safe handover; existing indefinite retention therefore changes. During rollback or mixed-version operation, an older provider may interpret any retained force-rotation annotation by presence. Before activating an older controller, remove the annotation from the live resource and from any accidental Git source; the new controller deliberately does not remove it automatically.
 :::
 
 #### Create failure protection
