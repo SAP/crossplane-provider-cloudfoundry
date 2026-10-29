@@ -257,21 +257,37 @@ func TestRotationConnectionPublisherBoundary(t *testing.T) {
 	})
 }
 
-// TestRotationConnectionDetailsRetrievalErrorIsNotHandover records the current
-// controller behavior: GetConnectionDetails swallows retrieval errors. The
-// handover contract must not mistake the resulting nil details for publication.
+// TestRotationConnectionDetailsRetrievalErrorIsNotHandover verifies that
+// required connection details cannot silently become an empty publication.
 func TestRotationConnectionDetailsRetrievalErrorIsNotHandover(t *testing.T) {
-	cr := rotationControllerCR(rotationTestK1, map[string]string{servicecredentialbinding.ForceRotationKey: rotationTestK0})
-	cr.Spec.ForProvider.Type = "key"
-	store := newRotationStoredClient(cr)
-	cf := &fake.MockServiceCredentialBinding{}
-	cf.On("Get", mock.Anything, rotationTestK1).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil).Once()
-	cf.On("GetDetails", mock.Anything, rotationTestK1).Return((*cfresource.ServiceCredentialBindingDetails)(nil), errors.New("unavailable")).Once()
-	obs, err := rotationControllerExternal(store, cf).Observe(context.Background(), cr)
-	require.NoError(t, err)
-	assert.True(t, obs.ResourceExists)
-	assert.Nil(t, obs.ConnectionDetails, "nil details after retrieval failure cannot prove successful secret publication")
-	assert.Empty(t, store.get().Status.AtProvider.RetiredKeys, "failed detail retrieval must not cause force retirement")
+	t.Run("configured secret fails observation", func(t *testing.T) {
+		cr := rotationControllerCR(rotationTestK1, nil)
+		cr.Spec.ForProvider.Type = "key"
+		cr.Spec.WriteConnectionSecretToReference = &xpv2.SecretReference{Name: "rotation-credentials", Namespace: "rotation-test"}
+		store := newRotationStoredClient(cr)
+		cf := &fake.MockServiceCredentialBinding{}
+		cf.On("Get", mock.Anything, rotationTestK1).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil).Once()
+		cf.On("GetDetails", mock.Anything, rotationTestK1).Return((*cfresource.ServiceCredentialBindingDetails)(nil), errors.New("unavailable")).Once()
+		obs, err := rotationControllerExternal(store, cf).Observe(context.Background(), cr)
+		require.Error(t, err)
+		assert.Empty(t, obs.ConnectionDetails)
+		assert.Empty(t, store.get().Status.AtProvider.RetiredKeys, "failed required detail retrieval must not cause force retirement")
+		cf.AssertExpectations(t)
+	})
+
+	t.Run("no secret keeps optional details best effort", func(t *testing.T) {
+		cr := rotationControllerCR(rotationTestK1, nil)
+		cr.Spec.ForProvider.Type = "key"
+		store := newRotationStoredClient(cr)
+		cf := &fake.MockServiceCredentialBinding{}
+		cf.On("Get", mock.Anything, rotationTestK1).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil).Once()
+		cf.On("GetDetails", mock.Anything, rotationTestK1).Return((*cfresource.ServiceCredentialBindingDetails)(nil), errors.New("unavailable")).Once()
+		obs, err := rotationControllerExternal(store, cf).Observe(context.Background(), cr)
+		require.NoError(t, err)
+		assert.True(t, obs.ResourceExists)
+		assert.Nil(t, obs.ConnectionDetails)
+		cf.AssertExpectations(t)
+	})
 }
 
 func rotationHandoverKube(t *testing.T, cr *v1alpha1.ServiceCredentialBinding, withOldSecret bool) client.Client {

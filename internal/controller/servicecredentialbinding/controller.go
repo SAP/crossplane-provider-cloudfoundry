@@ -364,10 +364,19 @@ func (c *external) HandleObservationState(serviceBinding *cfresource.ServiceCred
 
 		cr.SetConditions(xpv2.Available())
 
+		connectionDetails, err := scb.GetConnectionDetails(ctx, c.scbClient, serviceBinding.GUID, cr.Spec.ConnectionDetailsAsJSON)
+		if err != nil && cr.Spec.WriteConnectionSecretToReference != nil {
+			return managed.ExternalObservation{}, fmt.Errorf("cannot retrieve required connection details: %w", err)
+		}
+		if err != nil {
+			// Connection details are optional when this resource does not publish a secret.
+			connectionDetails = nil
+		}
+
 		return managed.ExternalObservation{
 			ResourceExists:    true,
 			ResourceUpToDate:  scb.IsUpToDate(ctx, cr, cr.Spec.ForProvider, *serviceBinding) && !c.keyRotator.HasExpiredKeys(cr),
-			ConnectionDetails: scb.GetConnectionDetails(ctx, c.scbClient, serviceBinding.GUID, cr.Spec.ConnectionDetailsAsJSON),
+			ConnectionDetails: connectionDetails,
 		}, nil
 	}
 
