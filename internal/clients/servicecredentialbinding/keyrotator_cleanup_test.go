@@ -154,7 +154,7 @@ func TestSCBKeyRotator_DeleteRetiredKeysRejectsUnknownIdentity(t *testing.T) {
 		AtProvider: v1alpha1.ServiceCredentialBindingObservation{RetiredKeys: []*v1alpha1.SCBResource{{Name: "no-guid"}}},
 	}}
 	assert.NotPanics(t, func() {
-		_ = (&SCBKeyRotator{SCBClient: cf}).DeleteRetiredKeys(context.Background(), cr)
+		assert.EqualError(t, (&SCBKeyRotator{SCBClient: cf}).DeleteRetiredKeys(context.Background(), cr), "cannot delete retired key with missing GUID")
 	})
 	cf.AssertNotCalled(t, "Delete", mock.Anything, "")
 }
