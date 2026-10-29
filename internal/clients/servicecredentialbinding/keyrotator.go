@@ -4,97 +4,135 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
-const ForceRotationKey = "servicecredentialbinding.cloudfoundry.crossplane.io/force-rotation"
+const (
+	ForceRotationKey           = "servicecredentialbinding.cloudfoundry.crossplane.io/force-rotation"
+	DefaultRetiredKeyRetention = 48 * time.Hour
+)
 
 type KeyRotator interface {
-	// RetireBinding checks if the binding should be retired based on the rotation frequency
-	// and the force rotation annotation. If it should be retired, it adds the retired key to the status.
+	// RetireBinding checks if the key should be retired based on schedule or target GUID.
+	// An already-retired active identity is returned as pending replacement work.
 	RetireBinding(cr *v1alpha1.ServiceCredentialBinding, serviceBinding *cfresource.ServiceCredentialBinding) bool
 
-	// HasExpiredKeys checks if there are any retired keys that have expired based on the rotation TTL.
+	// HasExpiredKeys checks if a retired key is eligible for routine cleanup.
 	HasExpiredKeys(cr *v1alpha1.ServiceCredentialBinding) bool
 
-	// DeleteExpiredKeys deletes the expired keys from the status and the external system.
-	// It returns the new list of retired keys and any error encountered during deletion.
+	// DeleteExpiredKeys deletes eligible retired keys and returns identities still tracked.
 	DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) ([]*v1alpha1.SCBResource, error)
 
-	// DeleteRetiredKeys deletes all retired keys from the external system.
+	// DeleteRetiredKeys deletes all retired keys as part of full resource deletion.
 	DeleteRetiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) error
 }
 
 type SCBKeyRotator struct {
 	SCBClient ServiceCredentialBinding
+	// Now allows lifecycle boundaries to be tested deterministically. A nil value uses UTC wall time.
+	Now func() time.Time
+}
+
+func (r *SCBKeyRotator) now() time.Time {
+	if r.Now != nil {
+		return r.Now().UTC()
+	}
+	return time.Now().UTC()
 }
 
 func (r *SCBKeyRotator) RetireBinding(cr *v1alpha1.ServiceCredentialBinding, serviceBinding *cfresource.ServiceCredentialBinding) bool {
-	forceRotation := false
-	if cr.Annotations != nil {
-		_, forceRotation = cr.Annotations[ForceRotationKey]
-	}
-
-	rotationDue := cr.Spec.ForProvider.Rotation != nil && cr.Spec.ForProvider.Rotation.Frequency != nil &&
-		(cr.Status.AtProvider.CreatedAt == nil ||
-			cr.Status.AtProvider.CreatedAt.Add(cr.Spec.ForProvider.Rotation.Frequency.Duration).Before(time.Now()))
-
-	if forceRotation || rotationDue {
-		// If the binding was created before the rotation frequency, retire it.
-		for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
-			if retiredKey.GUID == serviceBinding.GUID {
-				// If the binding is already retired, do not retire it again.
-				return true
-			}
-		}
-		cr.Status.AtProvider.RetiredKeys = append(cr.Status.AtProvider.RetiredKeys, &v1alpha1.SCBResource{
-			GUID:      serviceBinding.GUID,
-			Name:      ptr.Deref(serviceBinding.Name, ""), // only set during retirement; already retired keys are not backfilled
-			CreatedAt: &metav1.Time{Time: serviceBinding.CreatedAt},
-		})
-		return true
-	}
-
-	return false
-}
-
-func (r *SCBKeyRotator) HasExpiredKeys(cr *v1alpha1.ServiceCredentialBinding) bool {
-	if cr.Status.AtProvider.RetiredKeys == nil || cr.Spec.ForProvider.Rotation == nil ||
-		cr.Spec.ForProvider.Rotation.TTL == nil {
+	if cr == nil || serviceBinding == nil || serviceBinding.GUID == "" || cr.Spec.ForProvider.Type == "app" || cr.DeletionTimestamp != nil {
 		return false
 	}
 
-	for _, key := range cr.Status.AtProvider.RetiredKeys {
-		if key.CreatedAt.Add(cr.Spec.ForProvider.Rotation.TTL.Duration).Before(time.Now()) {
+	for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
+		if retiredKey != nil && sameGUID(retiredKey.GUID, serviceBinding.GUID) {
+			// Resume an accepted replacement independently of the annotation/schedule.
 			return true
 		}
 	}
 
+	forceRotation := false
+	if cr.Annotations != nil {
+		if target, ok := cr.Annotations[ForceRotationKey]; ok && isCanonicalUUID(target) {
+			forceRotation = sameGUID(target, serviceBinding.GUID)
+		}
+	}
+
+	rotationDue := cr.Spec.ForProvider.Rotation != nil && cr.Spec.ForProvider.Rotation.Frequency != nil &&
+		(cr.Status.AtProvider.CreatedAt == nil || !r.now().Before(cr.Status.AtProvider.CreatedAt.Add(cr.Spec.ForProvider.Rotation.Frequency.Duration)))
+
+	if !forceRotation && !rotationDue {
+		return false
+	}
+
+	cr.Status.AtProvider.RetiredKeys = append(cr.Status.AtProvider.RetiredKeys, &v1alpha1.SCBResource{
+		GUID:      serviceBinding.GUID,
+		Name:      ptr.Deref(serviceBinding.Name, ""),
+		CreatedAt: &metav1.Time{Time: serviceBinding.CreatedAt},
+	})
+	return true
+}
+
+// InitializeFallbackDeadlines records a one-time 48-hour fallback deadline for valid,
+// non-active retirees. The caller must invoke this only after it has confirmed handover
+// and persist the mutation before relying on it for cleanup.
+func (r *SCBKeyRotator) InitializeFallbackDeadlines(cr *v1alpha1.ServiceCredentialBinding, handover time.Time) bool {
+	if cr == nil || cr.Spec.ForProvider.Rotation != nil && cr.Spec.ForProvider.Rotation.TTL != nil {
+		return false
+	}
+
+	active := activeGUIDs(cr)
+	deadline := handover.UTC().Add(DefaultRetiredKeyRetention)
+	// metav1.Time JSON is second precision; round up so serialization cannot shorten retention.
+	deadline = deadline.Truncate(time.Second)
+	if !deadline.Equal(handover.UTC().Add(DefaultRetiredKeyRetention)) {
+		deadline = deadline.Add(time.Second)
+	}
+
+	changed := false
+	for _, key := range cr.Status.AtProvider.RetiredKeys {
+		if key == nil || key.GUID == "" || isActiveGUID(key.GUID, active) || key.DeleteAfter != nil {
+			continue
+		}
+		copy := metav1.NewTime(deadline)
+		key.DeleteAfter = &copy
+		changed = true
+	}
+	return changed
+}
+
+func (r *SCBKeyRotator) HasExpiredKeys(cr *v1alpha1.ServiceCredentialBinding) bool {
+	for _, key := range cr.Status.AtProvider.RetiredKeys {
+		if r.expired(cr, key, r.now()) {
+			return true
+		}
+	}
 	return false
 }
 
-func (c *SCBKeyRotator) DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) ([]*v1alpha1.SCBResource, error) {
+func (r *SCBKeyRotator) DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) ([]*v1alpha1.SCBResource, error) {
 	newRetiredKeys := make([]*v1alpha1.SCBResource, 0, len(cr.Status.AtProvider.RetiredKeys))
 	errs := make([]error, 0, len(cr.Status.AtProvider.RetiredKeys))
+	now := r.now()
 
 	for _, key := range cr.Status.AtProvider.RetiredKeys {
-
-		if key.CreatedAt.Add(cr.Spec.ForProvider.Rotation.TTL.Duration).After(time.Now()) ||
-			key.GUID == meta.GetExternalName(cr) {
+		if key == nil || key.GUID == "" || !r.expired(cr, key, now) {
 			newRetiredKeys = append(newRetiredKeys, key)
+			continue
+		}
 
-		} else if err := Delete(ctx, c.SCBClient, key.GUID); err != nil &&
-			!cfresource.IsResourceNotFoundError(err) &&
-			!cfresource.IsServiceBindingNotFoundError(err) {
-
-			// If we cannot delete the key, keep it in the list
+		if err := Delete(ctx, r.SCBClient, key.GUID); err != nil &&
+			!cfresource.IsResourceNotFoundError(err) && !cfresource.IsServiceBindingNotFoundError(err) {
 			newRetiredKeys = append(newRetiredKeys, key)
 			errs = append(errs, fmt.Errorf("cannot delete expired key %s: %w", key.GUID, err))
 		}
@@ -103,11 +141,68 @@ func (c *SCBKeyRotator) DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.Serv
 	return newRetiredKeys, errors.Join(errs...)
 }
 
-func (c *SCBKeyRotator) DeleteRetiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) error {
+func (r *SCBKeyRotator) expired(cr *v1alpha1.ServiceCredentialBinding, key *v1alpha1.SCBResource, now time.Time) bool {
+	if key == nil || key.GUID == "" || isActiveGUID(key.GUID, activeGUIDs(cr)) {
+		return false
+	}
+
+	var deadline time.Time
+	if cr.Spec.ForProvider.Rotation != nil && cr.Spec.ForProvider.Rotation.TTL != nil {
+		if key.CreatedAt == nil || key.CreatedAt.IsZero() {
+			return false
+		}
+		deadline = key.CreatedAt.Add(cr.Spec.ForProvider.Rotation.TTL.Duration)
+	} else {
+		if key.DeleteAfter == nil || key.DeleteAfter.IsZero() {
+			return false
+		}
+		deadline = key.DeleteAfter.Time
+	}
+	return !now.Before(deadline)
+}
+
+func activeGUIDs(cr *v1alpha1.ServiceCredentialBinding) []string {
+	active := []string{meta.GetExternalName(cr), cr.Status.AtProvider.GUID}
+	return active
+}
+
+func isActiveGUID(guid string, active []string) bool {
+	for _, candidate := range active {
+		if candidate != "" && sameGUID(guid, candidate) {
+			return true
+		}
+	}
+	return false
+}
+
+func isCanonicalUUID(value string) bool {
+	if len(value) != 36 || strings.TrimSpace(value) != value {
+		return false
+	}
+	_, err := uuid.Parse(value)
+	return err == nil && strings.Count(value, "-") == 4
+}
+
+func sameGUID(a, b string) bool {
+	if a == b {
+		return true
+	}
+	if !isCanonicalUUID(a) || !isCanonicalUUID(b) {
+		return false
+	}
+	return strings.EqualFold(a, b)
+}
+
+func (r *SCBKeyRotator) DeleteRetiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) error {
 	for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
-		if err := Delete(ctx, c.SCBClient, retiredKey.GUID); err != nil &&
-			!cfresource.IsResourceNotFoundError(err) &&
-			!cfresource.IsServiceBindingNotFoundError(err) {
+		if retiredKey == nil {
+			continue
+		}
+		if retiredKey.GUID == "" {
+			return errors.New("cannot delete retired key with missing GUID")
+		}
+		if err := Delete(ctx, r.SCBClient, retiredKey.GUID); err != nil &&
+			!cfresource.IsResourceNotFoundError(err) && !cfresource.IsServiceBindingNotFoundError(err) {
 			return fmt.Errorf("cannot delete retired key %s: %w", retiredKey.GUID, err)
 		}
 	}
