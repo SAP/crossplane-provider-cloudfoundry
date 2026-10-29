@@ -278,11 +278,18 @@ Custom tests use YAML manifests from `test/upgrade/testdata/customCRs/{testName}
 
 #### Current Custom Tests
 
-**Test_Space_External_Name** (`testdata/customCRs/externalNames/`)
+**Test_Space_External_Name** (`testdata/customCrs/externalNames/`)
 - Validates Space external-name follows UUID format
 - Verifies external-name doesn't change during upgrade
 - Tests external-name ADR compliance
 
+### ServiceCredentialBinding retired-key migration
+
+The existing ServiceCredentialBinding external-name upgrade test does not cover migration of legacy retired-key state. A dedicated rotation migration scenario is planned, but is not yet implemented; do not treat the current upgrade suite as evidence that legacy no-TTL retirees or the new `deleteAfter` CRD field have been verified across versions.
+
+When available, the scenario will use an isolated fixture under `testdata/customCrs/serviceCredentialBindingRotation/` and a FROM provider that supports the resumable pause safeguard, followed by a TO provider/CRD with the durable retired-key deadline. It must verify the active Cloud Foundry GUID and configured Secret survive, the old empty force-rotation annotation does not trigger another replacement, and a legacy retiree receives one non-sliding 48-hour deadline only after safe handover. The test must inspect actual Cloud Foundry and persisted resource state, not Ready alone.
+
+Choose and record compatible FROM/TO image tags and digests before execution. A candidate release example is not evidence of the required behavior. Upgrade testing creates infrastructure and real resources; follow the approval, active-context, credential-safety, and cleanup requirements in this guide before running it.
 #### Adding New Custom Test Resources
 
 1. Create a subdirectory for your test in `test/upgrade/testdata/customCRs/`:
