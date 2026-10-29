@@ -33,6 +33,7 @@ func rotationControllerCR(guid string, annotations map[string]string) *v1alpha1.
 }
 
 func rotationControllerExternal(kube *rotationStoredClient, cf *fake.MockServiceCredentialBinding) *external {
+	cf.On("GetDetails", mock.Anything, mock.Anything).Return(&cfresource.ServiceCredentialBindingDetails{Credentials: map[string]any{}}, nil).Maybe()
 	c := &external{
 		kube:      kube,
 		scbClient: cf,
@@ -81,9 +82,9 @@ func TestRotationCriticalAnnotationConflict(t *testing.T) {
 
 	_, err = c.Create(ctx, initial)
 	require.NoError(t, err)
-	// The current Create removes the annotation in memory; the API server copy
-	// still has it, as it would before the critical annotation update.
-	require.NotContains(t, initial.GetAnnotations(), servicecredentialbinding.ForceRotationKey)
+	// Create retains the operational target; it becomes inert once the active
+	// Cloud Foundry generation changes.
+	require.Equal(t, rotationTestK0, initial.GetAnnotations()[servicecredentialbinding.ForceRotationKey])
 	require.Contains(t, store.get().GetAnnotations(), servicecredentialbinding.ForceRotationKey)
 	require.Equal(t, rotationTestK1, meta.GetExternalName(initial))
 
@@ -100,11 +101,12 @@ func TestRotationCriticalAnnotationConflict(t *testing.T) {
 	// as stale when Cloud Foundry reports K1 as the active generation.
 	reloaded := store.get()
 	cf.On("Get", mock.Anything, rotationTestK1).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil).Once()
-	cf.On("GetDetails", mock.Anything, rotationTestK1).Return(&cfresource.ServiceCredentialBindingDetails{Credentials: map[string]any{}}, nil).Once()
 	obs, err = rotationControllerExternal(store, cf).Observe(ctx, reloaded)
 	require.NoError(t, err)
 	require.True(t, obs.ResourceExists, "stale K0 annotation must not request retirement of K1")
-	require.Empty(t, store.get().Status.AtProvider.RetiredKeys)
+	require.Len(t, store.get().Status.AtProvider.RetiredKeys, 1)
+	require.Equal(t, rotationTestK0, store.get().Status.AtProvider.RetiredKeys[0].GUID)
+	require.NotNil(t, store.get().Status.AtProvider.RetiredKeys[0].DeleteAfter)
 	cf.AssertExpectations(t)
 }
 
@@ -152,6 +154,24 @@ func TestRotationPendingReplacementRecovery(t *testing.T) {
 	require.False(t, obs.ResourceExists, "persisted retirement must resume replacement after the original Create failed")
 	require.Len(t, store.get().Status.AtProvider.RetiredKeys, 1)
 	require.Equal(t, rotationTestK0, store.get().Status.AtProvider.RetiredKeys[0].GUID)
+	cf.AssertExpectations(t)
+}
+
+func TestRotationFallbackDeadlinePersistenceFailureDefersNewRequest(t *testing.T) {
+	cr := rotationControllerCR(rotationTestK1, map[string]string{servicecredentialbinding.ForceRotationKey: rotationTestK1})
+	cr.Status.AtProvider.RetiredKeys = []*v1alpha1.SCBResource{{GUID: rotationTestK0}}
+	store := newRotationStoredClient(cr)
+	store.statusUpdateErr = errors.New("deadline status write rejected")
+	cf := &fake.MockServiceCredentialBinding{}
+	cf.On("Get", mock.Anything, rotationTestK1).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil).Once()
+
+	obs, err := rotationControllerExternal(store, cf).Observe(context.Background(), cr)
+	require.Error(t, err)
+	require.Empty(t, obs)
+	require.Len(t, store.get().Status.AtProvider.RetiredKeys, 1, "failed deadline persistence must not retire the active generation")
+	require.Equal(t, rotationTestK0, store.get().Status.AtProvider.RetiredKeys[0].GUID)
+	require.Nil(t, store.get().Status.AtProvider.RetiredKeys[0].DeleteAfter)
+	require.Equal(t, []string{"StatusUpdate"}, store.calls)
 	cf.AssertExpectations(t)
 }
 

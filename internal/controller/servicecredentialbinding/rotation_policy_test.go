@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
@@ -14,6 +15,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	k8sfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -108,6 +110,9 @@ func TestRotationRuntimePublishesBeforeUpdate(t *testing.T) {
 	_, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: cr.Name}})
 	require.NoError(t, err)
 	require.True(t, ext.secretPresentBeforeUpdate, "runtime must publish observed details before invoking Update")
+	secret := &corev1.Secret{}
+	require.NoError(t, store.Get(context.Background(), types.NamespacedName{Namespace: "rotation-test", Name: "rotation-credentials"}, secret))
+	require.Equal(t, []byte("published-user"), secret.Data["username"], "Update publication must not clear configured Secret data")
 }
 
 type rotationPublishingExternal struct {
@@ -136,7 +141,10 @@ func (e *rotationPublishingExternal) Update(ctx context.Context, _ resource.Mana
 	secret := &corev1.Secret{}
 	err := e.kube.Get(ctx, types.NamespacedName{Namespace: "rotation-test", Name: "rotation-credentials"}, secret)
 	e.secretPresentBeforeUpdate = err == nil && string(secret.Data["username"]) == "published-user"
-	return managed.ExternalUpdate{}, err
+	if err != nil {
+		return managed.ExternalUpdate{}, err
+	}
+	return managed.ExternalUpdate{ConnectionDetails: managed.ConnectionDetails{"username": []byte("published-user")}}, nil
 }
 
 func (e *rotationPublishingExternal) Delete(context.Context, resource.Managed) (managed.ExternalDelete, error) {
@@ -144,6 +152,42 @@ func (e *rotationPublishingExternal) Delete(context.Context, resource.Managed) (
 }
 
 func (e *rotationPublishingExternal) Disconnect(context.Context) error { return nil }
+
+func TestRotationProviderRotationWithoutUpdatePolicy(t *testing.T) {
+	cr := rotationHandoverCR(rotationTestK0, rotationTestK0, "key")
+	cr.Status.AtProvider.RetiredKeys = nil
+	cr.Spec.ManagementPolicies = xpv2.ManagementPolicies{xpv2.ManagementActionObserve, xpv2.ManagementActionCreate}
+	cr.Spec.DeletionPolicy = xpv2.DeletionOrphan
+	cr.Finalizers = []string{managed.FinalizerName}
+	store, scheme := rotationRuntimeStore(t, cr)
+	secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+		Name: "rotation-credentials", Namespace: "rotation-test",
+		OwnerReferences: []metav1.OwnerReference{{APIVersion: v1alpha1.CRDGroupVersion.String(), Kind: v1alpha1.ServiceCredentialBindingKind, Name: cr.Name, UID: cr.UID, Controller: ptr.To(true)}},
+	}, Type: resource.SecretTypeConnection, Data: map[string][]byte{"username": []byte("current")}}
+	require.NoError(t, store.Create(context.Background(), secret))
+	cf := &fake.MockServiceCredentialBinding{}
+	cf.On("Get", mock.Anything, rotationTestK0).Return(rotationControllerBinding(rotationTestK0, v1alpha1.LastOperationSucceeded), nil).Once()
+	cf.On("GetDetails", mock.Anything, rotationTestK0).Return(&cfresource.ServiceCredentialBindingDetails{Credentials: map[string]any{"username": "current"}}, nil).Once()
+	cf.On("Create", mock.Anything, mock.Anything).Return("", rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil).Once()
+	cf.On("Single", mock.Anything, mock.Anything).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil).Once()
+	ext := &external{
+		kube: store, reader: store, scbClient: cf,
+		keyRotator:        &servicecredentialbinding.SCBKeyRotator{SCBClient: cf},
+		maxCreateAttempts: DefaultMaxCreateAttempts, managementPoliciesEnabled: true,
+	}
+	ext.observationStateHandler = ext
+	reconciler := rotationRuntimeReconciler(t, store, scheme, ext, true)
+
+	_, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: cr.Name}})
+	require.NoError(t, err)
+	cf.AssertNotCalled(t, "Update", mock.Anything, mock.Anything, mock.Anything, mock.Anything)
+	cf.AssertExpectations(t)
+	persisted := &v1alpha1.ServiceCredentialBinding{}
+	require.NoError(t, store.Get(context.Background(), types.NamespacedName{Name: cr.Name}, persisted))
+	require.Len(t, persisted.Status.AtProvider.RetiredKeys, 1)
+	require.Equal(t, rotationTestK0, persisted.Status.AtProvider.RetiredKeys[0].GUID)
+	require.Equal(t, rotationTestK0, persisted.GetAnnotations()[servicecredentialbinding.ForceRotationKey])
+}
 
 func TestRotationRuntimeCreateWithoutUpdatePolicy(t *testing.T) {
 	cr := rotationControllerCR(rotationTestK0, nil)
@@ -206,7 +250,8 @@ func TestRotationRuntimeOrphanDoesNotDeleteRetiredKeys(t *testing.T) {
 }
 
 func rotationRuntimeExternal(kube client.Client, cf *fake.MockServiceCredentialBinding) *external {
-	c := &external{kube: kube, scbClient: cf, keyRotator: &servicecredentialbinding.SCBKeyRotator{SCBClient: cf}, maxCreateAttempts: DefaultMaxCreateAttempts}
+	cf.On("GetDetails", mock.Anything, mock.Anything).Return(&cfresource.ServiceCredentialBindingDetails{Credentials: map[string]any{}}, nil).Maybe()
+	c := &external{kube: kube, scbClient: cf, keyRotator: &servicecredentialbinding.SCBKeyRotator{SCBClient: cf}, maxCreateAttempts: DefaultMaxCreateAttempts, managementPoliciesEnabled: true}
 	c.observationStateHandler = c
 	return c
 }
