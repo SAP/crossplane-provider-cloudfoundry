@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
@@ -107,28 +108,34 @@ func Delete(ctx context.Context, scbClient ServiceCredentialBinding, guid string
 	return err
 }
 
-// GetConnectionDetails returns the connection details of the ServiceCredentialBinding details
-func GetConnectionDetails(ctx context.Context, scbClient ServiceCredentialBinding, guid string, asJSON bool) managed.ConnectionDetails {
+// GetConnectionDetails returns the connection details of the ServiceCredentialBinding.
+// A nil result with an error indicates failed retrieval or encoding; an empty, non-nil
+// result with no error is a successful response containing no credentials.
+func GetConnectionDetails(ctx context.Context, scbClient ServiceCredentialBinding, guid string, asJSON bool) (managed.ConnectionDetails, error) {
 	bindingDetails, err := scbClient.GetDetails(ctx, guid)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("cannot retrieve service binding credentials: %w", err)
+	}
+	if bindingDetails == nil {
+		return nil, errors.New("cannot retrieve service binding credentials: Cloud Foundry returned no details")
+	}
+
+	jsonCredentials, err := json.Marshal(bindingDetails.Credentials)
+	if err != nil {
+		return nil, errors.New("cannot encode service binding credentials")
 	}
 
 	connectDetails := managed.ConnectionDetails{}
 	if asJSON {
-		jsonCredentials, err := json.Marshal(bindingDetails.Credentials)
-		if err != nil {
-			return nil
-		}
 		connectDetails["credentials"] = jsonCredentials
-		return connectDetails
+		return connectDetails, nil
 	}
 
 	for key, value := range normalizeMap(bindingDetails.Credentials, make(map[string]string), "", "_") {
 		connectDetails[key] = []byte(value)
 	}
 
-	return connectDetails
+	return connectDetails, nil
 }
 
 // newListOptions generates ServiceCredentialBindingListOptions according to CR's ForProvider spec
