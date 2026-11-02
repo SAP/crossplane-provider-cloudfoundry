@@ -1,6 +1,7 @@
 package servicecredentialbinding
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -16,9 +17,10 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/types"
 
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
+
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	scb "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
-	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 )
 
 const (
@@ -93,11 +95,11 @@ func (c *external) now() time.Time {
 // a successful handover/publication.
 func (c *external) connectionDetails(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding) (managed.ConnectionDetails, error) {
 	details, err := scb.GetConnectionDetails(ctx, c.scbClient, binding.GUID, cr.Spec.ConnectionDetailsAsJSON)
-	if err != nil && cr.Spec.WriteConnectionSecretToReference != nil {
-		return nil, fmt.Errorf("cannot retrieve required connection details: %w", err)
-	}
 	if err != nil {
-		return nil, nil
+		if cr.Spec.WriteConnectionSecretToReference != nil {
+			return nil, fmt.Errorf("cannot retrieve required connection details: %w", err)
+		}
+		return managed.ConnectionDetails{}, nil
 	}
 	return details, nil
 }
@@ -109,10 +111,13 @@ func (c *external) confirmHandover(ctx context.Context, cr *v1alpha1.ServiceCred
 	if cr == nil || binding == nil || binding.LastOperation.State != v1alpha1.LastOperationSucceeded {
 		return false
 	}
-	ref := cr.Spec.WriteConnectionSecretToReference
-	if ref == nil {
+	if cr.Spec.WriteConnectionSecretToReference == nil {
 		return true
 	}
+	return c.confirmSecretHandover(ctx, cr, details)
+}
+
+func (c *external) confirmSecretHandover(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, details managed.ConnectionDetails) bool {
 	if details == nil {
 		return false
 	}
@@ -123,6 +128,7 @@ func (c *external) confirmHandover(ctx context.Context, cr *v1alpha1.ServiceCred
 	if reader == nil {
 		return false
 	}
+	ref := cr.Spec.WriteConnectionSecretToReference
 	secret := &corev1.Secret{}
 	if err := reader.Get(ctx, types.NamespacedName{Namespace: ref.Namespace, Name: ref.Name}, secret); err != nil {
 		return false
@@ -177,7 +183,7 @@ func connectionDataEqual(data map[string][]byte, details managed.ConnectionDetai
 		return false
 	}
 	for key, value := range details {
-		if string(data[key]) != string(value) {
+		if !bytes.Equal(data[key], value) {
 			return false
 		}
 	}

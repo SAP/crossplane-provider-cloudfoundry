@@ -50,28 +50,14 @@ func (r *SCBKeyRotator) now() time.Time {
 }
 
 func (r *SCBKeyRotator) RetireBinding(cr *v1alpha1.ServiceCredentialBinding, serviceBinding *cfresource.ServiceCredentialBinding) bool {
-	if cr == nil || serviceBinding == nil || serviceBinding.GUID == "" || cr.Spec.ForProvider.Type == "app" || cr.DeletionTimestamp != nil {
+	if !eligibleForRetirement(cr, serviceBinding) {
 		return false
 	}
-
-	for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
-		if retiredKey != nil && sameGUID(retiredKey.GUID, serviceBinding.GUID) {
-			// Resume an accepted replacement independently of the annotation/schedule.
-			return true
-		}
+	if hasPendingRetirement(cr, serviceBinding.GUID) {
+		// Resume an accepted replacement independently of the annotation/schedule.
+		return true
 	}
-
-	forceRotation := false
-	if cr.Annotations != nil {
-		if target, ok := cr.Annotations[ForceRotationKey]; ok && isCanonicalUUID(target) {
-			forceRotation = sameGUID(target, serviceBinding.GUID)
-		}
-	}
-
-	rotationDue := cr.Spec.ForProvider.Rotation != nil && cr.Spec.ForProvider.Rotation.Frequency != nil &&
-		(cr.Status.AtProvider.CreatedAt == nil || !r.now().Before(cr.Status.AtProvider.CreatedAt.Add(cr.Spec.ForProvider.Rotation.Frequency.Duration)))
-
-	if !forceRotation && !rotationDue {
+	if !forceRotationTargetsActiveKey(cr, serviceBinding.GUID) && !r.rotationIsDue(cr) {
 		return false
 	}
 
@@ -81,6 +67,36 @@ func (r *SCBKeyRotator) RetireBinding(cr *v1alpha1.ServiceCredentialBinding, ser
 		CreatedAt: &metav1.Time{Time: serviceBinding.CreatedAt},
 	})
 	return true
+}
+
+func eligibleForRetirement(cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding) bool {
+	return cr != nil && binding != nil && binding.GUID != "" && cr.Spec.ForProvider.Type != "app" && cr.DeletionTimestamp == nil
+}
+
+func hasPendingRetirement(cr *v1alpha1.ServiceCredentialBinding, guid string) bool {
+	for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
+		if retiredKey != nil && sameGUID(retiredKey.GUID, guid) {
+			return true
+		}
+	}
+	return false
+}
+
+func forceRotationTargetsActiveKey(cr *v1alpha1.ServiceCredentialBinding, guid string) bool {
+	if cr.Annotations == nil {
+		return false
+	}
+	target, ok := cr.Annotations[ForceRotationKey]
+	return ok && isCanonicalUUID(target) && sameGUID(target, guid)
+}
+
+func (r *SCBKeyRotator) rotationIsDue(cr *v1alpha1.ServiceCredentialBinding) bool {
+	rotation := cr.Spec.ForProvider.Rotation
+	if rotation == nil || rotation.Frequency == nil {
+		return false
+	}
+	createdAt := cr.Status.AtProvider.CreatedAt
+	return createdAt == nil || !r.now().Before(createdAt.Add(rotation.Frequency.Duration))
 }
 
 // InitializeFallbackDeadlines records a one-time 48-hour fallback deadline for valid,

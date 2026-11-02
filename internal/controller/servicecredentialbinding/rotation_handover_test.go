@@ -63,14 +63,13 @@ func TestRotationHandoverDeferral(t *testing.T) {
 			cf.On("GetDetails", mock.Anything, rotationTestK1).Return(&cfresource.ServiceCredentialBindingDetails{Credentials: map[string]any{"username": "new"}}, nil).Maybe()
 			kube := rotationHandoverKube(t, cr, true)
 			obs, err := rotationRuntimeExternal(kube, cf).Observe(context.Background(), cr)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.True(t, obs.ResourceExists, "a replacement cannot be retired before handover")
 			persisted := &v1alpha1.ServiceCredentialBinding{}
-			if assert.NoError(t, kube.Get(context.Background(), types.NamespacedName{Name: cr.Name}, persisted)) {
-				assert.Len(t, persisted.Status.AtProvider.RetiredKeys, 1)
-				if len(persisted.Status.AtProvider.RetiredKeys) > 0 {
-					assert.Equal(t, rotationTestK0, persisted.Status.AtProvider.RetiredKeys[0].GUID)
-				}
+			require.NoError(t, kube.Get(context.Background(), types.NamespacedName{Name: cr.Name}, persisted))
+			assert.Len(t, persisted.Status.AtProvider.RetiredKeys, 1)
+			if len(persisted.Status.AtProvider.RetiredKeys) > 0 {
+				assert.Equal(t, rotationTestK0, persisted.Status.AtProvider.RetiredKeys[0].GUID)
 			}
 			cf.AssertExpectations(t)
 		})
@@ -92,12 +91,11 @@ func TestRotationHandoverSecretMismatchAndReadErrors(t *testing.T) {
 			cf.On("GetDetails", mock.Anything, rotationTestK1).Return(&cfresource.ServiceCredentialBindingDetails{Credentials: map[string]any{"username": "new"}}, nil).Maybe()
 			kube := rotationHandoverKube(t, cr, tc.hasSecret)
 			obs, err := rotationRuntimeExternal(kube, cf).Observe(context.Background(), cr)
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.True(t, obs.ResourceExists)
 			persisted := &v1alpha1.ServiceCredentialBinding{}
-			if assert.NoError(t, kube.Get(context.Background(), types.NamespacedName{Name: cr.Name}, persisted)) {
-				assert.Len(t, persisted.Status.AtProvider.RetiredKeys, 1)
-			}
+			require.NoError(t, kube.Get(context.Background(), types.NamespacedName{Name: cr.Name}, persisted))
+			assert.Len(t, persisted.Status.AtProvider.RetiredKeys, 1)
 			cf.AssertExpectations(t)
 		})
 	}
@@ -289,7 +287,7 @@ func TestRotationAnnotationWarnings(t *testing.T) {
 			assert.Equal(t, tc.wantWarn, len(recorder.events) > 0, "warning should explain malformed target GUID or unsupported app rotation")
 			if tc.wantWarn && len(recorder.events) > 0 {
 				assert.Equal(t, event.TypeWarning, recorder.events[0].Type)
-				assert.True(t, strings.Contains(strings.ToLower(recorder.events[0].Message), "key"), "warning must identify the key-only rotation contract")
+				assert.Contains(t, strings.ToLower(recorder.events[0].Message), "key", "warning must identify the key-only rotation contract")
 			}
 			if !tc.wantRetire {
 				assert.Empty(t, store.get().Status.AtProvider.RetiredKeys)
@@ -405,7 +403,7 @@ func TestRotationConnectionDetailsRetrievalErrorIsNotHandover(t *testing.T) {
 		obs, err := rotationControllerExternal(store, cf).Observe(context.Background(), cr)
 		require.NoError(t, err)
 		assert.True(t, obs.ResourceExists)
-		assert.Nil(t, obs.ConnectionDetails)
+		assert.Empty(t, obs.ConnectionDetails)
 		cf.AssertExpectations(t)
 	})
 }
