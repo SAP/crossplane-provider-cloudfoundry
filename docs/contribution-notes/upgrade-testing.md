@@ -42,6 +42,19 @@ We maintain two types of upgrade tests:
 7. **Post-Upgrade Assessment** - Verify custom conditions (e.g., external-name unchanged)
 8. **Cleanup** - Delete resources and destroy cluster
 
+### Custom resource-cleanup hooks
+
+`CustomUpgradeTestBuilder` supports optional `WithCustomPreCleanup` and `WithCustomPostResourceCleanup` callbacks for scenario-owned cleanup that must bracket fixture deletion:
+
+1. Pre-cleanup callback
+2. Normal deletion and wait for fixture resources
+3. Post-resource callback (for example, verify external resources are gone)
+4. Existing ProviderConfig and provider teardown
+
+Callbacks receive the cleanup context and `envconf.Config`, return errors, and should be idempotent and restricted to resources owned by the scenario. A pre-cleanup error does not skip fixture deletion or post-resource verification; a deletion error does not skip post-resource verification. Errors are reported as test failures, while later safe cleanup stages are still attempted. The cleanup phases share a bounded context detached from a canceled assessment context while preserving its values. They must honor its deadline; exhaustion is reported, not treated as successful cleanup. Builders that register no hooks retain the normal fixture-deletion behavior.
+
+Do not use `t.Fatal`/`FailNow` inside a cleanup callback: return an error so the builder can continue cleanup. The e2e-framework normally runs feature teardown after a failed assessment, including a fatal failure confined to that assessment subtest. Its fail-fast mode intentionally stops before feature teardown; disabled graceful teardown, hard process/test timeouts, process termination, or an unavailable cluster/provider can also prevent hooks from running or completing. These hooks are not crash-proof cleanup and do not justify forced finalizer removal or direct Cloud Foundry deletion. Report any remaining owned resources.
+
 ## Prerequisites
 
 ### Required Tools
