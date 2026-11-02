@@ -18,10 +18,6 @@ func runResourceCleanup(
 	timeout time.Duration,
 	before, removeResources, after cleanupAction,
 ) error {
-	if parent == nil {
-		parent = context.Background()
-	}
-
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), timeout)
 	defer cancel()
 

@@ -8,6 +8,7 @@ import (
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
@@ -37,7 +38,7 @@ func TestSCBKeyRotator_ActiveKeyProtection(t *testing.T) {
 	cf := &fake.MockServiceCredentialBinding{}
 	rotator.SCBClient = cf
 	remaining, err := rotator.DeleteExpiredKeys(context.Background(), cr)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []*v1alpha1.SCBResource{active}, remaining)
 	cf.AssertNotCalled(t, "Delete", mock.Anything, active.GUID)
 }
@@ -104,7 +105,7 @@ func TestSCBKeyRotator_DeleteExpiredKeysPartialProgress(t *testing.T) {
 	cf.On("Delete", mock.Anything, failed.GUID).Return("", assert.AnError)
 
 	remaining, err := (&SCBKeyRotator{SCBClient: cf}).DeleteExpiredKeys(context.Background(), cr)
-	assert.EqualError(t, err, "cannot delete expired key failed: assert.AnError general error for testing")
+	require.EqualError(t, err, "cannot delete expired key failed: assert.AnError general error for testing")
 	assert.Equal(t, []*v1alpha1.SCBResource{failed}, remaining)
 	cf.AssertExpectations(t)
 }
@@ -127,7 +128,7 @@ func TestSCBKeyRotator_DeleteExpiredKeysKeepsCurrentWithMixedKeys(t *testing.T) 
 
 	assert.True(t, rotator.HasExpiredKeys(cr), "only the non-active expired key should be eligible")
 	remaining, err := rotator.DeleteExpiredKeys(context.Background(), cr)
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []*v1alpha1.SCBResource{active}, remaining)
 	cf.AssertNotCalled(t, "Delete", mock.Anything, active.GUID)
 	cf.AssertExpectations(t)
@@ -143,7 +144,7 @@ func TestSCBKeyRotator_DeleteRetiredKeysNotFoundVariants(t *testing.T) {
 		}},
 	}}
 
-	assert.NoError(t, (&SCBKeyRotator{SCBClient: cf}).DeleteRetiredKeys(context.Background(), cr))
+	require.NoError(t, (&SCBKeyRotator{SCBClient: cf}).DeleteRetiredKeys(context.Background(), cr))
 	cf.AssertExpectations(t)
 }
 

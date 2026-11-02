@@ -9,6 +9,7 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/test"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
@@ -89,7 +90,7 @@ func TestRotationCleanupPartialProgress(t *testing.T) {
 	}
 
 	_, err := ext.Update(context.Background(), cr)
-	assert.ErrorContains(t, err, "cannot delete expired key "+failed.GUID+": assert.AnError general error for testing")
+	require.ErrorContains(t, err, "cannot delete expired key "+failed.GUID+": assert.AnError general error for testing")
 	assert.Equal(t, []*v1alpha1.SCBResource{failed}, cr.Status.AtProvider.RetiredKeys,
 		"successfully deleted and not-found keys should be removed even when another deletion fails")
 	assert.Equal(t, []*v1alpha1.SCBResource{failed}, store.get().Status.AtProvider.RetiredKeys,
