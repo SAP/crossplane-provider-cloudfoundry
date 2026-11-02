@@ -56,9 +56,16 @@ type CustomUpgradeTestBuilder struct {
 	preUpgradeAssessments  []phaseFunc
 	postUpgradeAssessments []phaseFunc
 
+	// Custom cleanup callbacks run before and after fixture-resource deletion.
+	preCleanup          cleanupPhaseFunc
+	postResourceCleanup cleanupPhaseFunc
+
 	// Disable default phases
 	skipDefaultResourceVerification bool
 }
+
+// cleanupPhaseFunc is an optional error-returning resource cleanup hook.
+type cleanupPhaseFunc func(context.Context, *envconf.Config) error
 
 // phaseFunc represents a test phase function that can be added to the test feature.
 type phaseFunc struct {
@@ -152,6 +159,24 @@ func (b *CustomUpgradeTestBuilder) WithCustomPostUpgradeAssessment(
 	return b
 }
 
+// WithCustomPreCleanup registers scenario-owned preparation immediately before
+// the builder deletes fixture resources. The callback should be idempotent and
+// limit mutations to resources owned by the scenario. Its error is reported,
+// but fixture deletion and the post-resource hook are still attempted.
+func (b *CustomUpgradeTestBuilder) WithCustomPreCleanup(fn func(context.Context, *envconf.Config) error) *CustomUpgradeTestBuilder {
+	b.preCleanup = fn
+	return b
+}
+
+// WithCustomPostResourceCleanup registers verification immediately after
+// fixture-resource deletion and before ProviderConfig/provider teardown. Use it
+// for externally managed resources that must be checked while provider access
+// is still available. Its error is reported without skipping provider teardown.
+func (b *CustomUpgradeTestBuilder) WithCustomPostResourceCleanup(fn func(context.Context, *envconf.Config) error) *CustomUpgradeTestBuilder {
+	b.postResourceCleanup = fn
+	return b
+}
+
 // SkipDefaultResourceVerification disables the default resource verification phases.
 // This means that no checks are being carried out by default before and after upgrading the provider.
 // Custom verification phases can be added using WithCustomPreUpgradeAssessment.
@@ -174,8 +199,11 @@ func (b *CustomUpgradeTestBuilder) SkipDefaultResourceVerification() *CustomUpgr
 //  5. Provider upgrade
 //  6. Post-upgrade verification (unless skipped)
 //  7. Custom post-upgrade assessments
-//  8. Resource cleanup
-//  9. Provider cleanup
+//  8. Custom pre-resource cleanup (when configured)
+//  9. Resource cleanup
+//
+// 10. Custom post-resource cleanup (when configured)
+// 11. Provider cleanup
 //
 // Example:
 //
@@ -249,16 +277,30 @@ func (b *CustomUpgradeTestBuilder) Feature() features.Feature {
 	}
 
 	feature = feature.WithTeardown(
-		"Delete resources",
+		"Prepare custom resource cleanup",
 		func(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
-			err := test.DeleteResourcesFromDirsGracefully(
-				ctx,
-				cfg,
-				b.resourceDirectories,
-				wait.WithTimeout(b.verifyTimeout),
-			)
+			var before cleanupAction
+			if b.preCleanup != nil {
+				before = func(cleanupCtx context.Context) error {
+					return b.preCleanup(cleanupCtx, cfg)
+				}
+			}
+			var after cleanupAction
+			if b.postResourceCleanup != nil {
+				after = func(cleanupCtx context.Context) error {
+					return b.postResourceCleanup(cleanupCtx, cfg)
+				}
+			}
+			err := runResourceCleanup(ctx, b.verifyTimeout, before, func(cleanupCtx context.Context) error {
+				return test.DeleteResourcesFromDirsGracefully(
+					cleanupCtx,
+					cfg,
+					b.resourceDirectories,
+					wait.WithTimeout(b.verifyTimeout),
+				)
+			}, after)
 			if err != nil {
-				t.Logf("failed to clean up resources: %v", err)
+				t.Errorf("resource cleanup did not complete successfully: %v", err)
 			}
 			return ctx
 		},
