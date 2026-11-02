@@ -209,7 +209,9 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, fmt.Errorf("cannot resolve effective management policies: %w", err)
 	}
 	if !cr.GetDeletionTimestamp().IsZero() {
-		return c.observationStateHandler.HandleObservationState(serviceBinding, ctx, cr)
+		// Full deletion is independent of connection-secret handover. The runtime
+		// applies the effective Delete/Orphan policy after Observe succeeds.
+		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
 	}
 	if obs, handled, err := c.resumePendingReplacement(ctx, cr, serviceBinding, policies); handled {
 		return obs, err
