@@ -225,6 +225,19 @@ make test-upgrade-custom
 | `UPGRADE_TEST_WAIT_FOR_PAUSE` | Wait time after provider upgrade (minutes) | `1` | `2` |
 | `UPGRADE_TEST_FILTER` | Test name filter for custom tests | `.` (all) | `Test_Space_External_Name` |
 
+### Kind node image
+
+`KIND_NODE_IMAGE_TAG` selects the Kubernetes node image used when either tagged test harness creates a new kind cluster. The Makefile exports this variable and defaults it to `v1.32.0`; override it with a tag supported by your local kind/container runtime. The value is a tag (for example, `v1.31.4`), not a full image reference. Direct `go test` invocations can set the variable in their environment (for example, prefix the command with `KIND_NODE_IMAGE_TAG=v1.31.4`). These tagged test mains create clusters and require the same infrastructure authorization and disposable environment as the Make targets. When the variable is unset or empty, the harness leaves kind's default image selection unchanged.
+
+For example, run one custom upgrade scenario or the focused key-rotation acceptance test with an explicit tag:
+
+```bash
+make test-upgrade-custom KIND_NODE_IMAGE_TAG=v1.32.0 UPGRADE_TEST_FILTER='^Test_ServiceCredentialBinding_External_Name$' UPGRADE_TEST_FROM_TAG=v1.3.0 UPGRADE_TEST_TO_TAG=local
+make test-acceptance KIND_NODE_IMAGE_TAG=v1.32.0 testFilter=TestServiceCredentialBindingForceRotation BUILD_ID=issue-401-node-$(date +%s)
+```
+
+The examples use the Makefile default only; they do not imply that this node image works in every environment. An existing/reused cluster is not recreated or modified when the variable changes. Use a fresh cluster to validate a different node image.
+
 ## Test Resources
 
 ### Base Upgrade Tests

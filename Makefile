@@ -56,6 +56,7 @@ GO_LINT_ARGS := --timeout 10m0s --output.checkstyle.path=$(GO_LINT_OUTPUT)/check
 # kind-related versions
 KIND_VERSION ?= v0.26.0
 KIND_NODE_IMAGE_TAG ?= v1.32.0
+export KIND_NODE_IMAGE_TAG
 
 # Setup Kubernetes tools
 
