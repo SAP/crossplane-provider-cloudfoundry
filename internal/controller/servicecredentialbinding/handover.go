@@ -105,8 +105,8 @@ func (c *external) connectionDetails(ctx context.Context, cr *v1alpha1.ServiceCr
 }
 
 // confirmHandover requires successful CF operation and, when configured, a
-// connection Secret owned by this resource whose complete data matches the freshly
-// retrieved details. A missing/unreadable Secret is not proof of publication.
+// connection Secret owned by this resource contains the freshly retrieved details.
+// Extra entries may remain because the runtime publisher merge-patches Secret data.
 func (c *external) confirmHandover(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding, details managed.ConnectionDetails) bool {
 	if cr == nil || binding == nil || binding.LastOperation.State != v1alpha1.LastOperationSucceeded {
 		return false
@@ -137,7 +137,7 @@ func (c *external) confirmSecretHandover(ctx context.Context, cr *v1alpha1.Servi
 	if secret.Namespace != expected.Namespace || secret.Name != expected.Name || secret.Type != resource.SecretTypeConnection || !sameControllerOwner(secret, expected) {
 		return false
 	}
-	return connectionDataEqual(secret.Data, details)
+	return connectionDataContains(secret.Data, details)
 }
 
 func sameControllerOwner(actual, expected *corev1.Secret) bool {
@@ -178,12 +178,10 @@ func (c *external) preservedConnectionDetails(ctx context.Context, cr *v1alpha1.
 	return preserved, nil
 }
 
-func connectionDataEqual(data map[string][]byte, details managed.ConnectionDetails) bool {
-	if len(data) != len(details) {
-		return false
-	}
+func connectionDataContains(data map[string][]byte, details managed.ConnectionDetails) bool {
 	for key, value := range details {
-		if !bytes.Equal(data[key], value) {
+		actual, ok := data[key]
+		if !ok || !bytes.Equal(actual, value) {
 			return false
 		}
 	}
