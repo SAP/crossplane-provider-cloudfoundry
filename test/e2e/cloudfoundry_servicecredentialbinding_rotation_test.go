@@ -5,6 +5,7 @@ package e2e
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 	"time"
 
@@ -12,11 +13,15 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 	scbclient "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
+	testutil "github.com/SAP/crossplane-provider-cloudfoundry/test"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes/scheme"
@@ -24,6 +29,12 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
+)
+
+const (
+	rotationAssessmentLimit = 20 * time.Minute
+	rotationCleanupReserve  = 8 * time.Minute
+	rotationFinishMargin    = 30 * time.Second
 )
 
 const forceRotationAnnotation = "servicecredentialbinding.cloudfoundry.crossplane.io/force-rotation"
@@ -39,16 +50,20 @@ func TestServiceCredentialBindingForceRotation(t *testing.T) {
 }
 
 func runForceRotationE2E(t *testing.T, parent context.Context, cfg *envconf.Config) {
-	ctx, cancel := context.WithTimeout(parent, 20*time.Minute)
-	defer cancel()
 	fixtureDir := crsDir("servicecredentialbinding-rotation/no-ttl")
+	cleanup := newRotationCleanupOperations(cfg, "scb-rotation-no-ttl", "rotation-instance", "scb-rotation-no-ttl-secret", "rotation-space", "rotation-org")
+	applyStarted := false
 	defer func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 8*time.Minute)
-		defer cleanupCancel()
-		if err := UnapplyResources(cleanupCtx, cfg, fixtureDir); err != nil {
-			t.Errorf("remove rotation fixture: %v", err)
+		if !applyStarted {
+			return
+		}
+		if err := testutil.RunServiceCredentialBindingRotationCleanup(parent, 8*time.Minute, 2*time.Second, cleanup); err != nil {
+			t.Errorf("rotation fixture cleanup incomplete: %v", err)
 		}
 	}()
+	ctx, cancel := rotationAssessmentContext(t, parent)
+	defer cancel()
+	applyStarted = true
 	if err := ApplyResources(ctx, cfg, fixtureDir); err != nil {
 		t.Fatalf("apply rotation fixture: %v", err)
 	}
@@ -145,16 +160,20 @@ func TestServiceCredentialBindingRetiredKeyCleanup(t *testing.T) {
 }
 
 func runRetiredKeyCleanupE2E(t *testing.T, parent context.Context, cfg *envconf.Config) {
-	ctx, cancel := context.WithTimeout(parent, 20*time.Minute)
-	defer cancel()
 	fixtureDir := crsDir("servicecredentialbinding-rotation/explicit-ttl")
+	cleanup := newRotationCleanupOperations(cfg, "scb-rotation-cleanup", "cleanup-instance", "scb-rotation-cleanup-secret", "cleanup-space", "cleanup-org")
+	applyStarted := false
 	defer func() {
-		cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 8*time.Minute)
-		defer cleanupCancel()
-		if err := UnapplyResources(cleanupCtx, cfg, fixtureDir); err != nil {
-			t.Errorf("remove cleanup fixture: %v", err)
+		if !applyStarted {
+			return
+		}
+		if err := testutil.RunServiceCredentialBindingRotationCleanup(parent, 8*time.Minute, 2*time.Second, cleanup); err != nil {
+			t.Errorf("cleanup fixture teardown incomplete: %v", err)
 		}
 	}()
+	ctx, cancel := rotationAssessmentContext(t, parent)
+	defer cancel()
+	applyStarted = true
 	if err := ApplyResources(ctx, cfg, fixtureDir); err != nil {
 		t.Fatalf("apply cleanup fixture: %v", err)
 	}
@@ -536,6 +555,149 @@ func rotationCFClient(t *testing.T, ctx context.Context, cfg *envconf.Config, mg
 		t.Fatalf("create Cloud Foundry client: %v", err)
 	}
 	return scbclient.NewClient(cf)
+}
+
+func rotationAssessmentContext(t *testing.T, parent context.Context) (context.Context, context.CancelFunc) {
+	t.Helper()
+	limit := rotationAssessmentLimit
+	if deadline, ok := t.Deadline(); ok {
+		available := time.Until(deadline) - rotationCleanupReserve - rotationFinishMargin
+		if available <= 0 {
+			t.Fatalf("insufficient test-process time remains for assessment and bounded rotation cleanup")
+		}
+		if available < limit {
+			limit = available
+		}
+	}
+	return context.WithTimeout(parent, limit)
+}
+
+func newRotationCleanupOperations(cfg *envconf.Config, bindingName, instanceName, secretName, spaceName, orgName string) testutil.ServiceCredentialBindingRotationCleanup {
+	kubeScheme := runtime.NewScheme()
+	if err := apis.AddToScheme(kubeScheme); err != nil {
+		return failedRotationCleanupOperations()
+	}
+	if err := corev1.AddToScheme(kubeScheme); err != nil {
+		return failedRotationCleanupOperations()
+	}
+	kube, err := ctrlclient.New(cfg.Client().RESTConfig(), ctrlclient.Options{Scheme: kubeScheme})
+	if err != nil {
+		return failedRotationCleanupOperations()
+	}
+
+	var cfBinding scbclient.ServiceCredentialBinding
+	var externalCheckErr error
+	bindingKey := types.NamespacedName{Name: runScopedName(bindingName)}
+	instanceKey := types.NamespacedName{Name: runScopedName(instanceName)}
+	secretKey := types.NamespacedName{Namespace: "default", Name: runScopedName(secretName)}
+	spaceKey := types.NamespacedName{Name: runScopedName(spaceName)}
+	orgKey := types.NamespacedName{Name: runScopedName(orgName)}
+
+	return testutil.ServiceCredentialBindingRotationCleanup{
+		CaptureBindingGUIDs: func(ctx context.Context) ([]string, error) {
+			binding := &v1alpha1.ServiceCredentialBinding{}
+			if err := kube.Get(ctx, bindingKey, binding); err != nil {
+				if apierrors.IsNotFound(err) {
+					return nil, nil
+				}
+				err := errors.New("cannot read the owned binding identity for cleanup")
+				externalCheckErr = errors.New("Cloud Foundry binding identity could not be recovered")
+				return nil, err
+			}
+			guids := []string{binding.Annotations["crossplane.io/external-name"], binding.Status.AtProvider.GUID}
+			for _, retired := range binding.Status.AtProvider.RetiredKeys {
+				if retired != nil {
+					guids = append(guids, retired.GUID)
+				}
+			}
+			cf, err := clients.ClientFnBuilder(ctx, kube)(binding)
+			if err != nil {
+				externalCheckErr = errors.New("Cloud Foundry verification client could not be created")
+				return guids, nil
+			}
+			cfBinding = scbclient.NewClient(cf)
+			return guids, nil
+		},
+		CaptureInstanceGUID: func(ctx context.Context) (string, error) {
+			instance := &v1alpha1.ServiceInstance{}
+			if err := kube.Get(ctx, instanceKey, instance); err != nil {
+				if apierrors.IsNotFound(err) {
+					return "", nil
+				}
+				return "", errors.New("cannot read the owned ServiceInstance identity for cleanup")
+			}
+			return instance.Annotations["crossplane.io/external-name"], nil
+		},
+		ExternalCheckError: func() error { return externalCheckErr },
+		DeleteBinding: func(ctx context.Context) error {
+			return testutil.IgnoreRotationCleanupNotFound(kube.Delete(ctx, &v1alpha1.ServiceCredentialBinding{ObjectMeta: metav1.ObjectMeta{Name: bindingKey.Name}}))
+		},
+		BindingExists: func(ctx context.Context) (bool, error) {
+			return rotationObjectExists(ctx, kube, bindingKey, &v1alpha1.ServiceCredentialBinding{})
+		},
+		BindingExistsInCF: func(ctx context.Context, guid string) (bool, error) {
+			if cfBinding == nil {
+				return false, errors.New("Cloud Foundry verification client is unavailable")
+			}
+			present, err := testutil.ServiceCredentialBindingExistsInCF(ctx, cfBinding, guid)
+			if err != nil {
+				return true, errors.New("Cloud Foundry binding verification request failed")
+			}
+			return present, nil
+		},
+		DeleteSecret: func(ctx context.Context) error {
+			return testutil.IgnoreRotationCleanupNotFound(kube.Delete(ctx, &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Namespace: secretKey.Namespace, Name: secretKey.Name}}))
+		},
+		SecretExists: func(ctx context.Context) (bool, error) {
+			return rotationObjectExists(ctx, kube, secretKey, &corev1.Secret{})
+		},
+		DeleteInstance: func(ctx context.Context) error {
+			return testutil.IgnoreRotationCleanupNotFound(kube.Delete(ctx, &v1alpha1.ServiceInstance{ObjectMeta: metav1.ObjectMeta{Name: instanceKey.Name}}))
+		},
+		InstanceExists: func(ctx context.Context) (bool, error) {
+			return rotationObjectExists(ctx, kube, instanceKey, &v1alpha1.ServiceInstance{})
+		},
+		DeleteImports: func(ctx context.Context) error {
+			spaceErr := testutil.IgnoreRotationCleanupNotFound(kube.Delete(ctx, &v1alpha1.Space{ObjectMeta: metav1.ObjectMeta{Name: spaceKey.Name}}))
+			orgErr := testutil.IgnoreRotationCleanupNotFound(kube.Delete(ctx, &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: orgKey.Name}}))
+			return errors.Join(spaceErr, orgErr)
+		},
+		ImportsExist: func(ctx context.Context) (bool, error) {
+			spaceExists, err := rotationObjectExists(ctx, kube, spaceKey, &v1alpha1.Space{})
+			if err != nil || spaceExists {
+				return spaceExists, err
+			}
+			return rotationObjectExists(ctx, kube, orgKey, &v1alpha1.Organization{})
+		},
+	}
+}
+
+func failedRotationCleanupOperations() testutil.ServiceCredentialBindingRotationCleanup {
+	cleanupErr := errors.New("Kubernetes cleanup client initialization failed")
+	fail := func(context.Context) error { return cleanupErr }
+	return testutil.ServiceCredentialBindingRotationCleanup{
+		CaptureBindingGUIDs: func(context.Context) ([]string, error) { return nil, cleanupErr },
+		CaptureInstanceGUID: func(context.Context) (string, error) { return "", cleanupErr },
+		ExternalCheckError:  func() error { return cleanupErr },
+		DeleteBinding:       fail,
+		BindingExists:       func(context.Context) (bool, error) { return true, cleanupErr },
+		DeleteSecret:        fail,
+		SecretExists:        func(context.Context) (bool, error) { return true, cleanupErr },
+		DeleteInstance:      fail,
+		InstanceExists:      func(context.Context) (bool, error) { return true, cleanupErr },
+		DeleteImports:       fail,
+		ImportsExist:        func(context.Context) (bool, error) { return true, cleanupErr },
+	}
+}
+
+func rotationObjectExists(ctx context.Context, kube ctrlclient.Client, key types.NamespacedName, object ctrlclient.Object) (bool, error) {
+	if err := kube.Get(ctx, key, object); err != nil {
+		if apierrors.IsNotFound(err) {
+			return false, nil
+		}
+		return true, errors.New("Kubernetes resource existence check failed")
+	}
+	return true, nil
 }
 
 func copyStringMap(in map[string]string) map[string]string {
