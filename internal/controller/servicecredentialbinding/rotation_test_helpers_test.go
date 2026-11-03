@@ -25,6 +25,7 @@ type rotationStoredClient struct {
 	conflictNext       bool
 	conflictsRemaining int
 	statusUpdateErr    error
+	updateErr          error
 	calls              []string
 }
 
@@ -43,6 +44,9 @@ func newRotationStoredClient(initial *v1alpha1.ServiceCredentialBinding) *rotati
 	}
 	c.MockUpdate = func(_ context.Context, obj k8s.Object, _ ...k8s.UpdateOption) error {
 		s.calls = append(s.calls, "Update")
+		if s.updateErr != nil {
+			return s.updateErr
+		}
 		if s.conflictNext || s.conflictsRemaining > 0 {
 			s.conflictNext = false
 			if s.conflictsRemaining > 0 {
@@ -57,6 +61,9 @@ func newRotationStoredClient(initial *v1alpha1.ServiceCredentialBinding) *rotati
 		next := incoming.DeepCopy()
 		next.Status = s.stored.Status
 		s.stored = next
+		// A successful Kubernetes Update decodes the complete server response
+		// into the caller, including status preserved by the status subresource.
+		*incoming = *next.DeepCopy()
 		return nil
 	}
 	c.MockStatusUpdate = func(_ context.Context, obj k8s.Object, _ ...k8s.SubResourceUpdateOption) error {

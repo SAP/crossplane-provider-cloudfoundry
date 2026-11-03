@@ -4,12 +4,21 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	xresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/utils/ptr"
+	k8sfake "sigs.k8s.io/controller-runtime/pkg/client/fake"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
@@ -44,6 +53,116 @@ func rotationControllerExternal(kube *rotationStoredClient, cf *fake.MockService
 	}
 	c.observationStateHandler = c
 	return c
+}
+
+func TestRotationAttemptResetPreservesObservedGeneration(t *testing.T) {
+	for _, withPublishedSecret := range []bool{false, true} {
+		name := "without connection Secret"
+		if withPublishedSecret {
+			name = "with unchanged published credentials"
+		}
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+			cr := rotationControllerCR(rotationTestK1, map[string]string{createAttemptsAnnotation: "1"})
+			cr.Spec.ForProvider.Rotation = &v1alpha1.RotationParameters{Frequency: &metav1.Duration{Duration: 24 * time.Hour}}
+			cr.Status.AtProvider.GUID = rotationTestK0
+			cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: now.Add(-72 * time.Hour)}
+			cr.Status.AtProvider.RetiredKeys = []*v1alpha1.SCBResource{{
+				GUID:      rotationTestK0,
+				CreatedAt: &metav1.Time{Time: now.Add(-72 * time.Hour)},
+			}}
+			if withPublishedSecret {
+				cr.UID = types.UID("rotation-test-owner")
+				cr.Spec.WriteConnectionSecretToReference = &xpv2.SecretReference{Name: "rotation-credentials", Namespace: "rotation-test"}
+			}
+			store := newRotationStoredClient(cr)
+			binding := rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded)
+			binding.CreatedAt = now.Add(-time.Hour)
+			cf := &fake.MockServiceCredentialBinding{}
+			cf.On("Get", mock.Anything, rotationTestK1).Return(binding, nil).Once()
+			scheme := runtime.NewScheme()
+			require.NoError(t, corev1.AddToScheme(scheme))
+			reader := k8sfake.NewClientBuilder().WithScheme(scheme).Build()
+			if withPublishedSecret {
+				secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{
+					Name:      "rotation-credentials",
+					Namespace: "rotation-test",
+					OwnerReferences: []metav1.OwnerReference{{
+						APIVersion: v1alpha1.CRDGroupVersion.String(),
+						Kind:       v1alpha1.ServiceCredentialBindingKind,
+						Name:       cr.Name,
+						UID:        cr.UID,
+						Controller: ptr.To(true),
+					}},
+				}, Type: xresource.SecretTypeConnection, Data: map[string][]byte{"username": []byte("same")}}
+				require.NoError(t, reader.Create(ctx, secret))
+				cf.On("GetDetails", mock.Anything, rotationTestK1).Return(&cfresource.ServiceCredentialBindingDetails{Credentials: map[string]any{"username": "same"}}, nil).Once()
+			} else {
+				cf.On("GetDetails", mock.Anything, rotationTestK1).Return(&cfresource.ServiceCredentialBindingDetails{Credentials: map[string]any{}}, nil).Once()
+			}
+			c := &external{
+				kube: store, reader: reader, scbClient: cf,
+				keyRotator:        &servicecredentialbinding.SCBKeyRotator{SCBClient: cf, Now: func() time.Time { return now }},
+				maxCreateAttempts: DefaultMaxCreateAttempts,
+				nowFn:             func() time.Time { return now },
+			}
+			c.observationStateHandler = c
+
+			obs, err := c.Observe(ctx, cr)
+			require.NoError(t, err)
+			require.True(t, obs.ResourceExists, "fresh K1 creation time must prevent immediate scheduled retirement")
+			require.Equal(t, rotationTestK1, cr.Status.AtProvider.GUID)
+			require.True(t, cr.Status.AtProvider.CreatedAt.Time.Equal(binding.CreatedAt))
+			require.Equal(t, v1alpha1.LastOperationSucceeded, cr.Status.AtProvider.LastOperation.State)
+			require.Empty(t, getCreateAttempts(cr))
+			require.Len(t, cr.Status.AtProvider.RetiredKeys, 1)
+			require.Equal(t, rotationTestK0, cr.Status.AtProvider.RetiredKeys[0].GUID)
+			require.NotNil(t, cr.Status.AtProvider.RetiredKeys[0].DeleteAfter)
+
+			persisted := store.get()
+			require.Equal(t, rotationTestK1, persisted.Status.AtProvider.GUID)
+			require.True(t, persisted.Status.AtProvider.CreatedAt.Time.Equal(binding.CreatedAt))
+			require.Equal(t, v1alpha1.LastOperationSucceeded, persisted.Status.AtProvider.LastOperation.State)
+			require.Len(t, persisted.Status.AtProvider.RetiredKeys, 1)
+			require.Equal(t, rotationTestK0, persisted.Status.AtProvider.RetiredKeys[0].GUID)
+			require.Equal(t, []string{"Update", "StatusUpdate"}, store.calls)
+			cf.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+			cf.AssertExpectations(t)
+		})
+	}
+}
+
+func TestRotationAttemptResetWriteFailureDoesNotRetireObservedBinding(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		conflict bool
+	}{
+		{name: "update error"},
+		{name: "conflict", conflict: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cr := rotationControllerCR(rotationTestK1, map[string]string{createAttemptsAnnotation: "1"})
+			cr.Spec.ForProvider.Rotation = &v1alpha1.RotationParameters{Frequency: &metav1.Duration{Duration: time.Hour}}
+			cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: time.Now().Add(-24 * time.Hour)}
+			store := newRotationStoredClient(cr)
+			if tc.conflict {
+				store.conflictNext = true
+			} else {
+				store.updateErr = errors.New("metadata update rejected")
+			}
+			cf := &fake.MockServiceCredentialBinding{}
+			cf.On("Get", mock.Anything, rotationTestK1).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil).Once()
+			c := rotationControllerExternal(store, cf)
+
+			obs, err := c.Observe(context.Background(), cr)
+			require.Error(t, err)
+			require.Empty(t, obs)
+			require.Empty(t, store.get().Status.AtProvider.RetiredKeys)
+			cf.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+			cf.AssertExpectations(t)
+		})
+	}
 }
 
 func TestRotationCreateRetainsForceAnnotation(t *testing.T) {
