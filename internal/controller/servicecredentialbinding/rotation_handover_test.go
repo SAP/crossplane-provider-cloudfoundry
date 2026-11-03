@@ -101,6 +101,80 @@ func TestRotationHandoverAllowsAdditionalSecretKeys(t *testing.T) {
 	}
 }
 
+func TestRotationHandoverAncillaryOwners(t *testing.T) {
+	cr := rotationHandoverCR(rotationTestK1, "__absent__", "key")
+	kube := rotationHandoverKube(t, cr, false)
+	expected := resource.ConnectionSecretFor(cr, v1alpha1.ServiceCredentialBindingGroupVersionKind)
+	controller := expected.OwnerReferences[0]
+	ancillary := metav1.OwnerReference{
+		APIVersion: "v1",
+		Kind:       "ConfigMap",
+		Name:       "independent-owner",
+		UID:        types.UID("independent-owner-uid"),
+		Controller: ptr.To(false),
+	}
+
+	for _, tc := range []struct {
+		name         string
+		owners       []metav1.OwnerReference
+		secretType   corev1.SecretType
+		secretName   string
+		wantHandover bool
+	}{
+		{name: "ancillary owner after controller", owners: []metav1.OwnerReference{controller, ancillary}, secretType: resource.SecretTypeConnection, secretName: expected.Name, wantHandover: true},
+		{name: "ancillary owner before controller", owners: []metav1.OwnerReference{ancillary, controller}, secretType: resource.SecretTypeConnection, secretName: expected.Name, wantHandover: true},
+		{name: "missing controller", owners: []metav1.OwnerReference{ancillary}, secretType: resource.SecretTypeConnection, secretName: expected.Name},
+		{name: "foreign controller UID", owners: []metav1.OwnerReference{func() metav1.OwnerReference { r := controller; r.UID = types.UID("foreign-controller"); return r }(), ancillary}, secretType: resource.SecretTypeConnection, secretName: expected.Name},
+		{name: "foreign controller name", owners: []metav1.OwnerReference{func() metav1.OwnerReference { r := controller; r.Name = "other-binding"; return r }(), ancillary}, secretType: resource.SecretTypeConnection, secretName: expected.Name},
+		{name: "foreign controller kind", owners: []metav1.OwnerReference{func() metav1.OwnerReference { r := controller; r.Kind = "Other"; return r }(), ancillary}, secretType: resource.SecretTypeConnection, secretName: expected.Name},
+		{name: "foreign controller API version", owners: []metav1.OwnerReference{func() metav1.OwnerReference { r := controller; r.APIVersion = "other/v1"; return r }(), ancillary}, secretType: resource.SecretTypeConnection, secretName: expected.Name},
+		{name: "non-controller binding owner", owners: []metav1.OwnerReference{func() metav1.OwnerReference { r := controller; r.Controller = ptr.To(false); return r }(), ancillary}, secretType: resource.SecretTypeConnection, secretName: expected.Name},
+		{name: "wrong Secret type", owners: []metav1.OwnerReference{controller, ancillary}, secretType: corev1.SecretTypeOpaque, secretName: expected.Name},
+		{name: "wrong Secret reference", owners: []metav1.OwnerReference{controller, ancillary}, secretType: resource.SecretTypeConnection, secretName: "other-secret"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			secret := &corev1.Secret{
+				ObjectMeta: metav1.ObjectMeta{Name: tc.secretName, Namespace: expected.Namespace, OwnerReferences: tc.owners},
+				Type:       tc.secretType,
+				Data:       map[string][]byte{"username": []byte("current"), "extra": []byte("preserved")},
+			}
+			require.NoError(t, kube.Create(context.Background(), secret))
+			c := rotationRuntimeExternal(kube, &fake.MockServiceCredentialBinding{})
+			got := c.confirmSecretHandover(context.Background(), cr, managed.ConnectionDetails{"username": []byte("current")})
+			assert.Equal(t, tc.wantHandover, got)
+			assert.Equal(t, tc.owners, secret.OwnerReferences, "handover checks must not mutate ownership")
+			require.NoError(t, kube.Delete(context.Background(), secret))
+		})
+	}
+}
+
+func TestRotationPublisherNoopPreservesAncillaryOwners(t *testing.T) {
+	ctx := context.Background()
+	scheme := mustRotationScheme(t)
+	cr := rotationControllerCR(rotationTestK1, nil)
+	cr.UID = types.UID("rotation-test-owner")
+	cr.Spec.WriteConnectionSecretToReference = &xpv2.SecretReference{Name: "rotation-credentials", Namespace: "rotation-test"}
+	kube := k8sfake.NewClientBuilder().WithScheme(scheme).WithObjects(cr).Build()
+	publisher := managed.NewAPISecretPublisher(kube, scheme)
+	details := managed.ConnectionDetails{"username": []byte("current")}
+	_, err := publisher.PublishConnection(ctx, cr, details)
+	require.NoError(t, err)
+
+	secret := &corev1.Secret{}
+	key := types.NamespacedName{Namespace: "rotation-test", Name: "rotation-credentials"}
+	require.NoError(t, kube.Get(ctx, key, secret))
+	ancillary := metav1.OwnerReference{APIVersion: "v1", Kind: "ConfigMap", Name: "independent-owner", UID: types.UID("independent-owner-uid"), Controller: ptr.To(false)}
+	secret.OwnerReferences = append(secret.OwnerReferences, ancillary)
+	require.NoError(t, kube.Update(ctx, secret))
+
+	published, err := publisher.PublishConnection(ctx, cr, details)
+	require.NoError(t, err)
+	assert.False(t, published, "unchanged credentials are a publisher no-op")
+	require.NoError(t, kube.Get(ctx, key, secret))
+	assert.Contains(t, secret.OwnerReferences, ancillary)
+	assert.True(t, rotationRuntimeExternal(kube, &fake.MockServiceCredentialBinding{}).confirmSecretHandover(ctx, cr, details))
+}
+
 func TestRotationHandoverSecretMismatchAndReadErrors(t *testing.T) {
 	for _, tc := range []struct {
 		name      string

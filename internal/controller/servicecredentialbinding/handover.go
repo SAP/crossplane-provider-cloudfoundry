@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
@@ -141,11 +142,12 @@ func (c *external) confirmSecretHandover(ctx context.Context, cr *v1alpha1.Servi
 }
 
 func sameControllerOwner(actual, expected *corev1.Secret) bool {
-	if len(expected.OwnerReferences) != 1 || len(actual.OwnerReferences) != 1 {
+	if actual == nil || expected == nil {
 		return false
 	}
-	a, e := actual.OwnerReferences[0], expected.OwnerReferences[0]
-	return a.APIVersion == e.APIVersion && a.Kind == e.Kind && a.Name == e.Name && a.UID == e.UID && a.Controller != nil && *a.Controller && e.Controller != nil && *e.Controller
+	a := metav1.GetControllerOf(actual)
+	e := metav1.GetControllerOf(expected)
+	return a != nil && e != nil && a.APIVersion == e.APIVersion && a.Kind == e.Kind && a.Name == e.Name && a.UID == e.UID
 }
 
 func (c *external) preservedConnectionDetails(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ConnectionDetails, error) {

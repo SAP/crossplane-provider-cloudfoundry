@@ -267,7 +267,7 @@ The annotation is a compare-and-rotate request: if scheduled rotation or another
 
 **Retired-key retention and handover:**
 
-Retired keys are deleted only after a replacement is usable. With a configured Secret, handover means the Secret contains all currently expected credentials; extra old entries are allowed and are not removed. Without a Secret, successful binding observation is sufficient.
+Retired keys are deleted only after a replacement is usable. With a configured Secret, handover means the Secret is controlled by the ServiceCredentialBinding and contains all currently expected credentials; additional non-controller owner references and extra old data entries are allowed and are not removed. A different controller owner is not accepted. Without a Secret, successful binding observation is sufficient.
 
 - **No TTL:** retain each retired key for 48 hours after handover. Legacy keys without a deadline receive one 48-hour window after their next safe handover; their creation time does not shorten it.
 - **Explicit TTL:** retain the existing creation-based deadline. Removing the TTL switches eligible keys to the 48-hour fallback; adding one can shorten retention.
