@@ -227,10 +227,14 @@ func (c *external) adoptBinding(ctx context.Context, cr *v1alpha1.ServiceCredent
 			return fmt.Errorf("%s: %w", errUpdateCR, err)
 		}
 	}
+	applyBindingObservation(cr, binding)
+	return nil
+}
+
+func applyBindingObservation(cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding) {
 	cr.Status.AtProvider.GUID = binding.GUID
 	cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: binding.CreatedAt}
 	scb.UpdateObservation(&cr.Status.AtProvider, binding)
-	return nil
 }
 
 func (c *external) resumePendingReplacement(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding, policies managed.ManagementPoliciesChecker) (managed.ExternalObservation, bool, error) {
@@ -524,6 +528,10 @@ func (c *external) observeSucceeded(ctx context.Context, cr *v1alpha1.ServiceCre
 		if err := c.kube.Update(ctx, cr); err != nil {
 			return managed.ExternalObservation{}, fmt.Errorf("cannot persist create attempt reset: %w", err)
 		}
+		// Metadata Update may decode the API-server response, whose status still
+		// reflects the previous generation because status is a separate subresource.
+		// Reapply this successful CF observation before schedule/handover decisions.
+		applyBindingObservation(cr, binding)
 	}
 	cr.SetConditions(xpv2.Available())
 	connectionDetails, err := c.successfulConnectionDetails(ctx, cr, binding, resetAttempts)
