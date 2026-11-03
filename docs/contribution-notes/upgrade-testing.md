@@ -311,11 +311,19 @@ Custom tests use YAML manifests from `test/upgrade/testdata/customCRs/{testName}
 
 ### ServiceCredentialBinding retired-key migration
 
-The existing ServiceCredentialBinding external-name upgrade test does not cover migration of legacy retired-key state. A dedicated rotation migration scenario is planned, but is not yet implemented; do not treat the current upgrade suite as evidence that legacy no-TTL retirees or the new `deleteAfter` CRD field have been verified across versions.
+`Test_ServiceCredentialBinding_Rotation_Migration` in `test/upgrade/service_credential_binding_rotation_upgrade_test.go` exercises migration of a legacy retired key and the `deleteAfter` CRD field. It is guarded to run only with `UPGRADE_TEST_FROM_TAG=v1.3.0` and `UPGRADE_TEST_TO_TAG=local`; other version pairs skip this scenario and are not evidence that migration passed. Its isolated fixtures are under `test/upgrade/testdata/customCrs/serviceCredentialBindingRotation/`.
 
-When available, the scenario will use an isolated fixture under `testdata/customCrs/serviceCredentialBindingRotation/` and a FROM provider that supports the resumable pause safeguard, followed by a TO provider/CRD with the durable retired-key deadline. It must verify the active Cloud Foundry GUID and configured Secret survive, the old empty force-rotation annotation does not trigger another replacement, and a legacy retiree receives one non-sliding 48-hour deadline only after safe handover. The test must inspect actual Cloud Foundry and persisted resource state, not Ready alone.
+The legacy provider creates a replacement while an empty force-rotation annotation is present, retains the old Cloud Foundry key, and pauses the managed resource before upgrade. The post-upgrade assessment verifies the live CRD contains `deleteAfter`, preserves the active and retired GUIDs and configured Secret, and leaves the legacy empty annotation inert. It then unpauses the scenario-owned binding with the supported `[Observe, Update]` management policy: fallback deadline migration must succeed without `Create`, without another key generation, and only after successful handover. The test checks that the deadline is approximately 48 hours after handover and does not slide across later reconciliations. Cleanup switches only the scenario-owned binding to `All`, removes its owned CF bindings, and verifies imported Organization/Space resources remain; the custom cleanup hooks and their failure behavior are described in [Custom resource-cleanup hooks](#custom-resource-cleanup-hooks).
 
-Choose and record compatible FROM/TO image tags and digests before execution. A candidate release example is not evidence of the required behavior. Upgrade testing creates infrastructure and real resources; follow the approval, active-context, credential-safety, and cleanup requirements in this guide before running it.
+Run only with explicit authorization and a disposable Kubernetes/Cloud Foundry environment. Before execution, check the active Kubernetes context, verify credential availability without recording or printing credential values, and record the actual compatible FROM/TO image references and digests and required build tools; the test's version guard alone does not establish image compatibility. The focused invocation is:
+
+```sh
+UPGRADE_TEST_FROM_TAG=v1.3.0 UPGRADE_TEST_TO_TAG=local \
+  make test-upgrade-custom UPGRADE_TEST_FILTER='^Test_ServiceCredentialBinding_Rotation_Migration$'
+```
+
+The harness also requires `CF_EMAIL`, `CF_USERNAME`, `CF_PASSWORD`, and `CF_ENDPOINT`. The Make target builds and supplies the local `UUT_IMAGES` package when `UPGRADE_TEST_TO_TAG=local`; direct test-binary runs must supply compatible images themselves. Do not print credential values. A tagged compile verifies compilation only; only a non-skipped run of this scenario against the stated FROM/TO versions verifies the upgrade behavior. Record the actual versions and result, and report any resources left behind if safe cleanup cannot complete.
+
 #### Adding New Custom Test Resources
 
 1. Create a subdirectory for your test in `test/upgrade/testdata/customCRs/`:
