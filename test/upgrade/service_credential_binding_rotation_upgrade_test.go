@@ -49,14 +49,15 @@ var rotationMigrationResourceDirectories = []string{
 type rotationMigrationContextKey struct{}
 
 type rotationMigrationState struct {
-	OldGUID    string
-	ActiveGUID string
-	KnownGUIDs map[string]struct{}
-	OrgGUID    string
-	SpaceGUID  string
-	Kube       ctrlclient.Client
-	CF         scbclient.ServiceCredentialBinding
-	CFAPI      *cfclient.Client
+	OldGUID        string
+	ActiveGUID     string
+	KnownGUIDs     map[string]struct{}
+	OrgGUID        string
+	SpaceGUID      string
+	Kube           ctrlclient.Client
+	CF             scbclient.ServiceCredentialBinding
+	CFAPI          *cfclient.Client
+	AncillaryOwner metav1.OwnerReference
 }
 
 // Test_ServiceCredentialBinding_Rotation_Migration exercises a legacy retired key
@@ -171,6 +172,12 @@ func rotationMigrationPreUpgrade(ctx context.Context, t *testing.T, cfg *envconf
 	if err := rotationMigrationAssertPublished(t, ctx, cfg, cfBinding, binding, activeGUID); err != nil {
 		t.Fatalf("verify legacy replacement handover: %v", err)
 	}
+	if err := rotationMigrationAddAncillaryOwner(ctx, kube, binding, state); err != nil {
+		t.Fatalf("add scenario-owned ancillary Secret owner: %v", err)
+	}
+	if err := rotationMigrationAssertAncillaryOwner(ctx, kube, binding, state); err != nil {
+		t.Fatalf("verify ancillary Secret owner before upgrade: %v", err)
+	}
 	if _, err := cfBinding.Get(ctx, oldGUID); err != nil {
 		t.Fatalf("legacy retired binding is not present before upgrade: %v", err)
 	}
@@ -206,6 +213,9 @@ func rotationMigrationPostUpgrade(ctx context.Context, t *testing.T, cfg *envcon
 	}
 	if !rotationMigrationHasRetiree(binding, state.OldGUID) {
 		t.Fatal("legacy retired key record was not preserved by the upgrade")
+	}
+	if err := rotationMigrationAssertAncillaryOwner(ctx, state.Kube, binding, &state); err != nil {
+		t.Fatalf("ancillary Secret owner was not preserved by the upgrade: %v", err)
 	}
 	if _, paused := binding.Annotations[rotationMigrationPauseAnnotation]; !paused {
 		t.Fatal("legacy provider retry-budget pause marker was not preserved by the upgrade")
@@ -244,6 +254,9 @@ func rotationMigrationPostUpgrade(ctx context.Context, t *testing.T, cfg *envcon
 			return false, nil
 		}
 		if err := rotationMigrationAssertPublished(t, ctx, cfg, state.CF, binding, state.ActiveGUID); err != nil {
+			return false, nil
+		}
+		if err := rotationMigrationAssertAncillaryOwner(ctx, state.Kube, binding, &state); err != nil {
 			return false, nil
 		}
 		for _, retired := range binding.Status.AtProvider.RetiredKeys {
@@ -525,6 +538,51 @@ func rotationMigrationAssertIdentity(t *testing.T, binding *v1alpha1.ServiceCred
 		return fmt.Errorf("active ServiceCredentialBinding GUID changed during migration")
 	}
 	return nil
+}
+
+func rotationMigrationAddAncillaryOwner(ctx context.Context, kube ctrlclient.Client, binding *v1alpha1.ServiceCredentialBinding, state *rotationMigrationState) error {
+	instance := &v1alpha1.ServiceInstance{}
+	if err := kube.Get(ctx, ctrlclient.ObjectKey{Name: "upgrade-test-rotation-service-instance"}, instance); err != nil {
+		return fmt.Errorf("read scenario-owned ServiceInstance identity: %w", err)
+	}
+	if instance.UID == "" {
+		return fmt.Errorf("scenario-owned ServiceInstance has no Kubernetes UID")
+	}
+	controller := false
+	state.AncillaryOwner = metav1.OwnerReference{
+		APIVersion: v1alpha1.ServiceInstance_GroupVersionKind.GroupVersion().String(),
+		Kind:       v1alpha1.ServiceInstance_GroupVersionKind.Kind,
+		Name:       instance.Name,
+		UID:        instance.UID,
+		Controller: &controller,
+	}
+	ref := binding.Spec.WriteConnectionSecretToReference
+	if ref == nil {
+		return fmt.Errorf("migration fixture has no connection Secret reference")
+	}
+	secret := &corev1.Secret{}
+	if err := kube.Get(ctx, ctrlclient.ObjectKey{Namespace: ref.Namespace, Name: ref.Name}, secret); err != nil {
+		return fmt.Errorf("read published connection Secret: %w", err)
+	}
+	secret.OwnerReferences = append(secret.OwnerReferences, state.AncillaryOwner)
+	return kube.Update(ctx, secret)
+}
+
+func rotationMigrationAssertAncillaryOwner(ctx context.Context, kube ctrlclient.Client, binding *v1alpha1.ServiceCredentialBinding, state *rotationMigrationState) error {
+	ref := binding.Spec.WriteConnectionSecretToReference
+	if ref == nil {
+		return fmt.Errorf("migration fixture has no connection Secret reference")
+	}
+	secret := &corev1.Secret{}
+	if err := kube.Get(ctx, ctrlclient.ObjectKey{Namespace: ref.Namespace, Name: ref.Name}, secret); err != nil {
+		return fmt.Errorf("read connection Secret: %w", err)
+	}
+	for _, owner := range secret.OwnerReferences {
+		if owner.APIVersion == state.AncillaryOwner.APIVersion && owner.Kind == state.AncillaryOwner.Kind && owner.Name == state.AncillaryOwner.Name && owner.UID == state.AncillaryOwner.UID && owner.Controller != nil && !*owner.Controller {
+			return nil
+		}
+	}
+	return fmt.Errorf("scenario-owned ancillary ServiceInstance owner reference is missing")
 }
 
 func rotationMigrationAssertPublished(t *testing.T, ctx context.Context, cfg *envconf.Config, cf scbclient.ServiceCredentialBinding, binding *v1alpha1.ServiceCredentialBinding, guid string) error {
