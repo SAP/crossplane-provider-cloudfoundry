@@ -76,6 +76,31 @@ func TestRotationHandoverDeferral(t *testing.T) {
 	}
 }
 
+func TestRotationHandoverAllowsAdditionalSecretKeys(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		data    map[string][]byte
+		details managed.ConnectionDetails
+		want    bool
+	}{
+		{name: "additional old format key", data: map[string][]byte{"username": []byte("new"), "credentials": []byte(`{"username":"old"}`)}, details: managed.ConnectionDetails{"username": []byte("new")}, want: true},
+		{name: "missing expected key", data: map[string][]byte{"credentials": []byte(`{"username":"new"}`)}, details: managed.ConnectionDetails{"username": []byte("new")}},
+		{name: "wrong expected value", data: map[string][]byte{"username": []byte("old"), "credentials": []byte(`{"username":"old"}`)}, details: managed.ConnectionDetails{"username": []byte("new")}},
+		{name: "empty expected key absent", data: map[string][]byte{"old": []byte("value")}, details: managed.ConnectionDetails{"username": []byte{}}},
+		{name: "empty expected key present", data: map[string][]byte{"username": {}, "old": []byte("value")}, details: managed.ConnectionDetails{"username": []byte{}}, want: true},
+		{name: "empty expected map", data: map[string][]byte{"old": []byte("value")}, details: managed.ConnectionDetails{}, want: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cr := rotationHandoverCR(rotationTestK1, "__absent__", "key")
+			kube := rotationHandoverKube(t, cr, false)
+			secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "rotation-credentials", Namespace: "rotation-test", OwnerReferences: []metav1.OwnerReference{{APIVersion: v1alpha1.CRDGroupVersion.String(), Kind: v1alpha1.ServiceCredentialBindingKind, Name: cr.Name, UID: cr.UID, Controller: ptr.To(true)}}}, Type: resource.SecretTypeConnection, Data: tc.data}
+			require.NoError(t, kube.Create(context.Background(), secret))
+			c := rotationRuntimeExternal(kube, &fake.MockServiceCredentialBinding{})
+			assert.Equal(t, tc.want, c.confirmSecretHandover(context.Background(), cr, tc.details))
+		})
+	}
+}
+
 func TestRotationHandoverSecretMismatchAndReadErrors(t *testing.T) {
 	for _, tc := range []struct {
 		name      string
@@ -107,7 +132,7 @@ func TestRotationDeferredIntentRemovedBeforeHandover(t *testing.T) {
 		cf := &fake.MockServiceCredentialBinding{}
 		cf.On("Get", mock.Anything, rotationTestK1).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationInProgress), nil).Once()
 		cf.On("Get", mock.Anything, rotationTestK1).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil).Once()
-		cf.On("GetDetails", mock.Anything, rotationTestK1).Return(&cfresource.ServiceCredentialBindingDetails{Credentials: map[string]any{}}, nil).Once()
+		cf.On("GetDetails", mock.Anything, rotationTestK1).Return(&cfresource.ServiceCredentialBindingDetails{Credentials: map[string]any{"username": "new"}}, nil).Once()
 		kube := rotationHandoverKube(t, cr, true)
 		c := rotationRuntimeExternal(kube, cf)
 
@@ -213,7 +238,7 @@ func TestRotationConfirmedUnchangedSecretPersistsDeadlineAndAllowsNextRotation(t
 	expectedOwner := resource.ConnectionSecretFor(cr, v1alpha1.ServiceCredentialBindingGroupVersionKind)
 	require.Equal(t, expectedOwner.Type, secret.Type)
 	require.True(t, sameControllerOwner(secret, expectedOwner))
-	require.True(t, rotationCredentialDataEqual(secret.Data, managed.ConnectionDetails{"username": []byte("new")}))
+	require.True(t, connectionDataContains(secret.Data, managed.ConnectionDetails{"username": []byte("new")}))
 	binding := rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded)
 	require.Equal(t, v1alpha1.LastOperationSucceeded, binding.LastOperation.State)
 	require.True(t, c.confirmHandover(context.Background(), cr, rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), managed.ConnectionDetails{"username": []byte("new")}), "an unchanged, correctly owned Secret must confirm handover")
@@ -297,6 +322,51 @@ func TestRotationAnnotationWarnings(t *testing.T) {
 	}
 }
 
+func TestRotationPublisherFormatChangesLeaveHandoverConvergent(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		initialJSON      bool
+		nextJSON         bool
+		initialDetails   managed.ConnectionDetails
+		nextDetails      managed.ConnectionDetails
+		wantPreservedKey string
+	}{
+		{
+			name: "JSON to flattened with shrinking credentials", initialJSON: true,
+			initialDetails: managed.ConnectionDetails{"credentials": []byte(`{"username":"user","password":"old"}`)},
+			nextDetails:    managed.ConnectionDetails{"username": []byte("user")}, wantPreservedKey: "credentials",
+		},
+		{
+			name: "flattened to JSON with shrinking credentials", nextJSON: true,
+			initialDetails: managed.ConnectionDetails{"username": []byte("user"), "password": []byte("old")},
+			nextDetails:    managed.ConnectionDetails{"credentials": []byte(`{"username":"user"}`)}, wantPreservedKey: "password",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ctx := context.Background()
+			scheme := mustRotationScheme(t)
+			cr := rotationControllerCR(rotationTestK1, nil)
+			cr.UID = types.UID("rotation-test-owner")
+			cr.Spec.ConnectionDetailsAsJSON = tc.initialJSON
+			cr.Spec.WriteConnectionSecretToReference = &xpv2.SecretReference{Name: "rotation-credentials", Namespace: "rotation-test"}
+			kube := k8sfake.NewClientBuilder().WithScheme(scheme).WithObjects(cr).Build()
+			publisher := managed.NewAPISecretPublisher(kube, scheme)
+			if _, err := publisher.PublishConnection(ctx, cr, tc.initialDetails); err != nil {
+				t.Fatalf("publish initial credential format: %v", err)
+			}
+			cr.Spec.ConnectionDetailsAsJSON = tc.nextJSON
+			if _, err := publisher.PublishConnection(ctx, cr, tc.nextDetails); err != nil {
+				t.Fatalf("publish changed credential format: %v", err)
+			}
+			secret := &corev1.Secret{}
+			require.NoError(t, kube.Get(ctx, types.NamespacedName{Namespace: "rotation-test", Name: "rotation-credentials"}, secret))
+			require.Contains(t, secret.Data, tc.wantPreservedKey)
+			c := rotationRuntimeExternal(kube, &fake.MockServiceCredentialBinding{})
+			require.True(t, c.confirmSecretHandover(ctx, cr, tc.nextDetails), "expected current entries must confirm despite merge-patch leftovers")
+		})
+	}
+}
+
 func TestRotationConnectionPublisherBoundary(t *testing.T) {
 	for _, tc := range []struct {
 		name    string
@@ -341,7 +411,7 @@ func TestRotationConnectionPublisherBoundary(t *testing.T) {
 			require.Equal(t, tc.wantNew, published)
 			secret := &corev1.Secret{}
 			require.NoError(t, kube.Get(context.Background(), types.NamespacedName{Namespace: "rotation-test", Name: "rotation-credentials"}, secret))
-			require.True(t, rotationCredentialDataEqual(secret.Data, details), "published credential data mismatch")
+			require.True(t, connectionDataContains(secret.Data, details), "published credential data mismatch")
 		})
 	}
 
@@ -421,16 +491,4 @@ func rotationHandoverKube(t *testing.T, cr *v1alpha1.ServiceCredentialBinding, w
 		}, Type: resource.SecretTypeConnection, Data: map[string][]byte{"username": []byte("old")}})
 	}
 	return k8sfake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1alpha1.ServiceCredentialBinding{}).WithObjects(objects...).Build()
-}
-
-func rotationCredentialDataEqual(actual map[string][]byte, expected managed.ConnectionDetails) bool {
-	if len(actual) != len(expected) {
-		return false
-	}
-	for key, value := range expected {
-		if !bytes.Equal(actual[key], value) {
-			return false
-		}
-	}
-	return true
 }

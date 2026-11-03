@@ -106,6 +106,11 @@ func runForceRotationE2E(t *testing.T, parent context.Context, cfg *envconf.Conf
 		assertCurrentGUID(t, ctx, cfg, name, k1)
 	}
 
+	// Switch publication format on the same Secret. The runtime publisher merge-patches
+	// data, so the old JSON key remains while the expected flattened entries appear.
+	setConnectionDetailsFormat(t, ctx, cfg, name, false)
+	waitForPublishedCredentialsWithAdditionalKeys(t, ctx, cfg, name, k1, runScopedName("scb-rotation-no-ttl-secret"), true)
+
 	// A request targeting the then-current generation remains a valid new action.
 	current := &v1alpha1.ServiceCredentialBinding{}
 	if err := resourceClient.Get(ctx, name, "", current); err != nil {
@@ -438,8 +443,12 @@ func assertForceTarget(t *testing.T, ctx context.Context, cfg *envconf.Config, n
 
 func assertPublishedCredentials(t *testing.T, ctx context.Context, cfg *envconf.Config, mg *v1alpha1.ServiceCredentialBinding, guid, secretName string) {
 	t.Helper()
-	cfBinding := rotationCFClient(t, ctx, cfg, mg)
-	details, err := cfBinding.GetDetails(ctx, guid)
+	current := &v1alpha1.ServiceCredentialBinding{}
+	if err := cfg.Client().Resources().Get(ctx, mg.Name, "", current); err != nil {
+		t.Fatalf("read current binding for credential-format assertion: %v", err)
+	}
+	cfBinding := rotationCFClient(t, ctx, cfg, current)
+	expected, err := scbclient.GetConnectionDetails(ctx, cfBinding, guid, current.Spec.ConnectionDetailsAsJSON)
 	if err != nil {
 		t.Fatalf("read replacement credential details: %v", err)
 	}
@@ -447,17 +456,66 @@ func assertPublishedCredentials(t *testing.T, ctx context.Context, cfg *envconf.
 	if err := cfg.Client().Resources().Get(ctx, secretName, "default", secret); err != nil {
 		t.Fatalf("read published credential Secret: %v", err)
 	}
-	if len(details.Credentials) == 0 || len(secret.Data) == 0 {
+	if len(expected) == 0 || len(secret.Data) == 0 {
 		t.Fatal("replacement credentials or published Secret are empty")
 	}
-	want, err := json.Marshal(details.Credentials)
-	if err != nil {
-		t.Fatalf("marshal replacement credentials for comparison: %v", err)
+	for key, value := range expected {
+		actual, ok := secret.Data[key]
+		if !ok || string(actual) != string(value) {
+			t.Fatal("published Secret is missing an expected credential entry")
+		}
 	}
-	got, ok := secret.Data["credentials"]
-	if !ok || string(got) != string(want) {
-		t.Fatal("published Secret does not match replacement credentials")
+}
+
+func setConnectionDetailsFormat(t *testing.T, ctx context.Context, cfg *envconf.Config, name string, asJSON bool) {
+	t.Helper()
+	client := cfg.Client().Resources()
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		current := &v1alpha1.ServiceCredentialBinding{}
+		if err := client.Get(ctx, name, "", current); err != nil {
+			return err
+		}
+		current.Spec.ConnectionDetailsAsJSON = asJSON
+		return client.Update(ctx, current)
+	}); err != nil {
+		t.Fatalf("change connection-detail publication format: %v", err)
 	}
+}
+
+func waitForPublishedCredentialsWithAdditionalKeys(t *testing.T, ctx context.Context, cfg *envconf.Config, name, guid, secretName string, requireJSONKey bool) {
+	t.Helper()
+	if err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
+		current := &v1alpha1.ServiceCredentialBinding{}
+		if err := cfg.Client().Resources().Get(ctx, name, "", current); err != nil {
+			return false, err
+		}
+		cfBinding := rotationCFClient(t, ctx, cfg, current)
+		expected, err := scbclient.GetConnectionDetails(ctx, cfBinding, guid, current.Spec.ConnectionDetailsAsJSON)
+		if err != nil {
+			return false, nil
+		}
+		secret := &corev1.Secret{}
+		if err := cfg.Client().Resources().Get(ctx, secretName, "default", secret); err != nil {
+			return false, nil
+		}
+		if requireJSONKey && !hasCredentialKey(secret, "credentials") {
+			return false, nil
+		}
+		for key, value := range expected {
+			actual, ok := secret.Data[key]
+			if !ok || string(actual) != string(value) {
+				return false, nil
+			}
+		}
+		return len(expected) != 0, nil
+	}); err != nil {
+		t.Fatal("timed out waiting for expected published credential entries and retained old-format key")
+	}
+}
+
+func hasCredentialKey(secret *corev1.Secret, key string) bool {
+	_, ok := secret.Data[key]
+	return ok
 }
 
 func rotationCFClient(t *testing.T, ctx context.Context, cfg *envconf.Config, mg *v1alpha1.ServiceCredentialBinding) scbclient.ServiceCredentialBinding {
