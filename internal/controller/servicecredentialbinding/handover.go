@@ -207,13 +207,13 @@ func (c *external) currentHandover(ctx context.Context, cr *v1alpha1.ServiceCred
 	return binding, details, c.confirmHandover(ctx, cr, binding, details), nil
 }
 
-func (c *external) persistFallbackDeadlines(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, handover time.Time) (bool, error) {
+func (c *external) persistFallbackDeadlines(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, handover time.Time) error {
 	rotator, ok := c.keyRotator.(*scb.SCBKeyRotator)
 	if !ok || !rotator.InitializeFallbackDeadlines(cr, handover) {
-		return false, nil
+		return nil
 	}
 	if err := c.kube.Status().Update(ctx, cr); err != nil {
-		return false, fmt.Errorf("cannot persist retired-key retention deadlines: %w", err)
+		return fmt.Errorf("cannot persist retired-key retention deadlines: %w", err)
 	}
-	return true, nil
+	return nil
 }

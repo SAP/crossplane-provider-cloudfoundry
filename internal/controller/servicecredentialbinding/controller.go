@@ -263,10 +263,14 @@ func (c *external) observeAndRetire(ctx context.Context, cr *v1alpha1.ServiceCre
 	if err != nil {
 		return managed.ExternalObservation{}, err
 	}
+	return c.retireObservedBinding(ctx, cr, binding, policies, obs)
+}
+
+func (c *external) retireObservedBinding(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding, policies managed.ManagementPoliciesChecker, obs managed.ExternalObservation) (managed.ExternalObservation, error) {
 	if (!policies.ShouldCreate() && !policies.ShouldUpdate()) || !isKeyBinding(cr) || !c.confirmHandover(ctx, cr, binding, obs.ConnectionDetails) {
 		return obs, nil
 	}
-	if _, err := c.persistFallbackDeadlines(ctx, cr, c.now()); err != nil {
+	if err := c.persistFallbackDeadlines(ctx, cr, c.now()); err != nil {
 		return managed.ExternalObservation{}, err
 	}
 	if !policies.ShouldCreate() {
@@ -387,7 +391,7 @@ func (c *external) updateRetiredBindings(ctx context.Context, cr *v1alpha1.Servi
 		// replacement credentials were published. Defer routine deletion.
 		return managed.ExternalUpdate{ConnectionDetails: updateDetails}, nil
 	}
-	if _, err := c.persistFallbackDeadlines(ctx, cr, c.now()); err != nil {
+	if err := c.persistFallbackDeadlines(ctx, cr, c.now()); err != nil {
 		return managed.ExternalUpdate{}, err
 	}
 	return c.deleteExpiredBindings(ctx, cr, updateDetails)
