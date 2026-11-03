@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"testing"
 	"time"
 
@@ -17,6 +18,7 @@ import (
 	cfclient "github.com/cloudfoundry/go-cfclient/v3/client"
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	corev1 "k8s.io/api/core/v1"
 	kubeErrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -217,11 +219,16 @@ func rotationMigrationPostUpgrade(ctx context.Context, t *testing.T, cfg *envcon
 		}
 	}
 
-	// Unpause but leave the legacy empty annotation in place. Successful K1
-	// publication is the first safe post-upgrade handover confirmation.
+	// Use a supported no-Create policy while retaining Update for lifecycle
+	// migration. Unpause in the same update, and keep the legacy empty annotation
+	// to prove it remains inert after upgrade.
 	rotationMigrationUpdate(t, ctx, state.Kube, func(current *v1alpha1.ServiceCredentialBinding) {
 		if current.Annotations == nil {
 			current.Annotations = map[string]string{}
+		}
+		current.Spec.ManagementPolicies = xpv2.ManagementPolicies{
+			xpv2.ManagementActionObserve,
+			xpv2.ManagementActionUpdate,
 		}
 		delete(current.Annotations, rotationMigrationPauseAnnotation)
 		current.Annotations[rotationMigrationForceAnnotation] = ""
@@ -252,6 +259,12 @@ func rotationMigrationPostUpgrade(ctx context.Context, t *testing.T, cfg *envcon
 	}
 	if deadline.Before(confirmedAt.Add(48*time.Hour-time.Minute)) || deadline.After(confirmedAt.Add(48*time.Hour+time.Minute)) {
 		t.Fatal("legacy retired-key deadline is not approximately 48 hours after confirmed handover")
+	}
+	if policies := binding.Spec.ManagementPolicies; len(policies) != 2 || !slices.Contains(policies, xpv2.ManagementActionObserve) || !slices.Contains(policies, xpv2.ManagementActionUpdate) || slices.Contains(policies, xpv2.ManagementActionCreate) {
+		t.Fatal("migration did not retain the supported no-Create policy")
+	}
+	if len(binding.Status.AtProvider.RetiredKeys) != 1 || binding.Status.AtProvider.RetiredKeys[0] == nil || binding.Status.AtProvider.RetiredKeys[0].GUID != state.OldGUID {
+		t.Fatal("migration created or retained an unexpected binding generation")
 	}
 	if _, err := state.CF.Get(ctx, state.OldGUID); err != nil {
 		t.Fatalf("legacy key disappeared before its fallback deadline: %v", err)
@@ -332,7 +345,10 @@ func rotationMigrationPrepareCleanup(ctx context.Context, cfg *envconf.Config, s
 			return err
 		}
 		rotationMigrationRememberBinding(state, latest)
-		changed := false
+		// Restore full management only inside this scenario-owned cleanup hook,
+		// after the no-Create migration assertions have completed.
+		latest.Spec.ManagementPolicies = xpv2.ManagementPolicies{xpv2.ManagementActionAll}
+		changed := true
 		for _, annotation := range []string{
 			rotationMigrationPauseAnnotation,
 			rotationMigrationForceAnnotation,

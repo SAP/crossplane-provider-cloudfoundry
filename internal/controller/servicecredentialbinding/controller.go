@@ -263,17 +263,19 @@ func (c *external) observeAndRetire(ctx context.Context, cr *v1alpha1.ServiceCre
 	if err != nil {
 		return managed.ExternalObservation{}, err
 	}
-	if !policies.ShouldCreate() || !isKeyBinding(cr) || !c.confirmHandover(ctx, cr, binding, obs.ConnectionDetails) {
+	if (!policies.ShouldCreate() && !policies.ShouldUpdate()) || !isKeyBinding(cr) || !c.confirmHandover(ctx, cr, binding, obs.ConnectionDetails) {
 		return obs, nil
 	}
-	changed, err := c.persistFallbackDeadlines(ctx, cr, c.now())
-	if err != nil {
+	if _, err := c.persistFallbackDeadlines(ctx, cr, c.now()); err != nil {
 		return managed.ExternalObservation{}, err
 	}
+	if !policies.ShouldCreate() {
+		// Deadline migration is lifecycle bookkeeping, not permission to create
+		// a replacement. Persist it on this normal Observe path so it does not
+		// depend on unrelated metadata drift causing runtime to call Update.
+		return obs, nil
+	}
 	if !c.keyRotator.RetireBinding(cr, binding) {
-		if changed {
-			obs.ResourceUpToDate = false
-		}
 		return obs, nil
 	}
 	if err := c.kube.Status().Update(ctx, cr); err != nil {

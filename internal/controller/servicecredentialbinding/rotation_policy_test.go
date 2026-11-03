@@ -23,6 +23,7 @@ import (
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/fake"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/metadata"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
 )
 
@@ -73,6 +74,109 @@ func TestRotationEffectiveLegacyPolicyMatrix(t *testing.T) {
 			require.Equal(t, tc.wantDelete, resolver.ShouldDelete())
 			require.Equal(t, tc.wantOnlyWatch, resolver.ShouldOnlyObserve())
 			require.Equal(t, tc.wantPause, resolver.IsPaused())
+		})
+	}
+}
+
+func TestRotationFallbackDeadlineInitializationWithoutCreatePolicy(t *testing.T) {
+	now := time.Date(2026, 11, 3, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name                      string
+		policies                  xpv2.ManagementPolicies
+		deletion                  xpv2.DeletionPolicy
+		managementPoliciesEnabled bool
+		rotation                  *v1alpha1.RotationParameters
+		removeTTL                 bool
+		target                    string
+		wantInit                  bool
+		wantCleanup               bool
+	}{
+		{name: "observe and update no rotation", policies: xpv2.ManagementPolicies{xpv2.ManagementActionObserve, xpv2.ManagementActionUpdate}, deletion: xpv2.DeletionOrphan, managementPoliciesEnabled: true, target: rotationTestK1, wantInit: true, wantCleanup: true},
+		{name: "observe update and late initialize frequency only", policies: xpv2.ManagementPolicies{xpv2.ManagementActionObserve, xpv2.ManagementActionLateInitialize, xpv2.ManagementActionUpdate}, deletion: xpv2.DeletionOrphan, managementPoliciesEnabled: true, rotation: &v1alpha1.RotationParameters{Frequency: &metav1.Duration{Duration: 24 * time.Hour}}, target: rotationTestK1, wantInit: true, wantCleanup: true},
+		{name: "observe update after ttl removal", policies: xpv2.ManagementPolicies{xpv2.ManagementActionObserve, xpv2.ManagementActionUpdate}, deletion: xpv2.DeletionOrphan, managementPoliciesEnabled: true, rotation: &v1alpha1.RotationParameters{Frequency: &metav1.Duration{Duration: 24 * time.Hour}, TTL: &metav1.Duration{Duration: 72 * time.Hour}}, removeTTL: true, target: rotationTestK1, wantInit: true, wantCleanup: true},
+		{name: "wildcard policy", policies: xpv2.ManagementPolicies{xpv2.ManagementActionAll}, deletion: xpv2.DeletionDelete, managementPoliciesEnabled: true, wantInit: true, wantCleanup: true},
+		{name: "create without update", policies: xpv2.ManagementPolicies{xpv2.ManagementActionObserve, xpv2.ManagementActionCreate}, deletion: xpv2.DeletionOrphan, managementPoliciesEnabled: true, wantInit: true},
+		{name: "observe only", policies: xpv2.ManagementPolicies{xpv2.ManagementActionObserve}, deletion: xpv2.DeletionOrphan, managementPoliciesEnabled: true},
+		{name: "enabled empty policy pauses", policies: xpv2.ManagementPolicies{}, deletion: xpv2.DeletionOrphan, managementPoliciesEnabled: true},
+		{name: "legacy default policy", wantInit: true, wantCleanup: true},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			target := tc.target
+			if target == "" {
+				target = rotationTestK0
+			}
+			cr := rotationControllerCR(rotationTestK1, map[string]string{servicecredentialbinding.ForceRotationKey: target})
+			cr.Spec.ManagementPolicies = tc.policies
+			cr.Spec.DeletionPolicy = tc.deletion
+			cr.Spec.ForProvider.Rotation = tc.rotation
+			if tc.removeTTL {
+				cr.Spec.ForProvider.Rotation.TTL = nil
+			}
+			cr.Finalizers = []string{managed.FinalizerName}
+			cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: now}
+			cr.Status.AtProvider.RetiredKeys = []*v1alpha1.SCBResource{{GUID: rotationTestK0, CreatedAt: &metav1.Time{Time: now.Add(-180 * 24 * time.Hour)}}}
+			store, scheme := rotationRuntimeStore(t, cr)
+			cf := &fake.MockServiceCredentialBinding{}
+			if tc.name != "enabled empty policy pauses" {
+				binding := rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded)
+				binding.Metadata = metadata.BuildMetadata(cr, cr.Spec.ForProvider.Labels, cr.Spec.ForProvider.Annotations)
+				require.True(t, servicecredentialbinding.IsUpToDate(context.Background(), cr, cr.Spec.ForProvider, *binding), "test must exercise an observed binding without metadata drift")
+				cf.On("Get", mock.Anything, rotationTestK1).Return(binding, nil).Maybe()
+				cf.On("Update", mock.Anything, rotationTestK1, mock.Anything).Return(binding, nil).Maybe()
+			}
+			external := rotationRuntimeExternal(store, cf)
+			external.managementPoliciesEnabled = tc.managementPoliciesEnabled
+			external.nowFn = func() time.Time { return now }
+			external.keyRotator.(*servicecredentialbinding.SCBKeyRotator).Now = func() time.Time { return now }
+			reconciler := rotationRuntimeReconciler(t, store, scheme, external, tc.managementPoliciesEnabled)
+
+			request := reconcile.Request{NamespacedName: types.NamespacedName{Name: cr.Name}}
+			_, err := reconciler.Reconcile(context.Background(), request)
+			require.NoError(t, err)
+			if tc.wantInit {
+				persisted := &v1alpha1.ServiceCredentialBinding{}
+				require.NoError(t, store.Get(context.Background(), types.NamespacedName{Name: cr.Name}, persisted))
+				require.Len(t, persisted.Status.AtProvider.RetiredKeys, 1)
+				deadline := persisted.Status.AtProvider.RetiredKeys[0].DeleteAfter
+				require.NotNil(t, deadline, "normal Observe must initialize fallback state without metadata drift; rotation=%#v policies=%v", persisted.Spec.ForProvider.Rotation, persisted.Spec.ManagementPolicies)
+				require.True(t, deadline.Time.Equal(now.Add(48*time.Hour)))
+				require.Equal(t, rotationTestK1, persisted.Status.AtProvider.GUID)
+				require.Equal(t, target, persisted.Annotations[servicecredentialbinding.ForceRotationKey], "a deferred or stale target remains inert and is not consumed")
+
+				// Reload and reconcile again to prove the deadline is durable and does not slide.
+				_, err = reconciler.Reconcile(context.Background(), request)
+				require.NoError(t, err)
+				reloaded := &v1alpha1.ServiceCredentialBinding{}
+				require.NoError(t, store.Get(context.Background(), types.NamespacedName{Name: cr.Name}, reloaded))
+				require.True(t, reloaded.Status.AtProvider.RetiredKeys[0].DeleteAfter.Time.Equal(deadline.Time))
+				require.Equal(t, rotationTestK1, reloaded.Status.AtProvider.GUID, "no replacement may be created when Create is disallowed")
+
+				now = deadline.Time
+				if tc.wantCleanup {
+					cf.On("Delete", mock.Anything, rotationTestK0).Return("", nil).Once()
+				}
+				_, err = reconciler.Reconcile(context.Background(), request)
+				require.NoError(t, err)
+				cleaned := &v1alpha1.ServiceCredentialBinding{}
+				require.NoError(t, store.Get(context.Background(), types.NamespacedName{Name: cr.Name}, cleaned))
+				require.Equal(t, rotationTestK1, cleaned.Status.AtProvider.GUID, "routine cleanup must protect the active generation")
+				if tc.wantCleanup {
+					require.Empty(t, cleaned.Status.AtProvider.RetiredKeys, "Update-permitted reconciliation should clean at the deadline")
+				} else {
+					require.Len(t, cleaned.Status.AtProvider.RetiredKeys, 1, "Create-only policy must not gain cleanup authority")
+				}
+			} else {
+				persisted := &v1alpha1.ServiceCredentialBinding{}
+				require.NoError(t, store.Get(context.Background(), types.NamespacedName{Name: cr.Name}, persisted))
+				require.Nil(t, persisted.Status.AtProvider.RetiredKeys[0].DeleteAfter, "disallowed or paused lifecycle must not initialize fallback state")
+			}
+			cf.AssertNotCalled(t, "Create", mock.Anything, mock.Anything)
+			if !tc.wantCleanup {
+				cf.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
+			}
+			cf.AssertExpectations(t)
 		})
 	}
 }
