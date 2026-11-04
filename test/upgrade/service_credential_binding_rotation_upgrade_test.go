@@ -5,6 +5,7 @@ package upgrade
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"slices"
@@ -77,6 +78,7 @@ func Test_ServiceCredentialBinding_Rotation_Migration(t *testing.T) {
 		ToVersion(toTag).
 		WithResourceDirectories(rotationMigrationResourceDirectories).
 		WithVerifyTimeout(10*time.Minute).
+		WithKeepResourcesPausedAfterUpgrade().
 		WithCustomPreUpgradeAssessment(
 			"Create and pause a legacy retired-key state",
 			preUpgrade,
@@ -172,6 +174,19 @@ func rotationMigrationPreUpgrade(ctx context.Context, t *testing.T, cfg *envconf
 	if err := rotationMigrationAssertPublished(t, ctx, cfg, cfBinding, binding, activeGUID); err != nil {
 		t.Fatalf("verify legacy replacement handover: %v", err)
 	}
+	// The retry-budget pause below stops Cloud Foundry actions but still returns
+	// an empty observation that Crossplane's connection Secret publisher applies.
+	// Use the full runtime pause before adding ancillary ownership so publication
+	// cannot replace the Secret's owner-reference list with the controller alone.
+	rotationMigrationUpdate(t, ctx, kube, func(current *v1alpha1.ServiceCredentialBinding) {
+		if current.Annotations == nil {
+			current.Annotations = map[string]string{}
+		}
+		current.Annotations[meta.AnnotationKeyReconciliationPaused] = "true"
+	})
+	if err := rotationMigrationWaitForPaused(ctx, kube); err != nil {
+		t.Fatalf("wait for full runtime pause before adding ancillary Secret owner: %v", err)
+	}
 	if err := rotationMigrationAddAncillaryOwner(ctx, kube, binding, state); err != nil {
 		t.Fatalf("add scenario-owned ancillary Secret owner: %v", err)
 	}
@@ -214,8 +229,14 @@ func rotationMigrationPostUpgrade(ctx context.Context, t *testing.T, cfg *envcon
 	if !rotationMigrationHasRetiree(binding, state.OldGUID) {
 		t.Fatal("legacy retired key record was not preserved by the upgrade")
 	}
+	if _, paused := binding.Annotations[meta.AnnotationKeyReconciliationPaused]; !paused {
+		t.Fatal("full Crossplane pause was not retained across the provider upgrade")
+	}
+	if condition := binding.GetCondition(xpv2.TypeSynced); condition.Status != corev1.ConditionFalse || condition.Reason != "ReconcilePaused" {
+		t.Fatalf("binding is not fully paused after provider upgrade: Synced=%s/%s", condition.Status, condition.Reason)
+	}
 	if err := rotationMigrationAssertAncillaryOwner(ctx, state.Kube, binding, &state); err != nil {
-		t.Fatalf("ancillary Secret owner was not preserved by the upgrade: %v", err)
+		t.Fatalf("ancillary Secret owner was not preserved while fully paused across the upgrade: %v", err)
 	}
 	if _, paused := binding.Annotations[rotationMigrationPauseAnnotation]; !paused {
 		t.Fatal("legacy provider retry-budget pause marker was not preserved by the upgrade")
@@ -227,6 +248,14 @@ func rotationMigrationPostUpgrade(ctx context.Context, t *testing.T, cfg *envcon
 		if retired != nil && retired.GUID == state.OldGUID && retired.DeleteAfter != nil {
 			t.Fatal("paused upgrade initialized fallback retention before handover confirmation")
 		}
+	}
+
+	// The upgrade harness kept every fixture paused. Once continuity assertions
+	// have passed, resume the imported parents and instance so teardown can
+	// finalize them even if a later migration assertion fails. Keep the binding
+	// paused until its no-Create policy and retained annotation are updated below.
+	if err := rotationMigrationResumeSupportingResources(ctx, state.Kube); err != nil {
+		t.Fatalf("resume supporting fixture resources after upgrade assertions: %v", err)
 	}
 
 	// Use a supported no-Create policy while retaining Update for lifecycle
@@ -241,6 +270,7 @@ func rotationMigrationPostUpgrade(ctx context.Context, t *testing.T, cfg *envcon
 			xpv2.ManagementActionUpdate,
 		}
 		delete(current.Annotations, rotationMigrationPauseAnnotation)
+		delete(current.Annotations, meta.AnnotationKeyReconciliationPaused)
 		current.Annotations[rotationMigrationForceAnnotation] = ""
 	})
 
@@ -310,10 +340,19 @@ func rotationMigrationPostUpgrade(ctx context.Context, t *testing.T, cfg *envcon
 	return ctx
 }
 
+func rotationMigrationResumeSupportingResources(ctx context.Context, kube ctrlclient.Client) error {
+	return resumePausedFixtureResources(ctx, kube,
+		&v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: "upgrade-test-rotation-org"}},
+		&v1alpha1.Space{ObjectMeta: metav1.ObjectMeta{Name: "upgrade-test-rotation-space"}},
+		&v1alpha1.ServiceInstance{ObjectMeta: metav1.ObjectMeta{Name: "upgrade-test-rotation-service-instance"}},
+	)
+}
+
 // rotationMigrationPrepareCleanup removes only operational annotations owned by
 // this scenario before fixture deletion, including when the upgrade assessment
 // failed and left the old controller paused.
 func rotationMigrationPrepareCleanup(ctx context.Context, cfg *envconf.Config, state *rotationMigrationState) error {
+	var errs []error
 	if state.Kube == nil {
 		kube, err := rotationMigrationNewKubeClient(cfg)
 		if err != nil {
@@ -322,22 +361,28 @@ func rotationMigrationPrepareCleanup(ctx context.Context, cfg *envconf.Config, s
 		state.Kube = kube
 	}
 
+	// Resume only this scenario's parent/instance wrappers before deleting the
+	// binding. Cleanup also runs after failed post-upgrade assertions, so this
+	// must not depend on the normal migration path having reached its resume step.
+	if err := rotationMigrationResumeSupportingResources(ctx, state.Kube); err != nil {
+		errs = append(errs, fmt.Errorf("resume supporting fixture resources before cleanup: %w", err))
+	}
 	if err := rotationMigrationRememberImportedIdentities(ctx, state.Kube, state); err != nil {
-		return err
+		return errors.Join(append(errs, err)...)
 	}
 	key := ctrlclient.ObjectKey{Name: rotationMigrationBindingName}
 	current := &v1alpha1.ServiceCredentialBinding{}
 	if err := state.Kube.Get(ctx, key, current); err != nil {
 		if kubeErrors.IsNotFound(err) {
-			return nil
+			return errors.Join(errs...)
 		}
-		return fmt.Errorf("read owned binding before cleanup: %w", err)
+		return errors.Join(append(errs, fmt.Errorf("read owned binding before cleanup: %w", err))...)
 	}
 	rotationMigrationRememberBinding(state, current)
 	if state.CF == nil || state.CFAPI == nil {
 		cf, cfAPI, err := rotationMigrationNewCFClient(ctx, state.Kube, current)
 		if err != nil {
-			return fmt.Errorf("create Cloud Foundry client for owned cleanup: %w", err)
+			return errors.Join(append(errs, fmt.Errorf("create Cloud Foundry client for owned cleanup: %w", err))...)
 		}
 		state.CF, state.CFAPI = cf, cfAPI
 	}
@@ -346,7 +391,7 @@ func rotationMigrationPrepareCleanup(ctx context.Context, cfg *envconf.Config, s
 	// closes the window in which the legacy provider could interpret the retained
 	// empty annotation as a fresh rotation after being unpaused.
 	if err := state.Kube.Delete(ctx, current); err != nil && !kubeErrors.IsNotFound(err) {
-		return fmt.Errorf("request deletion of owned binding before unpausing it: %w", err)
+		return errors.Join(append(errs, fmt.Errorf("request deletion of owned binding before unpausing it: %w", err))...)
 	}
 
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
@@ -377,9 +422,9 @@ func rotationMigrationPrepareCleanup(ctx context.Context, cfg *envconf.Config, s
 		}
 		return state.Kube.Update(ctx, latest)
 	}); err != nil {
-		return fmt.Errorf("clear scenario-owned pause/force annotations before resource deletion: %w", err)
+		return errors.Join(append(errs, fmt.Errorf("clear scenario-owned pause/force annotations before resource deletion: %w", err))...)
 	}
-	return nil
+	return errors.Join(errs...)
 }
 
 // rotationMigrationVerifyCleanup runs after fixture deletion but before the
@@ -504,6 +549,18 @@ func rotationMigrationUpdate(t *testing.T, ctx context.Context, kube ctrlclient.
 	}); err != nil {
 		t.Fatalf("update migration test binding: %v", err)
 	}
+}
+
+func rotationMigrationWaitForPaused(ctx context.Context, kube ctrlclient.Client) error {
+	key := ctrlclient.ObjectKey{Name: rotationMigrationBindingName}
+	return wait.PollUntilContextTimeout(ctx, time.Second, time.Minute, true, func(ctx context.Context) (bool, error) {
+		binding := &v1alpha1.ServiceCredentialBinding{}
+		if err := kube.Get(ctx, key, binding); err != nil {
+			return false, err
+		}
+		condition := binding.GetCondition(xpv2.TypeSynced)
+		return condition.Status == corev1.ConditionFalse && condition.Reason == "ReconcilePaused", nil
+	})
 }
 
 func rotationMigrationReady(binding *v1alpha1.ServiceCredentialBinding) bool {

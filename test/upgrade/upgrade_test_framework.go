@@ -62,6 +62,7 @@ type CustomUpgradeTestBuilder struct {
 
 	// Disable default phases
 	skipDefaultResourceVerification bool
+	keepResourcesPausedAfterUpgrade bool
 }
 
 // cleanupPhaseFunc is an optional error-returning resource cleanup hook.
@@ -128,6 +129,14 @@ func (b *CustomUpgradeTestBuilder) WithVerifyTimeout(timeout time.Duration) *Cus
 // If not set, the value from UPGRADE_TEST_WAIT_FOR_PAUSE or default (1 minute) will be used.
 func (b *CustomUpgradeTestBuilder) WithWaitForPause(duration time.Duration) *CustomUpgradeTestBuilder {
 	b.waitForPause = duration
+	return b
+}
+
+// WithKeepResourcesPausedAfterUpgrade leaves fixture resources under the full
+// Crossplane pause after installing the target provider. A custom post-upgrade
+// assessment must explicitly resume them when ready.
+func (b *CustomUpgradeTestBuilder) WithKeepResourcesPausedAfterUpgrade() *CustomUpgradeTestBuilder {
+	b.keepResourcesPausedAfterUpgrade = true
 	return b
 }
 
@@ -254,15 +263,20 @@ func (b *CustomUpgradeTestBuilder) Feature() features.Feature {
 		feature = feature.Assess(phase.description, phase.fn)
 	}
 
-	feature = feature.Assess(
-		"Upgrade provider to version "+b.toTag,
-		upgrade.UpgradeProvider(upgrade.UpgradeProviderOptions{
-			ClusterName:         upgradeTest.ClusterName,
-			ProviderOptions:     toProviderOptions,
-			ResourceDirectories: upgradeTest.ResourceDirectories,
-			WaitForPause:        b.waitForPause,
-		}),
-	)
+	upgradeOptions := upgrade.UpgradeProviderOptions{
+		ClusterName:         upgradeTest.ClusterName,
+		ProviderOptions:     toProviderOptions,
+		ResourceDirectories: upgradeTest.ResourceDirectories,
+		WaitForPause:        b.waitForPause,
+	}
+	upgradeProvider := upgrade.UpgradeProvider(upgradeOptions)
+	if b.keepResourcesPausedAfterUpgrade {
+		upgradeProvider = upgrade.Compose(
+			upgrade.PauseResources(upgradeOptions.ResourceDirectories, upgradeOptions.WaitForPause),
+			upgrade.ApplyProvider(upgradeOptions.ClusterName, upgradeOptions.ProviderOptions),
+		)
+	}
+	feature = feature.Assess("Upgrade provider to version "+b.toTag, upgradeProvider)
 
 	if !b.skipDefaultResourceVerification {
 		feature = feature.Assess(
