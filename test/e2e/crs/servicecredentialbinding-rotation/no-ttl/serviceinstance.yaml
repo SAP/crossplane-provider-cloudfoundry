@@ -12,5 +12,11 @@ spec:
       policy:
         resolve: Always
     servicePlan:
-      offering: alert-notification
-      plan: standard
+      offering: xsuaa
+      plan: application
+    parameters:
+      xsappname: scb-rotation-no-ttl-$BUILD_ID
+      tenant-mode: dedicated
+      oauth2-configuration:
+        credential-types:
+          - binding-secret
