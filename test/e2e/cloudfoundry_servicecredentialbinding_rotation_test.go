@@ -19,7 +19,6 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/util/retry"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
@@ -77,16 +76,17 @@ func runForceRotationE2E(t *testing.T, parent context.Context, cfg *envconf.Conf
 		t.Fatalf("reload successful initial binding: %v", err)
 	}
 	k0 := binding.Status.AtProvider.GUID
-	waitForCredentialPublication(t, ctx, cfg, name, k0, runScopedName("scb-rotation-no-ttl-secret"), 3*time.Minute)
-
 	cfBinding := rotationCFClient(t, ctx, cfg, binding)
-	if _, err := cfBinding.Get(ctx, k0); err != nil {
-		t.Fatalf("read initial Cloud Foundry binding: %v", err)
-	}
+	waitForCredentialPublication(t, ctx, cfg, cfBinding, name, k0, runScopedName("scb-rotation-no-ttl-secret"), 3*time.Minute)
+	k0Credentials := rotationCredentialSnapshot(t, ctx, cfBinding, k0)
 	setForceTarget(t, ctx, cfg, name, k0)
 
 	k1 := waitForRotatedBinding(t, ctx, cfg, name, k0, 5*time.Minute)
-	assertPublishedCredentials(t, ctx, cfg, binding, k1, runScopedName("scb-rotation-no-ttl-secret"))
+	assertPublishedCredentials(t, ctx, cfg, cfBinding, binding, k1, runScopedName("scb-rotation-no-ttl-secret"))
+	k1Credentials := rotationCredentialSnapshot(t, ctx, cfBinding, k1)
+	if err := testutil.ValidateRotationCredentialChange(k0Credentials, k1Credentials); err != nil {
+		t.Fatalf("XSUAA binding credentials did not change at first rotation: %v", err)
+	}
 	k0Deadline := waitForFallbackDeadline(t, ctx, cfg, name, k0, cfBinding)
 	assertFallbackDeadlineNear(t, k0Deadline, time.Now())
 	if _, err := cfBinding.Get(ctx, k0); err != nil {
@@ -105,14 +105,16 @@ func runForceRotationE2E(t *testing.T, parent context.Context, cfg *envconf.Conf
 			t.Fatalf("reload binding during replay check: %v", err)
 		}
 		setForceTarget(t, ctx, cfg, name, k0)
-		time.Sleep(10 * time.Second)
+		if err := waitRotationReplayInterval(ctx, 10*time.Second); err != nil {
+			t.Fatalf("stale-target replay wait canceled: %v", err)
+		}
 		assertCurrentGUID(t, ctx, cfg, name, k1)
 	}
 
 	// Switch publication format on the same Secret. The runtime publisher merge-patches
 	// data, so the old JSON key remains while the expected flattened entries appear.
 	setConnectionDetailsFormat(t, ctx, cfg, name, false)
-	waitForPublishedCredentialsWithAdditionalKeys(t, ctx, cfg, name, k1, runScopedName("scb-rotation-no-ttl-secret"), true)
+	waitForPublishedCredentialsWithAdditionalKeys(t, ctx, cfg, cfBinding, name, k1, runScopedName("scb-rotation-no-ttl-secret"), true)
 
 	// A request targeting the then-current generation remains a valid new action.
 	current := &v1alpha1.ServiceCredentialBinding{}
@@ -121,17 +123,25 @@ func runForceRotationE2E(t *testing.T, parent context.Context, cfg *envconf.Conf
 	}
 	setForceTarget(t, ctx, cfg, name, k1)
 	k2 := waitForRotatedBinding(t, ctx, cfg, name, k1, 5*time.Minute)
-	assertPublishedCredentials(t, ctx, cfg, binding, k2, runScopedName("scb-rotation-no-ttl-secret"))
+	assertPublishedCredentials(t, ctx, cfg, cfBinding, binding, k2, runScopedName("scb-rotation-no-ttl-secret"))
+	k2Credentials := rotationCredentialSnapshot(t, ctx, cfBinding, k2)
+	if err := testutil.ValidateRotationCredentialChange(k1Credentials, k2Credentials); err != nil {
+		t.Fatalf("XSUAA binding credentials did not change at second rotation: %v", err)
+	}
 	k1Deadline := waitForFallbackDeadline(t, ctx, cfg, name, k1, cfBinding)
 	assertFallbackDeadlineNear(t, k1Deadline, time.Now())
 	assertFallbackDeadlineUnchanged(t, ctx, cfg, name, k0, k0Deadline)
 	assertCurrentGUID(t, ctx, cfg, name, k2)
 	for i := 0; i < 6; i++ {
 		setForceTarget(t, ctx, cfg, name, k0)
-		time.Sleep(10 * time.Second)
+		if err := waitRotationReplayInterval(ctx, 10*time.Second); err != nil {
+			t.Fatalf("stale-target replay wait canceled: %v", err)
+		}
 		assertCurrentGUID(t, ctx, cfg, name, k2)
 		setForceTarget(t, ctx, cfg, name, k1)
-		time.Sleep(10 * time.Second)
+		if err := waitRotationReplayInterval(ctx, 10*time.Second); err != nil {
+			t.Fatalf("stale-target replay wait canceled: %v", err)
+		}
 		assertCurrentGUID(t, ctx, cfg, name, k2)
 	}
 	assertFallbackDeadlineUnchanged(t, ctx, cfg, name, k0, k0Deadline)
@@ -174,47 +184,29 @@ func runRetiredKeyCleanupE2E(t *testing.T, parent context.Context, cfg *envconf.
 		t.Fatalf("reload successful initial binding: %v", err)
 	}
 	k0 := binding.Status.AtProvider.GUID
-	waitForCredentialPublication(t, ctx, cfg, name, k0, runScopedName("scb-rotation-cleanup-secret"), 3*time.Minute)
 	cfBinding := rotationCFClient(t, ctx, cfg, binding)
-	if _, err := cfBinding.Get(ctx, k0); err != nil {
-		t.Fatalf("read initial Cloud Foundry binding: %v", err)
-	}
+	waitForCredentialPublication(t, ctx, cfg, cfBinding, name, k0, runScopedName("scb-rotation-cleanup-secret"), 3*time.Minute)
+	k0Credentials := rotationCredentialSnapshot(t, ctx, cfBinding, k0)
 	if err := resourceClient.Get(ctx, name, "", binding); err != nil {
 		t.Fatalf("reload binding before rotation: %v", err)
 	}
 	setForceTarget(t, ctx, cfg, name, k0)
 	k1 := waitForRotatedBinding(t, ctx, cfg, name, k0, 5*time.Minute)
-	assertPublishedCredentials(t, ctx, cfg, binding, k1, runScopedName("scb-rotation-cleanup-secret"))
-	if err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 8*time.Minute, true, func(ctx context.Context) (bool, error) {
-		_, err := cfBinding.Get(ctx, k0)
-		if clients.ErrorIsNotFound(err) {
-			return true, nil
-		}
-		if err != nil {
-			return false, err
-		}
-		return false, nil
-	}); err != nil {
-		t.Fatalf("wait for retired CF key disappearance: %v", err)
+	assertPublishedCredentials(t, ctx, cfg, cfBinding, binding, k1, runScopedName("scb-rotation-cleanup-secret"))
+	k1Credentials := rotationCredentialSnapshot(t, ctx, cfBinding, k1)
+	if err := testutil.ValidateRotationCredentialChange(k0Credentials, k1Credentials); err != nil {
+		t.Fatalf("XSUAA binding credentials did not change at cleanup rotation: %v", err)
 	}
-	active := &v1alpha1.ServiceCredentialBinding{}
-	if err := resourceClient.Get(ctx, name, "", active); err != nil {
-		t.Fatalf("read active binding after retired-key cleanup: %v", err)
+	if err := waitForRetiredKeyCollection(ctx, cfg, name, k0, cfBinding); err != nil {
+		t.Fatalf("wait for retired key CF and status collection: %v", err)
 	}
-	activeGUID := active.Status.AtProvider.GUID
-	if activeGUID == "" {
-		t.Fatal("active binding GUID is empty after retired-key cleanup")
-	}
-	if _, err := cfBinding.Get(ctx, activeGUID); err != nil {
-		t.Fatalf("active replacement key disappeared: %v", err)
-	}
+	waitForStablePublishedActiveBinding(t, ctx, cfg, cfBinding, name, runScopedName("scb-rotation-cleanup-secret"))
 
 	// Once K0 is actually gone, disable scheduled rotation and replay the stale
 	// target. The target remains inert even after its retired-key record is GC'd.
 	if err := resourceClient.Get(ctx, name, "", binding); err != nil {
 		t.Fatalf("reload binding after retired-key cleanup: %v", err)
 	}
-	activeGUID = binding.Status.AtProvider.GUID
 	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		current := &v1alpha1.ServiceCredentialBinding{}
 		if err := resourceClient.Get(ctx, name, "", current); err != nil {
@@ -227,9 +219,111 @@ func runRetiredKeyCleanupE2E(t *testing.T, parent context.Context, cfg *envconf.
 	}); err != nil {
 		t.Fatalf("disable scheduled rotation and restore stale target: %v", err)
 	}
+	activeGUID := waitForStablePublishedActiveBinding(t, ctx, cfg, cfBinding, name, runScopedName("scb-rotation-cleanup-secret"))
 	for i := 0; i < 6; i++ {
-		time.Sleep(10 * time.Second)
+		if err := waitRotationReplayInterval(ctx, 10*time.Second); err != nil {
+			t.Fatalf("stale-target replay wait canceled: %v", err)
+		}
 		assertCurrentGUID(t, ctx, cfg, name, activeGUID)
+		assertRetiredGUIDAbsent(t, ctx, cfg, name, k0)
+	}
+}
+
+func rotationCredentialSnapshot(t *testing.T, ctx context.Context, cfBinding scbclient.ServiceCredentialBinding, guid string) map[string]any {
+	t.Helper()
+	details, err := cfBinding.GetDetails(ctx, guid)
+	if err != nil || details == nil {
+		t.Fatalf("read broker credentials for current binding generation (available=%t)", details != nil)
+	}
+	credentials := make(map[string]any, len(details.Credentials))
+	for key, value := range details.Credentials {
+		credentials[key] = value
+	}
+	return credentials
+}
+
+func waitForRetiredKeyCollection(ctx context.Context, cfg *envconf.Config, name, retiredGUID string, cfBinding scbclient.ServiceCredentialBinding) error {
+	return testutil.WaitForRotationRetiredKeyCollection(ctx, 8*time.Minute, 5*time.Second, retiredGUID,
+		func(ctx context.Context) (bool, error) {
+			_, err := cfBinding.Get(ctx, retiredGUID)
+			if clients.ErrorIsNotFound(err) {
+				return false, nil
+			}
+			if err != nil {
+				return true, errors.New("Cloud Foundry verification failed")
+			}
+			return true, nil
+		},
+		func(ctx context.Context) ([]*v1alpha1.SCBResource, error) {
+			current := &v1alpha1.ServiceCredentialBinding{}
+			if err := cfg.Client().Resources().Get(ctx, name, "", current); err != nil {
+				return nil, errors.New("Kubernetes status read failed")
+			}
+			return current.Status.AtProvider.RetiredKeys, nil
+		})
+}
+
+func waitForStablePublishedActiveBinding(t *testing.T, ctx context.Context, cfg *envconf.Config, cfBinding scbclient.ServiceCredentialBinding, name, secretName string) string {
+	t.Helper()
+	var activeGUID string
+	err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
+		current := &v1alpha1.ServiceCredentialBinding{}
+		if err := cfg.Client().Resources().Get(ctx, name, "", current); err != nil {
+			return false, errors.New("Kubernetes active-binding read failed")
+		}
+		guid := current.Status.AtProvider.GUID
+		operationSucceeded := current.Status.AtProvider.LastOperation != nil && current.Status.AtProvider.LastOperation.State == v1alpha1.LastOperationSucceeded
+		if guid == "" || !operationSucceeded || isRetiredGUID(current.Status.AtProvider.RetiredKeys, guid) {
+			return false, nil
+		}
+		_, err := cfBinding.Get(ctx, guid)
+		if err != nil {
+			if clients.ErrorIsNotFound(err) {
+				return false, nil
+			}
+			return false, errors.New("Cloud Foundry active-key verification failed")
+		}
+		if !testutil.RotationActiveBindingUsable(guid, operationSucceeded, true) {
+			return false, nil
+		}
+		activeGUID = guid
+		return true, nil
+	})
+	if err != nil {
+		t.Fatalf("wait for scheduled replacement to reach a stable active generation: %v", err)
+	}
+	waitForCredentialPublication(t, ctx, cfg, cfBinding, name, activeGUID, secretName, 3*time.Minute)
+	return activeGUID
+}
+
+func isRetiredGUID(retired []*v1alpha1.SCBResource, guid string) bool {
+	for _, key := range retired {
+		if key != nil && key.GUID == guid {
+			return true
+		}
+	}
+	return false
+}
+
+func assertRetiredGUIDAbsent(t *testing.T, ctx context.Context, cfg *envconf.Config, name, guid string) {
+	t.Helper()
+	current := &v1alpha1.ServiceCredentialBinding{}
+	if err := cfg.Client().Resources().Get(ctx, name, "", current); err != nil {
+		t.Fatalf("read retired-key status during stale-target replay: %v", err)
+	}
+	if isRetiredGUID(current.Status.AtProvider.RetiredKeys, guid) {
+		t.Fatalf("collected retired key %q reappeared in status", guid)
+	}
+}
+
+func waitRotationReplayInterval(ctx context.Context, duration time.Duration) error {
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
 
@@ -445,9 +539,9 @@ func assertForceTarget(t *testing.T, ctx context.Context, cfg *envconf.Config, n
 	}
 }
 
-func assertPublishedCredentials(t *testing.T, ctx context.Context, cfg *envconf.Config, mg *v1alpha1.ServiceCredentialBinding, guid, secretName string) {
+func assertPublishedCredentials(t *testing.T, ctx context.Context, cfg *envconf.Config, cfBinding scbclient.ServiceCredentialBinding, mg *v1alpha1.ServiceCredentialBinding, guid, secretName string) {
 	t.Helper()
-	waitForCredentialPublication(t, ctx, cfg, mg.Name, guid, secretName, 3*time.Minute)
+	waitForCredentialPublication(t, ctx, cfg, cfBinding, mg.Name, guid, secretName, 3*time.Minute)
 }
 
 func setConnectionDetailsFormat(t *testing.T, ctx context.Context, cfg *envconf.Config, name string, asJSON bool) {
@@ -465,9 +559,9 @@ func setConnectionDetailsFormat(t *testing.T, ctx context.Context, cfg *envconf.
 	}
 }
 
-func waitForPublishedCredentialsWithAdditionalKeys(t *testing.T, ctx context.Context, cfg *envconf.Config, name, guid, secretName string, requireJSONKey bool) {
+func waitForPublishedCredentialsWithAdditionalKeys(t *testing.T, ctx context.Context, cfg *envconf.Config, cfBinding scbclient.ServiceCredentialBinding, name, guid, secretName string, requireJSONKey bool) {
 	t.Helper()
-	waitForCredentialPublication(t, ctx, cfg, name, guid, secretName, 3*time.Minute)
+	waitForCredentialPublication(t, ctx, cfg, cfBinding, name, guid, secretName, 3*time.Minute)
 	if requireJSONKey {
 		secret := &corev1.Secret{}
 		if err := cfg.Client().Resources().Get(ctx, secretName, "default", secret); err != nil {
@@ -481,7 +575,7 @@ func waitForPublishedCredentialsWithAdditionalKeys(t *testing.T, ctx context.Con
 
 // waitForCredentialPublication separately confirms the active generation and its
 // published Secret. A successful CF operation alone is not publication proof.
-func waitForCredentialPublication(t *testing.T, ctx context.Context, cfg *envconf.Config, name, targetGUID, secretName string, timeout time.Duration) {
+func waitForCredentialPublication(t *testing.T, ctx context.Context, cfg *envconf.Config, cfBinding scbclient.ServiceCredentialBinding, name, targetGUID, secretName string, timeout time.Duration) {
 	t.Helper()
 	err := testutil.WaitForServiceCredentialBindingPublication(ctx, timeout, 5*time.Second, targetGUID, true, func(ctx context.Context) (testutil.ServiceCredentialBindingPublicationSnapshot, error) {
 		current := &v1alpha1.ServiceCredentialBinding{}
@@ -495,7 +589,6 @@ func waitForCredentialPublication(t *testing.T, ctx context.Context, cfg *envcon
 		if ref == nil || ref.Name != secretName {
 			return testutil.ServiceCredentialBindingPublicationSnapshot{}, nil
 		}
-		cfBinding := rotationCFClient(t, ctx, cfg, current)
 		expected, err := scbclient.GetConnectionDetails(ctx, cfBinding, targetGUID, current.Spec.ConnectionDetailsAsJSON)
 		if err != nil {
 			return testutil.ServiceCredentialBindingPublicationSnapshot{}, nil
@@ -526,7 +619,7 @@ func hasCredentialKey(secret *corev1.Secret, key string) bool {
 
 func rotationCFClient(t *testing.T, ctx context.Context, cfg *envconf.Config, mg *v1alpha1.ServiceCredentialBinding) scbclient.ServiceCredentialBinding {
 	t.Helper()
-	kubeScheme := scheme.Scheme
+	kubeScheme := runtime.NewScheme()
 	if err := apis.AddToScheme(kubeScheme); err != nil {
 		t.Fatalf("register provider scheme: %v", err)
 	}
