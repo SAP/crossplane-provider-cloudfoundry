@@ -4,7 +4,7 @@ package e2e
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os"
 	"reflect"
 	"testing"
@@ -83,10 +83,10 @@ func newRotationSetupOperations(t *testing.T, cfg *envconf.Config, fixtureDir, b
 func applyRotationFixtureFile(ctx context.Context, cfg *envconf.Config, dir, filename string) error {
 	client, err := resources.New(cfg.Client().RESTConfig())
 	if err != nil {
-		return fmt.Errorf("create fixture client")
+		return testutil.RotationSetupApplyFailure(err, "FixtureFile", filename)
 	}
 	if err := apis.AddToScheme(client.GetScheme()); err != nil {
-		return fmt.Errorf("register fixture API types")
+		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureKindMissing, ResourceKind: "FixtureFile", ResourceName: filename}
 	}
 	client.WithNamespace(cfg.Namespace())
 	seen := false
@@ -95,10 +95,14 @@ func applyRotationFixtureFile(ctx context.Context, cfg *envconf.Config, dir, fil
 		return applyRotationFixtureDocument(ctx, client, cfg.Namespace(), desired)
 	}, decoder.MutateNamespace(cfg.Namespace()))
 	if err != nil {
-		return err
+		var setupErr *testutil.RotationSetupError
+		if errors.As(err, &setupErr) {
+			return setupErr
+		}
+		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureDecodeFailed, ResourceKind: "FixtureFile", ResourceName: filename}
 	}
 	if !seen {
-		return fmt.Errorf("fixture file %q contains no resources", filename)
+		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureDecodeFailed, ResourceKind: "FixtureFile", ResourceName: filename}
 	}
 	return nil
 }
@@ -106,7 +110,7 @@ func applyRotationFixtureFile(ctx context.Context, cfg *envconf.Config, dir, fil
 func applyRotationFixtureDocument(ctx context.Context, client *resources.Resources, namespace string, desired k8s.Object) error {
 	gvk := desired.GetObjectKind().GroupVersionKind()
 	if gvk.Empty() {
-		return fmt.Errorf("fixture document has no registered kind")
+		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureKindMissing, ResourceName: desired.GetName()}
 	}
 	key := types.NamespacedName{Namespace: desired.GetNamespace(), Name: desired.GetName()}
 	if key.Namespace == "" {
@@ -115,21 +119,21 @@ func applyRotationFixtureDocument(ctx context.Context, client *resources.Resourc
 	}
 	desiredMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(desired)
 	if err != nil {
-		return fmt.Errorf("decode fixture identity")
+		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureConversionFailed, ResourceKind: gvk.Kind, ResourceName: key.Name}
 	}
 	current, exists, err := getRotationFixtureObject(ctx, client, key, gvk)
 	if err != nil {
-		return err
+		return testutil.RotationSetupApplyFailure(err, gvk.Kind, key.Name)
 	}
 	if exists {
 		return validateExistingRotationFixture(desired, desiredMap["spec"], current, gvk)
 	}
 	if err := client.Create(ctx, desired); err != nil && !apierrors.IsAlreadyExists(err) {
-		return err
+		return testutil.RotationSetupApplyFailure(err, gvk.Kind, key.Name)
 	}
 	current, _, err = getRotationFixtureObject(ctx, client, key, gvk)
 	if err != nil {
-		return err
+		return testutil.RotationSetupApplyFailure(err, gvk.Kind, key.Name)
 	}
 	return validateExistingRotationFixture(desired, desiredMap["spec"], current, gvk)
 }
@@ -137,11 +141,11 @@ func applyRotationFixtureDocument(ctx context.Context, client *resources.Resourc
 func getRotationFixtureObject(ctx context.Context, client *resources.Resources, key types.NamespacedName, gvk schema.GroupVersionKind) (k8s.Object, bool, error) {
 	current, err := client.GetScheme().New(gvk)
 	if err != nil {
-		return nil, false, fmt.Errorf("resolve fixture resource kind")
+		return nil, false, &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureKindMissing, ResourceName: key.Name}
 	}
 	currentObject, ok := current.(k8s.Object)
 	if !ok {
-		return nil, false, fmt.Errorf("fixture resource kind is not a Kubernetes object")
+		return nil, false, &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureKindMissing, ResourceKind: gvk.Kind, ResourceName: key.Name}
 	}
 	if err := client.Get(ctx, key.Name, key.Namespace, currentObject); apierrors.IsNotFound(err) {
 		return currentObject, false, nil
@@ -153,14 +157,14 @@ func getRotationFixtureObject(ctx context.Context, client *resources.Resources, 
 
 func validateExistingRotationFixture(desired k8s.Object, desiredSpec any, current k8s.Object, expected schema.GroupVersionKind) error {
 	if current.GetObjectKind().GroupVersionKind() != expected || current.GetName() != desired.GetName() || current.GetNamespace() != desired.GetNamespace() {
-		return fmt.Errorf("run-scoped fixture identity does not match")
+		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureIdentityMismatch, ResourceKind: expected.Kind, ResourceName: desired.GetName()}
 	}
 	currentMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(current)
 	if err != nil {
-		return fmt.Errorf("read existing fixture identity")
+		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureConversionFailed, ResourceKind: expected.Kind, ResourceName: desired.GetName()}
 	}
 	if !rotationFixtureValueMatches(desiredSpec, currentMap["spec"]) {
-		return fmt.Errorf("existing run-scoped fixture spec does not match")
+		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureSpecMismatch, ResourceKind: expected.Kind, ResourceName: desired.GetName()}
 	}
 	return nil
 }
