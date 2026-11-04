@@ -51,6 +51,22 @@ func TestRotationCleanupWaitsForBindingAndExternalDeletionInOrder(t *testing.T) 
 	}
 }
 
+func TestRotationCleanupReportsDeleteErrorButContinuesPolling(t *testing.T) {
+	var instanceDeletes int
+	ops := rotationCleanupOps()
+	ops.DeleteBinding = func(context.Context) error { return errors.New("delete response lost") }
+	ops.BindingExists = func(context.Context) (bool, error) { return false, nil }
+	ops.DeleteInstance = func(context.Context) error { instanceDeletes++; return nil }
+
+	err := RunServiceCredentialBindingRotationCleanup(context.Background(), time.Second, time.Millisecond, ops)
+	if err == nil || !strings.Contains(err.Error(), "request binding deletion") {
+		t.Fatalf("expected binding deletion error to be reported, got %v", err)
+	}
+	if instanceDeletes != 1 {
+		t.Fatalf("cleanup did not continue after confirming binding absence; instance deletes=%d", instanceDeletes)
+	}
+}
+
 func TestRotationCleanupRetainsParentsWhileBindingOrCFKeyRemains(t *testing.T) {
 	for _, tc := range []struct {
 		name           string

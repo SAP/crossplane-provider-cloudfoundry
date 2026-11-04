@@ -51,96 +51,121 @@ func RunServiceCredentialBindingRotationCleanup(
 	ctx, cancel := context.WithTimeout(context.WithoutCancel(parent), timeout)
 	defer cancel()
 
-	var errs []error
-	addErr := func(phase string, err error) {
-		if err != nil {
-			errs = append(errs, fmt.Errorf("%s: %w", phase, err))
-		}
-	}
+	state, errs := captureRotationCleanupState(ctx, ops)
+	bindingGone, bindingErrs := deleteAndWaitForRotationBinding(ctx, pollInterval, ops)
+	errs = append(errs, bindingErrs...)
 
-	var guids []string
-	if ops.CaptureBindingGUIDs == nil {
-		addErr("capture binding identities", errors.New("operation is not configured"))
-	} else {
-		var err error
-		guids, err = ops.CaptureBindingGUIDs(ctx)
-		addErr("capture binding identities", err)
+	cfVerified, err := verifyRotationBindingGone(ctx, pollInterval, ops, state, bindingGone)
+	appendCleanupError(&errs, "verify CF binding deletion", err)
+	if bindingGone && cfVerified && ctx.Err() == nil {
+		errs = append(errs, deleteRotationCleanupDependencies(ctx, pollInterval, ops, state.instanceGUID)...)
 	}
-	externalCheckUnavailable := false
-	instanceGUID := ""
-	if ops.CaptureInstanceGUID == nil {
-		addErr("capture instance identity", errors.New("operation is not configured"))
+	appendCleanupError(&errs, "cleanup deadline", ctx.Err())
+	return errors.Join(errs...)
+}
+
+type rotationCleanupState struct {
+	guids                    []string
+	instanceGUID             string
+	externalCheckUnavailable bool
+}
+
+func captureRotationCleanupState(ctx context.Context, ops ServiceCredentialBindingRotationCleanup) (rotationCleanupState, []error) {
+	var state rotationCleanupState
+	var errs []error
+	if ops.CaptureBindingGUIDs == nil {
+		appendCleanupError(&errs, "capture binding identities", errors.New("operation is not configured"))
 	} else {
 		var err error
-		instanceGUID, err = ops.CaptureInstanceGUID(ctx)
-		addErr("capture instance identity", err)
+		state.guids, err = ops.CaptureBindingGUIDs(ctx)
+		appendCleanupError(&errs, "capture binding identities", err)
+	}
+	if ops.CaptureInstanceGUID == nil {
+		appendCleanupError(&errs, "capture instance identity", errors.New("operation is not configured"))
+	} else {
+		var err error
+		state.instanceGUID, err = ops.CaptureInstanceGUID(ctx)
+		appendCleanupError(&errs, "capture instance identity", err)
 	}
 	if ops.ExternalCheckError != nil {
-		externalErr := ops.ExternalCheckError()
-		addErr("prepare CF verification", externalErr)
-		externalCheckUnavailable = externalErr != nil
+		err := ops.ExternalCheckError()
+		appendCleanupError(&errs, "prepare CF verification", err)
+		state.externalCheckUnavailable = err != nil
 	}
+	return state, errs
+}
 
-	bindingDeleteErr := callCleanup(ctx, ops.DeleteBinding)
-	addErr("request binding deletion", bindingDeleteErr)
-	bindingGone, bindingWaitErr := waitForCleanupAbsence(ctx, pollInterval, ops.BindingExists)
-	addErr("wait for binding finalization", bindingWaitErr)
+func deleteAndWaitForRotationBinding(ctx context.Context, interval time.Duration, ops ServiceCredentialBindingRotationCleanup) (bool, []error) {
+	var errs []error
+	appendCleanupError(&errs, "request binding deletion", callCleanup(ctx, ops.DeleteBinding))
+	bindingGone, err := waitForCleanupAbsence(ctx, interval, ops.BindingExists)
+	appendCleanupError(&errs, "wait for binding finalization", err)
+	return bindingGone, errs
+}
 
-	cfVerified := true
-	if bindingGone {
-		if externalCheckUnavailable {
-			// The verification limitation is reported above. Provider-managed
-			// deletion/finalization still permits safe owned Kubernetes cleanup.
-		} else if ops.BindingExistsInCF == nil {
-			if len(guids) != 0 {
-				cfVerified = false
-				addErr("verify CF binding deletion", errors.New("CF binding read operation is not configured"))
-			}
-		} else {
-			for _, guid := range uniqueNonEmpty(guids) {
-				gone, err := waitForCFBindingAbsence(ctx, pollInterval, guid, ops.BindingExistsInCF)
-				if err != nil {
-					cfVerified = false
-					addErr("verify CF binding deletion", fmt.Errorf("binding identity %q: %w", guid, err))
-					break
-				}
-				if !gone {
-					cfVerified = false
-				}
-			}
+func verifyRotationBindingGone(ctx context.Context, interval time.Duration, ops ServiceCredentialBindingRotationCleanup, state rotationCleanupState, bindingGone bool) (bool, error) {
+	if !bindingGone {
+		return false, nil
+	}
+	switch {
+	case state.externalCheckUnavailable:
+		// The verification limitation is already recorded. The provider-managed
+		// finalizer still permits safe cleanup of owned Kubernetes dependencies.
+		return true, nil
+	case ops.BindingExistsInCF == nil:
+		if len(state.guids) == 0 {
+			return true, nil
 		}
-	} else {
-		cfVerified = false
+		return false, errors.New("CF binding read operation is not configured")
+	default:
+		return verifyTrackedCFBindings(ctx, interval, ops.BindingExistsInCF, state.guids)
 	}
+}
 
+func verifyTrackedCFBindings(ctx context.Context, interval time.Duration, exists func(context.Context, string) (bool, error), guids []string) (bool, error) {
+	for _, guid := range uniqueNonEmpty(guids) {
+		gone, err := waitForCFBindingAbsence(ctx, interval, guid, exists)
+		if err != nil {
+			return false, fmt.Errorf("binding identity %q: %w", guid, err)
+		}
+		if !gone {
+			return false, nil
+		}
+	}
+	return true, nil
+}
+
+func deleteRotationCleanupDependencies(ctx context.Context, interval time.Duration, ops ServiceCredentialBindingRotationCleanup, instanceGUID string) []error {
+	var errs []error
 	// Remove only the configured output Secret after its managed binding has
 	// finalized. It is namespaced, unlike the cluster-scoped managed resources.
-	if bindingGone && cfVerified && ctx.Err() == nil {
-		addErr("request connection Secret deletion", callCleanup(ctx, ops.DeleteSecret))
-		_, err := waitForCleanupAbsence(ctx, pollInterval, ops.SecretExists)
-		addErr("wait for connection Secret deletion", err)
+	appendCleanupError(&errs, "request connection Secret deletion", callCleanup(ctx, ops.DeleteSecret))
+	_, err := waitForCleanupAbsence(ctx, interval, ops.SecretExists)
+	appendCleanupError(&errs, "wait for connection Secret deletion", err)
+	if ctx.Err() != nil {
+		return errs
 	}
 
-	// Do not remove the parent instance or imported wrappers while the binding
-	// CR is still finalizing or a configured CF check confirms a key remains.
-	if bindingGone && cfVerified && ctx.Err() == nil {
-		addErr("request instance deletion", callCleanup(ctx, ops.DeleteInstance))
-		instanceGone, err := waitForCleanupAbsence(ctx, pollInterval, ops.InstanceExists)
-		if err != nil && instanceGUID != "" {
-			err = fmt.Errorf("instance identity %q: %w", instanceGUID, err)
-		}
-		addErr("wait for instance finalization", err)
-		if instanceGone && ctx.Err() == nil {
-			addErr("request imported-wrapper deletion", callCleanup(ctx, ops.DeleteImports))
-			_, err = waitForCleanupAbsence(ctx, pollInterval, ops.ImportsExist)
-			addErr("wait for imported-wrapper deletion", err)
-		}
+	// Do not remove imported wrappers until the owned parent instance finalizes.
+	appendCleanupError(&errs, "request instance deletion", callCleanup(ctx, ops.DeleteInstance))
+	instanceGone, err := waitForCleanupAbsence(ctx, interval, ops.InstanceExists)
+	if err != nil && instanceGUID != "" {
+		err = fmt.Errorf("instance identity %q: %w", instanceGUID, err)
 	}
+	appendCleanupError(&errs, "wait for instance finalization", err)
+	if !instanceGone || ctx.Err() != nil {
+		return errs
+	}
+	appendCleanupError(&errs, "request imported-wrapper deletion", callCleanup(ctx, ops.DeleteImports))
+	_, err = waitForCleanupAbsence(ctx, interval, ops.ImportsExist)
+	appendCleanupError(&errs, "wait for imported-wrapper deletion", err)
+	return errs
+}
 
-	if err := ctx.Err(); err != nil {
-		addErr("cleanup deadline", err)
+func appendCleanupError(errs *[]error, phase string, err error) {
+	if err != nil {
+		*errs = append(*errs, fmt.Errorf("%s: %w", phase, err))
 	}
-	return errors.Join(errs...)
 }
 
 func callCleanup(ctx context.Context, action func(context.Context) error) error {
@@ -238,7 +263,7 @@ func ServiceCredentialBindingExistsInCF(ctx context.Context, getter interface {
 		return true, err
 	}
 	if binding == nil {
-		return true, errors.New("Cloud Foundry returned no binding without a not-found response")
+		return true, errors.New("cloud foundry returned no binding without a not-found response")
 	}
 	return true, nil
 }
