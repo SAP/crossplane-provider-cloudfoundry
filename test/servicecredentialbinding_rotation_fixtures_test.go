@@ -7,9 +7,10 @@ import (
 	"strings"
 	"testing"
 
-	resourcev1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/crossplane/crossplane/apis/v2/core/v2"
+	v2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"sigs.k8s.io/yaml"
+
+	resourcev1alpha1 "github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 const rotationFixtureMaxXSAppNameLength = 100
@@ -135,7 +136,7 @@ func assertRotationInstanceFixture(t *testing.T, instance *resourcev1alpha1.Serv
 	if instance.Name != name || instance.Namespace != "default" || instance.Spec.ForProvider.Type != resourcev1alpha1.ManagedService || instance.Spec.ForProvider.Name == nil || *instance.Spec.ForProvider.Name != name {
 		t.Fatal("rotation service-instance fixture must use its scenario-specific managed resource and CF name")
 	}
-	plan := instance.Spec.ForProvider.Managed.ServicePlan
+	plan := instance.Spec.ForProvider.ServicePlan
 	if plan == nil || plan.Offering == nil || *plan.Offering != "xsuaa" || plan.Plan == nil || *plan.Plan != "application" {
 		t.Fatal("rotation service-instance fixture must use the XSUAA application plan")
 	}
@@ -158,11 +159,11 @@ func assertRotationInstanceFixture(t *testing.T, instance *resourcev1alpha1.Serv
 
 func rotationXSUAAParameters(t *testing.T, instance *resourcev1alpha1.ServiceInstance) map[string]any {
 	t.Helper()
-	if instance.Spec.ForProvider.Managed.Parameters == nil || len(instance.Spec.ForProvider.Managed.Parameters.Raw) == 0 {
+	if instance.Spec.ForProvider.Parameters == nil || len(instance.Spec.ForProvider.Parameters.Raw) == 0 {
 		t.Fatal("rotation XSUAA fixture must define non-secret broker parameters")
 	}
 	var parameters map[string]any
-	if err := json.Unmarshal(instance.Spec.ForProvider.Managed.Parameters.Raw, &parameters); err != nil {
+	if err := json.Unmarshal(instance.Spec.ForProvider.Parameters.Raw, &parameters); err != nil {
 		t.Fatalf("decode rotation XSUAA broker parameters: %v", err)
 	}
 	return parameters
