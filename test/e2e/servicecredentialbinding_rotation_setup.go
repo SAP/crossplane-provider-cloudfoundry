@@ -126,7 +126,7 @@ func applyRotationFixtureDocument(ctx context.Context, client *resources.Resourc
 		return testutil.RotationSetupApplyFailure(err, gvk.Kind, key.Name)
 	}
 	if exists {
-		return validateExistingRotationFixture(desired, desiredMap["spec"], current, gvk)
+		return validateExistingRotationFixture(desired, desiredMap["spec"], current, gvk, client.GetScheme())
 	}
 	if err := client.Create(ctx, desired); err != nil && !apierrors.IsAlreadyExists(err) {
 		return testutil.RotationSetupApplyFailure(err, gvk.Kind, key.Name)
@@ -135,7 +135,7 @@ func applyRotationFixtureDocument(ctx context.Context, client *resources.Resourc
 	if err != nil {
 		return testutil.RotationSetupApplyFailure(err, gvk.Kind, key.Name)
 	}
-	return validateExistingRotationFixture(desired, desiredMap["spec"], current, gvk)
+	return validateExistingRotationFixture(desired, desiredMap["spec"], current, gvk, client.GetScheme())
 }
 
 func getRotationFixtureObject(ctx context.Context, client *resources.Resources, key types.NamespacedName, gvk schema.GroupVersionKind) (k8s.Object, bool, error) {
@@ -155,22 +155,26 @@ func getRotationFixtureObject(ctx context.Context, client *resources.Resources, 
 	return currentObject, true, nil
 }
 
-func validateExistingRotationFixture(desired k8s.Object, desiredSpec any, current k8s.Object, expected schema.GroupVersionKind) error {
-	identityChecks := testutil.CheckRotationFixtureIdentity(expected, desired, current)
+func validateExistingRotationFixture(desired k8s.Object, desiredSpec any, current k8s.Object, manifestGVK schema.GroupVersionKind, scheme *runtime.Scheme) error {
+	registeredGVKs, _, err := scheme.ObjectKinds(current)
+	if err != nil {
+		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureKindMissing, ResourceKind: manifestGVK.Kind, ResourceName: desired.GetName()}
+	}
+	identityChecks := testutil.CheckRotationFixtureIdentity(manifestGVK, registeredGVKs, desired, current)
 	if !identityChecks.Matches() {
 		return &testutil.RotationSetupError{
 			Kind:           testutil.RotationSetupFixtureIdentityMismatch,
-			ResourceKind:   expected.Kind,
+			ResourceKind:   manifestGVK.Kind,
 			ResourceName:   desired.GetName(),
 			IdentityChecks: &identityChecks,
 		}
 	}
 	currentMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(current)
 	if err != nil {
-		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureConversionFailed, ResourceKind: expected.Kind, ResourceName: desired.GetName()}
+		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureConversionFailed, ResourceKind: manifestGVK.Kind, ResourceName: desired.GetName()}
 	}
 	if !rotationFixtureValueMatches(desiredSpec, currentMap["spec"]) {
-		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureSpecMismatch, ResourceKind: expected.Kind, ResourceName: desired.GetName()}
+		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureSpecMismatch, ResourceKind: manifestGVK.Kind, ResourceName: desired.GetName()}
 	}
 	return nil
 }

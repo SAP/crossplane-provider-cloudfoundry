@@ -34,17 +34,23 @@ func (c RotationFixtureIdentityChecks) Matches() bool {
 	return c.ManifestGVKMatches && c.FetchedGVKMatches && c.NameMatches && c.NamespaceMatches
 }
 
-// CheckRotationFixtureIdentity validates identity without requiring the typed
-// Kubernetes GET result to carry TypeMeta. An empty fetched GVK is acceptable;
-// the caller constructs that object from the expected GVK using its API scheme.
-func CheckRotationFixtureIdentity(expected schema.GroupVersionKind, desired, current runtime.Object) RotationFixtureIdentityChecks {
+// CheckRotationFixtureIdentity validates the decoded manifest GVK against the
+// typed object's registered GVKs without depending on mutable desired TypeMeta.
+// An empty fetched GVK is acceptable; any populated fetched GVK must match the
+// immutable manifest GVK captured before client operations.
+func CheckRotationFixtureIdentity(manifestGVK schema.GroupVersionKind, registeredGVKs []schema.GroupVersionKind, desired, current runtime.Object) RotationFixtureIdentityChecks {
 	checks := RotationFixtureIdentityChecks{}
 	if desired == nil || current == nil {
 		return checks
 	}
-	checks.ManifestGVKMatches = desired.GetObjectKind().GroupVersionKind() == expected
+	for _, registeredGVK := range registeredGVKs {
+		if registeredGVK == manifestGVK {
+			checks.ManifestGVKMatches = true
+			break
+		}
+	}
 	currentGVK := current.GetObjectKind().GroupVersionKind()
-	checks.FetchedGVKMatches = currentGVK.Empty() || currentGVK == expected
+	checks.FetchedGVKMatches = currentGVK.Empty() || currentGVK == manifestGVK
 	desiredMeta, desiredOK := desired.(metav1.Object)
 	currentMeta, currentOK := current.(metav1.Object)
 	if desiredOK && currentOK {
