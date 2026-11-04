@@ -9,11 +9,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis"
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
-	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
-	scbclient "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
-	testutil "github.com/SAP/crossplane-provider-cloudfoundry/test"
 	xpresource "github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -29,6 +24,12 @@ import (
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis"
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
+	scbclient "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
+	testutil "github.com/SAP/crossplane-provider-cloudfoundry/test"
 )
 
 const (
@@ -64,23 +65,16 @@ func runForceRotationE2E(t *testing.T, parent context.Context, cfg *envconf.Conf
 	ctx, cancel := rotationAssessmentContext(t, parent)
 	defer cancel()
 	applyStarted = true
-	if err := ApplyResources(ctx, cfg, fixtureDir); err != nil {
-		t.Fatalf("apply rotation fixture: %v", err)
+	setup := newRotationSetupOperations(t, cfg, fixtureDir, "scb-rotation-no-ttl", "rotation-instance", "rotation-org", "rotation-space")
+	if err := testutil.RunServiceCredentialBindingRotationSetup(ctx, setup); err != nil {
+		t.Fatalf("initial rotation setup failed: %v", err)
 	}
 
 	name := runScopedName("scb-rotation-no-ttl")
 	binding := &v1alpha1.ServiceCredentialBinding{}
 	resourceClient := cfg.Client().Resources()
-	if err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
-		if err := resourceClient.Get(ctx, name, "", binding); err != nil {
-			return false, err
-		}
-		if binding.Status.AtProvider.GUID == "" || binding.Status.AtProvider.LastOperation == nil || binding.Status.AtProvider.LastOperation.Type != "create" || binding.Status.AtProvider.LastOperation.State != "succeeded" {
-			return false, nil
-		}
-		return true, nil
-	}); err != nil {
-		t.Fatalf("wait for initial binding operation: %v", err)
+	if err := resourceClient.Get(ctx, name, "", binding); err != nil {
+		t.Fatalf("reload successful initial binding: %v", err)
 	}
 	k0 := binding.Status.AtProvider.GUID
 	waitForCredentialPublication(t, ctx, cfg, name, k0, runScopedName("scb-rotation-no-ttl-secret"), 3*time.Minute)
@@ -168,20 +162,16 @@ func runRetiredKeyCleanupE2E(t *testing.T, parent context.Context, cfg *envconf.
 	ctx, cancel := rotationAssessmentContext(t, parent)
 	defer cancel()
 	applyStarted = true
-	if err := ApplyResources(ctx, cfg, fixtureDir); err != nil {
-		t.Fatalf("apply cleanup fixture: %v", err)
+	setup := newRotationSetupOperations(t, cfg, fixtureDir, "scb-rotation-cleanup", "cleanup-instance", "cleanup-org", "cleanup-space")
+	if err := testutil.RunServiceCredentialBindingRotationSetup(ctx, setup); err != nil {
+		t.Fatalf("initial cleanup setup failed: %v", err)
 	}
 
 	name := runScopedName("scb-rotation-cleanup")
 	binding := &v1alpha1.ServiceCredentialBinding{}
 	resourceClient := cfg.Client().Resources()
-	if err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 5*time.Minute, true, func(ctx context.Context) (bool, error) {
-		if err := resourceClient.Get(ctx, name, "", binding); err != nil {
-			return false, err
-		}
-		return binding.Status.AtProvider.GUID != "", nil
-	}); err != nil {
-		t.Fatalf("wait for initial binding: %v", err)
+	if err := resourceClient.Get(ctx, name, "", binding); err != nil {
+		t.Fatalf("reload successful initial binding: %v", err)
 	}
 	k0 := binding.Status.AtProvider.GUID
 	waitForCredentialPublication(t, ctx, cfg, name, k0, runScopedName("scb-rotation-cleanup-secret"), 3*time.Minute)
