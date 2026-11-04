@@ -88,6 +88,28 @@ func TestRotationFixtureIdentityChecks(t *testing.T) {
 	}
 }
 
+func TestRotationSetupErrorPreservesIdentityChecks(t *testing.T) {
+	identityChecks := &RotationFixtureIdentityChecks{
+		ManifestGVKMatches: true,
+		FetchedGVKMatches:  false,
+		NameMatches:        true,
+		NamespaceMatches:   true,
+	}
+	original := &RotationSetupError{
+		Kind: RotationSetupFixtureIdentityMismatch, ResourceKind: "Organization", ResourceName: "rotation-org-test",
+		IdentityChecks: identityChecks,
+	}
+
+	got := rotationSetupErrorFor("imports", original, false)
+	if got.IdentityChecks == nil || *got.IdentityChecks != *identityChecks {
+		t.Fatalf("wrapped identity checks = %#v, want %#v", got.IdentityChecks, identityChecks)
+	}
+	want := `service-key rotation setup phase "imports" failed (fixture-identity-mismatch) resource=Organization/rotation-org-test identity-checks={manifest-gvk:true,fetched-gvk:false,name:true,namespace:true}`
+	if got.Error() != want {
+		t.Fatalf("wrapped error = %q, want %q", got.Error(), want)
+	}
+}
+
 func TestRotationSetupErrorReportsOnlyIdentityCheckBooleans(t *testing.T) {
 	err := &RotationSetupError{
 		Kind: RotationSetupFixtureIdentityMismatch, ResourceKind: "Organization", ResourceName: "rotation-org-test",

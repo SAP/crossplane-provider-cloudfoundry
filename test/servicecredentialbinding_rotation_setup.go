@@ -317,11 +317,12 @@ func rotationSetupErrorFor(phase string, err error, probe bool) *RotationSetupEr
 	var setupErr *RotationSetupError
 	if errors.As(err, &setupErr) {
 		return &RotationSetupError{
-			Phase:        phase,
-			Kind:         setupErr.Kind,
-			ResourceKind: setupErr.ResourceKind,
-			ResourceName: setupErr.ResourceName,
-			APICode:      setupErr.APICode,
+			Phase:          phase,
+			Kind:           setupErr.Kind,
+			ResourceKind:   setupErr.ResourceKind,
+			ResourceName:   setupErr.ResourceName,
+			APICode:        setupErr.APICode,
+			IdentityChecks: setupErr.IdentityChecks,
 		}
 	}
 	if !probe {
