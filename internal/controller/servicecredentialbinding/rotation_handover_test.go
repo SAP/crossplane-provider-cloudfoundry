@@ -526,6 +526,7 @@ func TestRotationConnectionDetailsRetrievalErrorIsNotHandover(t *testing.T) {
 		cr := rotationControllerCR(rotationTestK1, nil)
 		cr.Spec.ForProvider.Type = "key"
 		cr.Spec.WriteConnectionSecretToReference = &xpv2.SecretReference{Name: "rotation-credentials", Namespace: "rotation-test"}
+		cr.Status.AtProvider.RetiredKeys = []*v1alpha1.SCBResource{{GUID: rotationTestK0, CreatedAt: &metav1.Time{Time: time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)}}}
 		store := newRotationStoredClient(cr)
 		cf := &fake.MockServiceCredentialBinding{}
 		cf.On("Get", mock.Anything, rotationTestK1).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil).Once()
@@ -533,7 +534,9 @@ func TestRotationConnectionDetailsRetrievalErrorIsNotHandover(t *testing.T) {
 		obs, err := rotationControllerExternal(store, cf).Observe(context.Background(), cr)
 		require.Error(t, err)
 		assert.Empty(t, obs.ConnectionDetails)
-		assert.Empty(t, store.get().Status.AtProvider.RetiredKeys, "failed required detail retrieval must not cause force retirement")
+		persisted := store.get()
+		assert.Len(t, persisted.Status.AtProvider.RetiredKeys, 1, "failed required detail retrieval must not cause force retirement")
+		assert.Nil(t, persisted.Status.AtProvider.RetiredKeys[0].DeleteAfter, "failed required detail retrieval must not establish the handover deadline")
 		cf.AssertExpectations(t)
 	})
 

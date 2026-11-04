@@ -83,13 +83,7 @@ func runForceRotationE2E(t *testing.T, parent context.Context, cfg *envconf.Conf
 		t.Fatalf("wait for initial binding operation: %v", err)
 	}
 	k0 := binding.Status.AtProvider.GUID
-	secret := &corev1.Secret{}
-	if err := cfg.Client().Resources().Get(ctx, runScopedName("scb-rotation-no-ttl-secret"), "default", secret); err != nil {
-		t.Fatalf("read initial connection Secret: %v", err)
-	}
-	if len(secret.Data) == 0 {
-		t.Fatal("initial connection Secret has no credential data")
-	}
+	waitForCredentialPublication(t, ctx, cfg, name, k0, runScopedName("scb-rotation-no-ttl-secret"), 3*time.Minute)
 
 	cfBinding := rotationCFClient(t, ctx, cfg, binding)
 	if _, err := cfBinding.Get(ctx, k0); err != nil {
@@ -190,6 +184,7 @@ func runRetiredKeyCleanupE2E(t *testing.T, parent context.Context, cfg *envconf.
 		t.Fatalf("wait for initial binding: %v", err)
 	}
 	k0 := binding.Status.AtProvider.GUID
+	waitForCredentialPublication(t, ctx, cfg, name, k0, runScopedName("scb-rotation-cleanup-secret"), 3*time.Minute)
 	cfBinding := rotationCFClient(t, ctx, cfg, binding)
 	if _, err := cfBinding.Get(ctx, k0); err != nil {
 		t.Fatalf("read initial Cloud Foundry binding: %v", err)
@@ -383,11 +378,11 @@ func inspectLiveRetiredKeySchema(ctx context.Context, cfg *envconf.Config) retir
 }
 
 func sameConnectionSecretOwner(actual, expected *corev1.Secret) bool {
-	if len(actual.OwnerReferences) != 1 || len(expected.OwnerReferences) != 1 {
+	if actual == nil || expected == nil {
 		return false
 	}
-	a, e := actual.OwnerReferences[0], expected.OwnerReferences[0]
-	return a.APIVersion == e.APIVersion && a.Kind == e.Kind && a.Name == e.Name && a.UID == e.UID && a.Controller != nil && *a.Controller && e.Controller != nil && *e.Controller
+	a, e := metav1.GetControllerOf(actual), metav1.GetControllerOf(expected)
+	return a != nil && e != nil && a.APIVersion == e.APIVersion && a.Kind == e.Kind && a.Name == e.Name && a.UID == e.UID
 }
 
 func assertFallbackDeadlineNear(t *testing.T, deadline, observedAt time.Time) {
@@ -462,28 +457,7 @@ func assertForceTarget(t *testing.T, ctx context.Context, cfg *envconf.Config, n
 
 func assertPublishedCredentials(t *testing.T, ctx context.Context, cfg *envconf.Config, mg *v1alpha1.ServiceCredentialBinding, guid, secretName string) {
 	t.Helper()
-	current := &v1alpha1.ServiceCredentialBinding{}
-	if err := cfg.Client().Resources().Get(ctx, mg.Name, "", current); err != nil {
-		t.Fatalf("read current binding for credential-format assertion: %v", err)
-	}
-	cfBinding := rotationCFClient(t, ctx, cfg, current)
-	expected, err := scbclient.GetConnectionDetails(ctx, cfBinding, guid, current.Spec.ConnectionDetailsAsJSON)
-	if err != nil {
-		t.Fatalf("read replacement credential details: %v", err)
-	}
-	secret := &corev1.Secret{}
-	if err := cfg.Client().Resources().Get(ctx, secretName, "default", secret); err != nil {
-		t.Fatalf("read published credential Secret: %v", err)
-	}
-	if len(expected) == 0 || len(secret.Data) == 0 {
-		t.Fatal("replacement credentials or published Secret are empty")
-	}
-	for key, value := range expected {
-		actual, ok := secret.Data[key]
-		if !ok || string(actual) != string(value) {
-			t.Fatal("published Secret is missing an expected credential entry")
-		}
-	}
+	waitForCredentialPublication(t, ctx, cfg, mg.Name, guid, secretName, 3*time.Minute)
 }
 
 func setConnectionDetailsFormat(t *testing.T, ctx context.Context, cfg *envconf.Config, name string, asJSON bool) {
@@ -503,32 +477,55 @@ func setConnectionDetailsFormat(t *testing.T, ctx context.Context, cfg *envconf.
 
 func waitForPublishedCredentialsWithAdditionalKeys(t *testing.T, ctx context.Context, cfg *envconf.Config, name, guid, secretName string, requireJSONKey bool) {
 	t.Helper()
-	if err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 3*time.Minute, true, func(ctx context.Context) (bool, error) {
-		current := &v1alpha1.ServiceCredentialBinding{}
-		if err := cfg.Client().Resources().Get(ctx, name, "", current); err != nil {
-			return false, err
-		}
-		cfBinding := rotationCFClient(t, ctx, cfg, current)
-		expected, err := scbclient.GetConnectionDetails(ctx, cfBinding, guid, current.Spec.ConnectionDetailsAsJSON)
-		if err != nil {
-			return false, nil
-		}
+	waitForCredentialPublication(t, ctx, cfg, name, guid, secretName, 3*time.Minute)
+	if requireJSONKey {
 		secret := &corev1.Secret{}
 		if err := cfg.Client().Resources().Get(ctx, secretName, "default", secret); err != nil {
-			return false, nil
+			t.Fatalf("read published credential Secret after handover: %v", err)
 		}
-		if requireJSONKey && !hasCredentialKey(secret, "credentials") {
-			return false, nil
+		if !hasCredentialKey(secret, "credentials") {
+			t.Fatal("previous JSON credential key was not retained during format migration")
 		}
-		for key, value := range expected {
-			actual, ok := secret.Data[key]
-			if !ok || string(actual) != string(value) {
-				return false, nil
-			}
+	}
+}
+
+// waitForCredentialPublication separately confirms the active generation and its
+// published Secret. A successful CF operation alone is not publication proof.
+func waitForCredentialPublication(t *testing.T, ctx context.Context, cfg *envconf.Config, name, targetGUID, secretName string, timeout time.Duration) {
+	t.Helper()
+	err := testutil.WaitForServiceCredentialBindingPublication(ctx, timeout, 5*time.Second, targetGUID, true, func(ctx context.Context) (testutil.ServiceCredentialBindingPublicationSnapshot, error) {
+		current := &v1alpha1.ServiceCredentialBinding{}
+		if err := cfg.Client().Resources().Get(ctx, name, "", current); err != nil {
+			return testutil.ServiceCredentialBindingPublicationSnapshot{}, nil
 		}
-		return len(expected) != 0, nil
-	}); err != nil {
-		t.Fatal("timed out waiting for expected published credential entries and retained old-format key")
+		if current.Status.AtProvider.GUID != targetGUID || current.Status.AtProvider.LastOperation == nil || current.Status.AtProvider.LastOperation.State != v1alpha1.LastOperationSucceeded {
+			return testutil.ServiceCredentialBindingPublicationSnapshot{}, nil
+		}
+		ref := current.Spec.WriteConnectionSecretToReference
+		if ref == nil || ref.Name != secretName {
+			return testutil.ServiceCredentialBindingPublicationSnapshot{}, nil
+		}
+		cfBinding := rotationCFClient(t, ctx, cfg, current)
+		expected, err := scbclient.GetConnectionDetails(ctx, cfBinding, targetGUID, current.Spec.ConnectionDetailsAsJSON)
+		if err != nil {
+			return testutil.ServiceCredentialBindingPublicationSnapshot{}, nil
+		}
+		secret := &corev1.Secret{}
+		if err := cfg.Client().Resources().Get(ctx, ref.Name, ref.Namespace, secret); err != nil {
+			return testutil.ServiceCredentialBindingPublicationSnapshot{}, nil
+		}
+		expectedOwner := xpresource.ConnectionSecretFor(current, v1alpha1.ServiceCredentialBindingGroupVersionKind)
+		return testutil.ServiceCredentialBindingPublicationSnapshot{
+			BindingGUID:     current.Status.AtProvider.GUID,
+			SecretNamespace: ref.Namespace,
+			SecretName:      ref.Name,
+			ExpectedDetails: expected,
+			Secret:          secret,
+			ExpectedOwner:   expectedOwner,
+		}, nil
+	})
+	if err != nil {
+		t.Fatalf("wait for current-generation credential publication: %v", err)
 	}
 }
 
