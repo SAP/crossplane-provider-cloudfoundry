@@ -12,41 +12,90 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
-func TestRotationFixtureIdentityMatches(t *testing.T) {
+func TestRotationFixtureIdentityChecks(t *testing.T) {
 	gvk := schema.GroupVersionKind{Group: "cloudfoundry.crossplane.io", Version: "v1alpha1", Kind: "Organization"}
 	apiVersion, kind := gvk.ToAPIVersionAndKind()
-	desired := &v1alpha1.Organization{
-		TypeMeta:   metav1.TypeMeta{APIVersion: apiVersion, Kind: kind},
-		ObjectMeta: metav1.ObjectMeta{Name: "rotation-org-test", Namespace: "default"},
+	newDesired := func(resourceKind string) *unstructured.Unstructured {
+		desired := &unstructured.Unstructured{}
+		desired.SetGroupVersionKind(schema.GroupVersionKind{Group: gvk.Group, Version: gvk.Version, Kind: resourceKind})
+		desired.SetName("rotation-org-test")
+		desired.SetNamespace("default")
+		return desired
 	}
-	current := &v1alpha1.Organization{ObjectMeta: desired.ObjectMeta}
+	desired := newDesired(kind)
+	current := &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: desired.GetName(), Namespace: desired.GetNamespace()}}
 
 	tests := []struct {
 		name     string
-		desired  *v1alpha1.Organization
+		desired  runtime.Object
 		current  runtime.Object
 		expected schema.GroupVersionKind
-		want     bool
+		want     RotationFixtureIdentityChecks
 	}{
-		{name: "typed GET with empty TypeMeta", desired: desired, current: current, expected: gvk, want: true},
-		{name: "wrong expected GVK", desired: desired, current: current, expected: schema.GroupVersionKind{Group: gvk.Group, Version: gvk.Version, Kind: "Space"}},
-		{name: "wrong populated current GVK", desired: desired, current: &v1alpha1.Organization{TypeMeta: metav1.TypeMeta{APIVersion: apiVersion, Kind: "Space"}, ObjectMeta: desired.ObjectMeta}, expected: gvk},
-		{name: "wrong concrete type", desired: desired, current: &v1alpha1.Space{ObjectMeta: desired.ObjectMeta}, expected: gvk},
-		{name: "wrong name", desired: desired, current: &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "default"}}, expected: gvk},
-		{name: "wrong namespace", desired: desired, current: &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: "other"}}, expected: gvk},
+		{
+			name:     "unstructured manifest and typed GET with empty TypeMeta",
+			desired:  desired,
+			current:  current,
+			expected: gvk,
+			want: RotationFixtureIdentityChecks{
+				ManifestGVKMatches: true, FetchedGVKMatches: true, NameMatches: true, NamespaceMatches: true,
+			},
+		},
+		{
+			name: "wrong manifest GVK", desired: newDesired("Space"), current: current, expected: gvk,
+			want: RotationFixtureIdentityChecks{FetchedGVKMatches: true, NameMatches: true, NamespaceMatches: true},
+		},
+		{
+			name: "wrong expected GVK", desired: desired, current: current,
+			expected: schema.GroupVersionKind{Group: gvk.Group, Version: gvk.Version, Kind: "Space"},
+			want:     RotationFixtureIdentityChecks{FetchedGVKMatches: true, NameMatches: true, NamespaceMatches: true},
+		},
+		{
+			name: "conflicting populated fetched GVK", desired: desired,
+			current:  &v1alpha1.Organization{TypeMeta: metav1.TypeMeta{APIVersion: apiVersion, Kind: "Space"}, ObjectMeta: current.ObjectMeta},
+			expected: gvk,
+			want:     RotationFixtureIdentityChecks{ManifestGVKMatches: true, NameMatches: true, NamespaceMatches: true},
+		},
+		{
+			name: "wrong name", desired: desired,
+			current: &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "default"}}, expected: gvk,
+			want: RotationFixtureIdentityChecks{ManifestGVKMatches: true, FetchedGVKMatches: true, NamespaceMatches: true},
+		},
+		{
+			name: "wrong namespace", desired: desired,
+			current: &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: desired.GetName(), Namespace: "other"}}, expected: gvk,
+			want: RotationFixtureIdentityChecks{ManifestGVKMatches: true, FetchedGVKMatches: true, NameMatches: true},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := RotationFixtureIdentityMatches(tt.expected, tt.desired, tt.current); got != tt.want {
-				t.Fatalf("RotationFixtureIdentityMatches() = %t, want %t", got, tt.want)
+			got := CheckRotationFixtureIdentity(tt.expected, tt.desired, tt.current)
+			if got != tt.want {
+				t.Fatalf("CheckRotationFixtureIdentity() = %+v, want %+v", got, tt.want)
+			}
+			wantMatch := tt.name == "unstructured manifest and typed GET with empty TypeMeta"
+			if gotMatch := got.Matches(); gotMatch != wantMatch {
+				t.Fatalf("checks.Matches() = %t, want %t", gotMatch, wantMatch)
 			}
 		})
+	}
+}
+
+func TestRotationSetupErrorReportsOnlyIdentityCheckBooleans(t *testing.T) {
+	err := &RotationSetupError{
+		Kind: RotationSetupFixtureIdentityMismatch, ResourceKind: "Organization", ResourceName: "rotation-org-test",
+		IdentityChecks: &RotationFixtureIdentityChecks{ManifestGVKMatches: true, FetchedGVKMatches: false, NameMatches: true, NamespaceMatches: false},
+	}
+	want := `service-key rotation setup phase "" failed (fixture-identity-mismatch) resource=Organization/rotation-org-test identity-checks={manifest-gvk:true,fetched-gvk:false,name:true,namespace:false}`
+	if got := err.Error(); got != want {
+		t.Fatalf("RotationSetupError.Error() = %q, want %q", got, want)
 	}
 }
 

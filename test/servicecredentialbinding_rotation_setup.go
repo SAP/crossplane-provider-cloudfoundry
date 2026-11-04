@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"reflect"
 	"strings"
 	"time"
 
@@ -21,23 +20,38 @@ import (
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
-// RotationFixtureIdentityMatches checks fixture identity without requiring a
-// typed Kubernetes GET result to carry TypeMeta. The typed object's Go type is
-// authoritative for the fetched resource kind; any populated GVK must agree.
-func RotationFixtureIdentityMatches(expected schema.GroupVersionKind, desired, current runtime.Object) bool {
-	if desired == nil || current == nil || desired.GetObjectKind().GroupVersionKind() != expected || reflect.TypeOf(desired) != reflect.TypeOf(current) {
-		return false
+// RotationFixtureIdentityChecks records only safe identity-match booleans. It
+// intentionally does not compare Go types: fixture decoding may use Unstructured
+// while the typed resource client reads into a scheme-allocated API object.
+type RotationFixtureIdentityChecks struct {
+	ManifestGVKMatches bool
+	FetchedGVKMatches  bool
+	NameMatches        bool
+	NamespaceMatches   bool
+}
+
+func (c RotationFixtureIdentityChecks) Matches() bool {
+	return c.ManifestGVKMatches && c.FetchedGVKMatches && c.NameMatches && c.NamespaceMatches
+}
+
+// CheckRotationFixtureIdentity validates identity without requiring the typed
+// Kubernetes GET result to carry TypeMeta. An empty fetched GVK is acceptable;
+// the caller constructs that object from the expected GVK using its API scheme.
+func CheckRotationFixtureIdentity(expected schema.GroupVersionKind, desired, current runtime.Object) RotationFixtureIdentityChecks {
+	checks := RotationFixtureIdentityChecks{}
+	if desired == nil || current == nil {
+		return checks
 	}
+	checks.ManifestGVKMatches = desired.GetObjectKind().GroupVersionKind() == expected
+	currentGVK := current.GetObjectKind().GroupVersionKind()
+	checks.FetchedGVKMatches = currentGVK.Empty() || currentGVK == expected
 	desiredMeta, desiredOK := desired.(metav1.Object)
 	currentMeta, currentOK := current.(metav1.Object)
-	if !desiredOK || !currentOK {
-		return false
+	if desiredOK && currentOK {
+		checks.NameMatches = desiredMeta.GetName() == currentMeta.GetName()
+		checks.NamespaceMatches = desiredMeta.GetNamespace() == currentMeta.GetNamespace()
 	}
-	currentGVK := current.GetObjectKind().GroupVersionKind()
-	if !currentGVK.Empty() && currentGVK != expected {
-		return false
-	}
-	return desiredMeta.GetName() == currentMeta.GetName() && desiredMeta.GetNamespace() == currentMeta.GetNamespace()
+	return checks
 }
 
 // RotationSetupFailureKind is a credential-safe setup failure category.
@@ -72,11 +86,12 @@ const (
 // RotationSetupError deliberately omits the underlying API error text, which may
 // contain broker parameters or other sensitive data.
 type RotationSetupError struct {
-	Phase        string
-	Kind         RotationSetupFailureKind
-	ResourceKind string
-	ResourceName string
-	APICode      int32
+	Phase          string
+	Kind           RotationSetupFailureKind
+	ResourceKind   string
+	ResourceName   string
+	APICode        int32
+	IdentityChecks *RotationFixtureIdentityChecks
 }
 
 func (e *RotationSetupError) Error() string {
@@ -89,6 +104,10 @@ func (e *RotationSetupError) Error() string {
 	}
 	if e.APICode != 0 {
 		message += fmt.Sprintf(" api-code=%d", e.APICode)
+	}
+	if e.IdentityChecks != nil {
+		checks := e.IdentityChecks
+		message += fmt.Sprintf(" identity-checks={manifest-gvk:%t,fetched-gvk:%t,name:%t,namespace:%t}", checks.ManifestGVKMatches, checks.FetchedGVKMatches, checks.NameMatches, checks.NamespaceMatches)
 	}
 	return message
 }

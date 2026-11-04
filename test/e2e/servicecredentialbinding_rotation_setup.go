@@ -156,8 +156,14 @@ func getRotationFixtureObject(ctx context.Context, client *resources.Resources, 
 }
 
 func validateExistingRotationFixture(desired k8s.Object, desiredSpec any, current k8s.Object, expected schema.GroupVersionKind) error {
-	if !testutil.RotationFixtureIdentityMatches(expected, desired, current) {
-		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureIdentityMismatch, ResourceKind: expected.Kind, ResourceName: desired.GetName()}
+	identityChecks := testutil.CheckRotationFixtureIdentity(expected, desired, current)
+	if !identityChecks.Matches() {
+		return &testutil.RotationSetupError{
+			Kind:           testutil.RotationSetupFixtureIdentityMismatch,
+			ResourceKind:   expected.Kind,
+			ResourceName:   desired.GetName(),
+			IdentityChecks: &identityChecks,
+		}
 	}
 	currentMap, err := runtime.DefaultUnstructuredConverter.ToUnstructured(current)
 	if err != nil {
