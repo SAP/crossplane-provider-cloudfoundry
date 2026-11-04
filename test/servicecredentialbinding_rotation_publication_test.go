@@ -67,6 +67,10 @@ func TestRotationPublicationPredicate(t *testing.T) {
 		{name: "wrong Secret type", mutate: func(s *ServiceCredentialBindingPublicationSnapshot) { s.Secret.Type = corev1.SecretTypeOpaque }},
 		{name: "missing data", mutate: func(s *ServiceCredentialBindingPublicationSnapshot) { delete(s.Secret.Data, "username") }},
 		{name: "stale data", mutate: func(s *ServiceCredentialBindingPublicationSnapshot) { s.Secret.Data["username"] = []byte("old") }},
+		{name: "stale data with newer resourceVersion", mutate: func(s *ServiceCredentialBindingPublicationSnapshot) {
+			s.Secret.ResourceVersion = "999"
+			s.Secret.Data["username"] = []byte("old")
+		}},
 		{name: "foreign controller", mutate: func(s *ServiceCredentialBindingPublicationSnapshot) {
 			for i := range s.Secret.OwnerReferences {
 				if s.Secret.OwnerReferences[i].Controller != nil && *s.Secret.OwnerReferences[i].Controller {
