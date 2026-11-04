@@ -5,14 +5,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
-	"github.com/google/uuid"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -38,23 +36,11 @@ func isPendingReplacement(cr *v1alpha1.ServiceCredentialBinding, activeGUID stri
 		return false
 	}
 	for _, retired := range cr.Status.AtProvider.RetiredKeys {
-		if retired != nil && sameExternalGUID(retired.GUID, activeGUID) {
+		if retired != nil && scb.SameGUID(retired.GUID, activeGUID) {
 			return true
 		}
 	}
 	return false
-}
-
-func isCanonicalGUID(value string) bool {
-	if len(value) != 36 || strings.TrimSpace(value) != value || strings.Count(value, "-") != 4 {
-		return false
-	}
-	_, err := uuid.Parse(value)
-	return err == nil
-}
-
-func sameExternalGUID(a, b string) bool {
-	return a == b || isCanonicalGUID(a) && isCanonicalGUID(b) && strings.EqualFold(a, b)
 }
 
 // lifecyclePolicies returns the same effective legacy/management-policy view used by
@@ -76,7 +62,7 @@ func (c *external) warnForceRotation(cr *v1alpha1.ServiceCredentialBinding) {
 		c.recorder.Event(cr, event.Warning(reasonForceRotationUnsupported, errors.New("force rotation is supported only for key bindings")))
 		return
 	}
-	if value == "" || !isCanonicalGUID(value) {
+	if value == "" || !scb.IsCanonicalGUID(value) {
 		c.recorder.Event(cr, event.Warning(reasonInvalidForceRotationTarget, errors.New("force-rotation must contain the active key GUID; empty and malformed values are ignored")))
 	}
 }

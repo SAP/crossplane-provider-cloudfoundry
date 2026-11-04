@@ -4,12 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
-	"github.com/google/uuid"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
 
@@ -75,7 +73,7 @@ func eligibleForRetirement(cr *v1alpha1.ServiceCredentialBinding, binding *cfres
 
 func hasPendingRetirement(cr *v1alpha1.ServiceCredentialBinding, guid string) bool {
 	for _, retiredKey := range cr.Status.AtProvider.RetiredKeys {
-		if retiredKey != nil && sameGUID(retiredKey.GUID, guid) {
+		if retiredKey != nil && SameGUID(retiredKey.GUID, guid) {
 			return true
 		}
 	}
@@ -87,7 +85,7 @@ func forceRotationTargetsActiveKey(cr *v1alpha1.ServiceCredentialBinding, guid s
 		return false
 	}
 	target, ok := cr.Annotations[ForceRotationKey]
-	return ok && isCanonicalUUID(target) && sameGUID(target, guid)
+	return ok && IsCanonicalGUID(target) && SameGUID(target, guid)
 }
 
 func (r *SCBKeyRotator) rotationIsDue(cr *v1alpha1.ServiceCredentialBinding) bool {
@@ -184,29 +182,11 @@ func activeGUIDs(cr *v1alpha1.ServiceCredentialBinding) []string {
 
 func isActiveGUID(guid string, active []string) bool {
 	for _, candidate := range active {
-		if candidate != "" && sameGUID(guid, candidate) {
+		if candidate != "" && SameGUID(guid, candidate) {
 			return true
 		}
 	}
 	return false
-}
-
-func isCanonicalUUID(value string) bool {
-	if len(value) != 36 || strings.TrimSpace(value) != value {
-		return false
-	}
-	_, err := uuid.Parse(value)
-	return err == nil && strings.Count(value, "-") == 4
-}
-
-func sameGUID(a, b string) bool {
-	if a == b {
-		return true
-	}
-	if !isCanonicalUUID(a) || !isCanonicalUUID(b) {
-		return false
-	}
-	return strings.EqualFold(a, b)
 }
 
 func (r *SCBKeyRotator) DeleteRetiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) error {
