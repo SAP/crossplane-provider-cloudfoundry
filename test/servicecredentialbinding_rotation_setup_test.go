@@ -127,6 +127,80 @@ func TestRotationSetupStopsAtPhaseFailures(t *testing.T) {
 	}
 }
 
+func TestRotationSetupApplyFailureClassification(t *testing.T) {
+	const sentinel = "credential-or-parameter-sentinel"
+	resourceKind, resourceName := "Space", "rotation-space-build123"
+	cases := []struct {
+		name string
+		err  error
+		kind RotationSetupFailureKind
+		code int32
+	}{
+		{name: "forbidden", err: apierrors.NewForbidden(schema.GroupResource{Resource: "spaces"}, resourceName, errors.New(sentinel)), kind: RotationSetupForbidden, code: 403},
+		{name: "invalid", err: apierrors.NewInvalid(schema.GroupKind{Kind: "Space"}, resourceName, nil), kind: RotationSetupInvalid, code: 422},
+		{name: "conflict", err: apierrors.NewConflict(schema.GroupResource{Resource: "spaces"}, resourceName, errors.New(sentinel)), kind: RotationSetupApplyConflict, code: 409},
+		{name: "not found", err: apierrors.NewNotFound(schema.GroupResource{Resource: "spaces"}, resourceName), kind: RotationSetupApplyNotFound, code: 404},
+		{name: "timeout", err: apierrors.NewTimeoutError(sentinel, 1), kind: RotationSetupApplyTimedOut, code: 504},
+		{name: "rate limited", err: apierrors.NewTooManyRequests(sentinel, 1), kind: RotationSetupApplyRateLimited, code: 429},
+		{name: "unavailable", err: apierrors.NewServiceUnavailable(sentinel), kind: RotationSetupApplyUnavailable, code: 503},
+		{name: "unknown API status", err: apierrors.NewBadRequest(sentinel), kind: RotationSetupApplyAPIError, code: 400},
+		{name: "local error", err: errors.New(sentinel), kind: RotationSetupApplyFailed},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			failure := RotationSetupApplyFailure(tc.err, resourceKind, resourceName)
+			failure.Phase = "imports"
+			if failure.Kind != tc.kind || failure.APICode != tc.code {
+				t.Fatalf("safe classification = (%s, %d), want (%s, %d)", failure.Kind, failure.APICode, tc.kind, tc.code)
+			}
+			if failure.ResourceKind != resourceKind || failure.ResourceName != resourceName {
+				t.Fatalf("resource context = %s/%s, want %s/%s", failure.ResourceKind, failure.ResourceName, resourceKind, resourceName)
+			}
+			if strings.Contains(failure.Error(), sentinel) {
+				t.Fatalf("underlying error text leaked: %v", failure)
+			}
+		})
+	}
+}
+
+func TestRotationSetupApplyFailurePreservesSafeFixtureContext(t *testing.T) {
+	const sentinel = "sensitive-fixture-parameter"
+	wrapped := RotationSetupApplyFailure(&RotationSetupError{Kind: RotationSetupFixtureSpecMismatch}, "Space", "rotation-space-build123")
+	if wrapped.Kind != RotationSetupFixtureSpecMismatch || wrapped.ResourceKind != "Space" || wrapped.ResourceName != "rotation-space-build123" {
+		t.Fatalf("wrapping a typed fixture failure lost safe context: %#v", wrapped)
+	}
+	for _, kind := range []RotationSetupFailureKind{
+		RotationSetupFixtureDecodeFailed,
+		RotationSetupFixtureKindMissing,
+		RotationSetupFixtureConversionFailed,
+		RotationSetupFixtureIdentityMismatch,
+		RotationSetupFixtureSpecMismatch,
+	} {
+		t.Run(string(kind), func(t *testing.T) {
+			ops := setupTestOperations()
+			ops.ApplyImports = func(context.Context) error {
+				return &RotationSetupError{
+					Kind:         kind,
+					ResourceKind: "Space",
+					ResourceName: "rotation-space-build123",
+				}
+			}
+			ops.PhaseTimeout = time.Second
+			err := RunServiceCredentialBindingRotationSetup(context.Background(), ops)
+			var setupErr *RotationSetupError
+			if !errors.As(err, &setupErr) {
+				t.Fatalf("error = %v, want RotationSetupError", err)
+			}
+			if setupErr.Phase != "imports" || setupErr.Kind != kind || setupErr.ResourceKind != "Space" || setupErr.ResourceName != "rotation-space-build123" {
+				t.Fatalf("safe fixture failure context = %#v", setupErr)
+			}
+			if strings.Contains(err.Error(), sentinel) {
+				t.Fatalf("fixture details leaked: %v", err)
+			}
+		})
+	}
+}
+
 func TestRotationSetupPhaseTimeoutDoesNotExtendAssessmentDeadline(t *testing.T) {
 	ops := setupTestOperations()
 	ops.PhaseTimeout = time.Second

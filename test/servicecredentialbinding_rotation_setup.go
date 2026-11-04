@@ -23,27 +23,103 @@ type RotationSetupFailureKind string
 const (
 	rotationSetupResourcePhase = "resource"
 
-	RotationSetupApplyFailed          RotationSetupFailureKind = "apply-failed"
-	RotationSetupForbidden            RotationSetupFailureKind = "forbidden"
-	RotationSetupInvalid              RotationSetupFailureKind = "invalid"
-	RotationSetupUnauthorized         RotationSetupFailureKind = "unauthorized"
-	RotationSetupProvisioningFailed   RotationSetupFailureKind = "provisioning-failed"
-	RotationSetupPaused               RotationSetupFailureKind = "paused"
-	RotationSetupCreateExhausted      RotationSetupFailureKind = "create-exhausted"
-	RotationSetupReadFailed           RotationSetupFailureKind = "read-failed"
-	RotationSetupTimedOut             RotationSetupFailureKind = "timeout"
-	RotationSetupInvalidConfiguration RotationSetupFailureKind = "invalid-configuration"
+	RotationSetupApplyFailed             RotationSetupFailureKind = "apply-failed"
+	RotationSetupApplyConflict           RotationSetupFailureKind = "apply-conflict"
+	RotationSetupApplyNotFound           RotationSetupFailureKind = "apply-not-found"
+	RotationSetupApplyTimedOut           RotationSetupFailureKind = "apply-timeout"
+	RotationSetupApplyRateLimited        RotationSetupFailureKind = "apply-rate-limited"
+	RotationSetupApplyUnavailable        RotationSetupFailureKind = "apply-unavailable"
+	RotationSetupApplyAPIError           RotationSetupFailureKind = "apply-api-error"
+	RotationSetupFixtureDecodeFailed     RotationSetupFailureKind = "fixture-decode-failed"
+	RotationSetupFixtureKindMissing      RotationSetupFailureKind = "fixture-kind-missing"
+	RotationSetupFixtureConversionFailed RotationSetupFailureKind = "fixture-conversion-failed"
+	RotationSetupFixtureIdentityMismatch RotationSetupFailureKind = "fixture-identity-mismatch"
+	RotationSetupFixtureSpecMismatch     RotationSetupFailureKind = "fixture-spec-mismatch"
+	RotationSetupForbidden               RotationSetupFailureKind = "forbidden"
+	RotationSetupInvalid                 RotationSetupFailureKind = "invalid"
+	RotationSetupUnauthorized            RotationSetupFailureKind = "unauthorized"
+	RotationSetupProvisioningFailed      RotationSetupFailureKind = "provisioning-failed"
+	RotationSetupPaused                  RotationSetupFailureKind = "paused"
+	RotationSetupCreateExhausted         RotationSetupFailureKind = "create-exhausted"
+	RotationSetupReadFailed              RotationSetupFailureKind = "read-failed"
+	RotationSetupTimedOut                RotationSetupFailureKind = "timeout"
+	RotationSetupInvalidConfiguration    RotationSetupFailureKind = "invalid-configuration"
 )
 
 // RotationSetupError deliberately omits the underlying API error text, which may
 // contain broker parameters or other sensitive data.
 type RotationSetupError struct {
-	Phase string
-	Kind  RotationSetupFailureKind
+	Phase        string
+	Kind         RotationSetupFailureKind
+	ResourceKind string
+	ResourceName string
+	APICode      int32
 }
 
 func (e *RotationSetupError) Error() string {
-	return fmt.Sprintf("service-key rotation setup phase %q failed (%s)", e.Phase, e.Kind)
+	message := fmt.Sprintf("service-key rotation setup phase %q failed (%s)", e.Phase, e.Kind)
+	if e.ResourceKind != "" {
+		message += fmt.Sprintf(" resource=%s", e.ResourceKind)
+		if e.ResourceName != "" {
+			message += "/" + e.ResourceName
+		}
+	}
+	if e.APICode != 0 {
+		message += fmt.Sprintf(" api-code=%d", e.APICode)
+	}
+	return message
+}
+
+// RotationSetupApplyFailure converts an arbitrary apply error into a safe,
+// allowlisted category. It deliberately discards the error text and status body.
+func RotationSetupApplyFailure(err error, resourceKind, resourceName string) *RotationSetupError {
+	var setupErr *RotationSetupError
+	if errors.As(err, &setupErr) {
+		failure := *setupErr
+		if failure.ResourceKind == "" {
+			failure.ResourceKind = resourceKind
+		}
+		if failure.ResourceName == "" {
+			failure.ResourceName = resourceName
+		}
+		return &failure
+	}
+	failure := &RotationSetupError{
+		Kind:         RotationSetupApplyFailed,
+		ResourceKind: resourceKind,
+		ResourceName: resourceName,
+	}
+	var apiStatus apierrors.APIStatus
+	if errors.As(err, &apiStatus) {
+		failure.APICode = apiStatus.Status().Code
+	}
+	failure.Kind = rotationSetupApplyFailureKind(err, failure.APICode)
+	return failure
+}
+
+func rotationSetupApplyFailureKind(err error, apiCode int32) RotationSetupFailureKind {
+	switch {
+	case apierrors.IsForbidden(err):
+		return RotationSetupForbidden
+	case apierrors.IsUnauthorized(err):
+		return RotationSetupUnauthorized
+	case apierrors.IsInvalid(err):
+		return RotationSetupInvalid
+	case apierrors.IsConflict(err):
+		return RotationSetupApplyConflict
+	case apierrors.IsNotFound(err):
+		return RotationSetupApplyNotFound
+	case apierrors.IsTimeout(err), apierrors.IsServerTimeout(err):
+		return RotationSetupApplyTimedOut
+	case apierrors.IsTooManyRequests(err):
+		return RotationSetupApplyRateLimited
+	case apierrors.IsServiceUnavailable(err), apierrors.IsInternalError(err):
+		return RotationSetupApplyUnavailable
+	case apiCode != 0:
+		return RotationSetupApplyAPIError
+	default:
+		return RotationSetupApplyFailed
+	}
 }
 
 // RotationSetupOperations describes the dependency order for one assessment.
@@ -198,20 +274,20 @@ func classifyRotationSetupProbeError(err error) (RotationSetupFailureKind, bool)
 func rotationSetupErrorFor(phase string, err error, probe bool) *RotationSetupError {
 	var setupErr *RotationSetupError
 	if errors.As(err, &setupErr) {
-		return &RotationSetupError{Phase: phase, Kind: setupErr.Kind}
+		return &RotationSetupError{
+			Phase:        phase,
+			Kind:         setupErr.Kind,
+			ResourceKind: setupErr.ResourceKind,
+			ResourceName: setupErr.ResourceName,
+			APICode:      setupErr.APICode,
+		}
 	}
-	kind := RotationSetupApplyFailed
-	if probe {
-		kind, _ = classifyRotationSetupProbeError(err)
+	if !probe {
+		failure := RotationSetupApplyFailure(err, "", "")
+		failure.Phase = phase
+		return failure
 	}
-	switch {
-	case apierrors.IsForbidden(err):
-		kind = RotationSetupForbidden
-	case apierrors.IsUnauthorized(err):
-		kind = RotationSetupUnauthorized
-	case apierrors.IsInvalid(err):
-		kind = RotationSetupInvalid
-	}
+	kind, _ := classifyRotationSetupProbeError(err)
 	return &RotationSetupError{Phase: phase, Kind: kind}
 }
 
