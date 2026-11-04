@@ -6,7 +6,6 @@ import (
 	"context"
 	"errors"
 	"os"
-	"reflect"
 	"testing"
 	"time"
 
@@ -180,42 +179,7 @@ func validateExistingRotationFixture(desired k8s.Object, desiredSpec any, curren
 }
 
 func rotationFixtureValueMatches(expected, actual any) bool {
-	return rotationFixtureMapMatches(expected, actual, true)
-}
-
-func rotationFixtureMapMatches(expected, actual any, allowManagedDefaults bool) bool {
-	expectedMap, isMap := expected.(map[string]interface{})
-	if isMap {
-		actualMap, ok := actual.(map[string]interface{})
-		if !ok {
-			return false
-		}
-		for key, expectedValue := range expectedMap {
-			actualValue, ok := actualMap[key]
-			if !ok || !rotationFixtureMapMatches(expectedValue, actualValue, false) {
-				return false
-			}
-		}
-		for key := range actualMap {
-			if _, expected := expectedMap[key]; expected {
-				continue
-			}
-			if !allowManagedDefaults || !rotationFixtureDefaultedSpecField(key) {
-				return false
-			}
-		}
-		return true
-	}
-	return reflect.DeepEqual(expected, actual)
-}
-
-func rotationFixtureDefaultedSpecField(field string) bool {
-	switch field {
-	case "managementPolicies", "providerConfigRef", "deletionPolicy":
-		return true
-	default:
-		return false
-	}
+	return testutil.RotationFixtureValueMatches(expected, actual)
 }
 
 func logRotationSetupDiagnostic(t *testing.T, ctx context.Context, client *resources.Resources, phase, bindingName, instanceName, orgName, spaceName string) {
