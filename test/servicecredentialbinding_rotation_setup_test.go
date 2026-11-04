@@ -33,50 +33,45 @@ func TestRotationFixtureIdentityChecks(t *testing.T) {
 	current := &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: desired.GetName(), Namespace: desired.GetNamespace()}}
 
 	tests := []struct {
-		name     string
-		desired  runtime.Object
-		current  runtime.Object
-		expected schema.GroupVersionKind
-		want     RotationFixtureIdentityChecks
+		name           string
+		desired        runtime.Object
+		current        runtime.Object
+		manifestGVK    schema.GroupVersionKind
+		registeredGVKs []schema.GroupVersionKind
+		want           RotationFixtureIdentityChecks
 	}{
 		{
-			name:     "unstructured manifest and typed GET with empty TypeMeta",
-			desired:  desired,
-			current:  current,
-			expected: gvk,
-			want: RotationFixtureIdentityChecks{
-				ManifestGVKMatches: true, FetchedGVKMatches: true, NameMatches: true, NamespaceMatches: true,
-			},
+			name: "unstructured manifest and typed GET with empty TypeMeta", desired: desired, current: current,
+			manifestGVK: gvk, registeredGVKs: []schema.GroupVersionKind{gvk},
+			want: RotationFixtureIdentityChecks{ManifestGVKMatches: true, FetchedGVKMatches: true, NameMatches: true, NamespaceMatches: true},
 		},
 		{
-			name: "wrong manifest GVK", desired: newDesired("Space"), current: current, expected: gvk,
+			name: "wrong manifest GVK", desired: newDesired("Space"), current: current,
+			manifestGVK: schema.GroupVersionKind{Group: gvk.Group, Version: gvk.Version, Kind: "Space"}, registeredGVKs: []schema.GroupVersionKind{gvk},
 			want: RotationFixtureIdentityChecks{FetchedGVKMatches: true, NameMatches: true, NamespaceMatches: true},
 		},
 		{
-			name: "wrong expected GVK", desired: desired, current: current,
-			expected: schema.GroupVersionKind{Group: gvk.Group, Version: gvk.Version, Kind: "Space"},
-			want:     RotationFixtureIdentityChecks{FetchedGVKMatches: true, NameMatches: true, NamespaceMatches: true},
-		},
-		{
 			name: "conflicting populated fetched GVK", desired: desired,
-			current:  &v1alpha1.Organization{TypeMeta: metav1.TypeMeta{APIVersion: apiVersion, Kind: "Space"}, ObjectMeta: current.ObjectMeta},
-			expected: gvk,
-			want:     RotationFixtureIdentityChecks{ManifestGVKMatches: true, NameMatches: true, NamespaceMatches: true},
+			current:     &v1alpha1.Organization{TypeMeta: metav1.TypeMeta{APIVersion: apiVersion, Kind: "Space"}, ObjectMeta: current.ObjectMeta},
+			manifestGVK: gvk, registeredGVKs: []schema.GroupVersionKind{gvk},
+			want: RotationFixtureIdentityChecks{ManifestGVKMatches: true, NameMatches: true, NamespaceMatches: true},
 		},
 		{
 			name: "wrong name", desired: desired,
-			current: &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "default"}}, expected: gvk,
+			current:     &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "default"}},
+			manifestGVK: gvk, registeredGVKs: []schema.GroupVersionKind{gvk},
 			want: RotationFixtureIdentityChecks{ManifestGVKMatches: true, FetchedGVKMatches: true, NamespaceMatches: true},
 		},
 		{
 			name: "wrong namespace", desired: desired,
-			current: &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: desired.GetName(), Namespace: "other"}}, expected: gvk,
+			current:     &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: desired.GetName(), Namespace: "other"}},
+			manifestGVK: gvk, registeredGVKs: []schema.GroupVersionKind{gvk},
 			want: RotationFixtureIdentityChecks{ManifestGVKMatches: true, FetchedGVKMatches: true, NameMatches: true},
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := CheckRotationFixtureIdentity(tt.expected, tt.desired, tt.current)
+			got := CheckRotationFixtureIdentity(tt.manifestGVK, tt.registeredGVKs, tt.desired, tt.current)
 			if got != tt.want {
 				t.Fatalf("CheckRotationFixtureIdentity() = %+v, want %+v", got, tt.want)
 			}
@@ -85,6 +80,34 @@ func TestRotationFixtureIdentityChecks(t *testing.T) {
 				t.Fatalf("checks.Matches() = %t, want %t", gotMatch, wantMatch)
 			}
 		})
+	}
+}
+
+func TestRotationFixtureIdentityChecksUseDecodedGVKAfterDesiredMutation(t *testing.T) {
+	manifestGVK := schema.GroupVersionKind{Group: "cloudfoundry.crossplane.io", Version: "v1alpha1", Kind: "Organization"}
+	desired := &unstructured.Unstructured{}
+	desired.SetGroupVersionKind(manifestGVK)
+	desired.SetName("rotation-org-test")
+	desired.SetNamespace("default")
+	current := &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: desired.GetName(), Namespace: desired.GetNamespace()}}
+	kubeScheme := runtime.NewScheme()
+	if err := v1alpha1.AddToScheme(kubeScheme); err != nil {
+		t.Fatalf("register provider API types: %v", err)
+	}
+	registeredGVKs, _, err := kubeScheme.ObjectKinds(current)
+	if err != nil {
+		t.Fatalf("lookup registered GVKs for typed Organization: %v", err)
+	}
+
+	// API clients may populate or normalize TypeMeta while applying the decoded
+	// object. Identity validation must use the immutable manifest GVK snapshot.
+	desired.SetGroupVersionKind(schema.GroupVersionKind{Group: "other.example.io", Version: "v1", Kind: "Other"})
+	got := CheckRotationFixtureIdentity(manifestGVK, registeredGVKs, desired, current)
+	want := RotationFixtureIdentityChecks{
+		ManifestGVKMatches: true, FetchedGVKMatches: true, NameMatches: true, NamespaceMatches: true,
+	}
+	if got != want {
+		t.Fatalf("CheckRotationFixtureIdentity() after TypeMeta mutation = %+v, want %+v", got, want)
 	}
 }
 
