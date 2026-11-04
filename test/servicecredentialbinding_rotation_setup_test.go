@@ -11,10 +11,44 @@ import (
 	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
+
+func TestRotationFixtureIdentityMatches(t *testing.T) {
+	gvk := schema.GroupVersionKind{Group: "cloudfoundry.crossplane.io", Version: "v1alpha1", Kind: "Organization"}
+	apiVersion, kind := gvk.ToAPIVersionAndKind()
+	desired := &v1alpha1.Organization{
+		TypeMeta:   metav1.TypeMeta{APIVersion: apiVersion, Kind: kind},
+		ObjectMeta: metav1.ObjectMeta{Name: "rotation-org-test", Namespace: "default"},
+	}
+	current := &v1alpha1.Organization{ObjectMeta: desired.ObjectMeta}
+
+	tests := []struct {
+		name     string
+		desired  *v1alpha1.Organization
+		current  runtime.Object
+		expected schema.GroupVersionKind
+		want     bool
+	}{
+		{name: "typed GET with empty TypeMeta", desired: desired, current: current, expected: gvk, want: true},
+		{name: "wrong expected GVK", desired: desired, current: current, expected: schema.GroupVersionKind{Group: gvk.Group, Version: gvk.Version, Kind: "Space"}},
+		{name: "wrong populated current GVK", desired: desired, current: &v1alpha1.Organization{TypeMeta: metav1.TypeMeta{APIVersion: apiVersion, Kind: "Space"}, ObjectMeta: desired.ObjectMeta}, expected: gvk},
+		{name: "wrong concrete type", desired: desired, current: &v1alpha1.Space{ObjectMeta: desired.ObjectMeta}, expected: gvk},
+		{name: "wrong name", desired: desired, current: &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: "other", Namespace: "default"}}, expected: gvk},
+		{name: "wrong namespace", desired: desired, current: &v1alpha1.Organization{ObjectMeta: metav1.ObjectMeta{Name: desired.Name, Namespace: "other"}}, expected: gvk},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := RotationFixtureIdentityMatches(tt.expected, tt.desired, tt.current); got != tt.want {
+				t.Fatalf("RotationFixtureIdentityMatches() = %t, want %t", got, tt.want)
+			}
+		})
+	}
+}
 
 func TestRotationSetupOrdersPhasesAndPollsPending(t *testing.T) {
 	var calls []string

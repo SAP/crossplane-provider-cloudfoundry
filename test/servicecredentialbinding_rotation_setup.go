@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
 	"strings"
 	"time"
 
@@ -13,9 +14,31 @@ import (
 	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
+
+// RotationFixtureIdentityMatches checks fixture identity without requiring a
+// typed Kubernetes GET result to carry TypeMeta. The typed object's Go type is
+// authoritative for the fetched resource kind; any populated GVK must agree.
+func RotationFixtureIdentityMatches(expected schema.GroupVersionKind, desired, current runtime.Object) bool {
+	if desired == nil || current == nil || desired.GetObjectKind().GroupVersionKind() != expected || reflect.TypeOf(desired) != reflect.TypeOf(current) {
+		return false
+	}
+	desiredMeta, desiredOK := desired.(metav1.Object)
+	currentMeta, currentOK := current.(metav1.Object)
+	if !desiredOK || !currentOK {
+		return false
+	}
+	currentGVK := current.GetObjectKind().GroupVersionKind()
+	if !currentGVK.Empty() && currentGVK != expected {
+		return false
+	}
+	return desiredMeta.GetName() == currentMeta.GetName() && desiredMeta.GetNamespace() == currentMeta.GetNamespace()
+}
 
 // RotationSetupFailureKind is a credential-safe setup failure category.
 type RotationSetupFailureKind string
