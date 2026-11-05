@@ -8,7 +8,9 @@ import (
 
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	kubeerrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/util/wait"
 
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/SAP/crossplane-provider-cloudfoundry/internal/clients"
 )
 
@@ -124,7 +126,9 @@ func verifyRotationBindingGone(ctx context.Context, interval time.Duration, ops 
 
 func verifyTrackedCFBindings(ctx context.Context, interval time.Duration, exists func(context.Context, string) (bool, error), guids []string) (bool, error) {
 	for _, guid := range uniqueNonEmpty(guids) {
-		gone, err := waitForCFBindingAbsence(ctx, interval, guid, exists)
+		gone, err := waitForCleanupAbsence(ctx, interval, func(ctx context.Context) (bool, error) {
+			return exists(ctx, guid)
+		})
 		if err != nil {
 			return false, fmt.Errorf("binding identity %q: %w", guid, err)
 		}
@@ -182,56 +186,32 @@ func waitForCleanupAbsence(ctx context.Context, interval time.Duration, exists f
 	if exists == nil {
 		return false, errors.New("existence check is not configured")
 	}
-	for {
-		if err := ctx.Err(); err != nil {
-			return false, err
-		}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	absent := false
+	err := wait.PollUntilContextCancel(ctx, interval, true, func(ctx context.Context) (bool, error) {
 		present, err := exists(ctx)
 		if err != nil {
 			return false, err
 		}
-		if !present {
-			return true, nil
-		}
-		timer := time.NewTimer(interval)
-		select {
-		case <-ctx.Done():
-			stopCleanupTimer(timer)
-			return false, ctx.Err()
-		case <-timer.C:
-		}
-	}
+		absent = !present
+		return absent, nil
+	})
+	return absent, err
 }
 
-func waitForCFBindingAbsence(ctx context.Context, interval time.Duration, guid string, exists func(context.Context, string) (bool, error)) (bool, error) {
-	for {
-		if err := ctx.Err(); err != nil {
-			return false, err
-		}
-		present, err := exists(ctx, guid)
-		if err != nil {
-			return false, err
-		}
-		if !present {
-			return true, nil
-		}
-		timer := time.NewTimer(interval)
-		select {
-		case <-ctx.Done():
-			stopCleanupTimer(timer)
-			return false, ctx.Err()
-		case <-timer.C:
+// RotationRetiredKeyCollected requires both Cloud Foundry absence and status GC.
+func RotationRetiredKeyCollected(guid string, cfPresent bool, retired []*v1alpha1.SCBResource) bool {
+	if guid == "" || cfPresent {
+		return false
+	}
+	for _, key := range retired {
+		if key != nil && key.GUID == guid {
+			return false
 		}
 	}
-}
-
-func stopCleanupTimer(timer *time.Timer) {
-	if !timer.Stop() {
-		select {
-		case <-timer.C:
-		default:
-		}
-	}
+	return true
 }
 
 func uniqueNonEmpty(values []string) []string {

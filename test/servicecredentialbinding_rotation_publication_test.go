@@ -98,6 +98,37 @@ func TestRotationPublicationPredicate(t *testing.T) {
 	}
 }
 
+func TestRotationCredentialChangeRequiresDifferentNonEmptyClientSecret(t *testing.T) {
+	const sentinel = "credential-sentinel-must-not-appear"
+	cases := []struct {
+		name    string
+		old     map[string]any
+		current map[string]any
+		wantErr bool
+	}{
+		{name: "different secrets", old: map[string]any{"clientsecret": "old"}, current: map[string]any{"clientsecret": "new"}},
+		{name: "same secret despite representation change", old: map[string]any{"clientsecret": "same", "old-json": "value"}, current: map[string]any{"clientsecret": "same"}, wantErr: true},
+		{name: "empty old secret", old: map[string]any{"clientsecret": ""}, current: map[string]any{"clientsecret": "new"}, wantErr: true},
+		{name: "missing old secret", old: map[string]any{}, current: map[string]any{"clientsecret": "new"}, wantErr: true},
+		{name: "non-string old secret", old: map[string]any{"clientsecret": 42}, current: map[string]any{"clientsecret": "new"}, wantErr: true},
+		{name: "empty current secret", old: map[string]any{"clientsecret": "old"}, current: map[string]any{"clientsecret": ""}, wantErr: true},
+		{name: "missing current secret", old: map[string]any{"clientsecret": "old"}, current: map[string]any{}, wantErr: true},
+		{name: "non-string current secret", old: map[string]any{"clientsecret": "old"}, current: map[string]any{"clientsecret": 42}, wantErr: true},
+		{name: "credential values are not included in errors", old: map[string]any{"clientsecret": sentinel}, current: map[string]any{"clientsecret": sentinel}, wantErr: true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateRotationCredentialChange(tc.old, tc.current)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("validation error = %v, wantErr %t", err, tc.wantErr)
+			}
+			if err != nil && strings.Contains(err.Error(), sentinel) {
+				t.Fatal("credential value leaked into validation error")
+			}
+		})
+	}
+}
+
 func TestRotationPublicationWaitBoundsAndSanitizesErrors(t *testing.T) {
 	sentinel := errors.New("credential-value-must-not-leak")
 	err := WaitForServiceCredentialBindingPublication(context.Background(), 10*time.Millisecond, time.Millisecond, "binding-k1", true, func(context.Context) (ServiceCredentialBindingPublicationSnapshot, error) {

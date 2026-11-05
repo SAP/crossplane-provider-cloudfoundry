@@ -11,6 +11,8 @@ import (
 	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 func TestRotationCleanupWaitsForBindingAndExternalDeletionInOrder(t *testing.T) {
@@ -153,6 +155,31 @@ func TestRotationCleanupCFBindingNotFoundVariants(t *testing.T) {
 	present, err := ServiceCredentialBindingExistsInCF(context.Background(), rotationCFGetter{binding: &cfresource.ServiceCredentialBinding{GUID: "owned-key"}}, "owned-key")
 	if err != nil || !present {
 		t.Fatalf("existing CF binding was not retained as present: present=%t err=%v", present, err)
+	}
+	if _, err := ServiceCredentialBindingExistsInCF(context.Background(), rotationCFGetter{err: errors.New("temporary API failure")}, "owned-key"); err == nil {
+		t.Fatal("unexpected CF read error was treated as absence")
+	}
+}
+
+func TestRotationRetiredKeyCollectionRequiresCFAndStatusAbsence(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		guid      string
+		cfPresent bool
+		retired   []*v1alpha1.SCBResource
+		want      bool
+	}{
+		{name: "both absent", guid: "k0", want: true},
+		{name: "CF key remains", guid: "k0", cfPresent: true},
+		{name: "status record remains after CF deletion", guid: "k0", retired: []*v1alpha1.SCBResource{{GUID: "k0"}}},
+		{name: "nil status entry ignored", guid: "k0", retired: []*v1alpha1.SCBResource{nil, {GUID: "k1"}}, want: true},
+		{name: "missing identity is not inferred", cfPresent: false, want: false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := RotationRetiredKeyCollected(tc.guid, tc.cfPresent, tc.retired); got != tc.want {
+				t.Fatalf("retired-key collection = %t, want %t", got, tc.want)
+			}
+		})
 	}
 }
 

@@ -10,7 +10,25 @@ import (
 	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/wait"
 )
+
+// ValidateRotationCredentialChange verifies that the XSUAA client secret changed
+// between generations without exposing either value in its error.
+func ValidateRotationCredentialChange(previous, current map[string]any) error {
+	oldSecret, ok := previous["clientsecret"].(string)
+	if !ok || oldSecret == "" {
+		return errors.New("previous binding credentials have no non-empty clientsecret")
+	}
+	newSecret, ok := current["clientsecret"].(string)
+	if !ok || newSecret == "" {
+		return errors.New("current binding credentials have no non-empty clientsecret")
+	}
+	if oldSecret == newSecret {
+		return errors.New("binding clientsecret did not change across rotation")
+	}
+	return nil
+}
 
 // ServiceCredentialBindingPublicationSnapshot is a single read-back attempt.
 // ExpectedDetails must be non-nil when retrieval succeeded; an empty map is a
@@ -40,9 +58,20 @@ func WaitForServiceCredentialBindingPublication(
 	if interval <= 0 {
 		interval = time.Second
 	}
-	waitCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	return pollForPublication(waitCtx, interval, targetGUID, requireNonEmpty, read)
+	if err := ctx.Err(); err != nil {
+		return publicationTimeout(targetGUID, err)
+	}
+	err := wait.PollUntilContextTimeout(ctx, interval, timeout, true, func(ctx context.Context) (bool, error) {
+		snapshot, err := read(ctx)
+		if err != nil {
+			return false, ctx.Err()
+		}
+		return serviceCredentialBindingPublicationMatches(snapshot, targetGUID, requireNonEmpty), nil
+	})
+	if err != nil {
+		return publicationTimeout(targetGUID, err)
+	}
+	return nil
 }
 
 func validatePublicationWait(targetGUID string, timeout time.Duration, read func(context.Context) (ServiceCredentialBindingPublicationSnapshot, error)) error {
@@ -56,28 +85,6 @@ func validatePublicationWait(targetGUID string, timeout time.Duration, read func
 		return errors.New("publication read operation is required")
 	}
 	return nil
-}
-
-func pollForPublication(ctx context.Context, interval time.Duration, targetGUID string, requireNonEmpty bool, read func(context.Context) (ServiceCredentialBindingPublicationSnapshot, error)) error {
-	for {
-		if err := ctx.Err(); err != nil {
-			return publicationTimeout(targetGUID, err)
-		}
-		snapshot, err := read(ctx)
-		if err == nil && serviceCredentialBindingPublicationMatches(snapshot, targetGUID, requireNonEmpty) {
-			return nil
-		}
-		if err := ctx.Err(); err != nil {
-			return publicationTimeout(targetGUID, err)
-		}
-		timer := time.NewTimer(interval)
-		select {
-		case <-ctx.Done():
-			stopPublicationTimer(timer)
-			return publicationTimeout(targetGUID, ctx.Err())
-		case <-timer.C:
-		}
-	}
 }
 
 func publicationTimeout(targetGUID string, err error) error {
@@ -123,13 +130,4 @@ func sameRotationSecretController(actual, expected *corev1.Secret) bool {
 	}
 	a, e := metav1.GetControllerOf(actual), metav1.GetControllerOf(expected)
 	return a != nil && e != nil && a.APIVersion == e.APIVersion && a.Kind == e.Kind && a.Name == e.Name && a.UID == e.UID
-}
-
-func stopPublicationTimer(timer *time.Timer) {
-	if !timer.Stop() {
-		select {
-		case <-timer.C:
-		default:
-		}
-	}
 }
