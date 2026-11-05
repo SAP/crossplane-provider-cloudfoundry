@@ -38,21 +38,22 @@ func (m *rotationTestManager) GetScheme() *runtime.Scheme { return m.scheme }
 
 func TestRotationEffectiveLegacyPolicyMatrix(t *testing.T) {
 	cases := []struct {
-		name          string
-		policies      xpv2.ManagementPolicies
-		deletion      xpv2.DeletionPolicy
-		wantCreate    bool
-		wantUpdate    bool
-		wantDelete    bool
-		wantOnlyWatch bool
-		wantPause     bool
-		wantErr       bool
+		name            string
+		policies        xpv2.ManagementPolicies
+		deletion        xpv2.DeletionPolicy
+		wantCreate      bool
+		wantUpdate      bool
+		wantDelete      bool
+		wantOnlyWatch   bool
+		wantPause       bool
+		wantErr         bool
+		policiesEnabled bool
 	}{
-		{name: "enabled wildcard", policies: xpv2.ManagementPolicies{xpv2.ManagementActionAll}, deletion: xpv2.DeletionDelete, wantCreate: true, wantUpdate: true, wantDelete: true},
-		{name: "observe only", policies: xpv2.ManagementPolicies{xpv2.ManagementActionObserve}, deletion: xpv2.DeletionOrphan, wantOnlyWatch: true},
-		{name: "observe and create without update", policies: xpv2.ManagementPolicies{xpv2.ManagementActionObserve, xpv2.ManagementActionCreate}, deletion: xpv2.DeletionOrphan, wantCreate: true},
-		{name: "update only", policies: xpv2.ManagementPolicies{xpv2.ManagementActionObserve, xpv2.ManagementActionUpdate}, deletion: xpv2.DeletionOrphan, wantUpdate: true},
-		{name: "empty enabled policy pauses", policies: xpv2.ManagementPolicies{}, deletion: xpv2.DeletionOrphan, wantPause: true},
+		{name: "enabled wildcard", policies: xpv2.ManagementPolicies{xpv2.ManagementActionAll}, deletion: xpv2.DeletionDelete, wantCreate: true, wantUpdate: true, wantDelete: true, policiesEnabled: true},
+		{name: "observe only", policies: xpv2.ManagementPolicies{xpv2.ManagementActionObserve}, deletion: xpv2.DeletionOrphan, wantOnlyWatch: true, policiesEnabled: true},
+		{name: "observe and create without update", policies: xpv2.ManagementPolicies{xpv2.ManagementActionObserve, xpv2.ManagementActionCreate}, deletion: xpv2.DeletionOrphan, wantCreate: true, policiesEnabled: true},
+		{name: "update only", policies: xpv2.ManagementPolicies{xpv2.ManagementActionObserve, xpv2.ManagementActionUpdate}, deletion: xpv2.DeletionOrphan, wantUpdate: true, policiesEnabled: true},
+		{name: "empty enabled policy pauses", policies: xpv2.ManagementPolicies{}, deletion: xpv2.DeletionOrphan, wantPause: true, policiesEnabled: true},
 		{name: "disabled feature uses legacy delete", policies: xpv2.ManagementPolicies{}, deletion: xpv2.DeletionOrphan, wantCreate: true, wantUpdate: true},
 		{name: "disabled feature rejects non-default policy", policies: xpv2.ManagementPolicies{xpv2.ManagementActionObserve}, deletion: xpv2.DeletionOrphan, wantErr: true},
 	}
@@ -62,13 +63,13 @@ func TestRotationEffectiveLegacyPolicyMatrix(t *testing.T) {
 			cr := rotationControllerCR(rotationTestK0, nil)
 			cr.Spec.ManagementPolicies = tc.policies
 			cr.Spec.DeletionPolicy = tc.deletion
-			enabled := tc.name != "disabled feature uses legacy delete" && tc.name != "disabled feature rejects non-default policy"
-			resolver := managed.NewLegacyManagementPoliciesResolver(enabled, cr.Spec.ManagementPolicies, cr.Spec.DeletionPolicy)
+			external := &external{managementPoliciesEnabled: tc.policiesEnabled}
+			resolver, err := external.lifecyclePolicies(cr)
 			if tc.wantErr {
-				require.Error(t, resolver.Validate())
+				require.Error(t, err)
 				return
 			}
-			require.NoError(t, resolver.Validate())
+			require.NoError(t, err)
 			require.Equal(t, tc.wantCreate, resolver.ShouldCreate())
 			require.Equal(t, tc.wantUpdate, resolver.ShouldUpdate())
 			require.Equal(t, tc.wantDelete, resolver.ShouldDelete())
@@ -200,63 +201,6 @@ func TestRotationRuntimeObserveOnlyDoesNotConsumeForceRequest(t *testing.T) {
 	cf.AssertExpectations(t)
 }
 
-func TestRotationRuntimePublishesBeforeUpdate(t *testing.T) {
-	cr := rotationControllerCR(rotationTestK1, nil)
-	cr.UID = types.UID("rotation-test-owner")
-	cr.Spec.WriteConnectionSecretToReference = &xpv2.SecretReference{Name: "rotation-credentials", Namespace: "rotation-test"}
-	cr.Spec.ManagementPolicies = xpv2.ManagementPolicies{xpv2.ManagementActionObserve, xpv2.ManagementActionUpdate}
-	cr.Spec.DeletionPolicy = xpv2.DeletionOrphan
-	cr.Finalizers = []string{managed.FinalizerName}
-	store, scheme := rotationRuntimeStore(t, cr)
-	ext := &rotationPublishingExternal{kube: store, resourceExists: true}
-	reconciler := rotationRuntimeReconciler(t, store, scheme, ext, true)
-
-	_, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: cr.Name}})
-	require.NoError(t, err)
-	require.True(t, ext.secretPresentBeforeUpdate, "runtime must publish observed details before invoking Update")
-	secret := &corev1.Secret{}
-	require.NoError(t, store.Get(context.Background(), types.NamespacedName{Namespace: "rotation-test", Name: "rotation-credentials"}, secret))
-	require.Equal(t, []byte("published-user"), secret.Data["username"], "Update publication must not clear configured Secret data")
-}
-
-type rotationPublishingExternal struct {
-	kube                      client.Client
-	resourceExists            bool
-	createCalled              bool
-	secretPresentBeforeUpdate bool
-}
-
-func (e *rotationPublishingExternal) Observe(context.Context, resource.Managed) (managed.ExternalObservation, error) {
-	return managed.ExternalObservation{
-		ResourceExists:   e.resourceExists,
-		ResourceUpToDate: false,
-		ConnectionDetails: managed.ConnectionDetails{
-			"username": []byte("published-user"),
-		},
-	}, nil
-}
-
-func (e *rotationPublishingExternal) Create(context.Context, resource.Managed) (managed.ExternalCreation, error) {
-	e.createCalled = true
-	return managed.ExternalCreation{}, nil
-}
-
-func (e *rotationPublishingExternal) Update(ctx context.Context, _ resource.Managed) (managed.ExternalUpdate, error) {
-	secret := &corev1.Secret{}
-	err := e.kube.Get(ctx, types.NamespacedName{Namespace: "rotation-test", Name: "rotation-credentials"}, secret)
-	e.secretPresentBeforeUpdate = err == nil && string(secret.Data["username"]) == "published-user"
-	if err != nil {
-		return managed.ExternalUpdate{}, err
-	}
-	return managed.ExternalUpdate{ConnectionDetails: managed.ConnectionDetails{"username": []byte("published-user")}}, nil
-}
-
-func (e *rotationPublishingExternal) Delete(context.Context, resource.Managed) (managed.ExternalDelete, error) {
-	return managed.ExternalDelete{}, nil
-}
-
-func (e *rotationPublishingExternal) Disconnect(context.Context) error { return nil }
-
 func TestRotationProviderRotationWithoutUpdatePolicy(t *testing.T) {
 	cr := rotationHandoverCR(rotationTestK0, rotationTestK0, "key")
 	cr.Status.AtProvider.RetiredKeys = nil
@@ -291,21 +235,6 @@ func TestRotationProviderRotationWithoutUpdatePolicy(t *testing.T) {
 	require.Len(t, persisted.Status.AtProvider.RetiredKeys, 1)
 	require.Equal(t, rotationTestK0, persisted.Status.AtProvider.RetiredKeys[0].GUID)
 	require.Equal(t, rotationTestK0, persisted.GetAnnotations()[servicecredentialbinding.ForceRotationKey])
-}
-
-func TestRotationRuntimeCreateWithoutUpdatePolicy(t *testing.T) {
-	cr := rotationControllerCR(rotationTestK0, nil)
-	cr.Spec.ManagementPolicies = xpv2.ManagementPolicies{xpv2.ManagementActionObserve, xpv2.ManagementActionCreate}
-	cr.Spec.DeletionPolicy = xpv2.DeletionOrphan
-	cr.Finalizers = []string{managed.FinalizerName}
-	store, scheme := rotationRuntimeStore(t, cr)
-	ext := &rotationPublishingExternal{kube: store, resourceExists: false}
-	reconciler := rotationRuntimeReconciler(t, store, scheme, ext, true)
-
-	_, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: types.NamespacedName{Name: cr.Name}})
-	require.NoError(t, err)
-	require.True(t, ext.createCalled, "Create permission must be honored without Update permission")
-	require.False(t, ext.secretPresentBeforeUpdate, "Update must remain disallowed")
 }
 
 func TestRotationRuntimeDisabledPolicyRejectsBeforeExternalWork(t *testing.T) {

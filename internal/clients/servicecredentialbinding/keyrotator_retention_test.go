@@ -110,16 +110,14 @@ func TestRotationExplicitTTLCompatibility(t *testing.T) {
 }
 
 func TestSCBKeyRotator_CanonicalUUIDTargetAndPendingContinuation(t *testing.T) {
+	guid := "abcdef01-2345-4678-9abc-def012345678"
 	cr := rotationTestCR("key")
-	cr.Annotations = map[string]string{ForceRotationKey: "{11111111-1111-4111-8111-111111111111}"}
-	require.False(t, (&SCBKeyRotator{}).RetireBinding(cr, rotationTestBinding(rotationTestK0)), "braced UUIDs are outside the documented canonical form")
+	cr.Annotations = map[string]string{ForceRotationKey: "{" + guid + "}"}
+	require.False(t, (&SCBKeyRotator{}).RetireBinding(cr, rotationTestBinding(guid)), "braced UUIDs are outside the documented canonical form")
 
-	cr.Annotations[ForceRotationKey] = "11111111-1111-4111-8111-111111111111"
-	require.True(t, (&SCBKeyRotator{}).RetireBinding(cr, rotationTestBinding(stringsToUpper(rotationTestK0))))
+	cr.Annotations[ForceRotationKey] = guid
+	cr.Status.AtProvider.RetiredKeys = []*v1alpha1.SCBResource{{GUID: guid}}
+	require.True(t, (&SCBKeyRotator{}).RetireBinding(cr, rotationTestBinding(strings.ToUpper(guid))), "persisted identity comparison is case-insensitive")
 	cr.Annotations = nil
-	require.True(t, (&SCBKeyRotator{}).RetireBinding(cr, rotationTestBinding(rotationTestK0)), "persisted retired identity resumes without an annotation")
-}
-
-func stringsToUpper(value string) string {
-	return strings.ToUpper(value)
+	require.True(t, (&SCBKeyRotator{}).RetireBinding(cr, rotationTestBinding(guid)), "persisted retired identity resumes without an annotation")
 }
