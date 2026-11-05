@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"reflect"
 	"strings"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apimachinery/pkg/util/wait"
 
 	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
@@ -67,12 +69,6 @@ const (
 	rotationSetupResourcePhase = "resource"
 
 	RotationSetupApplyFailed             RotationSetupFailureKind = "apply-failed"
-	RotationSetupApplyConflict           RotationSetupFailureKind = "apply-conflict"
-	RotationSetupApplyNotFound           RotationSetupFailureKind = "apply-not-found"
-	RotationSetupApplyTimedOut           RotationSetupFailureKind = "apply-timeout"
-	RotationSetupApplyRateLimited        RotationSetupFailureKind = "apply-rate-limited"
-	RotationSetupApplyUnavailable        RotationSetupFailureKind = "apply-unavailable"
-	RotationSetupApplyAPIError           RotationSetupFailureKind = "apply-api-error"
 	RotationSetupFixtureDecodeFailed     RotationSetupFailureKind = "fixture-decode-failed"
 	RotationSetupFixtureKindMissing      RotationSetupFailureKind = "fixture-kind-missing"
 	RotationSetupFixtureConversionFailed RotationSetupFailureKind = "fixture-conversion-failed"
@@ -141,11 +137,11 @@ func RotationSetupApplyFailure(err error, resourceKind, resourceName string) *Ro
 	if errors.As(err, &apiStatus) {
 		failure.APICode = apiStatus.Status().Code
 	}
-	failure.Kind = rotationSetupApplyFailureKind(err, failure.APICode)
+	failure.Kind = rotationSetupApplyFailureKind(err)
 	return failure
 }
 
-func rotationSetupApplyFailureKind(err error, apiCode int32) RotationSetupFailureKind {
+func rotationSetupApplyFailureKind(err error) RotationSetupFailureKind {
 	switch {
 	case apierrors.IsForbidden(err):
 		return RotationSetupForbidden
@@ -153,18 +149,6 @@ func rotationSetupApplyFailureKind(err error, apiCode int32) RotationSetupFailur
 		return RotationSetupUnauthorized
 	case apierrors.IsInvalid(err):
 		return RotationSetupInvalid
-	case apierrors.IsConflict(err):
-		return RotationSetupApplyConflict
-	case apierrors.IsNotFound(err):
-		return RotationSetupApplyNotFound
-	case apierrors.IsTimeout(err), apierrors.IsServerTimeout(err):
-		return RotationSetupApplyTimedOut
-	case apierrors.IsTooManyRequests(err):
-		return RotationSetupApplyRateLimited
-	case apierrors.IsServiceUnavailable(err), apierrors.IsInternalError(err):
-		return RotationSetupApplyUnavailable
-	case apiCode != 0:
-		return RotationSetupApplyAPIError
 	default:
 		return RotationSetupApplyFailed
 	}
@@ -209,7 +193,7 @@ func RunServiceCredentialBindingRotationSetup(ctx context.Context, ops RotationS
 			if ctx.Err() != nil {
 				return rotationSetupFailure(phase.name, RotationSetupTimedOut, ops.OnFailureRead, ctx)
 			}
-			failure := rotationSetupErrorFor(phase.name, err, false)
+			failure := rotationSetupErrorFor(phase.name, err)
 			rotationSetupDiagnostics(ctx, phase.name, ops.OnFailureRead)
 			return failure
 		}
@@ -253,21 +237,22 @@ func validateRotationSetupOperations(ops RotationSetupOperations) error {
 }
 
 func waitForRotationSetupPhase(ctx context.Context, phase rotationSetupPhase, ops RotationSetupOperations) error {
-	for {
-		if ctx.Err() != nil {
-			return &RotationSetupError{Phase: phase.name, Kind: RotationSetupTimedOut}
-		}
+	var failure error
+	err := wait.PollUntilContextTimeout(ctx, ops.PollInterval, ops.PhaseTimeout, true, func(ctx context.Context) (bool, error) {
 		ready, err := rotationSetupProbe(ctx, phase)
 		if err != nil {
-			return err
+			failure = err
+			return false, err
 		}
-		if ready {
-			return nil
-		}
-		if err := waitRotationSetupInterval(ctx, ops.PollInterval); err != nil {
-			return &RotationSetupError{Phase: phase.name, Kind: RotationSetupTimedOut}
-		}
+		return ready, nil
+	})
+	if failure != nil {
+		return failure
 	}
+	if err != nil {
+		return &RotationSetupError{Phase: phase.name, Kind: RotationSetupTimedOut}
+	}
+	return nil
 }
 
 func rotationSetupProbe(ctx context.Context, phase rotationSetupPhase) (bool, error) {
@@ -283,17 +268,6 @@ func rotationSetupProbe(ctx context.Context, phase rotationSetupPhase) (bool, er
 		return false, nil
 	}
 	return false, &RotationSetupError{Phase: phase.name, Kind: kind}
-}
-
-func waitRotationSetupInterval(ctx context.Context, interval time.Duration) error {
-	timer := time.NewTimer(interval)
-	defer timer.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-timer.C:
-		return nil
-	}
 }
 
 func classifyRotationSetupProbeError(err error) (RotationSetupFailureKind, bool) {
@@ -319,25 +293,16 @@ func classifyRotationSetupProbeError(err error) (RotationSetupFailureKind, bool)
 	}
 }
 
-func rotationSetupErrorFor(phase string, err error, probe bool) *RotationSetupError {
+func rotationSetupErrorFor(phase string, err error) *RotationSetupError {
 	var setupErr *RotationSetupError
 	if errors.As(err, &setupErr) {
-		return &RotationSetupError{
-			Phase:          phase,
-			Kind:           setupErr.Kind,
-			ResourceKind:   setupErr.ResourceKind,
-			ResourceName:   setupErr.ResourceName,
-			APICode:        setupErr.APICode,
-			IdentityChecks: setupErr.IdentityChecks,
-		}
-	}
-	if !probe {
-		failure := RotationSetupApplyFailure(err, "", "")
+		failure := *setupErr
 		failure.Phase = phase
-		return failure
+		return &failure
 	}
-	kind, _ := classifyRotationSetupProbeError(err)
-	return &RotationSetupError{Phase: phase, Kind: kind}
+	failure := RotationSetupApplyFailure(err, "", "")
+	failure.Phase = phase
+	return failure
 }
 
 func rotationSetupFailure(phase string, kind RotationSetupFailureKind, diagnose func(context.Context, string), ctx context.Context) *RotationSetupError {
@@ -433,6 +398,62 @@ func rotationSetupConditionFailureKind(message string) RotationSetupFailureKind 
 		return RotationSetupInvalid
 	default:
 		return ""
+	}
+}
+
+// RotationFixtureValueMatches checks a fetched spec while allowing only known
+// Crossplane defaults absent from the fixture.
+func RotationFixtureValueMatches(expected, actual any) bool {
+	return rotationFixtureMapMatches(expected, actual, true, nil)
+}
+
+func rotationFixtureMapMatches(expected, actual any, allowDefaults bool, path []string) bool {
+	expectedMap, ok := expected.(map[string]interface{})
+	if !ok {
+		return reflect.DeepEqual(expected, actual)
+	}
+	actualMap, ok := actual.(map[string]interface{})
+	return ok && rotationFixtureExpectedFieldsMatch(expectedMap, actualMap, path) && rotationFixtureActualFieldsAllowed(expectedMap, actualMap, allowDefaults, path)
+}
+
+func rotationFixtureExpectedFieldsMatch(expected, actual map[string]interface{}, path []string) bool {
+	for key, expectedValue := range expected {
+		actualValue, exists := actual[key]
+		if !exists || !rotationFixtureMapMatches(expectedValue, actualValue, false, append(path, key)) {
+			return false
+		}
+	}
+	return true
+}
+
+func rotationFixtureActualFieldsAllowed(expected, actual map[string]interface{}, allowDefaults bool, path []string) bool {
+	for key, value := range actual {
+		if _, exists := expected[key]; exists || allowDefaults && rotationFixtureDefaultedSpecField(key) || rotationFixtureDefaultedReferencePolicyField(path, key, value) {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func rotationFixtureDefaultedSpecField(field string) bool {
+	switch field {
+	case "managementPolicies", "providerConfigRef", "deletionPolicy":
+		return true
+	default:
+		return false
+	}
+}
+
+func rotationFixtureDefaultedReferencePolicyField(path []string, field string, actual any) bool {
+	if field != "resolution" || actual != "Required" || len(path) < 2 || path[len(path)-1] != "policy" {
+		return false
+	}
+	switch path[len(path)-2] {
+	case "orgRef", "orgSelector", "spaceRef", "spaceSelector", "serviceInstanceRef", "domainRef":
+		return true
+	default:
+		return false
 	}
 }
 

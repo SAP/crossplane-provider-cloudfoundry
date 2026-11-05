@@ -172,14 +172,10 @@ func validateExistingRotationFixture(desired k8s.Object, desiredSpec any, curren
 	if err != nil {
 		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureConversionFailed, ResourceKind: manifestGVK.Kind, ResourceName: desired.GetName()}
 	}
-	if !rotationFixtureValueMatches(desiredSpec, currentMap["spec"]) {
+	if !testutil.RotationFixtureValueMatches(desiredSpec, currentMap["spec"]) {
 		return &testutil.RotationSetupError{Kind: testutil.RotationSetupFixtureSpecMismatch, ResourceKind: manifestGVK.Kind, ResourceName: desired.GetName()}
 	}
 	return nil
-}
-
-func rotationFixtureValueMatches(expected, actual any) bool {
-	return testutil.RotationFixtureValueMatches(expected, actual)
 }
 
 func logRotationSetupDiagnostic(t *testing.T, ctx context.Context, client *resources.Resources, phase, bindingName, instanceName, orgName, spaceName string) {
