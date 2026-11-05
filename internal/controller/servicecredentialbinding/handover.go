@@ -1,0 +1,207 @@
+package servicecredentialbinding
+
+import (
+	"bytes"
+	"context"
+	"errors"
+	"fmt"
+	"time"
+
+	"github.com/crossplane/crossplane-runtime/v2/pkg/event"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
+	"github.com/crossplane/crossplane-runtime/v2/pkg/resource"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
+	scb "github.com/SAP/crossplane-provider-cloudfoundry/internal/clients/servicecredentialbinding"
+)
+
+const (
+	reasonInvalidForceRotationTarget event.Reason = "InvalidForceRotationTarget"
+	reasonForceRotationUnsupported   event.Reason = "ForceRotationUnsupported"
+)
+
+func isKeyBinding(cr *v1alpha1.ServiceCredentialBinding) bool {
+	return cr != nil && cr.Spec.ForProvider.Type == "key"
+}
+
+func isPendingReplacement(cr *v1alpha1.ServiceCredentialBinding, activeGUID string) bool {
+	if cr == nil || activeGUID == "" {
+		return false
+	}
+	for _, retired := range cr.Status.AtProvider.RetiredKeys {
+		if retired != nil && scb.SameGUID(retired.GUID, activeGUID) {
+			return true
+		}
+	}
+	return false
+}
+
+// lifecyclePolicies returns the same effective legacy/management-policy view used by
+// Crossplane runtime, including its feature-flag and legacy deletion-policy behavior.
+func (c *external) lifecyclePolicies(cr *v1alpha1.ServiceCredentialBinding) (managed.ManagementPoliciesChecker, error) {
+	p := managed.NewLegacyManagementPoliciesResolver(c.managementPoliciesEnabled, cr.Spec.ManagementPolicies, cr.Spec.DeletionPolicy)
+	if err := p.Validate(); err != nil {
+		return nil, err
+	}
+	return p, nil
+}
+
+func (c *external) warnForceRotation(cr *v1alpha1.ServiceCredentialBinding) {
+	value, present := cr.GetAnnotations()[scb.ForceRotationKey]
+	if !present || c.recorder == nil {
+		return
+	}
+	if cr.Spec.ForProvider.Type == "app" {
+		c.recorder.Event(cr, event.Warning(reasonForceRotationUnsupported, errors.New("force rotation is supported only for key bindings")))
+		return
+	}
+	if value == "" || !scb.IsCanonicalGUID(value) {
+		c.recorder.Event(cr, event.Warning(reasonInvalidForceRotationTarget, errors.New("force-rotation must contain the active key GUID; empty and malformed values are ignored")))
+	}
+}
+
+func (c *external) now() time.Time {
+	if c.nowFn != nil {
+		return c.nowFn().UTC()
+	}
+	if r, ok := c.keyRotator.(*scb.SCBKeyRotator); ok && r.Now != nil {
+		return r.Now().UTC()
+	}
+	return time.Now().UTC()
+}
+
+// connectionDetails returns the current CF credentials. Retrieval errors are fatal
+// when a connection Secret is configured, because nil details must not masquerade as
+// a successful handover/publication.
+func (c *external) connectionDetails(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding) (managed.ConnectionDetails, error) {
+	details, err := scb.GetConnectionDetails(ctx, c.scbClient, binding.GUID, cr.Spec.ConnectionDetailsAsJSON)
+	if err != nil {
+		if cr.Spec.WriteConnectionSecretToReference != nil {
+			return nil, fmt.Errorf("cannot retrieve required connection details: %w", err)
+		}
+		return managed.ConnectionDetails{}, nil
+	}
+	return details, nil
+}
+
+// confirmHandover requires successful CF operation and, when configured, a
+// connection Secret owned by this resource contains the freshly retrieved details.
+// Extra entries may remain because the runtime publisher merge-patches Secret data.
+func (c *external) confirmHandover(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding, details managed.ConnectionDetails) bool {
+	if cr == nil || binding == nil || binding.LastOperation.State != v1alpha1.LastOperationSucceeded {
+		return false
+	}
+	if cr.Spec.WriteConnectionSecretToReference == nil {
+		return true
+	}
+	return c.confirmSecretHandover(ctx, cr, details)
+}
+
+func (c *external) confirmSecretHandover(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, details managed.ConnectionDetails) bool {
+	if details == nil {
+		return false
+	}
+	reader := c.reader
+	if reader == nil {
+		reader = c.kube
+	}
+	if reader == nil {
+		return false
+	}
+	ref := cr.Spec.WriteConnectionSecretToReference
+	secret := &corev1.Secret{}
+	if err := reader.Get(ctx, types.NamespacedName{Namespace: ref.Namespace, Name: ref.Name}, secret); err != nil {
+		return false
+	}
+	expected := resource.ConnectionSecretFor(cr, v1alpha1.ServiceCredentialBindingGroupVersionKind)
+	if secret.Namespace != expected.Namespace || secret.Name != expected.Name || secret.Type != resource.SecretTypeConnection || !sameControllerOwner(secret, expected) {
+		return false
+	}
+	return connectionDataContains(secret.Data, details)
+}
+
+func sameControllerOwner(actual, expected *corev1.Secret) bool {
+	if actual == nil || expected == nil {
+		return false
+	}
+	a := metav1.GetControllerOf(actual)
+	e := metav1.GetControllerOf(expected)
+	return a != nil && e != nil && a.APIVersion == e.APIVersion && a.Kind == e.Kind && a.Name == e.Name && a.UID == e.UID
+}
+
+func (c *external) preservedConnectionDetails(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ConnectionDetails, error) {
+	ref := cr.Spec.WriteConnectionSecretToReference
+	if ref == nil {
+		return nil, nil
+	}
+	reader := c.reader
+	if reader == nil {
+		reader = c.kube
+	}
+	if reader == nil {
+		return nil, errors.New("cannot read configured connection Secret to preserve published credentials")
+	}
+	secret := &corev1.Secret{}
+	if err := reader.Get(ctx, types.NamespacedName{Namespace: ref.Namespace, Name: ref.Name}, secret); err != nil {
+		if apierrors.IsNotFound(err) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("cannot read configured connection Secret to preserve published credentials: %w", err)
+	}
+	expected := resource.ConnectionSecretFor(cr, v1alpha1.ServiceCredentialBindingGroupVersionKind)
+	if !sameControllerOwner(secret, expected) {
+		return nil, nil
+	}
+	preserved := make(managed.ConnectionDetails, len(secret.Data))
+	for key, value := range secret.Data {
+		preserved[key] = append([]byte(nil), value...)
+	}
+	return preserved, nil
+}
+
+func connectionDataContains(data map[string][]byte, details managed.ConnectionDetails) bool {
+	for key, value := range details {
+		actual, ok := data[key]
+		if !ok || !bytes.Equal(actual, value) {
+			return false
+		}
+	}
+	return true
+}
+
+func (c *external) currentHandover(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (*cfresource.ServiceCredentialBinding, managed.ConnectionDetails, bool, error) {
+	guid := meta.GetExternalName(cr)
+	if !isValidUUID(guid) {
+		return nil, nil, false, nil
+	}
+	binding, err := c.scbClient.Get(ctx, guid)
+	if err != nil {
+		return nil, nil, false, fmt.Errorf("cannot verify active binding handover: %w", err)
+	}
+	if cr.Spec.WriteConnectionSecretToReference == nil {
+		return binding, nil, c.confirmHandover(ctx, cr, binding, nil), nil
+	}
+	details, err := c.connectionDetails(ctx, cr, binding)
+	if err != nil {
+		return binding, nil, false, err
+	}
+	return binding, details, c.confirmHandover(ctx, cr, binding, details), nil
+}
+
+func (c *external) persistFallbackDeadlines(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, handover time.Time) error {
+	rotator, ok := c.keyRotator.(*scb.SCBKeyRotator)
+	if !ok || !rotator.InitializeFallbackDeadlines(cr, handover) {
+		return nil
+	}
+	if err := c.kube.Status().Update(ctx, cr); err != nil {
+		return fmt.Errorf("cannot persist retired-key retention deadlines: %w", err)
+	}
+	return nil
+}

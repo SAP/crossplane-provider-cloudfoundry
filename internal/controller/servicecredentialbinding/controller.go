@@ -63,21 +63,24 @@ func SetupWithMaxCreateAttempts(maxCreateAttempts int) func(ctrl.Manager, contro
 	return func(mgr ctrl.Manager, o controller.Options) error {
 		name := managed.ControllerName(v1alpha1.ServiceCredentialBindingGroupKind)
 		recorder := event.NewAPIRecorder(mgr.GetEventRecorderFor(name))
+		managementPoliciesEnabled := o.Features.Enabled(features.EnableBetaManagementPolicies)
 
 		options := []managed.ReconcilerOption{
 			managed.WithInitializers(),
 			managed.WithExternalConnector(&connector{
-				kube:              mgr.GetClient(),
-				usage:             resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
-				recorder:          recorder,
-				maxCreateAttempts: maxCreateAttempts,
+				kube:                      mgr.GetClient(),
+				reader:                    mgr.GetAPIReader(),
+				usage:                     resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &apisv1beta1.ProviderConfigUsage{}),
+				recorder:                  recorder,
+				maxCreateAttempts:         maxCreateAttempts,
+				managementPoliciesEnabled: managementPoliciesEnabled,
 			}),
 			managed.WithLogger(o.Logger.WithValues("controller", name)),
 			managed.WithRecorder(recorder),
 			managed.WithPollInterval(o.PollInterval),
 		}
 
-		if o.Features.Enabled(features.EnableBetaManagementPolicies) {
+		if managementPoliciesEnabled {
 			options = append(options, managed.WithManagementPolicies())
 		}
 
@@ -96,10 +99,12 @@ func SetupWithMaxCreateAttempts(maxCreateAttempts int) func(ctrl.Manager, contro
 // A connector is expected to produce an external client when its Connect method
 // is called.
 type connector struct {
-	kube              k8s.Client
-	usage             resource.LegacyTracker
-	recorder          event.Recorder
-	maxCreateAttempts int
+	kube                      k8s.Client
+	reader                    k8s.Reader
+	usage                     resource.LegacyTracker
+	recorder                  event.Recorder
+	maxCreateAttempts         int
+	managementPoliciesEnabled bool
 }
 
 // Connect typically produces an ExternalClient by:
@@ -129,8 +134,10 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 
 	client := scb.NewClient(cf)
 	ext := &external{
-		kube:      c.kube,
-		scbClient: client,
+		kube:                      c.kube,
+		reader:                    c.reader,
+		scbClient:                 client,
+		managementPoliciesEnabled: c.managementPoliciesEnabled,
 		keyRotator: &scb.SCBKeyRotator{
 			SCBClient: client,
 		},
@@ -155,12 +162,15 @@ type ObservationStateHandler interface {
 // An external service observes, then either creates, updates, or deletes an
 // external resource to ensure it reflects the managed resource's desired state.
 type external struct {
-	kube                    k8s.Client
-	scbClient               scb.ServiceCredentialBinding
-	keyRotator              scb.KeyRotator
-	observationStateHandler ObservationStateHandler
-	recorder                event.Recorder
-	maxCreateAttempts       int
+	kube                      k8s.Client
+	reader                    k8s.Reader
+	scbClient                 scb.ServiceCredentialBinding
+	keyRotator                scb.KeyRotator
+	observationStateHandler   ObservationStateHandler
+	recorder                  event.Recorder
+	maxCreateAttempts         int
+	managementPoliciesEnabled bool
+	nowFn                     func() time.Time
 }
 
 // isBindingNotFoundError returns true if the error indicates the binding was not found
@@ -177,6 +187,10 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	if !ok {
 		return managed.ExternalObservation{}, errors.New(errWrongCRType)
 	}
+	if c.observationStateHandler == nil {
+		c.observationStateHandler = c
+	}
+	c.warnForceRotation(cr)
 
 	guid := meta.GetExternalName(cr)
 	serviceBinding, err := scb.GetByIDOrSearch(ctx, c.scbClient, guid, cr.Spec.ForProvider)
@@ -186,37 +200,113 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 	if err != nil {
 		return managed.ExternalObservation{}, fmt.Errorf(errGet, err)
 	}
+	if err := c.adoptBinding(ctx, cr, guid, serviceBinding); err != nil {
+		return managed.ExternalObservation{}, err
+	}
 
-	// Adoption: if the external-name doesn't match the discovered GUID, update it
-	if guid != serviceBinding.GUID {
-		meta.SetExternalName(cr, serviceBinding.GUID)
-		// Reset circuit breaker on successful adoption
+	policies, err := c.lifecyclePolicies(cr)
+	if err != nil {
+		return managed.ExternalObservation{}, fmt.Errorf("cannot resolve effective management policies: %w", err)
+	}
+	if !cr.GetDeletionTimestamp().IsZero() {
+		// Full deletion is independent of connection-secret handover. The runtime
+		// applies the effective Delete/Orphan policy after Observe succeeds.
+		return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
+	}
+	if obs, handled, err := c.resumePendingReplacement(ctx, cr, serviceBinding, policies); handled {
+		return obs, err
+	}
+	return c.observeAndRetire(ctx, cr, serviceBinding, policies)
+}
+
+func (c *external) adoptBinding(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, priorGUID string, binding *cfresource.ServiceCredentialBinding) error {
+	if priorGUID != binding.GUID {
+		meta.SetExternalName(cr, binding.GUID)
 		resetCreateAttempts(cr)
 		if err := c.kube.Update(ctx, cr); err != nil {
-			return managed.ExternalObservation{}, fmt.Errorf("%s: %w", errUpdateCR, err)
+			return fmt.Errorf("%s: %w", errUpdateCR, err)
 		}
 	}
+	applyBindingObservation(cr, binding)
+	return nil
+}
 
-	cr.Status.AtProvider.GUID = serviceBinding.GUID
-	cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: serviceBinding.CreatedAt}
+func applyBindingObservation(cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding) {
+	cr.Status.AtProvider.GUID = binding.GUID
+	cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: binding.CreatedAt}
+	scb.UpdateObservation(&cr.Status.AtProvider, binding)
+}
 
-	// Retiring during deletion would skip Delete() and leak the binding.
-	if cr.GetDeletionTimestamp().IsZero() && c.keyRotator.RetireBinding(cr, serviceBinding) {
-		if err := c.kube.Status().Update(ctx, cr); err != nil {
-			return managed.ExternalObservation{}, fmt.Errorf(errUpdateStatus, err)
-		}
-		return c.notExists(ctx, cr)
+func (c *external) resumePendingReplacement(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding, policies managed.ManagementPoliciesChecker) (managed.ExternalObservation, bool, error) {
+	if !policies.ShouldCreate() || !isKeyBinding(cr) || !isPendingReplacement(cr, binding.GUID) {
+		return managed.ExternalObservation{}, false, nil
 	}
+	obs, err := c.observePendingBinding(ctx, cr, binding)
+	if err != nil {
+		return managed.ExternalObservation{}, true, err
+	}
+	pending, err := c.notExists(ctx, cr)
+	if err != nil {
+		return managed.ExternalObservation{}, true, err
+	}
+	if cr.Spec.WriteConnectionSecretToReference != nil {
+		pending.ConnectionDetails = obs.ConnectionDetails
+	}
+	return pending, true, nil
+}
 
-	scb.UpdateObservation(&cr.Status.AtProvider, serviceBinding)
+func (c *external) observePendingBinding(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding) (managed.ExternalObservation, error) {
+	if handler, ok := c.observationStateHandler.(*external); ok {
+		return handler.handleObservationState(binding, ctx, cr, false)
+	}
+	return c.observationStateHandler.HandleObservationState(binding, ctx, cr)
+}
 
-	return c.observationStateHandler.HandleObservationState(serviceBinding, ctx, cr)
+func (c *external) observeAndRetire(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding, policies managed.ManagementPoliciesChecker) (managed.ExternalObservation, error) {
+	obs, err := c.observationStateHandler.HandleObservationState(binding, ctx, cr)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
+	return c.retireObservedBinding(ctx, cr, binding, policies, obs)
+}
+
+func (c *external) retireObservedBinding(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding, policies managed.ManagementPoliciesChecker, obs managed.ExternalObservation) (managed.ExternalObservation, error) {
+	if (!policies.ShouldCreate() && !policies.ShouldUpdate()) || !isKeyBinding(cr) || !c.confirmHandover(ctx, cr, binding, obs.ConnectionDetails) {
+		return obs, nil
+	}
+	if err := c.persistFallbackDeadlines(ctx, cr, c.now()); err != nil {
+		return managed.ExternalObservation{}, err
+	}
+	if !policies.ShouldCreate() {
+		// Deadline migration is lifecycle bookkeeping, not permission to create
+		// a replacement. Persist it on this normal Observe path so it does not
+		// depend on unrelated metadata drift causing runtime to call Update.
+		return obs, nil
+	}
+	if !c.keyRotator.RetireBinding(cr, binding) {
+		return obs, nil
+	}
+	if err := c.kube.Status().Update(ctx, cr); err != nil {
+		return managed.ExternalObservation{}, fmt.Errorf(errUpdateStatus, err)
+	}
+	obs.ResourceExists = false
+	if cr.Spec.WriteConnectionSecretToReference == nil {
+		obs.ConnectionDetails = nil
+	}
+	return obs, nil
 }
 
 // observeMissing handles a binding that is not found in Cloud Foundry.
 func (c *external) observeMissing(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error) {
 	// Delete() is not called for a missing binding, so remove retired keys here.
 	if !cr.GetDeletionTimestamp().IsZero() {
+		policies, err := c.lifecyclePolicies(cr)
+		if err != nil {
+			return managed.ExternalObservation{}, fmt.Errorf("cannot resolve effective management policies: %w", err)
+		}
+		if !policies.ShouldDelete() {
+			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
+		}
 		if err := c.keyRotator.DeleteRetiredKeys(ctx, cr); err != nil {
 			return managed.ExternalObservation{}, fmt.Errorf(errDeleteRetiredKeys, err)
 		}
@@ -255,12 +345,6 @@ func (c *external) Create(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalCreation{}, fmt.Errorf(errCreate, err)
 	}
 
-	if cr.Annotations != nil {
-		if _, ok := cr.Annotations[scb.ForceRotationKey]; ok {
-			meta.RemoveAnnotations(cr, scb.ForceRotationKey)
-		}
-	}
-
 	return managed.ExternalCreation{}, nil
 }
 
@@ -270,23 +354,84 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	if !ok {
 		return managed.ExternalUpdate{}, errors.New(errWrongCRType)
 	}
-
-	if externalName := meta.GetExternalName(cr); externalName != "" && isValidUUID(externalName) {
-		if _, err := scb.Update(ctx, c.scbClient, externalName, cr, cr.Spec.ForProvider); err != nil {
-			return managed.ExternalUpdate{}, fmt.Errorf(errUpdate, err)
-		}
+	policies, err := c.lifecyclePolicies(cr)
+	if err != nil {
+		return managed.ExternalUpdate{}, fmt.Errorf("cannot resolve effective management policies: %w", err)
 	}
-
-	if cr.Status.AtProvider.RetiredKeys == nil {
+	if !policies.ShouldUpdate() {
 		return managed.ExternalUpdate{}, nil
 	}
-
-	if newRetiredKeys, err := c.keyRotator.DeleteExpiredKeys(ctx, cr); err != nil {
-		return managed.ExternalUpdate{}, fmt.Errorf(errDeleteExpiredKeys, err)
-	} else {
-		cr.Status.AtProvider.RetiredKeys = newRetiredKeys
+	if err := c.updateActiveBinding(ctx, cr); err != nil {
 		return managed.ExternalUpdate{}, err
 	}
+	if len(cr.Status.AtProvider.RetiredKeys) == 0 && cr.Spec.WriteConnectionSecretToReference == nil {
+		return managed.ExternalUpdate{}, nil
+	}
+	return c.updateRetiredBindings(ctx, cr)
+}
+
+func (c *external) updateActiveBinding(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) error {
+	externalName := meta.GetExternalName(cr)
+	if externalName == "" || !isValidUUID(externalName) {
+		return nil
+	}
+	if _, err := scb.Update(ctx, c.scbClient, externalName, cr, cr.Spec.ForProvider); err != nil {
+		return fmt.Errorf(errUpdate, err)
+	}
+	return nil
+}
+
+func (c *external) updateRetiredBindings(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalUpdate, error) {
+	binding, details, handedOver, err := c.currentHandover(ctx, cr)
+	if err != nil {
+		return managed.ExternalUpdate{}, err
+	}
+	updateDetails, err := c.updateConnectionDetails(ctx, cr, binding, details)
+	if err != nil {
+		return managed.ExternalUpdate{}, err
+	}
+	if len(cr.Status.AtProvider.RetiredKeys) == 0 || !handedOver || binding == nil {
+		// Metadata drift or a successful CF Update alone is not evidence that
+		// replacement credentials were published. Defer routine deletion.
+		return managed.ExternalUpdate{ConnectionDetails: updateDetails}, nil
+	}
+	if err := c.persistFallbackDeadlines(ctx, cr, c.now()); err != nil {
+		return managed.ExternalUpdate{}, err
+	}
+	return c.deleteExpiredBindings(ctx, cr, updateDetails)
+}
+
+func (c *external) updateConnectionDetails(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding, details managed.ConnectionDetails) (managed.ConnectionDetails, error) {
+	if binding != nil && binding.LastOperation.State == v1alpha1.LastOperationSucceeded {
+		return details, nil
+	}
+	if cr.Spec.WriteConnectionSecretToReference == nil {
+		return nil, nil
+	}
+	return c.preservedConnectionDetails(ctx, cr)
+}
+
+func (c *external) deleteExpiredBindings(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, details managed.ConnectionDetails) (managed.ExternalUpdate, error) {
+	oldLen := len(cr.Status.AtProvider.RetiredKeys)
+	newRetiredKeys, deleteErr := c.keyRotator.DeleteExpiredKeys(ctx, cr)
+	cr.Status.AtProvider.RetiredKeys = newRetiredKeys
+	if len(newRetiredKeys) != oldLen {
+		if err := c.kube.Status().Update(ctx, cr); err != nil {
+			return managed.ExternalUpdate{}, c.cleanupPersistenceError(deleteErr, err)
+		}
+	}
+	if deleteErr != nil {
+		return managed.ExternalUpdate{}, fmt.Errorf(errDeleteExpiredKeys, deleteErr)
+	}
+	return managed.ExternalUpdate{ConnectionDetails: details}, nil
+}
+
+func (c *external) cleanupPersistenceError(deleteErr, persistErr error) error {
+	persistFailure := fmt.Errorf("cannot persist retired-key cleanup progress: %w", persistErr)
+	if deleteErr == nil {
+		return persistFailure
+	}
+	return errors.Join(fmt.Errorf(errDeleteExpiredKeys, deleteErr), persistFailure)
 }
 
 // Delete a ServiceCredentialBinding resource.
@@ -294,6 +439,13 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	cr, ok := mg.(*v1alpha1.ServiceCredentialBinding)
 	if !ok {
 		return managed.ExternalDelete{}, errors.New(errWrongCRType)
+	}
+	policies, err := c.lifecyclePolicies(cr)
+	if err != nil {
+		return managed.ExternalDelete{}, fmt.Errorf("cannot resolve effective management policies: %w", err)
+	}
+	if !policies.ShouldDelete() {
+		return managed.ExternalDelete{}, nil
 	}
 	cr.SetConditions(xpv2.Deleting())
 
@@ -340,39 +492,65 @@ func extractParameters(ctx context.Context, kube k8s.Client, spec v1alpha1.Servi
 }
 
 func (c *external) HandleObservationState(serviceBinding *cfresource.ServiceCredentialBinding, ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) (managed.ExternalObservation, error) {
+	return c.handleObservationState(serviceBinding, ctx, cr, true)
+}
+
+func (c *external) handleObservationState(serviceBinding *cfresource.ServiceCredentialBinding, ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, resetAttempts bool) (managed.ExternalObservation, error) {
 	switch serviceBinding.LastOperation.State {
 	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress:
-		cr.SetConditions(xpv2.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
-		return managed.ExternalObservation{
-			ResourceExists:   true,
-			ResourceUpToDate: true, // Do not update the resource while the last operation is in progress
-		}, nil
+		return c.observeUnavailable(ctx, cr, serviceBinding, true)
 	case v1alpha1.LastOperationFailed:
-		cr.SetConditions(xpv2.Unavailable().WithMessage(serviceBinding.LastOperation.Description))
-		return managed.ExternalObservation{
-			ResourceExists:   true,
-			ResourceUpToDate: serviceBinding.LastOperation.Type != v1alpha1.LastOperationUpdate, // set to false when the last operation is update, hence the reconciler will retry update
-		}, nil
+		upToDate := serviceBinding.LastOperation.Type != v1alpha1.LastOperationUpdate
+		return c.observeUnavailable(ctx, cr, serviceBinding, upToDate)
 	case v1alpha1.LastOperationSucceeded:
-		if getCreateAttempts(cr) > 0 {
-			resetCreateAttempts(cr)
-
-			if err := c.kube.Update(ctx, cr); err != nil {
-				return managed.ExternalObservation{}, fmt.Errorf("cannot persist create attempt reset: %w", err)
-			}
-		}
-
-		cr.SetConditions(xpv2.Available())
-
-		return managed.ExternalObservation{
-			ResourceExists:    true,
-			ResourceUpToDate:  scb.IsUpToDate(ctx, cr, cr.Spec.ForProvider, *serviceBinding) && !c.keyRotator.HasExpiredKeys(cr),
-			ConnectionDetails: scb.GetConnectionDetails(ctx, c.scbClient, serviceBinding.GUID, cr.Spec.ConnectionDetailsAsJSON),
-		}, nil
+		return c.observeSucceeded(ctx, cr, serviceBinding, resetAttempts)
+	default:
+		return managed.ExternalObservation{}, errors.New(errUnknownState)
 	}
+}
 
-	// If the last operation is unknown, error out
-	return managed.ExternalObservation{}, errors.New(errUnknownState)
+func (c *external) observeUnavailable(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding, upToDate bool) (managed.ExternalObservation, error) {
+	cr.SetConditions(xpv2.Unavailable().WithMessage(binding.LastOperation.Description))
+	preserved, err := c.preservedConnectionDetails(ctx, cr)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
+	return managed.ExternalObservation{
+		ResourceExists:    true,
+		ResourceUpToDate:  upToDate,
+		ConnectionDetails: preserved,
+	}, nil
+}
+
+func (c *external) observeSucceeded(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding, resetAttempts bool) (managed.ExternalObservation, error) {
+	if resetAttempts && getCreateAttempts(cr) > 0 {
+		resetCreateAttempts(cr)
+		if err := c.kube.Update(ctx, cr); err != nil {
+			return managed.ExternalObservation{}, fmt.Errorf("cannot persist create attempt reset: %w", err)
+		}
+		// Metadata Update may decode the API-server response, whose status still
+		// reflects the previous generation because status is a separate subresource.
+		// Reapply this successful CF observation before schedule/handover decisions.
+		applyBindingObservation(cr, binding)
+	}
+	cr.SetConditions(xpv2.Available())
+	connectionDetails, err := c.successfulConnectionDetails(ctx, cr, binding, resetAttempts)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
+	handedOver := c.confirmHandover(ctx, cr, binding, connectionDetails)
+	return managed.ExternalObservation{
+		ResourceExists:    true,
+		ResourceUpToDate:  scb.IsUpToDate(ctx, cr, cr.Spec.ForProvider, *binding) && (!handedOver || !c.keyRotator.HasExpiredKeys(cr)),
+		ConnectionDetails: connectionDetails,
+	}, nil
+}
+
+func (c *external) successfulConnectionDetails(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding, retrieve bool) (managed.ConnectionDetails, error) {
+	if !retrieve {
+		return nil, nil
+	}
+	return c.connectionDetails(ctx, cr, binding)
 }
 
 func getCreateAttempts(cr *v1alpha1.ServiceCredentialBinding) int {

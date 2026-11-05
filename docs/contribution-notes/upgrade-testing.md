@@ -42,6 +42,19 @@ We maintain two types of upgrade tests:
 7. **Post-Upgrade Assessment** - Verify custom conditions (e.g., external-name unchanged)
 8. **Cleanup** - Delete resources and destroy cluster
 
+### Custom resource-cleanup hooks
+
+`CustomUpgradeTestBuilder` supports optional `WithCustomPreCleanup` and `WithCustomPostResourceCleanup` callbacks for scenario-owned cleanup that must bracket fixture deletion:
+
+1. Pre-cleanup callback
+2. Normal deletion and wait for fixture resources
+3. Post-resource callback (for example, verify external resources are gone)
+4. Existing ProviderConfig and provider teardown
+
+Callbacks receive the cleanup context and `envconf.Config`, return errors, and should be idempotent and restricted to resources owned by the scenario. A pre-cleanup error does not skip fixture deletion or post-resource verification; a deletion error does not skip post-resource verification. Errors are reported as test failures, while later safe cleanup stages are still attempted. The cleanup phases share a bounded context detached from a canceled assessment context while preserving its values. They must honor its deadline; exhaustion is reported, not treated as successful cleanup. Builders that register no hooks retain the normal fixture-deletion behavior.
+
+Do not use `t.Fatal`/`FailNow` inside a cleanup callback: return an error so the builder can continue cleanup. The e2e-framework normally runs feature teardown after a failed assessment, including a fatal failure confined to that assessment subtest. Its fail-fast mode intentionally stops before feature teardown; disabled graceful teardown, hard process/test timeouts, process termination, or an unavailable cluster/provider can also prevent hooks from running or completing. These hooks are not crash-proof cleanup and do not justify forced finalizer removal or direct Cloud Foundry deletion. Report any remaining owned resources.
+
 ## Prerequisites
 
 ### Required Tools
@@ -225,6 +238,19 @@ make test-upgrade-custom
 | `UPGRADE_TEST_WAIT_FOR_PAUSE` | Wait time after provider upgrade (minutes) | `1` | `2` |
 | `UPGRADE_TEST_FILTER` | Test name filter for custom tests | `.` (all) | `Test_Space_External_Name` |
 
+### Kind node image
+
+`KIND_NODE_IMAGE_TAG` selects the Kubernetes node image used when either tagged test harness creates a new kind cluster. The Makefile exports this variable and defaults it to `v1.32.0`; override it with a tag supported by your local kind/container runtime. The value is a tag (for example, `v1.31.4`), not a full image reference. Direct `go test` invocations can set the variable in their environment (for example, prefix the command with `KIND_NODE_IMAGE_TAG=v1.31.4`). These tagged test mains create clusters and require the same infrastructure authorization and disposable environment as the Make targets. When the variable is unset or empty, the harness leaves kind's default image selection unchanged.
+
+For example, run one custom upgrade scenario or the focused key-rotation acceptance test with an explicit tag:
+
+```bash
+make test-upgrade-custom KIND_NODE_IMAGE_TAG=v1.32.0 UPGRADE_TEST_FILTER='^Test_ServiceCredentialBinding_External_Name$' UPGRADE_TEST_FROM_TAG=v1.3.0 UPGRADE_TEST_TO_TAG=local
+make test-acceptance KIND_NODE_IMAGE_TAG=v1.32.0 testFilter=TestServiceCredentialBindingForceRotation BUILD_ID=issue-401-node-$(date +%s)
+```
+
+The examples use the Makefile default only; they do not imply that this node image works in every environment. An existing/reused cluster is not recreated or modified when the variable changes. Use a fresh cluster to validate a different node image.
+
 ## Test Resources
 
 ### Base Upgrade Tests
@@ -278,10 +304,21 @@ Custom tests use YAML manifests from `test/upgrade/testdata/customCRs/{testName}
 
 #### Current Custom Tests
 
-**Test_Space_External_Name** (`testdata/customCRs/externalNames/`)
+**Test_Space_External_Name** (`testdata/customCrs/externalNames/`)
 - Validates Space external-name follows UUID format
 - Verifies external-name doesn't change during upgrade
 - Tests external-name ADR compliance
+
+### ServiceCredentialBinding retired-key migration
+
+`Test_ServiceCredentialBinding_Rotation_Migration` verifies legacy retired-key migration and the `deleteAfter` CRD field, including the one-time 48-hour deadline after handover. It runs only with `UPGRADE_TEST_FROM_TAG=v1.3.0` and `UPGRADE_TEST_TO_TAG=local`; other version pairs skip it. Fixtures are in `test/upgrade/testdata/customCrs/serviceCredentialBindingRotation/`.
+
+Run only in an authorized, disposable Kubernetes/Cloud Foundry environment, following the usual credential and cleanup precautions:
+
+```sh
+UPGRADE_TEST_FROM_TAG=v1.3.0 UPGRADE_TEST_TO_TAG=local \
+  make test-upgrade-custom UPGRADE_TEST_FILTER='^Test_ServiceCredentialBinding_Rotation_Migration$'
+```
 
 #### Adding New Custom Test Resources
 
