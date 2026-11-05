@@ -1,0 +1,393 @@
+---
+sidebar_position: 1
+---
+
+import Link from '@docusaurus/Link';
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+import CodeBlock from '@theme/CodeBlock';
+import CliExportBadge from '@site/src/components/CliExportBadge.jsx';
+import Checklist from '@site/src/components/Checklist.jsx';
+
+# Import Cloud Foundry Org
+
+In this guide, we assume an
+> already existing Cloud Foundry Organization with
+>- one or more _spaces_
+>- a deployed _app_
+>- a _service instance_
+>- _org and space role_ assignments.
+
+We **want to orchestrate them using the Crossplane Cloud Foundry Provider** and control plane methodology.
+
+We will achieve this by following these 3 steps
+
+#### 1. Generate Yaml with Export CLI
+We will use the CLI Exporter: `xpcf` to **scan & generate the yaml definition** of Cloud Foundry resources that already exist in our running Organization.
+
+#### 2. Review and Observe
+We will review the resources and apply them to the Cloud Foundry Crossplane Provider in observe mode.
+The provider will compare with the actual API in **read-only way and verify correctness of yaml.**
+
+#### 3. Orchestrate from code
+We can now make our yaml files the source of truth to **actively orchestrate** our cloud landscapes using the Crossplane Cloud Foundry provider.
+
+
+## Before you start
+
+- Install the [Cloud Foundry CLI](https://docs.cloudfoundry.org/cf-cli/install-go-cli.html)
+- ControlPlane running the Cloud Foundry Crossplane Provider and [authenticate](../configure-provider-cf.mdx) your Organization
+
+:::warning ensure Access
+
+Make sure the Cloud Foundry provider's ProviderConfig uses a technical user that has admin access in the Organization of interest.
+
+:::
+
+
+
+## 0. Install the exporter
+
+Run the `xpcf` exporter directly with Nix:
+
+```bash
+nix run github:SAP/crossplane-provider-cloudfoundry#xpcf -- --help
+nix run github:SAP/crossplane-provider-cloudfoundry#xpcf -- export --help
+```
+
+:::tip
+
+Pin a released version by appending a tag, e.g. `#xpcf` → `/v0.3.4#xpcf`.
+
+:::
+
+## 1. Generate resources
+
+![import](/img/import-cli-cf-yaml.png)
+
+#### Login to Cloud Foundry
+
+Persist your Cloud Foundry credentials once with the `login` subcommand. You will be prompted for the API endpoint, username, and password:
+
+```bash
+xpcf login
+```
+
+#### Target org
+
+`xpcf` targets your existing Organization by name. The pattern is a regular expression.
+
+<Tabs groupId="cf-export-org">
+<TabItem value="pattern" label="By name" default>
+
+Add `--org '.*dev.*'` to the export command to select Organizations whose names contain `dev`.
+
+```bash
+xpcf export \
+  --kind organization \
+  --org '.*dev.*'
+```
+
+</TabItem>
+<TabItem value="all" label="All orgs">
+
+Use `--org '.*'` to match every Organization you can access.
+
+```bash
+xpcf export \
+  --kind organization \
+  --org '.*'
+```
+
+</TabItem>
+</Tabs>
+
+#### Choose resources
+
+Export all supported kinds or only individual ones.
+
+<Tabs groupId="cf-export-resources">
+<TabItem value="all" label="All resources" default>
+
+Repeat `--kind` for each supported resource kind to capture the whole Organization:
+
+```bash {4-9}
+xpcf export \
+  --org '.*dev.*' \
+  --space '.*' \
+  --kind organization \
+  --kind space \
+  --kind app \
+  --kind serviceinstance \
+  --kind orgrole \
+  --kind spacerole
+```
+
+</TabItem>
+<TabItem value="pick" label="Pick resources">
+
+Choose a subset of kinds. This example exports `Organizations`, `Spaces`, and `Apps`:
+
+```bash {4-6}
+xpcf export \
+  --org '.*dev.*' \
+  --space '.*' \
+  --kind organization \
+  --kind space \
+  --kind app
+```
+
+</TabItem>
+</Tabs>
+
+:::tip Resources link by reference
+
+The exporter links resources through Crossplane references, such as `orgRef` and `spaceRef`, instead of technical GUIDs. This keeps the generated landscape internally linked and meaningful.
+
+:::
+
+
+#### CLI export coverage
+
+The exporter is in preview. Copy the selector arguments into your `xpcf export` command and replace the placeholders. The `--org` and `--space` selectors accept regular expressions.
+
+Missing a resource? Check out our [contribution guides](../../contribution-notes/overview.mdx).
+
+<details>
+<summary>View CLI export coverage by resource</summary>
+
+| Resource | Supported | Selector | Notes |
+|---|---|---|---|
+| <Link id="cli-export-organization" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#organization">Organization</Link> | <CliExportBadge /> | <CodeBlock language="bash" className="cli-export-selector">{"--kind organization --org '<org-name>'"}</CodeBlock> | Root of the landscape. Export this first. |
+| <Link id="cli-export-space" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#space">Space</Link> | <CliExportBadge /> | <CodeBlock language="bash" className="cli-export-selector">{"--kind space --org '<org-name>' --space '<space-name>'"}</CodeBlock> | **Prerequisites:**<ul><li>[Organization](#cli-export-organization)</li></ul>Linked to its org via `orgRef`. |
+| <Link id="cli-export-app" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#app">App</Link> | <CliExportBadge /> | <CodeBlock language="bash" className="cli-export-selector">{"--kind app --org '<org-name>' --space '<space-name>'"}</CodeBlock> | **Prerequisites:**<ul><li>[Space](#cli-export-space)</li></ul>The exporter does not return buildpacks, stack, routes, or env vars; restore them before enabling management. |
+| <Link id="cli-export-serviceinstance" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#serviceinstance">ServiceInstance</Link> | <CliExportBadge /> | <CodeBlock language="bash" className="cli-export-selector">{"--kind serviceinstance --org '<org-name>' --space '<space-name>'"}</CodeBlock> | **Prerequisites:**<ul><li>[Space](#cli-export-space)</li></ul>The CLI does not return original `spec.forProvider.parameters`; restore them before enabling management. |
+| <Link id="cli-export-orgrole" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#orgrole">OrgRole</Link> | <CliExportBadge /> | <CodeBlock language="bash" className="cli-export-selector">{"--kind orgrole --org '<org-name>'"}</CodeBlock> | **Prerequisites:**<ul><li>[Organization](#cli-export-organization)</li></ul> |
+| <Link id="cli-export-spacerole" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#spacerole">SpaceRole</Link> | <CliExportBadge /> | <CodeBlock language="bash" className="cli-export-selector">{"--kind spacerole --org '<org-name>' --space '<space-name>'"}</CodeBlock> | **Prerequisites:**<ul><li>[Space](#cli-export-space)</li></ul> |
+| <Link id="cli-export-domain" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#domain">Domain</Link> | <a href="https://github.com/SAP/crossplane-provider-cloudfoundry/issues/392" target="_blank"><span className="badge badge--secondary">Planned #392</span></a> | — | — |
+| <Link id="cli-export-orgquota" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#orgquota">OrgQuota</Link> | <a href="https://github.com/SAP/crossplane-provider-cloudfoundry/issues/393" target="_blank"><span className="badge badge--secondary">Planned #393</span></a> | — | — |
+| <Link id="cli-export-spacequota" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#spacequota">SpaceQuota</Link> | <a href="https://github.com/SAP/crossplane-provider-cloudfoundry/issues/394" target="_blank"><span className="badge badge--secondary">Planned #394</span></a> | — | — |
+| <Link id="cli-export-serviceroutebinding" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#serviceroutebinding">ServiceRouteBinding</Link> | <a href="https://github.com/SAP/crossplane-provider-cloudfoundry/issues/395" target="_blank"><span className="badge badge--secondary">Planned #395</span></a> | — | — |
+| <Link id="cli-export-servicecredentialbinding" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#servicecredentialbinding">ServiceCredentialBinding</Link> | <a href="https://github.com/SAP/crossplane-provider-cloudfoundry/issues/396" target="_blank"><span className="badge badge--secondary">Planned #396</span></a> | — | — |
+| <Link id="cli-export-route" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#route">Route</Link> | <a href="https://github.com/SAP/crossplane-provider-cloudfoundry/issues/397" target="_blank"><span className="badge badge--secondary">Planned #397</span></a> | — | — |
+| <Link id="cli-export-orgmembers" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#orgmembers">OrgMembers</Link> | <span className="badge badge--secondary">Deferred</span> | — | Aggregate resource; a different fetch strategy is needed. Out of scope for the exporter. |
+| <Link id="cli-export-spacemembers" to="/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview#spacemembers">SpaceMembers</Link> | <span className="badge badge--secondary">Deferred</span> | — | Aggregate resource; a different fetch strategy is needed. Out of scope for the exporter. |
+
+</details>
+
+
+
+#### Exported resources
+
+The following examples are outcomes of the commands from the section above.
+
+<Tabs groupId="cf-exported-resources">
+<TabItem value="organization" label="Organization" default>
+
+```yaml {6,8}
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  name: demo-org
+  annotations:
+    crossplane.io/external-name: "<organization-guid>"
+spec:
+  managementPolicies: [Observe]
+  forProvider:
+    name: "<existing-org-name>"
+```
+
+</TabItem>
+<TabItem value="space" label="Space">
+
+```yaml {6,8}
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  name: demo-space
+  annotations:
+    crossplane.io/external-name: "<space-guid>"
+spec:
+  managementPolicies: [Observe]
+  forProvider:
+    name: "<existing-space-name>"
+    orgRef:
+      name: demo-org
+```
+
+</TabItem>
+<TabItem value="app" label="App">
+
+```yaml {6,8}
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: App
+metadata:
+  name: demo-app
+  annotations:
+    crossplane.io/external-name: "<app-guid>"
+spec:
+  managementPolicies: [Observe]
+  forProvider:
+    name: "<existing-app-name>"
+    spaceRef:
+      name: demo-space
+```
+
+The exporter omits buildpacks, stack, routes, and environment variables; restore them from the existing configuration before enabling management.
+
+</TabItem>
+<TabItem value="serviceinstance" label="ServiceInstance">
+
+```yaml {6,8}
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: demo-service
+  annotations:
+    crossplane.io/external-name: "<service-instance-guid>"
+spec:
+  managementPolicies: [Observe]
+  forProvider:
+    name: "<existing-service-instance-name>"
+    type: managed
+    servicePlan: "<service-plan>"
+    parameters: null
+    spaceRef:
+      name: demo-space
+```
+
+The CLI does not return original `spec.forProvider.parameters`; restore them before enabling management.
+
+</TabItem>
+<TabItem value="orgrole" label="OrgRole">
+
+```yaml {6,8}
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: OrgRole
+metadata:
+  name: demo-org-manager
+  annotations:
+    crossplane.io/external-name: "<org-role-guid>"
+spec:
+  managementPolicies: [Observe]
+  forProvider:
+    type: organization_manager
+    username: "<user-email>"
+    origin: sap.ids
+    orgRef:
+      name: demo-org
+```
+
+</TabItem>
+<TabItem value="spacerole" label="SpaceRole">
+
+```yaml {6,8}
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: SpaceRole
+metadata:
+  name: demo-space-developer
+  annotations:
+    crossplane.io/external-name: "<space-role-guid>"
+spec:
+  managementPolicies: [Observe]
+  forProvider:
+    type: space_developer
+    username: "<user-email>"
+    origin: sap.ids
+    spaceRef:
+      name: demo-space
+```
+
+</TabItem>
+</Tabs>
+
+### Review YAMLs
+
+Open the output yaml and check before applying.
+
+<Checklist
+  items={[
+    { title: 'Inventory', text: 'All desired resource kinds are present.' },
+    { title: 'Identity', text: 'Every external name matches the intended Cloud Foundry resource.' },
+    { title: 'References and credentials', text: 'ProviderConfig and resource references point to the intended org, spaces, and exported names.' },
+    { title: 'Observe only', text: <>Every imported resource has <code>managementPolicies: [Observe]</code>.</> },
+    { title: 'Clean result', text: 'Export warnings and commented-out definitions have been resolved.' },
+  ]}
+/>
+
+## 2. Apply in observe mode
+
+![observe](/img/import-cli-cf-observe.png)
+
+Apply the reviewed manifests directly to your control plane:
+
+```bash
+kubectl apply -f landscape.yaml
+```
+
+With `Observe`, Crossplane reads the existing resources without creating, updating, or deleting them.
+
+### Verify observation
+
+Check the resources you applied:
+
+```bash
+kubectl get managed
+```
+
+Apply the same gates to the deployed resources before enabling management:
+
+<Checklist
+  items={[
+    { title: 'Ready', text: <>Every imported resource reports <code>READY=True</code>.</> },
+    { title: 'Synced', text: <>Every imported resource reports <code>SYNCED=True</code>.</> },
+    { title: 'No errors', text: 'No unresolved reconciliation errors appear in the resource conditions or events.' },
+  ]}
+/>
+
+## 3. Enable management
+
+![orchestrate](/img/import-cli-cf-observe-1.png)
+
+Change `managementPolicies` from `[Observe]` to `["*"]` for each resource you want Crossplane to manage, keeping the IDs, names, references, and configuration verified during observation. The Organization example below highlights this change.
+
+```yaml {8-9}
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  name: demo-org
+  annotations:
+    crossplane.io/external-name: "<organization-guid>"
+spec:
+  managementPolicies:
+    - "*"
+  providerConfigRef:
+    name: default
+  forProvider:
+    name: "<existing-org-name>"
+```
+
+**`"*"` permits all supported actions, including creation, updates, and deletion.**
+
+Re-apply the updated manifests:
+
+```bash
+kubectl apply -f landscape.yaml
+```
+
+After the control plane reconciles, verify the resource conditions and Cloud Foundry state again before relying on active management.
+
+## Related topics
+
+- **Manage with GitOps**. This guide applies yamls directly to control plane to keep this guide focused. We stringly recommend GitOps approach instead using Kustomize overlays to supply environment-specific external names.
+- Learn more about ressource specific [External-name](/docs/crossplane-provider-cloudfoundry/docs/end-user-guides/import-landscape/overview) and where to look them up.
+
+## Troubleshooting
+
+Rerun the export with `--verbose` for diagnostic output.
+
+| Symptom | Check |
+|---|---|
+| Authentication or permission failure | Re-run `xpcf login`, verify the API endpoint, and check Organization permissions. The provider's credentials must also have access. |
+| No resources returned | Check org/space access and selection patterns; widen the `--org` and `--space` regular expressions. |
+| References not resolved | Export the referenced kind in the same run (e.g. export the Organization alongside its Spaces) so `orgRef`/`spaceRef` can be linked. |
