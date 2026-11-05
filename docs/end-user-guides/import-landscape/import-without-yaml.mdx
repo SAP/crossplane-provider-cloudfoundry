@@ -63,6 +63,8 @@ Pin a released version by appending a tag, e.g. `#xpcf` → `/v0.3.4#xpcf`.
 
 ## 1. Generate resources
 
+![import](/img/import-cli-cf-yaml.png)
+
 #### Login to Cloud Foundry
 
 Persist your Cloud Foundry credentials once with the `login` subcommand. You will be prompted for the API endpoint, username, and password:
@@ -315,6 +317,8 @@ Open the output yaml and check before applying.
 
 ## 2. Apply in observe mode
 
+![observe](/img/import-cli-cf-observe.png)
+
 Apply the reviewed manifests directly to your control plane:
 
 ```bash
@@ -342,6 +346,8 @@ Apply the same gates to the deployed resources before enabling management:
 />
 
 ## 3. Enable management
+
+![orchestrate](/img/import-cli-cf-observe-1.png)
 
 Change `managementPolicies` from `[Observe]` to `["*"]` for each resource you want Crossplane to manage, keeping the IDs, names, references, and configuration verified during observation. The Organization example below highlights this change.
 
