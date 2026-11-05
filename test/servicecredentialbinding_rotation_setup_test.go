@@ -116,31 +116,45 @@ func TestRotationSetupErrorPreservesIdentityChecks(t *testing.T) {
 		ManifestGVKMatches: true,
 		FetchedGVKMatches:  false,
 		NameMatches:        true,
-		NamespaceMatches:   true,
+		NamespaceMatches:   false,
 	}
 	original := &RotationSetupError{
 		Kind: RotationSetupFixtureIdentityMismatch, ResourceKind: "Organization", ResourceName: "rotation-org-test",
 		IdentityChecks: identityChecks,
 	}
 
-	got := rotationSetupErrorFor("imports", original, false)
+	got := rotationSetupErrorFor("imports", original)
 	if got.IdentityChecks == nil || *got.IdentityChecks != *identityChecks {
 		t.Fatalf("wrapped identity checks = %#v, want %#v", got.IdentityChecks, identityChecks)
 	}
-	want := `service-key rotation setup phase "imports" failed (fixture-identity-mismatch) resource=Organization/rotation-org-test identity-checks={manifest-gvk:true,fetched-gvk:false,name:true,namespace:true}`
+	want := `service-key rotation setup phase "imports" failed (fixture-identity-mismatch) resource=Organization/rotation-org-test identity-checks={manifest-gvk:true,fetched-gvk:false,name:true,namespace:false}`
 	if got.Error() != want {
 		t.Fatalf("wrapped error = %q, want %q", got.Error(), want)
 	}
 }
 
-func TestRotationSetupErrorReportsOnlyIdentityCheckBooleans(t *testing.T) {
-	err := &RotationSetupError{
-		Kind: RotationSetupFixtureIdentityMismatch, ResourceKind: "Organization", ResourceName: "rotation-org-test",
-		IdentityChecks: &RotationFixtureIdentityChecks{ManifestGVKMatches: true, FetchedGVKMatches: false, NameMatches: true, NamespaceMatches: false},
+func TestRotationFixtureValueMatchesDefaultsAndCollisions(t *testing.T) {
+	ref := func(policy map[string]interface{}) map[string]interface{} {
+		return map[string]interface{}{"forProvider": map[string]interface{}{"orgRef": map[string]interface{}{"name": "target", "policy": policy}}}
 	}
-	want := `service-key rotation setup phase "" failed (fixture-identity-mismatch) resource=Organization/rotation-org-test identity-checks={manifest-gvk:true,fetched-gvk:false,name:true,namespace:false}`
-	if got := err.Error(); got != want {
-		t.Fatalf("RotationSetupError.Error() = %q, want %q", got, want)
+	tests := []struct {
+		name string
+		want map[string]interface{}
+		got  map[string]interface{}
+		ok   bool
+	}{
+		{name: "managed defaults", want: map[string]interface{}{"forProvider": map[string]interface{}{}}, got: map[string]interface{}{"forProvider": map[string]interface{}{}, "managementPolicies": []interface{}{"Observe"}, "providerConfigRef": map[string]interface{}{"name": "default"}}, ok: true},
+		{name: "nested Required reference default", want: ref(map[string]interface{}{"resolve": "Always"}), got: ref(map[string]interface{}{"resolve": "Always", "resolution": "Required"}), ok: true},
+		{name: "different nested value", want: ref(map[string]interface{}{"resolve": "Always"}), got: ref(map[string]interface{}{"resolve": "Always", "resolution": "Optional"}), ok: false},
+		{name: "unknown nested field", want: ref(map[string]interface{}{"resolve": "Always"}), got: ref(map[string]interface{}{"resolve": "Always", "extra": true}), ok: false},
+		{name: "explicit value remains strict", want: ref(map[string]interface{}{"resolve": "Always", "resolution": "Optional"}), got: ref(map[string]interface{}{"resolve": "Always", "resolution": "Required"}), ok: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := RotationFixtureValueMatches(tt.want, tt.got); got != tt.ok {
+				t.Fatalf("RotationFixtureValueMatches() = %t, want %t", got, tt.ok)
+			}
+		})
 	}
 }
 
@@ -266,12 +280,7 @@ func TestRotationSetupApplyFailureClassification(t *testing.T) {
 	}{
 		{name: "forbidden", err: apierrors.NewForbidden(schema.GroupResource{Resource: "spaces"}, resourceName, errors.New(sentinel)), kind: RotationSetupForbidden, code: 403},
 		{name: "invalid", err: apierrors.NewInvalid(schema.GroupKind{Kind: "Space"}, resourceName, nil), kind: RotationSetupInvalid, code: 422},
-		{name: "conflict", err: apierrors.NewConflict(schema.GroupResource{Resource: "spaces"}, resourceName, errors.New(sentinel)), kind: RotationSetupApplyConflict, code: 409},
-		{name: "not found", err: apierrors.NewNotFound(schema.GroupResource{Resource: "spaces"}, resourceName), kind: RotationSetupApplyNotFound, code: 404},
-		{name: "timeout", err: apierrors.NewTimeoutError(sentinel, 1), kind: RotationSetupApplyTimedOut, code: 504},
-		{name: "rate limited", err: apierrors.NewTooManyRequests(sentinel, 1), kind: RotationSetupApplyRateLimited, code: 429},
-		{name: "unavailable", err: apierrors.NewServiceUnavailable(sentinel), kind: RotationSetupApplyUnavailable, code: 503},
-		{name: "unknown API status", err: apierrors.NewBadRequest(sentinel), kind: RotationSetupApplyAPIError, code: 400},
+		{name: "other API status", err: apierrors.NewConflict(schema.GroupResource{Resource: "spaces"}, resourceName, errors.New(sentinel)), kind: RotationSetupApplyFailed, code: 409},
 		{name: "local error", err: errors.New(sentinel), kind: RotationSetupApplyFailed},
 	}
 	for _, tc := range cases {
