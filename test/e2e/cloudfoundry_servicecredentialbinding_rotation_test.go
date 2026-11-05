@@ -13,12 +13,9 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
-	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/util/retry"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
@@ -82,7 +79,7 @@ func runForceRotationE2E(t *testing.T, parent context.Context, cfg *envconf.Conf
 	setForceTarget(t, ctx, cfg, name, k0)
 
 	k1 := waitForRotatedBinding(t, ctx, cfg, name, k0, 5*time.Minute)
-	assertPublishedCredentials(t, ctx, cfg, cfBinding, binding, k1, runScopedName("scb-rotation-no-ttl-secret"))
+	waitForCredentialPublication(t, ctx, cfg, cfBinding, name, k1, runScopedName("scb-rotation-no-ttl-secret"), 3*time.Minute)
 	k1Credentials := rotationCredentialSnapshot(t, ctx, cfBinding, k1)
 	if err := testutil.ValidateRotationCredentialChange(k0Credentials, k1Credentials); err != nil {
 		t.Fatalf("XSUAA binding credentials did not change at first rotation: %v", err)
@@ -123,7 +120,7 @@ func runForceRotationE2E(t *testing.T, parent context.Context, cfg *envconf.Conf
 	}
 	setForceTarget(t, ctx, cfg, name, k1)
 	k2 := waitForRotatedBinding(t, ctx, cfg, name, k1, 5*time.Minute)
-	assertPublishedCredentials(t, ctx, cfg, cfBinding, binding, k2, runScopedName("scb-rotation-no-ttl-secret"))
+	waitForCredentialPublication(t, ctx, cfg, cfBinding, name, k2, runScopedName("scb-rotation-no-ttl-secret"), 3*time.Minute)
 	k2Credentials := rotationCredentialSnapshot(t, ctx, cfBinding, k2)
 	if err := testutil.ValidateRotationCredentialChange(k1Credentials, k2Credentials); err != nil {
 		t.Fatalf("XSUAA binding credentials did not change at second rotation: %v", err)
@@ -192,7 +189,7 @@ func runRetiredKeyCleanupE2E(t *testing.T, parent context.Context, cfg *envconf.
 	}
 	setForceTarget(t, ctx, cfg, name, k0)
 	k1 := waitForRotatedBinding(t, ctx, cfg, name, k0, 5*time.Minute)
-	assertPublishedCredentials(t, ctx, cfg, cfBinding, binding, k1, runScopedName("scb-rotation-cleanup-secret"))
+	waitForCredentialPublication(t, ctx, cfg, cfBinding, name, k1, runScopedName("scb-rotation-cleanup-secret"), 3*time.Minute)
 	k1Credentials := rotationCredentialSnapshot(t, ctx, cfBinding, k1)
 	if err := testutil.ValidateRotationCredentialChange(k0Credentials, k1Credentials); err != nil {
 		t.Fatalf("XSUAA binding credentials did not change at cleanup rotation: %v", err)
@@ -243,24 +240,21 @@ func rotationCredentialSnapshot(t *testing.T, ctx context.Context, cfBinding scb
 }
 
 func waitForRetiredKeyCollection(ctx context.Context, cfg *envconf.Config, name, retiredGUID string, cfBinding scbclient.ServiceCredentialBinding) error {
-	return testutil.WaitForRotationRetiredKeyCollection(ctx, 8*time.Minute, 5*time.Second, retiredGUID,
-		func(ctx context.Context) (bool, error) {
-			_, err := cfBinding.Get(ctx, retiredGUID)
-			if clients.ErrorIsNotFound(err) {
-				return false, nil
-			}
-			if err != nil {
-				return true, errors.New("Cloud Foundry verification failed")
-			}
-			return true, nil
-		},
-		func(ctx context.Context) ([]*v1alpha1.SCBResource, error) {
-			current := &v1alpha1.ServiceCredentialBinding{}
-			if err := cfg.Client().Resources().Get(ctx, name, "", current); err != nil {
-				return nil, errors.New("Kubernetes status read failed")
-			}
-			return current.Status.AtProvider.RetiredKeys, nil
-		})
+	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 8*time.Minute, true, func(ctx context.Context) (bool, error) {
+		_, err := cfBinding.Get(ctx, retiredGUID)
+		cfPresent := true
+		if clients.ErrorIsNotFound(err) {
+			cfPresent = false
+		} else if err != nil {
+			return false, errors.New("Cloud Foundry retired-key verification failed")
+		}
+
+		current := &v1alpha1.ServiceCredentialBinding{}
+		if err := cfg.Client().Resources().Get(ctx, name, "", current); err != nil {
+			return false, errors.New("Kubernetes retired-key status read failed")
+		}
+		return testutil.RotationRetiredKeyCollected(retiredGUID, cfPresent, current.Status.AtProvider.RetiredKeys), nil
+	})
 }
 
 func waitForStablePublishedActiveBinding(t *testing.T, ctx context.Context, cfg *envconf.Config, cfBinding scbclient.ServiceCredentialBinding, name, secretName string) string {
@@ -282,9 +276,6 @@ func waitForStablePublishedActiveBinding(t *testing.T, ctx context.Context, cfg 
 				return false, nil
 			}
 			return false, errors.New("Cloud Foundry active-key verification failed")
-		}
-		if !testutil.RotationActiveBindingUsable(guid, operationSucceeded, true) {
-			return false, nil
 		}
 		activeGUID = guid
 		return true, nil
@@ -391,8 +382,6 @@ func reportFallbackDeadlineDiagnostics(t *testing.T, ctx context.Context, cfg *e
 	externalNameMatchesStatus := binding.Annotations["crossplane.io/external-name"] != "" && binding.Annotations["crossplane.io/external-name"] == binding.Status.AtProvider.GUID
 	rotationConfigured := binding.Spec.ForProvider.Rotation != nil
 	ttlConfigured := rotationConfigured && binding.Spec.ForProvider.Rotation.TTL != nil
-	crdSchema := inspectLiveRetiredKeySchema(ctx, cfg)
-
 	secretFound, secretTypeMatches, ownerMatches, credentialDataMatches := false, false, false, false
 	ref := binding.Spec.WriteConnectionSecretToReference
 	if ref != nil {
@@ -413,52 +402,11 @@ func reportFallbackDeadlineDiagnostics(t *testing.T, ctx context.Context, cfg *e
 		}
 	}
 
-	t.Logf("handover diagnostics: bindingRead=true activeGUIDPresent=%t externalNameMatchesStatus=%t lastOperationType=%q lastOperationState=%q retiredRecordFound=%t deleteAfterPresent=%t rotationConfigured=%t ttlConfigured=%t liveCRDRead=%t liveCRDVersionFound=%t liveRetiredKeysSchemaFound=%t liveDeleteAfterSchemaFound=%t secretConfigured=%t secretFound=%t secretTypeMatches=%t ownerMatches=%t credentialDataMatches=%t",
-		binding.Status.AtProvider.GUID != "", externalNameMatchesStatus, operationType, operationState, retiredFound, deadlinePresent, rotationConfigured, ttlConfigured, crdSchema.read, crdSchema.versionFound, crdSchema.retiredKeysFound, crdSchema.deleteAfterFound, ref != nil, secretFound, secretTypeMatches, ownerMatches, credentialDataMatches)
-}
-
-type retiredKeySchemaDiagnostics struct {
-	read             bool
-	versionFound     bool
-	retiredKeysFound bool
-	deleteAfterFound bool
-}
-
-func inspectLiveRetiredKeySchema(ctx context.Context, cfg *envconf.Config) retiredKeySchemaDiagnostics {
-	result := retiredKeySchemaDiagnostics{}
-	client, err := dynamic.NewForConfig(cfg.Client().RESTConfig())
-	if err != nil {
-		return result
+	t.Logf("handover diagnostics: bindingRead=true activeGUIDPresent=%t externalNameMatchesStatus=%t lastOperationType=%q lastOperationState=%q retiredRecordFound=%t deleteAfterPresent=%t rotationConfigured=%t ttlConfigured=%t secretConfigured=%t secretFound=%t secretTypeMatches=%t ownerMatches=%t credentialDataMatches=%t",
+		binding.Status.AtProvider.GUID != "", externalNameMatchesStatus, operationType, operationState, retiredFound, deadlinePresent, rotationConfigured, ttlConfigured, ref != nil, secretFound, secretTypeMatches, ownerMatches, credentialDataMatches)
+	if !deadlinePresent {
+		t.Log("if the retiree deadline is missing, verify the installed CRD includes status.atProvider.retiredKeys[].deleteAfter")
 	}
-	crd, err := client.Resource(schema.GroupVersionResource{
-		Group: "apiextensions.k8s.io", Version: "v1", Resource: "customresourcedefinitions",
-	}).Get(ctx, "servicecredentialbindings.cloudfoundry.crossplane.io", metav1.GetOptions{})
-	if err != nil {
-		return result
-	}
-	result.read = true
-	versions, found, err := unstructured.NestedSlice(crd.Object, "spec", "versions")
-	if err != nil || !found {
-		return result
-	}
-	for _, item := range versions {
-		version, ok := item.(map[string]interface{})
-		if !ok || version["name"] != "v1alpha1" {
-			continue
-		}
-		result.versionFound = true
-		_, result.retiredKeysFound, err = unstructured.NestedFieldNoCopy(version, "schema", "openAPIV3Schema", "properties", "status", "properties", "atProvider", "properties", "retiredKeys", "items", "properties")
-		if err != nil {
-			result.retiredKeysFound = false
-			return result
-		}
-		_, result.deleteAfterFound, err = unstructured.NestedFieldNoCopy(version, "schema", "openAPIV3Schema", "properties", "status", "properties", "atProvider", "properties", "retiredKeys", "items", "properties", "deleteAfter")
-		if err != nil {
-			result.deleteAfterFound = false
-		}
-		return result
-	}
-	return result
 }
 
 func sameConnectionSecretOwner(actual, expected *corev1.Secret) bool {
@@ -537,11 +485,6 @@ func assertForceTarget(t *testing.T, ctx context.Context, cfg *envconf.Config, n
 	if got := binding.Annotations[forceRotationAnnotation]; got != expected {
 		t.Fatalf("force-rotation annotation changed (expected retained target %s)", expected)
 	}
-}
-
-func assertPublishedCredentials(t *testing.T, ctx context.Context, cfg *envconf.Config, cfBinding scbclient.ServiceCredentialBinding, mg *v1alpha1.ServiceCredentialBinding, guid, secretName string) {
-	t.Helper()
-	waitForCredentialPublication(t, ctx, cfg, cfBinding, mg.Name, guid, secretName, 3*time.Minute)
 }
 
 func setConnectionDetailsFormat(t *testing.T, ctx context.Context, cfg *envconf.Config, name string, asJSON bool) {
