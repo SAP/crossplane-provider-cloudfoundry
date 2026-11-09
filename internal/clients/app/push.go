@@ -3,11 +3,10 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"io"
-	"os"
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
+	yaml3 "gopkg.in/yaml.v3"
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
@@ -18,13 +17,15 @@ import (
 
 // PushClient is the interface for pushing an app to the Cloud Foundry
 type PushClient interface {
-	Push(ctx context.Context, application *resource.App, manifest *operation.AppManifest, zipFile io.Reader) (*resource.App, error)
+	Push(ctx context.Context, application *resource.App, manifest *operation.AppManifest, dockerCredentials *DockerCredentials) (*resource.App, error)
 	GenerateManifest(ctx context.Context, appGUID string) (string, error)
 }
 
 // pushClient implements PushClient
 type pushClient struct {
 	client *cfv3.Client
+	// pollOptions for the manifest job and the build; nil uses the go-cfclient defaults
+	pollOptions *cfv3.PollingOptions
 }
 
 // NewPushClient creates a new PushClient
@@ -34,28 +35,111 @@ func NewPushClient(client *cfv3.Client) *pushClient {
 	}
 }
 
-// newAppPushOperation initializes a push operation with app target
-func newAppPushOperation(ctx context.Context, client *cfv3.Client, application *resource.App) (*operation.AppPushOperation, error) {
+// Push pushes a docker App to the Cloud Foundry.
+//
+// It follows the steps of go-cfclient's operation.AppPushOperation, but passes
+// the docker registry password directly in the package request. The go-cfclient
+// operation reads it from the process-wide CF_DOCKER_PASSWORD environment
+// variable, which is shared by all concurrent reconciles.
+func (p *pushClient) Push(ctx context.Context, application *resource.App, manifest *operation.AppManifest, dockerCredentials *DockerCredentials) (*resource.App, error) {
+	if manifest.Docker == nil {
+		return nil, errors.New("docker configuration is required to push an app")
+	}
+	spaceGUID := application.Relationships.Space.Data.GUID
+	if err := p.applyManifest(ctx, spaceGUID, manifest); err != nil {
+		return nil, err
+	}
 
-	space, err := client.Spaces.Get(ctx, application.Relationships.Space.Data.GUID)
+	app, err := p.client.Applications.Get(ctx, application.GUID)
 	if err != nil {
 		return nil, err
 	}
-	org, err := client.Organizations.Get(ctx, space.Relationships.Organization.Data.GUID)
+	appWasStarted := app.State == "STARTED"
+
+	pkg, err := p.createDockerPackage(ctx, app.GUID, manifest.Docker, dockerCredentials)
 	if err != nil {
 		return nil, err
 	}
 
-	return operation.NewAppPushOperation(client, org.Name, space.Name), nil
+	droplet, err := p.buildDroplet(ctx, pkg.GUID, manifest.Name)
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err := p.client.Droplets.SetCurrentAssociationForApp(ctx, app.GUID, droplet.GUID); err != nil {
+		return nil, errors.Wrapf(err, "error setting current droplet for app %s", manifest.Name)
+	}
+
+	if appWasStarted {
+		return p.client.Applications.Restart(ctx, app.GUID)
+	}
+	return p.client.Applications.Start(ctx, app.GUID)
 }
 
-// Push pushes an App to the Cloud Foundry
-func (p *pushClient) Push(ctx context.Context, application *resource.App, manifest *operation.AppManifest, zipfile io.Reader) (*resource.App, error) {
-	pusher, err := newAppPushOperation(ctx, p.client, application)
+// applyManifest applies the app manifest to the space and waits for the job to finish
+func (p *pushClient) applyManifest(ctx context.Context, spaceGUID string, manifest *operation.AppManifest) error {
+	// wrap it in a manifest that has an applications array as required by the API
+	m := &operation.Manifest{Applications: []*operation.AppManifest{manifest}}
+	manifestBytes, err := yaml3.Marshal(m)
 	if err != nil {
-		return nil, err
+		return errors.Wrap(err, "error marshalling application manifest")
 	}
-	return pusher.Push(ctx, manifest, nil)
+
+	jobGUID, err := p.client.Manifests.ApplyManifest(ctx, spaceGUID, string(manifestBytes))
+	if err != nil {
+		return errors.Wrapf(err, "error applying application manifest to space %s", spaceGUID)
+	}
+	if err := p.client.Jobs.PollComplete(ctx, jobGUID, p.pollOptions); err != nil {
+		return errors.Wrapf(err, "error waiting for application manifest to finish applying to space %s", spaceGUID)
+	}
+	return nil
+}
+
+// createDockerPackage creates a docker package with the registry credentials for this app only
+func (p *pushClient) createDockerPackage(ctx context.Context, appGUID string, docker *operation.AppManifestDocker, dockerCredentials *DockerCredentials) (*resource.Package, error) {
+	newPkg := newDockerPackageCreate(appGUID, docker, dockerCredentials)
+	pkg, err := p.client.Packages.Create(ctx, newPkg)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error creating docker package for app %s", appGUID)
+	}
+	return pkg, nil
+}
+
+// newDockerPackageCreate builds the package request; without credentials none are sent
+func newDockerPackageCreate(appGUID string, docker *operation.AppManifestDocker, dockerCredentials *DockerCredentials) *resource.PackageCreate {
+	username, password := "", ""
+	if dockerCredentials != nil {
+		username, password = dockerCredentials.Username, dockerCredentials.Password
+	}
+	newPkg := resource.NewDockerPackageCreate(appGUID, docker.Image, username, password)
+	if username == "" && password == "" {
+		newPkg.Data.DockerCredentials = nil
+	}
+	return newPkg
+}
+
+// buildDroplet stages the package and returns the resulting droplet
+func (p *pushClient) buildDroplet(ctx context.Context, pkgGUID string, appName string) (*resource.Droplet, error) {
+	newBuild := resource.NewBuildCreate(pkgGUID)
+	newBuild.Lifecycle = &resource.Lifecycle{
+		Type: resource.LifecycleDocker.String(),
+		Data: &resource.DockerLifecycle{},
+	}
+	build, err := p.client.Builds.Create(ctx, newBuild)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error creating build from package for app %s", appName)
+	}
+	if err := p.client.Builds.PollStaged(ctx, build.GUID, p.pollOptions); err != nil {
+		return nil, errors.Wrapf(err, "error while waiting for app %s package to build", appName)
+	}
+
+	opts := cfv3.NewDropletPackageListOptions()
+	opts.States.EqualTo(resource.DropletStateStaged.String())
+	droplet, err := p.client.Droplets.SingleForPackage(ctx, pkgGUID, opts)
+	if err != nil {
+		return nil, errors.Wrapf(err, "error finding droplet for app %s", appName)
+	}
+	return droplet, nil
 }
 
 // GenerateManifest generates a manifest for the app
@@ -133,12 +217,9 @@ func configDocker(forProvider v1alpha1.AppParameters, dockerCredentials *DockerC
 		Image: forProvider.Docker.Image,
 	}
 
+	// The password is not part of the manifest; Push sends it with the docker package.
 	if dockerCredentials != nil {
 		docker.Username = dockerCredentials.Username
-		err := os.Setenv("CF_DOCKER_PASSWORD", dockerCredentials.Password)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return docker, nil
