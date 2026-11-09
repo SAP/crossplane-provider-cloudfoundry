@@ -105,17 +105,13 @@ func (p *pushClient) createDockerPackage(ctx context.Context, appGUID string, do
 	return pkg, nil
 }
 
-// newDockerPackageCreate builds the package request; without credentials none are sent
+// newDockerPackageCreate builds the package request; empty credentials are omitted from the JSON
 func newDockerPackageCreate(appGUID string, docker *operation.AppManifestDocker, dockerCredentials *DockerCredentials) *resource.PackageCreate {
 	username, password := "", ""
 	if dockerCredentials != nil {
 		username, password = dockerCredentials.Username, dockerCredentials.Password
 	}
-	newPkg := resource.NewDockerPackageCreate(appGUID, docker.Image, username, password)
-	if username == "" && password == "" {
-		newPkg.Data.DockerCredentials = nil
-	}
-	return newPkg
+	return resource.NewDockerPackageCreate(appGUID, docker.Image, username, password)
 }
 
 // buildDroplet stages the package and returns the resulting droplet
