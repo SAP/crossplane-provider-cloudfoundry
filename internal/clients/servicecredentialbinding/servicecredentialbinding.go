@@ -114,51 +114,82 @@ func Delete(ctx context.Context, scbClient ServiceCredentialBinding, guid string
 		return fmt.Errorf("cannot confirm deletion of service credential binding %s: %w", guid, err)
 	}
 
-	binding, err := scbClient.Get(ctx, guid)
-	if isBindingNotFound(err) {
+	binding, gone, err := getBindingForDeletion(ctx, scbClient, guid, "before deletion")
+	if err != nil {
+		return err
+	}
+	if gone {
 		return nil
 	}
-	if err != nil {
-		return fmt.Errorf("cannot check service credential binding %s before deletion: %w", guid, err)
-	}
-	if binding == nil {
-		return fmt.Errorf("%w: Cloud Foundry returned no binding for %s", ErrDeletionPending, guid)
-	}
-	if binding.LastOperation.Type == "delete" {
-		switch binding.LastOperation.State {
-		case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress, v1alpha1.LastOperationSucceeded:
-			return fmt.Errorf("%w: Cloud Foundry delete operation for %s is %s", ErrDeletionPending, guid, binding.LastOperation.State)
-		case v1alpha1.LastOperationFailed:
-			// Retry a broker-failed unbind below.
-		default:
-			return fmt.Errorf("%w: Cloud Foundry delete operation for %s has unknown state %q", ErrDeletionPending, guid, binding.LastOperation.State)
-		}
+	if err := pendingDeleteOperation(binding, guid); err != nil {
+		return err
 	}
 
+	gone, err = deleteBinding(ctx, scbClient, guid)
+	if err != nil {
+		return err
+	}
+	if gone {
+		return nil
+	}
+	gone, err = confirmBindingDeletion(ctx, scbClient, guid)
+	if err != nil {
+		return err
+	}
+	if gone {
+		return nil
+	}
+	return fmt.Errorf("%w: Cloud Foundry still returns binding %s", ErrDeletionPending, guid)
+}
+
+func confirmBindingDeletion(ctx context.Context, scbClient ServiceCredentialBinding, guid string) (bool, error) {
 	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("cannot delete service credential binding %s: %w", guid, err)
+		return false, fmt.Errorf("cannot confirm deletion of service credential binding %s: %w", guid, err)
+	}
+	_, gone, err := getBindingForDeletion(ctx, scbClient, guid, "while confirming deletion")
+	return gone, err
+}
+
+func deleteBinding(ctx context.Context, scbClient ServiceCredentialBinding, guid string) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, fmt.Errorf("cannot delete service credential binding %s: %w", guid, err)
 	}
 	if _, err := scbClient.Delete(ctx, guid); err != nil {
 		if isBindingNotFound(err) {
-			return nil
+			return true, nil
 		}
-		return fmt.Errorf("cannot delete service credential binding %s: %w", guid, err)
+		return false, fmt.Errorf("cannot delete service credential binding %s: %w", guid, err)
 	}
+	return false, nil
+}
 
-	if err := ctx.Err(); err != nil {
-		return fmt.Errorf("cannot confirm deletion of service credential binding %s: %w", guid, err)
-	}
-	binding, err = scbClient.Get(ctx, guid)
+func getBindingForDeletion(ctx context.Context, scbClient ServiceCredentialBinding, guid, phase string) (*resource.ServiceCredentialBinding, bool, error) {
+	binding, err := scbClient.Get(ctx, guid)
 	if isBindingNotFound(err) {
-		return nil
+		return nil, true, nil
 	}
 	if err != nil {
-		return fmt.Errorf("cannot confirm deletion of service credential binding %s: %w", guid, err)
+		return nil, false, fmt.Errorf("cannot check service credential binding %s %s: %w", guid, phase, err)
 	}
 	if binding == nil {
-		return fmt.Errorf("%w: Cloud Foundry returned no binding while confirming deletion of %s", ErrDeletionPending, guid)
+		return nil, false, fmt.Errorf("%w: Cloud Foundry returned no binding %s for %s", ErrDeletionPending, phase, guid)
 	}
-	return fmt.Errorf("%w: Cloud Foundry still returns binding %s", ErrDeletionPending, guid)
+	return binding, false, nil
+}
+
+func pendingDeleteOperation(binding *resource.ServiceCredentialBinding, guid string) error {
+	if binding.LastOperation.Type != "delete" {
+		return nil
+	}
+	switch binding.LastOperation.State {
+	case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress, v1alpha1.LastOperationSucceeded:
+		return fmt.Errorf("%w: Cloud Foundry delete operation for %s is %s", ErrDeletionPending, guid, binding.LastOperation.State)
+	case v1alpha1.LastOperationFailed:
+		// Retry a broker-failed unbind below.
+	default:
+		return fmt.Errorf("%w: Cloud Foundry delete operation for %s has unknown state %q", ErrDeletionPending, guid, binding.LastOperation.State)
+	}
+	return nil
 }
 
 func isBindingNotFound(err error) bool {

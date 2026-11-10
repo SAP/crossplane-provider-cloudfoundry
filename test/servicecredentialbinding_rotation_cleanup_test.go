@@ -163,21 +163,27 @@ func TestRotationCleanupCFBindingNotFoundVariants(t *testing.T) {
 
 func TestRotationRetiredKeyCollectionRequiresCFAndStatusAbsence(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		guid      string
-		cfPresent bool
-		retired   []*v1alpha1.SCBResource
-		want      bool
+		name             string
+		guid             string
+		cfPresent        bool
+		retired          []*v1alpha1.SCBResource
+		wantCollected    bool
+		wantTrackingLoss bool
 	}{
-		{name: "both absent", guid: "k0", want: true},
-		{name: "CF key remains", guid: "k0", cfPresent: true},
+		{name: "both absent", guid: "k0", wantCollected: true},
+		{name: "both present while deleting", guid: "k0", cfPresent: true, retired: []*v1alpha1.SCBResource{{GUID: "k0"}}},
+		{name: "CF key remains without status tracking", guid: "k0", cfPresent: true, wantTrackingLoss: true},
 		{name: "status record remains after CF deletion", guid: "k0", retired: []*v1alpha1.SCBResource{{GUID: "k0"}}},
-		{name: "nil status entry ignored", guid: "k0", retired: []*v1alpha1.SCBResource{nil, {GUID: "k1"}}, want: true},
-		{name: "missing identity is not inferred", cfPresent: false, want: false},
+		{name: "nil status entry ignored", guid: "k0", retired: []*v1alpha1.SCBResource{nil, {GUID: "k1"}}, wantCollected: true},
+		{name: "missing identity is rejected", wantTrackingLoss: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if got := RotationRetiredKeyCollected(tc.guid, tc.cfPresent, tc.retired); got != tc.want {
-				t.Fatalf("retired-key collection = %t, want %t", got, tc.want)
+			got, err := ValidateRetiredKeyDeletionObservation(tc.guid, tc.cfPresent, tc.retired)
+			if got != tc.wantCollected || (err != nil) != tc.wantTrackingLoss {
+				t.Fatalf("retired-key observation = (%t, %v), want collected=%t trackingLoss=%t", got, err, tc.wantCollected, tc.wantTrackingLoss)
+			}
+			if got := RotationRetiredKeyCollected(tc.guid, tc.cfPresent, tc.retired); got != tc.wantCollected {
+				t.Fatalf("retired-key collection = %t, want %t", got, tc.wantCollected)
 			}
 		})
 	}

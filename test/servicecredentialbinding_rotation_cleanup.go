@@ -201,17 +201,30 @@ func waitForCleanupAbsence(ctx context.Context, interval time.Duration, exists f
 	return absent, err
 }
 
-// RotationRetiredKeyCollected requires both Cloud Foundry absence and status GC.
-func RotationRetiredKeyCollected(guid string, cfPresent bool, retired []*v1alpha1.SCBResource) bool {
-	if guid == "" || cfPresent {
-		return false
+// ValidateRetiredKeyDeletionObservation classifies one status-then-CF cleanup
+// sample. A status record disappearing while CF still returns the binding is a
+// tracking-loss error, not a transient wait or successful collection.
+func ValidateRetiredKeyDeletionObservation(guid string, cfPresent bool, retired []*v1alpha1.SCBResource) (bool, error) {
+	if guid == "" {
+		return false, errors.New("retired binding identity is empty")
 	}
+	tracked := false
 	for _, key := range retired {
 		if key != nil && key.GUID == guid {
-			return false
+			tracked = true
+			break
 		}
 	}
-	return true
+	if !tracked && cfPresent {
+		return false, errors.New("retired binding is still present in Cloud Foundry but missing from status")
+	}
+	return !cfPresent && !tracked, nil
+}
+
+// RotationRetiredKeyCollected requires both Cloud Foundry absence and status GC.
+func RotationRetiredKeyCollected(guid string, cfPresent bool, retired []*v1alpha1.SCBResource) bool {
+	collected, err := ValidateRetiredKeyDeletionObservation(guid, cfPresent, retired)
+	return err == nil && collected
 }
 
 func uniqueNonEmpty(values []string) []string {

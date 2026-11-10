@@ -241,19 +241,17 @@ func rotationCredentialSnapshot(t *testing.T, ctx context.Context, cfBinding scb
 
 func waitForRetiredKeyCollection(ctx context.Context, cfg *envconf.Config, name, retiredGUID string, cfBinding scbclient.ServiceCredentialBinding) error {
 	return wait.PollUntilContextTimeout(ctx, 5*time.Second, 8*time.Minute, true, func(ctx context.Context) (bool, error) {
-		_, err := cfBinding.Get(ctx, retiredGUID)
-		cfPresent := true
-		if clients.ErrorIsNotFound(err) {
-			cfPresent = false
-		} else if err != nil {
-			return false, errors.New("Cloud Foundry retired-key verification failed")
-		}
-
+		// Read status before CF so a record that disappeared from Kubernetes is
+		// compared against a subsequent external read, not a stale earlier sample.
 		current := &v1alpha1.ServiceCredentialBinding{}
 		if err := cfg.Client().Resources().Get(ctx, name, "", current); err != nil {
 			return false, errors.New("Kubernetes retired-key status read failed")
 		}
-		return testutil.RotationRetiredKeyCollected(retiredGUID, cfPresent, current.Status.AtProvider.RetiredKeys), nil
+		cfPresent, err := testutil.ServiceCredentialBindingExistsInCF(ctx, cfBinding, retiredGUID)
+		if err != nil {
+			return false, errors.New("Cloud Foundry retired-key verification failed")
+		}
+		return testutil.ValidateRetiredKeyDeletionObservation(retiredGUID, cfPresent, current.Status.AtProvider.RetiredKeys)
 	})
 }
 

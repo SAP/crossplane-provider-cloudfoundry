@@ -117,7 +117,7 @@ func TestRotationMissingActiveWaitsForRetiredDeletion(t *testing.T) {
 	reconciler := rotationRuntimeReconciler(t, store, scheme, external, true)
 	request := reconcile.Request{NamespacedName: client.ObjectKeyFromObject(cr)}
 
-	_, err = reconciler.Reconcile(context.Background(), request)
+	_, _ = reconciler.Reconcile(context.Background(), request)
 	// The managed reconciler may translate delete-time errors into a requeue;
 	// the safety contract is that it cannot remove the finalizer or forget K0.
 	remaining := &v1alpha1.ServiceCredentialBinding{}
