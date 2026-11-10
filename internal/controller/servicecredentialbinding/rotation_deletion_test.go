@@ -11,6 +11,7 @@ import (
 	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
@@ -81,6 +82,56 @@ func TestRotationDeletionDoesNotDependOnHandover(t *testing.T) {
 			})
 		}
 	}
+}
+
+func TestRotationMissingActiveWaitsForRetiredDeletion(t *testing.T) {
+	cr := rotationControllerCR(rotationTestK1, nil)
+	cr.Spec.ManagementPolicies = xpv2.ManagementPolicies{xpv2.ManagementActionAll}
+	cr.Spec.DeletionPolicy = xpv2.DeletionDelete
+	cr.Finalizers = []string{managed.FinalizerName}
+	deleting := metav1.NewTime(time.Now())
+	cr.SetDeletionTimestamp(&deleting)
+	cr.Status.AtProvider.RetiredKeys = []*v1alpha1.SCBResource{{GUID: rotationTestK0}}
+	directCF := &fake.MockServiceCredentialBinding{}
+	directCF.On("Get", mock.Anything, rotationTestK1).Return((*cfresource.ServiceCredentialBinding)(nil), cfresource.NewResourceNotFoundError()).Once()
+	pending := rotationControllerBinding(rotationTestK0, v1alpha1.LastOperationInProgress)
+	pending.LastOperation.Type = "delete"
+	directCF.On("Get", mock.Anything, rotationTestK0).Return(pending, nil).Once()
+	direct := rotationRuntimeExternal(nil, directCF)
+	_, err := direct.Observe(context.Background(), cr.DeepCopy())
+	require.ErrorIs(t, err, scb.ErrDeletionPending, "the missing-active observation path must retain pending retirees")
+	directCF.AssertExpectations(t)
+
+	store, scheme := rotationRuntimeStore(t, cr)
+
+	pending = rotationControllerBinding(rotationTestK0, v1alpha1.LastOperationInProgress)
+	pending.LastOperation.Type = "delete"
+	cf := &fake.MockServiceCredentialBinding{}
+	cf.On("Get", mock.Anything, rotationTestK1).Return((*cfresource.ServiceCredentialBinding)(nil), cfresource.NewResourceNotFoundError()).Twice()
+	cf.On("Get", mock.Anything, rotationTestK0).Run(func(args mock.Arguments) {
+		require.Equal(t, v1alpha1.LastOperationDelete, pending.LastOperation.Type)
+		require.Equal(t, v1alpha1.LastOperationInProgress, pending.LastOperation.State)
+	}).Return(pending, nil).Once()
+	cf.On("Get", mock.Anything, rotationTestK0).Return((*cfresource.ServiceCredentialBinding)(nil), cfresource.NewResourceNotFoundError()).Once()
+	external := rotationRuntimeExternal(store, cf)
+	reconciler := rotationRuntimeReconciler(t, store, scheme, external, true)
+	request := reconcile.Request{NamespacedName: client.ObjectKeyFromObject(cr)}
+
+	_, err = reconciler.Reconcile(context.Background(), request)
+	// The managed reconciler may translate delete-time errors into a requeue;
+	// the safety contract is that it cannot remove the finalizer or forget K0.
+	remaining := &v1alpha1.ServiceCredentialBinding{}
+	require.NoError(t, store.Get(context.Background(), client.ObjectKeyFromObject(cr), remaining))
+	require.Contains(t, remaining.Finalizers, managed.FinalizerName)
+	require.Len(t, remaining.Status.AtProvider.RetiredKeys, 1)
+	require.Equal(t, rotationTestK0, remaining.Status.AtProvider.RetiredKeys[0].GUID)
+	cf.AssertNotCalled(t, "Delete", mock.Anything, mock.Anything)
+
+	_, err = reconciler.Reconcile(context.Background(), request)
+	require.NoError(t, err, "confirmed retired-binding absence should allow finalization")
+	err = store.Get(context.Background(), client.ObjectKeyFromObject(cr), remaining)
+	require.True(t, apierrors.IsNotFound(err), "the resource should finalize only after CF confirms the retired GUID is absent")
+	cf.AssertExpectations(t)
 }
 
 func TestRotationDeletionDoesNotDeleteAfterBindingLookupFailure(t *testing.T) {
