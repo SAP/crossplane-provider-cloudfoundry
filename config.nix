@@ -3,7 +3,7 @@
   exporter-cli = {
     name = "xpcf";
     version = "0.0.1-alpha2";
-    vendorHash = "sha256-ENSiwCHtBpWyoV6K34omr6aSiYHQoQWPNFeXOF1CzY4=";
+    vendorHash = "sha256-g8+vqcjP1fMkX4xFdwsnu+XO47jpdMfrthTWHdMosa8=";
     # vendorHash = lib.fakeHash;
     meta = {
       description = "xpcf is a CLI tool for exporting existing resources as Crossplane managed resources";
