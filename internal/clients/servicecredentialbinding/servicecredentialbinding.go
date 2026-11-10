@@ -102,10 +102,67 @@ func Update(ctx context.Context, scbClient ServiceCredentialBinding, guid string
 	return scbClient.Update(ctx, guid, opt)
 }
 
-// Delete deletes a ServiceCredentialBinding resource
+// ErrDeletionPending means Cloud Foundry still reports the binding or its delete operation.
+var ErrDeletionPending = errors.New("service credential binding deletion is pending")
+
+// Delete deletes a ServiceCredentialBinding resource and confirms its absence.
+// A successful DELETE response may only mean that Cloud Foundry accepted an
+// asynchronous unbind operation, so the binding identity must remain tracked
+// until a GET confirms it no longer exists.
 func Delete(ctx context.Context, scbClient ServiceCredentialBinding, guid string) error {
-	_, err := scbClient.Delete(ctx, guid)
-	return err
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("cannot confirm deletion of service credential binding %s: %w", guid, err)
+	}
+
+	binding, err := scbClient.Get(ctx, guid)
+	if isBindingNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("cannot check service credential binding %s before deletion: %w", guid, err)
+	}
+	if binding == nil {
+		return fmt.Errorf("%w: Cloud Foundry returned no binding for %s", ErrDeletionPending, guid)
+	}
+	if binding.LastOperation.Type == "delete" {
+		switch binding.LastOperation.State {
+		case v1alpha1.LastOperationInitial, v1alpha1.LastOperationInProgress, v1alpha1.LastOperationSucceeded:
+			return fmt.Errorf("%w: Cloud Foundry delete operation for %s is %s", ErrDeletionPending, guid, binding.LastOperation.State)
+		case v1alpha1.LastOperationFailed:
+			// Retry a broker-failed unbind below.
+		default:
+			return fmt.Errorf("%w: Cloud Foundry delete operation for %s has unknown state %q", ErrDeletionPending, guid, binding.LastOperation.State)
+		}
+	}
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("cannot delete service credential binding %s: %w", guid, err)
+	}
+	if _, err := scbClient.Delete(ctx, guid); err != nil {
+		if isBindingNotFound(err) {
+			return nil
+		}
+		return fmt.Errorf("cannot delete service credential binding %s: %w", guid, err)
+	}
+
+	if err := ctx.Err(); err != nil {
+		return fmt.Errorf("cannot confirm deletion of service credential binding %s: %w", guid, err)
+	}
+	binding, err = scbClient.Get(ctx, guid)
+	if isBindingNotFound(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("cannot confirm deletion of service credential binding %s: %w", guid, err)
+	}
+	if binding == nil {
+		return fmt.Errorf("%w: Cloud Foundry returned no binding while confirming deletion of %s", ErrDeletionPending, guid)
+	}
+	return fmt.Errorf("%w: Cloud Foundry still returns binding %s", ErrDeletionPending, guid)
+}
+
+func isBindingNotFound(err error) bool {
+	return resource.IsResourceNotFoundError(err) || resource.IsServiceBindingNotFoundError(err)
 }
 
 // GetConnectionDetails returns the connection details of the ServiceCredentialBinding.

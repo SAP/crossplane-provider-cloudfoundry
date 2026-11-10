@@ -156,7 +156,9 @@ func TestRotationFallbackDeadlineInitializationWithoutCreatePolicy(t *testing.T)
 
 				now = deadline.Time
 				if tc.wantCleanup {
+					cf.On("Get", mock.Anything, rotationTestK0).Return(rotationControllerBinding(rotationTestK0, v1alpha1.LastOperationSucceeded), nil).Once()
 					cf.On("Delete", mock.Anything, rotationTestK0).Return("", nil).Once()
+					cf.On("Get", mock.Anything, rotationTestK0).Return((*cfresource.ServiceCredentialBinding)(nil), cfresource.NewResourceNotFoundError()).Once()
 				}
 				_, err = reconciler.Reconcile(context.Background(), request)
 				require.NoError(t, err)

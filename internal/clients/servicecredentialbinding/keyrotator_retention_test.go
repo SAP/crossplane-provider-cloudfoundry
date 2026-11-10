@@ -6,7 +6,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -38,7 +37,7 @@ func TestRotationFallbackRetention(t *testing.T) {
 			rotator.Now = func() time.Time { return wantDeadline.Add(tc.delta) }
 			cf := &fake.MockServiceCredentialBinding{}
 			if tc.expired {
-				cf.On("Delete", mock.Anything, rotationTestK0).Return("", nil).Once()
+				expectDeleteConfirmed(cf, rotationTestK0)
 			}
 			rotator.SCBClient = cf
 			require.Equal(t, tc.expired, rotator.HasExpiredKeys(cr))

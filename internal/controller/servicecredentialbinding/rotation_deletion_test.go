@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	cfresource "github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/reconciler/managed"
 	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	"github.com/stretchr/testify/mock"
@@ -60,8 +61,12 @@ func TestRotationDeletionDoesNotDependOnHandover(t *testing.T) {
 				require.Nil(t, cr.Status.AtProvider.RetiredKeys[0].DeleteAfter)
 
 				store, scheme := rotationRuntimeStore(t, cr)
+				cf.On("Get", mock.Anything, rotationTestK1).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil).Once()
 				cf.On("Delete", mock.Anything, rotationTestK1).Return("", nil).Once()
+				cf.On("Get", mock.Anything, rotationTestK1).Return((*cfresource.ServiceCredentialBinding)(nil), cfresource.NewResourceNotFoundError()).Once()
+				cf.On("Get", mock.Anything, rotationTestK0).Return(rotationControllerBinding(rotationTestK0, operationState), nil).Once()
 				cf.On("Delete", mock.Anything, rotationTestK0).Return("", nil).Once()
+				cf.On("Get", mock.Anything, rotationTestK0).Return((*cfresource.ServiceCredentialBinding)(nil), cfresource.NewResourceNotFoundError()).Once()
 				external := rotationRuntimeExternal(store, cf)
 				reader := &rotationFailingReader{}
 				external.reader = reader

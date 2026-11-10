@@ -353,7 +353,7 @@ func TestSCBKeyRotator_DeleteExpiredKeys(t *testing.T) {
 			},
 			mockClient: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
-				m.On("Delete", mock.Anything, "expired-key").Return("", nil)
+				expectDeleteConfirmed(m, "expired-key")
 				return m
 			},
 		},
@@ -364,11 +364,12 @@ func TestSCBKeyRotator_DeleteExpiredKeys(t *testing.T) {
 			},
 			want: want{
 				newRetiredKeys: []*v1alpha1.SCBResource{expiredKey, nonExpiredKey, currentKey}, // All keys remain due to error
-				err:            errors.New("cannot delete expired key expired-key: boom"),
+				err:            errors.New("cannot delete expired key expired-key: cannot delete service credential binding expired-key: boom"),
 			},
 			mockClient: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
-				m.On("Delete", mock.Anything, "expired-key").Return("", errBoom)
+				m.On("Get", mock.Anything, "expired-key").Return(deleteTestBinding("expired-key", "create", "succeeded"), nil).Once()
+				m.On("Delete", mock.Anything, "expired-key").Return("", errBoom).Once()
 				return m
 			},
 		},
@@ -445,8 +446,8 @@ func TestSCBKeyRotator_DeleteRetiredKeys(t *testing.T) {
 			},
 			mockClient: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
-				m.On("Delete", mock.Anything, "retired-key-1").Return("", nil)
-				m.On("Delete", mock.Anything, "retired-key-2").Return("", nil)
+				expectDeleteConfirmed(m, "retired-key-1")
+				expectDeleteConfirmed(m, "retired-key-2")
 				return m
 			},
 		},
@@ -456,11 +457,12 @@ func TestSCBKeyRotator_DeleteRetiredKeys(t *testing.T) {
 				cr:  crWithRetiredKeys,
 			},
 			want: want{
-				err: errors.New("cannot delete retired key retired-key-1: boom"),
+				err: errors.New("cannot delete retired key retired-key-1: cannot delete service credential binding retired-key-1: boom"),
 			},
 			mockClient: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
-				m.On("Delete", mock.Anything, "retired-key-1").Return("", errBoom)
+				m.On("Get", mock.Anything, "retired-key-1").Return(deleteTestBinding("retired-key-1", "create", "succeeded"), nil).Once()
+				m.On("Delete", mock.Anything, "retired-key-1").Return("", errBoom).Once()
 				return m
 			},
 		},
@@ -474,10 +476,10 @@ func TestSCBKeyRotator_DeleteRetiredKeys(t *testing.T) {
 			},
 			mockClient: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
-				// Simulate resource not found errors which should be ignored
-				notFoundErr := cfresource.NewResourceNotFoundError()
-				m.On("Delete", mock.Anything, "retired-key-1").Return("", notFoundErr)
-				m.On("Delete", mock.Anything, "retired-key-2").Return("", nil)
+				// Simulate a binding disappearing between the preflight GET and DELETE.
+				m.On("Get", mock.Anything, "retired-key-1").Return(deleteTestBinding("retired-key-1", "create", "succeeded"), nil).Once()
+				m.On("Delete", mock.Anything, "retired-key-1").Return("", cfresource.NewResourceNotFoundError()).Once()
+				expectDeleteConfirmed(m, "retired-key-2")
 				return m
 			},
 		},

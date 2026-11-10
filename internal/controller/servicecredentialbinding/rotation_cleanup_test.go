@@ -80,8 +80,11 @@ func TestRotationCleanupPartialProgress(t *testing.T) {
 		&cfresource.ServiceCredentialBinding{Resource: cfresource.Resource{GUID: rotationTestK1}}, nil,
 	)
 	cf.On("Get", mock.Anything, rotationTestK1).Return(rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded), nil)
-	cf.On("Delete", mock.Anything, removed.GUID).Return("", nil)
-	cf.On("Delete", mock.Anything, failed.GUID).Return("", assert.AnError)
+	cf.On("Get", mock.Anything, removed.GUID).Return(rotationControllerBinding(removed.GUID, v1alpha1.LastOperationSucceeded), nil).Once()
+	cf.On("Delete", mock.Anything, removed.GUID).Return("", nil).Once()
+	cf.On("Get", mock.Anything, removed.GUID).Return((*cfresource.ServiceCredentialBinding)(nil), cfresource.NewResourceNotFoundError()).Once()
+	cf.On("Get", mock.Anything, failed.GUID).Return(rotationControllerBinding(failed.GUID, v1alpha1.LastOperationSucceeded), nil).Once()
+	cf.On("Delete", mock.Anything, failed.GUID).Return("", assert.AnError).Once()
 	store := newRotationStoredClient(cr)
 	ext := &external{
 		kube:       store,
@@ -90,7 +93,7 @@ func TestRotationCleanupPartialProgress(t *testing.T) {
 	}
 
 	_, err := ext.Update(context.Background(), cr)
-	require.ErrorContains(t, err, "cannot delete expired key "+failed.GUID+": assert.AnError general error for testing")
+	require.ErrorContains(t, err, "cannot delete expired key "+failed.GUID+": cannot delete service credential binding "+failed.GUID+": assert.AnError general error for testing")
 	assert.Equal(t, []*v1alpha1.SCBResource{failed}, cr.Status.AtProvider.RetiredKeys,
 		"successfully deleted and not-found keys should be removed even when another deletion fails")
 	assert.Equal(t, []*v1alpha1.SCBResource{failed}, store.get().Status.AtProvider.RetiredKeys,
