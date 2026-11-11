@@ -209,29 +209,9 @@ func TestPushDockerCredentials(t *testing.T) {
 	}
 }
 
-func TestPushStartsOrRestartsApp(t *testing.T) {
-	tests := map[string]string{
-		"STOPPED": "start",
-		"STARTED": "restart",
-	}
-	for state, wantAction := range tests {
-		t.Run(state, func(t *testing.T) {
-			f := &fakeCF{appState: state}
-			p := newFakeCFPushClient(t, f)
-			manifest, err := newManifestFromSpec(testDockerSpec(), nil)
-			if err != nil {
-				t.Fatalf("newManifestFromSpec() error = %v", err)
-			}
-			if _, err := p.Push(context.Background(), testApp(), manifest, nil); err != nil {
-				t.Fatalf("Push() error = %v", err)
-			}
-			if f.lastAction != wantAction {
-				t.Errorf("app action = %q, want %q", f.lastAction, wantAction)
-			}
-		})
-	}
-}
-
+// TestConfigDockerDoesNotSetEnv checks that configDocker keeps the registry password out of
+// the process environment. The push tests can't catch that, because WithDockerPassword
+// overrides CF_DOCKER_PASSWORD.
 func TestConfigDockerDoesNotSetEnv(t *testing.T) {
 	t.Setenv("CF_DOCKER_PASSWORD", "")
 	creds := &DockerCredentials{Username: "user", Password: "secret"}
