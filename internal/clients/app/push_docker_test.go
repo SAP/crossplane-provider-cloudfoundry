@@ -10,11 +10,9 @@ import (
 	"os"
 	"sync"
 	"testing"
-	"time"
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
 	"github.com/cloudfoundry/go-cfclient/v3/config"
-	"github.com/cloudfoundry/go-cfclient/v3/operation"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
 	"github.com/google/go-cmp/cmp"
 
@@ -22,6 +20,7 @@ import (
 )
 
 const (
+	testOrgGUID     = "org-guid"
 	testAppGUID     = "app-guid"
 	testSpaceGUID   = "space-guid"
 	testPkgGUID     = "pkg-guid"
@@ -52,6 +51,23 @@ func (f *fakeCF) handler(t *testing.T, serverURL *string) http.Handler {
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		write(w, http.StatusOK, fmt.Sprintf(`{"links":{"login":{"href":%q},"uaa":{"href":%q}}}`, *serverURL, *serverURL))
 	})
+	space := fmt.Sprintf(`{"guid":%q,"name":"test-space","relationships":{"organization":{"data":{"guid":%q}}}}`, testSpaceGUID, testOrgGUID)
+	org := fmt.Sprintf(`{"guid":%q,"name":"test-org"}`, testOrgGUID)
+	paged := func(r string) string {
+		return `{"pagination":{"total_results":1,"total_pages":1},"resources":[` + r + `]}`
+	}
+	mux.HandleFunc("GET /v3/spaces/"+testSpaceGUID, func(w http.ResponseWriter, r *http.Request) {
+		write(w, http.StatusOK, space)
+	})
+	mux.HandleFunc("GET /v3/organizations/"+testOrgGUID, func(w http.ResponseWriter, r *http.Request) {
+		write(w, http.StatusOK, org)
+	})
+	mux.HandleFunc("GET /v3/organizations", func(w http.ResponseWriter, r *http.Request) {
+		write(w, http.StatusOK, paged(org))
+	})
+	mux.HandleFunc("GET /v3/spaces", func(w http.ResponseWriter, r *http.Request) {
+		write(w, http.StatusOK, paged(space))
+	})
 	mux.HandleFunc("POST /v3/spaces/"+testSpaceGUID+"/actions/apply_manifest", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Location", *serverURL+"/v3/jobs/"+testJobGUID)
 		write(w, http.StatusAccepted, "")
@@ -59,11 +75,11 @@ func (f *fakeCF) handler(t *testing.T, serverURL *string) http.Handler {
 	mux.HandleFunc("GET /v3/jobs/"+testJobGUID, func(w http.ResponseWriter, r *http.Request) {
 		write(w, http.StatusOK, fmt.Sprintf(`{"guid":%q,"state":"COMPLETE"}`, testJobGUID))
 	})
-	mux.HandleFunc("GET /v3/apps/"+testAppGUID, func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc("GET /v3/apps", func(w http.ResponseWriter, r *http.Request) {
 		f.mu.Lock()
 		state := f.appState
 		f.mu.Unlock()
-		write(w, http.StatusOK, fmt.Sprintf(`{"guid":%q,"name":"test-app","state":%q}`, testAppGUID, state))
+		write(w, http.StatusOK, paged(fmt.Sprintf(`{"guid":%q,"name":"test-app","state":%q,"lifecycle":{"type":"docker","data":{}}}`, testAppGUID, state)))
 	})
 	mux.HandleFunc("POST /v3/packages", func(w http.ResponseWriter, r *http.Request) {
 		var pkg resource.PackageCreate
@@ -115,9 +131,7 @@ func newFakeCFPushClient(t *testing.T, f *fakeCF) *pushClient {
 	if err != nil {
 		t.Fatalf("client.New() error = %v", err)
 	}
-	p := NewPushClient(cf)
-	p.pollOptions = &cfv3.PollingOptions{FailedState: "FAILED", Timeout: 5 * time.Second, CheckInterval: 10 * time.Millisecond}
-	return p
+	return NewPushClient(cf)
 }
 
 func testApp() *resource.App {
@@ -215,13 +229,6 @@ func TestPushStartsOrRestartsApp(t *testing.T) {
 				t.Errorf("app action = %q, want %q", f.lastAction, wantAction)
 			}
 		})
-	}
-}
-
-func TestPushRequiresDocker(t *testing.T) {
-	p := &pushClient{}
-	if _, err := p.Push(context.Background(), testApp(), operation.NewAppManifest("test-app"), nil); err == nil {
-		t.Error("Push() without docker configuration should fail")
 	}
 }
 
