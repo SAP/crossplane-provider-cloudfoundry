@@ -3,8 +3,6 @@ package app
 import (
 	"context"
 	"encoding/json"
-	"io"
-	"os"
 
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v2"
@@ -18,7 +16,7 @@ import (
 
 // PushClient is the interface for pushing an app to the Cloud Foundry
 type PushClient interface {
-	Push(ctx context.Context, application *resource.App, manifest *operation.AppManifest, zipFile io.Reader) (*resource.App, error)
+	Push(ctx context.Context, application *resource.App, manifest *operation.AppManifest, dockerCredentials *DockerCredentials) (*resource.App, error)
 	GenerateManifest(ctx context.Context, appGUID string) (string, error)
 }
 
@@ -34,8 +32,8 @@ func NewPushClient(client *cfv3.Client) *pushClient {
 	}
 }
 
-// newAppPushOperation initializes a push operation with app target
-func newAppPushOperation(ctx context.Context, client *cfv3.Client, application *resource.App) (*operation.AppPushOperation, error) {
+// newAppPushOperation initializes a push operation with app target and the docker registry password
+func newAppPushOperation(ctx context.Context, client *cfv3.Client, application *resource.App, dockerCredentials *DockerCredentials) (*operation.AppPushOperation, error) {
 
 	space, err := client.Spaces.Get(ctx, application.Relationships.Space.Data.GUID)
 	if err != nil {
@@ -46,12 +44,20 @@ func newAppPushOperation(ctx context.Context, client *cfv3.Client, application *
 		return nil, err
 	}
 
-	return operation.NewAppPushOperation(client, org.Name, space.Name), nil
+	pusher := operation.NewAppPushOperation(client, org.Name, space.Name)
+	// Always set the password on the operation, so go-cfclient never falls back to the
+	// process-wide CF_DOCKER_PASSWORD environment variable shared by all reconciles.
+	password := ""
+	if dockerCredentials != nil {
+		password = dockerCredentials.Password
+	}
+	pusher.WithDockerPassword(password)
+	return pusher, nil
 }
 
 // Push pushes an App to the Cloud Foundry
-func (p *pushClient) Push(ctx context.Context, application *resource.App, manifest *operation.AppManifest, zipfile io.Reader) (*resource.App, error) {
-	pusher, err := newAppPushOperation(ctx, p.client, application)
+func (p *pushClient) Push(ctx context.Context, application *resource.App, manifest *operation.AppManifest, dockerCredentials *DockerCredentials) (*resource.App, error) {
+	pusher, err := newAppPushOperation(ctx, p.client, application, dockerCredentials)
 	if err != nil {
 		return nil, err
 	}
@@ -133,12 +139,9 @@ func configDocker(forProvider v1alpha1.AppParameters, dockerCredentials *DockerC
 		Image: forProvider.Docker.Image,
 	}
 
+	// The password is not part of the manifest; it is set on the push operation.
 	if dockerCredentials != nil {
 		docker.Username = dockerCredentials.Username
-		err := os.Setenv("CF_DOCKER_PASSWORD", dockerCredentials.Password)
-		if err != nil {
-			return nil, err
-		}
 	}
 
 	return docker, nil

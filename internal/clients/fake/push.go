@@ -2,7 +2,6 @@ package fake
 
 import (
 	"context"
-	"io"
 
 	"github.com/cloudfoundry/go-cfclient/v3/operation"
 	"github.com/cloudfoundry/go-cfclient/v3/resource"
@@ -21,8 +20,8 @@ func (m *MockPush) Get(ctx context.Context, guid string) (*resource.App, error) 
 }
 
 // Push mocks PushClient.Push
-func (m *MockPush) Push(ctx context.Context, application *resource.App, manifest *operation.AppManifest, zipfile io.Reader) (*resource.App, error) {
-	args := m.Called()
+func (m *MockPush) Push(ctx context.Context, application *resource.App, manifest *operation.AppManifest, dockerCredentials *resource.DockerCredentials) (*resource.App, error) {
+	args := m.Called(dockerCredentials)
 	return args.Get(0).(*resource.App), args.Error(1)
 }
 

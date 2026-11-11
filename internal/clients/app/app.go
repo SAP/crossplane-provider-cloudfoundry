@@ -65,7 +65,8 @@ func NewAppClient(client *client.Client) *Client {
 	}
 }
 
-type DockerCredentials resource.DockerCredentials
+// DockerCredentials are the registry credentials for a docker app
+type DockerCredentials = resource.DockerCredentials
 
 // GetBySpec gets an App by matching spec fields (name and space).
 func (c *Client) GetBySpec(ctx context.Context, spec v1alpha1.AppParameters) (*resource.App, error) {
@@ -83,7 +84,7 @@ func (c *Client) CreateAndPush(ctx context.Context, mg xpresource.Managed, spec 
 	if err != nil {
 		return nil, err
 	}
-	return c.Push(ctx, application, manifest, nil)
+	return c.Push(ctx, application, manifest, dockerCredentials)
 }
 
 // Update updates an app in the Cloud Foundry.
@@ -106,7 +107,7 @@ func (c *Client) UpdateAndPush(ctx context.Context, guid string, mg xpresource.M
 	if err != nil {
 		return nil, err
 	}
-	return c.Push(ctx, application, manifest, nil)
+	return c.Push(ctx, application, manifest, dockerCredentials)
 }
 
 // Delete deletes an app in the Cloud Foundry.

@@ -8,6 +8,8 @@ import (
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/mock"
+	corev1 "k8s.io/api/core/v1"
 	k8s "sigs.k8s.io/controller-runtime/pkg/client"
 
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
@@ -87,6 +89,12 @@ func withImage(image string) modifier {
 	}
 }
 
+func withDockerCredentials(secretName, secretNamespace string) modifier {
+	return func(r *v1alpha1.App) {
+		r.Spec.ForProvider.Docker.Credentials = &xpv2.SecretReference{Name: secretName, Namespace: secretNamespace}
+	}
+}
+
 func withEnvironment(env map[string]string) modifier {
 	return func(r *v1alpha1.App) {
 		r.Spec.ForProvider.Environment = env
@@ -151,7 +159,7 @@ func newApp(typ string, m ...modifier) *v1alpha1.App {
 func newMockPush() *fake.MockPush {
 	m := &fake.MockPush{}
 	m.On("GenerateManifest", guid).Return("applications:\n- name: "+name, nil)
-	m.On("Push").Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
+	m.On("Push", mock.Anything).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App,
 		nil,
 	)
 	return m
@@ -695,6 +703,68 @@ func TestCreate(t *testing.T) {
 	}
 }
 
+// TestCreateAndUpdatePassDockerCredentials checks that the credentials read from the
+// referenced secret reach the push client on Create and on a docker image update.
+func TestCreateAndUpdatePassDockerCredentials(t *testing.T) {
+	const (
+		secretName      = "registry-secret"
+		secretNamespace = "default"
+	)
+	wantCreds := &app.DockerCredentials{Username: "registry-user", Password: "registry-password"}
+	kube := &test.MockClient{
+		MockGet: func(_ context.Context, key k8s.ObjectKey, obj k8s.Object) error {
+			if key.Name != secretName || key.Namespace != secretNamespace {
+				return errBoom
+			}
+			obj.(*corev1.Secret).Data = map[string][]byte{
+				".dockerconfigjson": []byte(`{"auths":{"registry.example.com":{"username":"registry-user","password":"registry-password"}}}`),
+			}
+			return nil
+		},
+		MockUpdate:       test.NewMockUpdateFn(nil),
+		MockStatusUpdate: test.NewMockSubResourceUpdateFn(nil),
+	}
+	newPush := func() *fake.MockPush {
+		m := &fake.MockPush{}
+		m.On("Push", wantCreds).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+		return m
+	}
+
+	t.Run("Create", func(t *testing.T) {
+		push := newPush()
+		appClient := &fake.MockApp{}
+		appClient.On("Create").Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+		c := &external{kube: kube, client: &app.Client{AppClient: appClient, PushClient: push}}
+
+		mg := newApp("docker", withSpace(spaceGUID), withImage("registry.example.com/app:v1"),
+			withDockerCredentials(secretName, secretNamespace))
+		if _, err := c.Create(context.Background(), mg); err != nil {
+			t.Fatalf("Create(...): unexpected error: %v", err)
+		}
+		push.AssertExpectations(t)
+	})
+
+	t.Run("UpdateDockerImage", func(t *testing.T) {
+		push := newPush()
+		appClient := &fake.MockApp{}
+		appClient.On("Update", guid).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+		c := &external{kube: kube, client: &app.Client{AppClient: appClient, PushClient: push}}
+
+		mg := newApp("docker",
+			withSpace(spaceGUID),
+			withExternalName(guid),
+			withStatus(guid, "STARTED"),
+			withObservedName(name),
+			withAppManifest("applications:\n- name: "+name+"\n  docker:\n    image: registry.example.com/app:v1"),
+			withImage("registry.example.com/app:v2"),
+			withDockerCredentials(secretName, secretNamespace))
+		if _, err := c.Update(context.Background(), mg); err != nil {
+			t.Fatalf("Update(...): unexpected error: %v", err)
+		}
+		push.AssertExpectations(t)
+	})
+}
+
 func TestUpdate(t *testing.T) {
 	type service func() *fake.MockApp
 	type job func() *fake.MockJob
@@ -976,7 +1046,7 @@ func TestUpdate(t *testing.T) {
 			push: func() *fake.MockPush {
 				m := &fake.MockPush{}
 				// Push is called during UpdateAndPush; return the app with the new image applied
-				m.On("Push").Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
+				m.On("Push", mock.Anything).Return(&fake.NewApp("docker").SetName(name).SetGUID(guid).App, nil)
 				return m
 			},
 			service: func() *fake.MockApp {
