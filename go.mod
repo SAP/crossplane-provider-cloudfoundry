@@ -4,6 +4,7 @@ go 1.27.3
 
 require (
 	github.com/SAP/xp-clifford v0.0.0-20260817093517-35e452c3c837
+	github.com/alecthomas/kingpin/v2 v2.4.0
 	github.com/blang/semver/v4 v4.0.0
 	github.com/cloudfoundry/go-cfclient/v3 v3.0.0-beta.2
 	github.com/crossplane-contrib/xp-testing v1.10.2
@@ -17,7 +18,6 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/stretchr/testify v1.12.1
 	github.com/vladimirvivien/gexe v0.5.0
-	gopkg.in/alecthomas/kingpin.v2 v2.2.6
 	gopkg.in/yaml.v2 v2.4.0
 	k8s.io/api v0.37.2
 	k8s.io/apimachinery v0.37.2
@@ -33,8 +33,6 @@ require (
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
-	github.com/alecthomas/kingpin/v2 v2.4.0 // indirect
-	github.com/alecthomas/template v0.0.0-20190718012654-fb15b899a751 // indirect
 	github.com/alecthomas/units v0.0.0-20240927000941-0f3dac36c52b // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
