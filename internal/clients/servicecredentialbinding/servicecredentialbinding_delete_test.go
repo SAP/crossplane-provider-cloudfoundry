@@ -57,15 +57,28 @@ func TestDeleteConfirmsBindingAbsence(t *testing.T) {
 	t.Run("nil preflight response is not absence", func(t *testing.T) {
 		cf := &fake.MockServiceCredentialBinding{}
 		cf.On("Get", mock.Anything, guid).Return((*cfresource.ServiceCredentialBinding)(nil), nil).Once()
-		require.ErrorIs(t, Delete(context.Background(), cf, guid), ErrDeletionPending)
+		err := Delete(context.Background(), cf, guid)
+		require.Error(t, err)
+		require.NotErrorIs(t, err, ErrDeletionPending, "a nil API response is anomalous, not routine async progress")
 		cf.AssertNotCalled(t, "Delete", mock.Anything, guid)
 	})
 
-	for _, state := range []string{"initial", "in progress", "succeeded", "unknown"} {
+	for _, state := range []string{"initial", "in progress", "succeeded"} {
 		t.Run("delete operation "+state+" is not resubmitted", func(t *testing.T) {
 			cf := &fake.MockServiceCredentialBinding{}
 			cf.On("Get", mock.Anything, guid).Return(binding("delete", state), nil).Once()
 			require.ErrorIs(t, Delete(context.Background(), cf, guid), ErrDeletionPending)
+			cf.AssertNotCalled(t, "Delete", mock.Anything, guid)
+		})
+	}
+
+	for _, state := range []string{"unknown", ""} {
+		t.Run("unknown delete operation state "+state+" is diagnostic", func(t *testing.T) {
+			cf := &fake.MockServiceCredentialBinding{}
+			cf.On("Get", mock.Anything, guid).Return(binding("delete", state), nil).Once()
+			err := Delete(context.Background(), cf, guid)
+			require.Error(t, err)
+			require.NotErrorIs(t, err, ErrDeletionPending)
 			cf.AssertNotCalled(t, "Delete", mock.Anything, guid)
 		})
 	}
@@ -131,7 +144,9 @@ func TestDeleteConfirmsBindingAbsence(t *testing.T) {
 		cf.On("Get", mock.Anything, guid).Return(binding("create", "succeeded"), nil).Once()
 		cf.On("Delete", mock.Anything, guid).Return("", nil).Once()
 		cf.On("Get", mock.Anything, guid).Return((*cfresource.ServiceCredentialBinding)(nil), nil).Once()
-		require.ErrorIs(t, Delete(context.Background(), cf, guid), ErrDeletionPending)
+		err := Delete(context.Background(), cf, guid)
+		require.Error(t, err)
+		require.NotErrorIs(t, err, ErrDeletionPending, "a nil confirmation response is anomalous")
 		cf.AssertExpectations(t)
 	})
 

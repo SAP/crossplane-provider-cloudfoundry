@@ -299,7 +299,7 @@ func rotationRuntimeStore(t *testing.T, cr *v1alpha1.ServiceCredentialBinding) (
 	return k8sfake.NewClientBuilder().WithScheme(scheme).WithStatusSubresource(&v1alpha1.ServiceCredentialBinding{}).WithObjects(cr).Build(), scheme
 }
 
-func rotationRuntimeReconciler(t *testing.T, kube client.Client, scheme *runtime.Scheme, external managed.ExternalClient, enablePolicies bool) *managed.Reconciler {
+func rotationRuntimeReconciler(t *testing.T, kube client.Client, scheme *runtime.Scheme, external managed.ExternalClient, enablePolicies bool, extra ...managed.ReconcilerOption) *managed.Reconciler {
 	t.Helper()
 	options := []managed.ReconcilerOption{
 		managed.WithInitializers(),
@@ -309,6 +309,7 @@ func rotationRuntimeReconciler(t *testing.T, kube client.Client, scheme *runtime
 	if enablePolicies {
 		options = append(options, managed.WithManagementPolicies())
 	}
+	options = append(options, extra...)
 	return managed.NewReconciler(&rotationTestManager{kube: kube, scheme: scheme}, resource.ManagedKind(v1alpha1.ServiceCredentialBindingGroupVersionKind), options...)
 }
 

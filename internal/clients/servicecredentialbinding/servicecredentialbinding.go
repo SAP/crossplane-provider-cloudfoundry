@@ -172,7 +172,7 @@ func getBindingForDeletion(ctx context.Context, scbClient ServiceCredentialBindi
 		return nil, false, fmt.Errorf("cannot check service credential binding %s %s: %w", guid, phase, err)
 	}
 	if binding == nil {
-		return nil, false, fmt.Errorf("%w: Cloud Foundry returned no binding %s for %s", ErrDeletionPending, phase, guid)
+		return nil, false, fmt.Errorf("cloud foundry returned no binding %s for %s", phase, guid)
 	}
 	return binding, false, nil
 }
@@ -187,7 +187,7 @@ func pendingDeleteOperation(binding *resource.ServiceCredentialBinding, guid str
 	case v1alpha1.LastOperationFailed:
 		// Retry a broker-failed unbind below.
 	default:
-		return fmt.Errorf("%w: Cloud Foundry delete operation for %s has unknown state %q", ErrDeletionPending, guid, binding.LastOperation.State)
+		return fmt.Errorf("cloud foundry delete operation for %s has unknown state %q", guid, binding.LastOperation.State)
 	}
 	return nil
 }

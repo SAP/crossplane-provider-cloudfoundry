@@ -96,12 +96,43 @@ func TestRotationCleanupPartialProgress(t *testing.T) {
 	}
 
 	_, err := ext.Update(context.Background(), cr)
-	require.ErrorIs(t, err, servicecredentialbinding.ErrDeletionPending)
-	require.ErrorContains(t, err, "cannot delete expired key "+failed.GUID)
+	require.NoError(t, err, "pending-only cleanup is normal progress")
 	assert.Equal(t, []*v1alpha1.SCBResource{failed}, cr.Status.AtProvider.RetiredKeys,
 		"successfully deleted and not-found keys should be removed even when another deletion fails")
 	assert.Equal(t, []*v1alpha1.SCBResource{failed}, store.get().Status.AtProvider.RetiredKeys,
 		"successful deletion progress must be persisted even when another deletion fails")
+	cf.AssertExpectations(t)
+}
+
+func TestRotationCleanupPendingAndFailurePersistsOnlyConfirmedRemoval(t *testing.T) {
+	now := time.Date(2026, 11, 10, 12, 0, 0, 0, time.UTC)
+	removed := &v1alpha1.SCBResource{GUID: rotationTestK0, CreatedAt: &metav1.Time{Time: now.Add(-2 * time.Hour)}}
+	pending := &v1alpha1.SCBResource{GUID: "33333333-3333-4333-8333-333333333333", CreatedAt: &metav1.Time{Time: now.Add(-2 * time.Hour)}}
+	failed := &v1alpha1.SCBResource{GUID: "44444444-4444-4444-8444-444444444444", CreatedAt: &metav1.Time{Time: now.Add(-2 * time.Hour)}}
+	cr := serviceCredentialBinding("key", withServiceInstanceID(serviceInstanceGUID), withExternalName(rotationTestK1))
+	cr.Spec.ForProvider.Rotation = &v1alpha1.RotationParameters{TTL: &metav1.Duration{Duration: time.Hour}}
+	cr.Status.AtProvider.RetiredKeys = []*v1alpha1.SCBResource{removed, pending, failed}
+	store := newRotationStoredClient(cr)
+	cf := &fake.MockServiceCredentialBinding{}
+	active := rotationControllerBinding(rotationTestK1, v1alpha1.LastOperationSucceeded)
+	cf.On("Update", mock.Anything, rotationTestK1, mock.Anything).Return(active, nil).Once()
+	cf.On("Get", mock.Anything, rotationTestK1).Return(active, nil).Once()
+	cf.On("Get", mock.Anything, removed.GUID).Return(rotationControllerBinding(removed.GUID, v1alpha1.LastOperationSucceeded), nil).Once()
+	cf.On("Delete", mock.Anything, removed.GUID).Return("", nil).Once()
+	cf.On("Get", mock.Anything, removed.GUID).Return((*cfresource.ServiceCredentialBinding)(nil), cfresource.NewResourceNotFoundError()).Once()
+	inProgress := rotationControllerBinding(pending.GUID, v1alpha1.LastOperationInProgress)
+	inProgress.LastOperation.Type = v1alpha1.LastOperationDelete
+	cf.On("Get", mock.Anything, pending.GUID).Return(inProgress, nil).Once()
+	lookupErr := errors.New("Cloud Foundry lookup unavailable")
+	cf.On("Get", mock.Anything, failed.GUID).Return((*cfresource.ServiceCredentialBinding)(nil), lookupErr).Once()
+
+	_, err := rotationCleanupUpdate(t, store, cf, now)
+	require.ErrorIs(t, err, lookupErr)
+	require.NotErrorIs(t, err, servicecredentialbinding.ErrDeletionPending)
+	stored := store.get()
+	require.Equal(t, []*v1alpha1.SCBResource{pending, failed}, stored.Status.AtProvider.RetiredKeys,
+		"only the confirmed absence is removed; pending and failed identities remain durable")
+	assert.Equal(t, pending, stored.Status.AtProvider.RetiredKeys[0], "pending deadline/identity must be unchanged")
 	cf.AssertExpectations(t)
 }
 
@@ -200,7 +231,7 @@ func TestRotationCleanupAsyncDeletionStatusWriteRetry(t *testing.T) {
 func assertRotationCleanupReconcile(t *testing.T, store *rotationStoredClient, cf *fake.MockServiceCredentialBinding, now time.Time) {
 	t.Helper()
 	_, err := rotationCleanupUpdate(t, store, cf, now)
-	require.ErrorIs(t, err, servicecredentialbinding.ErrDeletionPending)
+	require.NoError(t, err, "asynchronous cleanup remains eligible for a later reconcile")
 }
 
 func rotationCleanupUpdate(t *testing.T, store *rotationStoredClient, cf *fake.MockServiceCredentialBinding, now time.Time) (managed.ExternalUpdate, error) {

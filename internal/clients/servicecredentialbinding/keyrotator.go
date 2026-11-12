@@ -147,7 +147,9 @@ func (r *SCBKeyRotator) DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.Serv
 
 		if err := Delete(ctx, r.SCBClient, key.GUID); err != nil {
 			newRetiredKeys = append(newRetiredKeys, key)
-			errs = append(errs, fmt.Errorf("cannot delete expired key %s: %w", key.GUID, err))
+			if !errors.Is(err, ErrDeletionPending) {
+				errs = append(errs, fmt.Errorf("cannot delete expired key %s: %w", key.GUID, err))
+			}
 		}
 	}
 

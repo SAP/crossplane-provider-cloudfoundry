@@ -308,6 +308,9 @@ func (c *external) observeMissing(ctx context.Context, cr *v1alpha1.ServiceCrede
 			return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
 		}
 		if err := c.keyRotator.DeleteRetiredKeys(ctx, cr); err != nil {
+			if errors.Is(err, scb.ErrDeletionPending) {
+				return managed.ExternalObservation{ResourceExists: true, ResourceUpToDate: true}, nil
+			}
 			return managed.ExternalObservation{}, fmt.Errorf(errDeleteRetiredKeys, err)
 		}
 		return managed.ExternalObservation{ResourceExists: false}, nil
@@ -450,7 +453,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	cr.SetConditions(xpv2.Deleting())
 
 	if err := c.keyRotator.DeleteRetiredKeys(ctx, cr); err != nil {
-		return managed.ExternalDelete{}, fmt.Errorf(errDeleteRetiredKeys, err)
+		return pendingDeletionResult(err, errDeleteRetiredKeys)
 	}
 
 	// Try external-name first, then fall back to status GUID
@@ -470,10 +473,17 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 
 	if err := scb.Delete(ctx, c.scbClient, guidToDelete); err != nil {
-		return managed.ExternalDelete{}, fmt.Errorf(errDelete, err)
+		return pendingDeletionResult(err, errDelete)
 	}
 
 	return managed.ExternalDelete{}, nil
+}
+
+func pendingDeletionResult(err error, message string) (managed.ExternalDelete, error) {
+	if errors.Is(err, scb.ErrDeletionPending) {
+		return managed.ExternalDelete{}, nil
+	}
+	return managed.ExternalDelete{}, fmt.Errorf(message, err)
 }
 
 // extractParameters returns the parameters or credentials from the spec
