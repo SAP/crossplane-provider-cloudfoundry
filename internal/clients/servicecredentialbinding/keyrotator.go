@@ -145,8 +145,7 @@ func (r *SCBKeyRotator) DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.Serv
 			continue
 		}
 
-		if err := Delete(ctx, r.SCBClient, key.GUID); err != nil &&
-			!cfresource.IsResourceNotFoundError(err) && !cfresource.IsServiceBindingNotFoundError(err) {
+		if err := Delete(ctx, r.SCBClient, key.GUID); err != nil {
 			newRetiredKeys = append(newRetiredKeys, key)
 			errs = append(errs, fmt.Errorf("cannot delete expired key %s: %w", key.GUID, err))
 		}
@@ -197,8 +196,7 @@ func (r *SCBKeyRotator) DeleteRetiredKeys(ctx context.Context, cr *v1alpha1.Serv
 		if retiredKey.GUID == "" {
 			return errors.New("cannot delete retired key with missing GUID")
 		}
-		if err := Delete(ctx, r.SCBClient, retiredKey.GUID); err != nil &&
-			!cfresource.IsResourceNotFoundError(err) && !cfresource.IsServiceBindingNotFoundError(err) {
+		if err := Delete(ctx, r.SCBClient, retiredKey.GUID); err != nil {
 			return fmt.Errorf("cannot delete retired key %s: %w", retiredKey.GUID, err)
 		}
 	}

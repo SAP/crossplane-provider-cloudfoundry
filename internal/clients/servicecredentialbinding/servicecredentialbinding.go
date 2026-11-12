@@ -178,7 +178,7 @@ func getBindingForDeletion(ctx context.Context, scbClient ServiceCredentialBindi
 }
 
 func pendingDeleteOperation(binding *resource.ServiceCredentialBinding, guid string) error {
-	if binding.LastOperation.Type != "delete" {
+	if binding.LastOperation.Type != v1alpha1.LastOperationDelete {
 		return nil
 	}
 	switch binding.LastOperation.State {

@@ -469,7 +469,7 @@ func (c *external) Delete(ctx context.Context, mg resource.Managed) (managed.Ext
 		return managed.ExternalDelete{}, nil
 	}
 
-	if err := clients.IgnoreNotFoundErr(scb.Delete(ctx, c.scbClient, guidToDelete)); err != nil {
+	if err := scb.Delete(ctx, c.scbClient, guidToDelete); err != nil {
 		return managed.ExternalDelete{}, fmt.Errorf(errDelete, err)
 	}
 
