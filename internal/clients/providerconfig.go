@@ -55,7 +55,17 @@ func GetCredentialConfig(ctx context.Context, client client.Client, mg resource.
 		return nil, errors.Wrap(err, errExtractEndpoint)
 	}
 
-	return config.New(*url, config.UserPassword(cred.Email, cred.Password), config.SkipTLSValidation())
+	opts := []config.Option{config.UserPassword(cred.Email, cred.Password)}
+	if skipTLS(pc) {
+		opts = append(opts, config.SkipTLSValidation())
+	}
+	return config.New(*url, opts...)
+}
+
+// skipTLS reports whether TLS server-certificate verification should be disabled
+// for the CF API connection. Defaults to false (verify) when the field is unset.
+func skipTLS(pc *v1beta1.ProviderConfig) bool {
+	return pc.Spec.SkipTLSValidation != nil && *pc.Spec.SkipTLSValidation
 }
 
 func getProviderConfig(ctx context.Context, client client.Client, mg resource.Managed) (*v1beta1.ProviderConfig, error) {

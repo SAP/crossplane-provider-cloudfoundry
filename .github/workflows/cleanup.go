@@ -109,6 +109,7 @@ func newCfClient() (*client.Client, error) {
 		return nil, fmt.Errorf("cannot extract CF credentials: %w", err)
 	}
 
+	// Skip TLS intentional: build-ignored CI tool against public CF, not shipped runtime.
 	cfg, err := config.New(endpoint, config.UserPassword(s.Email, s.Password), config.SkipTLSValidation())
 	if err != nil {
 		return nil, fmt.Errorf("cannot configure CF client: %w", err)
