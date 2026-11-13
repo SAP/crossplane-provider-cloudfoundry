@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 	"github.com/crossplane/crossplane-runtime/v2/pkg/meta"
 	xpv2 "github.com/crossplane/crossplane/apis/v2/core/v2"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+
+	"github.com/SAP/crossplane-provider-cloudfoundry/apis/resources/v1alpha1"
 )
 
 const (
@@ -27,6 +28,28 @@ func prepareRotationMigrationBindingDeletion(
 	key client.ObjectKey,
 	remember func(*v1alpha1.ServiceCredentialBinding),
 ) error {
+	armed, err := armRotationMigrationBindingDeletion(ctx, kube, key, remember)
+	if err != nil {
+		return fmt.Errorf("arm owned binding for safe deletion: %w", err)
+	}
+	if armed == nil {
+		return nil
+	}
+	if err := deleteRotationMigrationBinding(ctx, kube, armed); err != nil {
+		return fmt.Errorf("request deletion of safely armed binding: %w", err)
+	}
+	if err := releaseRotationMigrationBinding(ctx, kube, key, remember); err != nil {
+		return fmt.Errorf("release owned binding after delete request: %w", err)
+	}
+	return nil
+}
+
+func armRotationMigrationBindingDeletion(
+	ctx context.Context,
+	kube client.Client,
+	key client.ObjectKey,
+	remember func(*v1alpha1.ServiceCredentialBinding),
+) (*v1alpha1.ServiceCredentialBinding, error) {
 	var armed *v1alpha1.ServiceCredentialBinding
 	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		current := &v1alpha1.ServiceCredentialBinding{}
@@ -48,17 +71,22 @@ func prepareRotationMigrationBindingDeletion(
 		armed = current
 		return nil
 	})
-	if err != nil {
-		return fmt.Errorf("arm owned binding for safe deletion: %w", err)
-	}
-	if armed == nil {
-		return nil
-	}
+	return armed, err
+}
 
+func deleteRotationMigrationBinding(ctx context.Context, kube client.Client, armed *v1alpha1.ServiceCredentialBinding) error {
 	if err := kube.Delete(ctx, armed); err != nil && !apierrors.IsNotFound(err) {
-		return fmt.Errorf("request deletion of safely armed binding: %w", err)
+		return err
 	}
+	return nil
+}
 
+func releaseRotationMigrationBinding(
+	ctx context.Context,
+	kube client.Client,
+	key client.ObjectKey,
+	remember func(*v1alpha1.ServiceCredentialBinding),
+) error {
 	return retry.RetryOnConflict(retry.DefaultRetry, func() error {
 		current := &v1alpha1.ServiceCredentialBinding{}
 		if err := kube.Get(ctx, key, current); err != nil {
@@ -80,7 +108,7 @@ func prepareRotationMigrationBindingDeletion(
 			current.Annotations = nil
 		}
 		if err := kube.Update(ctx, current); err != nil {
-			return fmt.Errorf("release owned binding after delete request: %w", err)
+			return err
 		}
 		return nil
 	})

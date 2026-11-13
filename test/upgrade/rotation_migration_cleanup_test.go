@@ -147,7 +147,7 @@ func (c *rotationMigrationCleanupClient) Update(ctx context.Context, obj client.
 func (c *rotationMigrationCleanupClient) Delete(ctx context.Context, obj client.Object, opts ...client.DeleteOption) error {
 	c.deleteCalls++
 	persisted := &v1alpha1.ServiceCredentialBinding{}
-	if err := c.Client.Get(ctx, client.ObjectKeyFromObject(obj), persisted); err != nil {
+	if err := c.Get(ctx, client.ObjectKeyFromObject(obj), persisted); err != nil {
 		return err
 	}
 	if persisted.Annotations[meta.AnnotationKeyReconciliationPaused] != "true" || !slices.Equal(persisted.Spec.ManagementPolicies, xpv2.ManagementPolicies{xpv2.ManagementActionAll}) {
@@ -185,7 +185,7 @@ func TestPrepareRotationMigrationBindingDeletionDoesNotReleaseAfterDeleteFailure
 	persisted := &v1alpha1.ServiceCredentialBinding{}
 	require.NoError(t, store.Get(ctx, client.ObjectKeyFromObject(binding), persisted))
 	require.Equal(t, "true", persisted.Annotations[meta.AnnotationKeyReconciliationPaused])
-	require.Equal(t, "", persisted.Annotations[rotationMigrationForceAnnotation])
+	require.Empty(t, persisted.Annotations[rotationMigrationForceAnnotation])
 	require.Equal(t, "retry-exhausted", persisted.Annotations[rotationMigrationPauseAnnotation])
 	require.Equal(t, xpv2.ManagementPolicies{xpv2.ManagementActionAll}, persisted.Spec.ManagementPolicies)
 }
