@@ -34,11 +34,9 @@ import (
 )
 
 const (
-	rotationMigrationBindingName     = "upgrade-test-rotation-service-credential-binding"
-	rotationMigrationForceAnnotation = "servicecredentialbinding.cloudfoundry.crossplane.io/force-rotation"
-	rotationMigrationPauseAnnotation = "servicecredentialbinding.cloudfoundry.crossplane.io/max-retry-exceeded"
-	rotationMigrationFailureEnv      = "UPGRADE_TEST_INJECT_ROTATION_MIGRATION_FAILURE"
-	rotationMigrationFailurePoint    = "after-upgrade-before-post-assessment"
+	rotationMigrationBindingName  = "upgrade-test-rotation-service-credential-binding"
+	rotationMigrationFailureEnv   = "UPGRADE_TEST_INJECT_ROTATION_MIGRATION_FAILURE"
+	rotationMigrationFailurePoint = "after-upgrade-before-post-assessment"
 )
 
 var rotationMigrationResourceDirectories = []string{
@@ -348,9 +346,8 @@ func rotationMigrationResumeSupportingResources(ctx context.Context, kube ctrlcl
 	)
 }
 
-// rotationMigrationPrepareCleanup removes only operational annotations owned by
-// this scenario before fixture deletion, including when the upgrade assessment
-// failed and left the old controller paused.
+// rotationMigrationPrepareCleanup safely requests deletion of this scenario's
+// binding, including when an assessment failed and left the old controller paused.
 func rotationMigrationPrepareCleanup(ctx context.Context, cfg *envconf.Config, state *rotationMigrationState) error {
 	var errs []error
 	if state.Kube == nil {
@@ -387,42 +384,10 @@ func rotationMigrationPrepareCleanup(ctx context.Context, cfg *envconf.Config, s
 		state.CF, state.CFAPI = cf, cfAPI
 	}
 
-	// Mark the owned binding for deletion before removing pause/force markers. This
-	// closes the window in which the legacy provider could interpret the retained
-	// empty annotation as a fresh rotation after being unpaused.
-	if err := state.Kube.Delete(ctx, current); err != nil && !kubeErrors.IsNotFound(err) {
-		return errors.Join(append(errs, fmt.Errorf("request deletion of owned binding before unpausing it: %w", err))...)
-	}
-
-	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
-		latest := &v1alpha1.ServiceCredentialBinding{}
-		if err := state.Kube.Get(ctx, key, latest); err != nil {
-			if kubeErrors.IsNotFound(err) {
-				return nil
-			}
-			return err
-		}
-		rotationMigrationRememberBinding(state, latest)
-		// Restore full management only inside this scenario-owned cleanup hook,
-		// after the no-Create migration assertions have completed.
-		latest.Spec.ManagementPolicies = xpv2.ManagementPolicies{xpv2.ManagementActionAll}
-		changed := true
-		for _, annotation := range []string{
-			rotationMigrationPauseAnnotation,
-			rotationMigrationForceAnnotation,
-			"crossplane.io/paused",
-		} {
-			if _, exists := latest.Annotations[annotation]; exists {
-				delete(latest.Annotations, annotation)
-				changed = true
-			}
-		}
-		if !changed {
-			return nil
-		}
-		return state.Kube.Update(ctx, latest)
+	if err := prepareRotationMigrationBindingDeletion(ctx, state.Kube, key, func(binding *v1alpha1.ServiceCredentialBinding) {
+		rotationMigrationRememberBinding(state, binding)
 	}); err != nil {
-		return errors.Join(append(errs, fmt.Errorf("clear scenario-owned pause/force annotations before resource deletion: %w", err))...)
+		return errors.Join(append(errs, fmt.Errorf("prepare owned binding deletion: %w", err))...)
 	}
 	return errors.Join(errs...)
 }

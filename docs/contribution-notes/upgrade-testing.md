@@ -313,6 +313,8 @@ Custom tests use YAML manifests from `test/upgrade/testdata/customCRs/{testName}
 
 `Test_ServiceCredentialBinding_Rotation_Migration` verifies legacy retired-key migration and the `deleteAfter` CRD field, including the one-time 48-hour deadline after handover. It runs only with `UPGRADE_TEST_FROM_TAG=v1.3.0` and `UPGRADE_TEST_TO_TAG=local`; other version pairs skip it. Fixtures are in `test/upgrade/testdata/customCrs/serviceCredentialBindingRotation/`.
 
+Its cleanup hook atomically persists wildcard management policies and the full Crossplane reconciliation pause before requesting binding deletion. It removes only the scenario-owned force/retry-pause/runtime-pause annotations after Delete succeeds or reports that the object is already gone. This prevents an intervening reconcile from orphan-finalizing the resource under `[Observe, Update]`, and prevents the legacy controller from treating the retained empty force annotation as a new rotation. If deletion fails, the binding remains paused and the cleanup error is reported; inspect and recover the owned resource rather than assuming teardown completed. The sequence is tested with a real managed reconciler at the Delete boundary, but cleanup hooks cannot protect against hard process termination.
+
 Run only in an authorized, disposable Kubernetes/Cloud Foundry environment, following the usual credential and cleanup precautions:
 
 ```sh
