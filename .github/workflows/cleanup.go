@@ -65,12 +65,7 @@ func main() {
 	}
 	// Delete SRBs before SIs — a bound SRB blocks SI deletion.
 	logCleanupErr("srb-e2e-serviceroutebinding"+scopedSuffix, deleteSRBByServiceInstance(ctx, cfClient, org.GUID, "e2e-serviceroutebinding-serviceinstance"+scopedSuffix))
-	for _, si := range []string{
-		"e2e-service-instance" + scopedSuffix,
-		"e2e-ups" + scopedSuffix,
-		"e2e-ups-no-credentials" + scopedSuffix,
-		"e2e-serviceroutebinding-serviceinstance" + scopedSuffix,
-	} {
+	for _, si := range serviceInstanceCleanupNames(scopedSuffix) {
 		logCleanupErr(si, deleteServiceInstance(ctx, cfClient, org.GUID, si))
 	}
 
@@ -158,6 +153,23 @@ func deleteApp(ctx context.Context, cfClient *client.Client, orgID, name string)
 	}
 	_, err = cfClient.Applications.Delete(ctx, a.GUID)
 	return err
+}
+
+// serviceInstanceCleanupNames includes the XSUAA instances backing the SCB
+// rotation fixtures. This fallback handles runs killed before test defers; the
+// reusable CI workflow runs the base-branch copy of this script, so these
+// entries take effect there after they reach the base branch. The ignored
+// script's pure registry tests can be run with:
+// go test .github/workflows/cleanup.go .github/workflows/cleanup_test.go -count=1
+func serviceInstanceCleanupNames(scopedSuffix string) []string {
+	return []string{
+		"e2e-service-instance" + scopedSuffix,
+		"e2e-ups" + scopedSuffix,
+		"e2e-ups-no-credentials" + scopedSuffix,
+		"e2e-serviceroutebinding-serviceinstance" + scopedSuffix,
+		"rotation-instance" + scopedSuffix,
+		"cleanup-instance" + scopedSuffix,
+	}
 }
 
 func deleteServiceInstance(ctx context.Context, cfClient *client.Client, orgID, name string) error {

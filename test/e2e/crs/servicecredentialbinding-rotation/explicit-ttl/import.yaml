@@ -1,0 +1,23 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Organization
+metadata:
+  name: cleanup-org-$BUILD_ID
+  namespace: default
+spec:
+  managementPolicies: [Observe]
+  forProvider:
+    name: cf-ci-e2e
+---
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: Space
+metadata:
+  name: cleanup-space-$BUILD_ID
+  namespace: default
+spec:
+  managementPolicies: [Observe]
+  forProvider:
+    name: space-donotdelete
+    orgRef:
+      name: cleanup-org-$BUILD_ID
+      policy:
+        resolve: Always

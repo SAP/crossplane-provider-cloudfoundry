@@ -25,7 +25,6 @@ import (
 	"testing"
 	"time"
 
-	testutil "github.com/SAP/crossplane-provider-cloudfoundry/test"
 	"github.com/crossplane-contrib/xp-testing/pkg/images"
 	"github.com/crossplane-contrib/xp-testing/pkg/setup"
 	"github.com/crossplane-contrib/xp-testing/pkg/vendored"
@@ -36,7 +35,8 @@ import (
 	"k8s.io/klog/v2"
 	"sigs.k8s.io/e2e-framework/pkg/env"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
-	"sigs.k8s.io/e2e-framework/support/kind"
+
+	testutil "github.com/SAP/crossplane-provider-cloudfoundry/test"
 )
 
 const (
@@ -100,14 +100,21 @@ func TestMain(m *testing.M) {
 
 	namespace := envconf.RandomName(namespacePrefix, 16)
 
-	SetupClusterWithCrossplane(namespace)
+	if err := SetupClusterWithCrossplane(namespace); err != nil {
+		klog.Fatal("failed to configure test cluster: ", err)
+	}
 
 	os.Exit(testenv.Run(m))
 }
 
 // SetupClusterWithCrossplane creates a kind cluster with Crossplane and the CloudFoundry provider
 // This is called once before all tests run
-func SetupClusterWithCrossplane(namespace string) {
+func SetupClusterWithCrossplane(namespace string) error {
+	cluster, err := testutil.NewKindClusterFromEnvironment()
+	if err != nil {
+		return err
+	}
+
 	testenv = env.New()
 
 	// Get CloudFoundry credentials from environment
@@ -168,12 +175,13 @@ func SetupClusterWithCrossplane(namespace string) {
 	})
 
 	// Configure the test environment
-	_ = cfg.Configure(testenv, &kind.Cluster{})
+	_ = cfg.Configure(testenv, cluster)
 
 	// Setup CloudFoundry credentials and ProviderConfig
 	testenv.Setup(
 		testutil.ApplySecretInCrossplaneNamespace(cfSecretName, cfSecretData),
 	)
+	return nil
 }
 
 // resolveImagePaths determines the correct package-plus-optional-controller

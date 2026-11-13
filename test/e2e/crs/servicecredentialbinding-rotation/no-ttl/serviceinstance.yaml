@@ -1,0 +1,22 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: rotation-instance-$BUILD_ID
+  namespace: default
+spec:
+  forProvider:
+    type: managed
+    name: rotation-instance-$BUILD_ID
+    spaceRef:
+      name: rotation-space-$BUILD_ID
+      policy:
+        resolve: Always
+    servicePlan:
+      offering: xsuaa
+      plan: application
+    parameters:
+      xsappname: scb-rotation-no-ttl-$BUILD_ID
+      tenant-mode: dedicated
+      oauth2-configuration:
+        credential-types:
+          - binding-secret

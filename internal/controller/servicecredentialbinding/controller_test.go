@@ -420,6 +420,7 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Get", mock.Anything, guid).Return(cfSucceeded(), nil)
+				m.On("GetDetails", mock.Anything, guid).Return(&cfresource.ServiceCredentialBindingDetails{Credentials: map[string]any{}}, nil)
 				return m
 			},
 			keyRotator: func() *fake.MockKeyRotator {
@@ -427,7 +428,7 @@ func TestObserve(t *testing.T) {
 				m.On("RetireBinding", mock.Anything, mock.Anything).Return(true)
 				return m
 			},
-			wantKubeCalls: []string{"StatusUpdate", "Update"},
+			wantKubeCalls: []string{"Update"},
 			wantEvents:    []string{"Warning/CreateAttemptsExhausted"},
 		},
 		"Retirement_BelowLimit": {
@@ -443,6 +444,7 @@ func TestObserve(t *testing.T) {
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				m.On("Get", mock.Anything, guid).Return(cfSucceeded(), nil)
+				m.On("GetDetails", mock.Anything, guid).Return(&cfresource.ServiceCredentialBindingDetails{Credentials: map[string]any{}}, nil)
 				return m
 			},
 			keyRotator: func() *fake.MockKeyRotator {
@@ -913,6 +915,7 @@ func TestUpdate(t *testing.T) {
 					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).ServiceCredentialBinding,
 					nil,
 				)
+				m.On("Get", mock.Anything, guid).Return(&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceCredentialBinding, nil)
 				return m
 			},
 			keyRotator: func() *fake.MockKeyRotator {
@@ -939,6 +942,7 @@ func TestUpdate(t *testing.T) {
 					&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).ServiceCredentialBinding,
 					nil,
 				)
+				m.On("Get", mock.Anything, guid).Return(&fake.NewServiceCredentialBinding("key").SetName(name).SetGUID(guid).SetLastOperation(v1alpha1.LastOperationCreate, v1alpha1.LastOperationSucceeded).ServiceCredentialBinding, nil)
 				return m
 			},
 			keyRotator: func() *fake.MockKeyRotator {
@@ -1581,7 +1585,9 @@ func TestDelete(t *testing.T) {
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
-				m.On("Delete", mock.Anything, guid).Return(guid, nil)
+				m.On("Get", mock.Anything, guid).Return(&cfresource.ServiceCredentialBinding{Resource: cfresource.Resource{GUID: guid}}, nil).Once()
+				m.On("Delete", mock.Anything, guid).Return(guid, nil).Once()
+				m.On("Get", mock.Anything, guid).Return((*cfresource.ServiceCredentialBinding)(nil), cfresource.NewResourceNotFoundError()).Once()
 				return m
 			},
 			keyRotator: func() *fake.MockKeyRotator {
@@ -1599,11 +1605,12 @@ func TestDelete(t *testing.T) {
 			},
 			want: want{
 				mg:  mgWant.DeepCopy(),
-				err: fmt.Errorf(errDelete, errCFClientError),
+				err: fmt.Errorf(errDelete, fmt.Errorf("cannot delete service credential binding %s: %w", guid, errCFClientError)),
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
-				m.On("Delete", mock.Anything, guid).Return("", errCFClientError)
+				m.On("Get", mock.Anything, guid).Return(&cfresource.ServiceCredentialBinding{Resource: cfresource.Resource{GUID: guid}}, nil).Once()
+				m.On("Delete", mock.Anything, guid).Return("", errCFClientError).Once()
 				return m
 			},
 			keyRotator: func() *fake.MockKeyRotator {
@@ -1647,7 +1654,8 @@ func TestDelete(t *testing.T) {
 			},
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
-				m.On("Delete", mock.Anything, guid).Return("", fake.ErrNoResultReturned)
+				m.On("Get", mock.Anything, guid).Return(&cfresource.ServiceCredentialBinding{Resource: cfresource.Resource{GUID: guid}}, nil).Once()
+				m.On("Delete", mock.Anything, guid).Return("", cfresource.NewResourceNotFoundError()).Once()
 				return m
 			},
 			keyRotator: func() *fake.MockKeyRotator {
@@ -1669,7 +1677,9 @@ func TestDelete(t *testing.T) {
 			service: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
 				// External-name is invalid UUID, but status has valid GUID - should use status GUID
-				m.On("Delete", mock.Anything, guid).Return("", nil)
+				m.On("Get", mock.Anything, guid).Return(&cfresource.ServiceCredentialBinding{Resource: cfresource.Resource{GUID: guid}}, nil).Once()
+				m.On("Delete", mock.Anything, guid).Return("", nil).Once()
+				m.On("Get", mock.Anything, guid).Return((*cfresource.ServiceCredentialBinding)(nil), cfresource.NewResourceNotFoundError()).Once()
 				return m
 			},
 			keyRotator: func() *fake.MockKeyRotator {

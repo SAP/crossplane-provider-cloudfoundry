@@ -36,6 +36,7 @@ func TestGetConnectionDetails(t *testing.T) {
 
 	type want struct {
 		details managed.ConnectionDetails
+		err     bool
 	}
 
 	testCredentials := map[string]interface{}{
@@ -85,24 +86,59 @@ func TestGetConnectionDetails(t *testing.T) {
 				guid:   testGUID,
 				asJSON: false,
 			},
-			want: want{
-				details: nil,
+			want: want{err: true},
+		},
+		"NilDetails": {
+			args: args{
+				ctx:    context.Background(),
+				client: createMockClientWithNilDetails(),
+				guid:   testGUID,
 			},
+			want: want{err: true},
+		},
+		"EmptyCredentials": {
+			args: args{
+				ctx:    context.Background(),
+				client: createMockClientWithDetails(map[string]interface{}{}, nil),
+				guid:   testGUID,
+			},
+			want: want{details: managed.ConnectionDetails{}},
+		},
+		"EmptyCredentialsAsJSON": {
+			args: args{
+				ctx:    context.Background(),
+				client: createMockClientWithDetails(map[string]interface{}{}, nil),
+				guid:   testGUID,
+				asJSON: true,
+			},
+			want: want{details: managed.ConnectionDetails{"credentials": []byte(`{}`)}},
+		},
+		"JSONEncodingError": {
+			args: args{
+				ctx:    context.Background(),
+				client: createMockClientWithDetails(map[string]interface{}{"unsupported": make(chan int)}, nil),
+				guid:   testGUID,
+				asJSON: true,
+			},
+			want: want{err: true},
+		},
+		"FlattenedEncodingError": {
+			args: args{
+				client: createMockClientWithDetails(map[string]interface{}{"unsupported": make(chan int)}, nil),
+				guid:   testGUID,
+			},
+			want: want{err: true},
 		},
 	}
 
 	for n, tc := range cases {
 		t.Run(n, func(t *testing.T) {
-			details := GetConnectionDetails(tc.args.ctx, tc.args.client, tc.args.guid, tc.args.asJSON)
-
-			if tc.want.details == nil {
-				if details != nil {
-					t.Errorf("GetConnectionDetails(...): expected nil, got %v", details)
-				}
-			} else {
-				if diff := cmp.Diff(tc.want.details, details); diff != "" {
-					t.Errorf("GetConnectionDetails(...): -want, +got:\n%s", diff)
-				}
+			details, err := GetConnectionDetails(tc.args.ctx, tc.args.client, tc.args.guid, tc.args.asJSON)
+			if (err != nil) != tc.want.err {
+				t.Errorf("GetConnectionDetails(...) error state mismatch: got error=%t, want error=%t", err != nil, tc.want.err)
+			}
+			if !cmp.Equal(tc.want.details, details) {
+				t.Error("GetConnectionDetails(...) returned unexpected connection details")
 			}
 		})
 	}
@@ -446,6 +482,13 @@ func TestIsUpToDate(t *testing.T) {
 	if !result {
 		t.Errorf("IsUpToDate(...): expected true, got false")
 	}
+}
+
+// Helper function to create a mock client that returns no detail object.
+func createMockClientWithNilDetails() ServiceCredentialBinding {
+	mockClient := &fake.MockServiceCredentialBinding{}
+	mockClient.On("GetDetails", mock.Anything, testGUID).Return((*cfresource.ServiceCredentialBindingDetails)(nil), nil)
+	return mockClient
 }
 
 // Helper function to create mock client with details
