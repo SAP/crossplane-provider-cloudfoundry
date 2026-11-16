@@ -1,0 +1,17 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceCredentialBinding
+metadata:
+  name: scb-rotation-no-ttl-$BUILD_ID
+  namespace: default
+spec:
+  forProvider:
+    name: scb-rotation-no-ttl-$BUILD_ID
+    type: key
+    serviceInstanceRef:
+      name: rotation-instance-$BUILD_ID
+      policy:
+        resolve: Always
+  connectionDetailsAsJSON: true
+  writeConnectionSecretToRef:
+    name: scb-rotation-no-ttl-secret-$BUILD_ID
+    namespace: default

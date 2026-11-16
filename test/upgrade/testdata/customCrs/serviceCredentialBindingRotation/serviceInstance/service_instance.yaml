@@ -1,0 +1,17 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: upgrade-test-rotation-service-instance
+spec:
+  providerConfigRef:
+    name: default
+  forProvider:
+    type: managed
+    name: upgrade-test-rotation-service-instance
+    spaceRef:
+      name: upgrade-test-rotation-space
+      policy:
+        resolve: Always
+    servicePlan:
+      offering: xsuaa
+      plan: application

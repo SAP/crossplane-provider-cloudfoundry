@@ -1,0 +1,20 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceCredentialBinding
+metadata:
+  name: scb-rotation-cleanup-$BUILD_ID
+  namespace: default
+spec:
+  forProvider:
+    name: scb-rotation-cleanup-$BUILD_ID
+    type: key
+    serviceInstanceRef:
+      name: cleanup-instance-$BUILD_ID
+      policy:
+        resolve: Always
+    rotation:
+      frequency: 5m
+      ttl: 5m
+  connectionDetailsAsJSON: true
+  writeConnectionSecretToRef:
+    name: scb-rotation-cleanup-secret-$BUILD_ID
+    namespace: default
