@@ -16,7 +16,9 @@ type ServiceCredentialBindingObservation struct {
 	// (Attributes) The details of the last operation performed on the service credential binding.
 	LastOperation *LastOperation `json:"lastOperation,omitempty"`
 
-	// If the binding is rotated, `retiredBindings` stores resources that have been rotated out but are still transitionally retained due to `rotation.ttl` setting
+	// RetiredKeys stores key bindings rotated out but retained during credential handover.
+	// When rotation.ttl is configured, its creation-based lifetime controls cleanup;
+	// otherwise deleteAfter stores the durable fallback retention deadline.
 	// +kubebuilder:validation:Optional
 	RetiredKeys []*SCBResource `json:"retiredKeys,omitempty"`
 
@@ -120,6 +122,11 @@ type SCBResource struct {
 	Name string `json:"name,omitempty"`
 	// The date and time when the resource was created.
 	CreatedAt *metav1.Time `json:"createdAt,omitempty"`
+	// DeleteAfter is the durable fallback cleanup deadline for a retired key when no
+	// explicit rotation TTL is configured. It is initialized after successful handover
+	// and is not reset by subsequent reconciliations. It is unused on the active binding.
+	// +kubebuilder:validation:Optional
+	DeleteAfter *metav1.Time `json:"deleteAfter,omitempty"`
 }
 
 // +kubebuilder:object:root=true

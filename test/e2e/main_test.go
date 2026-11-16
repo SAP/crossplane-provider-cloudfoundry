@@ -16,12 +16,13 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/klog"
 
+	testutil "github.com/SAP/crossplane-provider-cloudfoundry/test"
+
 	"sigs.k8s.io/e2e-framework/klient/decoder"
 	resources "sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/pkg/env"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/envfuncs"
-	"sigs.k8s.io/e2e-framework/support/kind"
 )
 
 var (
@@ -35,12 +36,19 @@ func TestMain(m *testing.M) {
 
 	namespace := envconf.RandomName("test-ns", 16)
 
-	SetupClusterWithCrossplane(namespace)
+	if err := SetupClusterWithCrossplane(namespace); err != nil {
+		klog.Fatal("failed to configure test cluster: ", err)
+	}
 
 	os.Exit(testenv.Run(m))
 }
 
-func SetupClusterWithCrossplane(namespace string) {
+func SetupClusterWithCrossplane(namespace string) error {
+	cluster, err := testutil.NewKindClusterFromEnvironment()
+	if err != nil {
+		return err
+	}
+
 	testenv = env.New()
 
 	secretData := getProviderConfigSecretData()
@@ -81,7 +89,7 @@ func SetupClusterWithCrossplane(namespace string) {
 		DeploymentRuntimeConfig: &deploymentRuntimeConfig,
 	}
 
-	clusterSetup.Configure(testenv, &kind.Cluster{})
+	clusterSetup.Configure(testenv, cluster)
 
 	testenv.Setup(
 		envfuncs.CreateNamespace(namespace),
@@ -102,4 +110,5 @@ func SetupClusterWithCrossplane(namespace string) {
 			return ctx, nil
 		},
 	)
+	return nil
 }
