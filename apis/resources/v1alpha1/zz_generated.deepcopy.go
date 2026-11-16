@@ -2212,6 +2212,10 @@ func (in *ServiceCredentialBindingObservation) DeepCopyInto(out *ServiceCredenti
 			}
 		}
 	}
+	if in.NextRotationAt != nil {
+		in, out := &in.NextRotationAt, &out.NextRotationAt
+		*out = (*in).DeepCopy()
+	}
 	in.ResourceMetadata.DeepCopyInto(&out.ResourceMetadata)
 }
 

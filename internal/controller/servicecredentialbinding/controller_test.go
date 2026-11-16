@@ -949,7 +949,7 @@ func TestUpdate(t *testing.T) {
 				m := &fake.MockKeyRotator{}
 				m.On("DeleteExpiredKeys", mock.Anything, mgWithRetiredKeys.DeepCopy()).Return(
 					[]*v1alpha1.SCBResource{},
-					errCFClientError,
+					[]error{errCFClientError},
 				)
 				return m
 			},

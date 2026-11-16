@@ -177,19 +177,20 @@ func TestRotationCleanupAsyncDeletionRetries(t *testing.T) {
 			assertRotationCleanupReconcile(t, store, cf, now)
 			require.Equal(t, retired, store.get().Status.AtProvider.RetiredKeys[0])
 
-			// Once the broker reports a failed unbind, retry exactly once; still-present
-			// bindings remain tracked even when Cloud Foundry accepts the retry.
+			// Once the broker reports a failed unbind, retry exactly once. The binding stays
+			// tracked and the failure is reported even when Cloud Foundry accepts the retry.
 			failed := rotationControllerBinding(rotationTestK0, v1alpha1.LastOperationFailed)
 			failed.LastOperation.Type = "delete"
 			cf.On("Get", mock.Anything, rotationTestK0).Return(failed, nil).Once()
 			cf.On("Delete", mock.Anything, rotationTestK0).Return("retry-job", nil).Once()
 			cf.On("Get", mock.Anything, rotationTestK0).Return(rotationControllerBinding(rotationTestK0, v1alpha1.LastOperationInProgress), nil).Once()
-			assertRotationCleanupReconcile(t, store, cf, now)
+			_, err := rotationCleanupUpdate(t, store, cf, now)
+			require.ErrorIs(t, err, servicecredentialbinding.ErrUnbindFailed)
 			require.Equal(t, retired, store.get().Status.AtProvider.RetiredKeys[0])
 
 			// Confirmed absence is the only transition that removes the durable identity.
 			cf.On("Get", mock.Anything, rotationTestK0).Return((*cfresource.ServiceCredentialBinding)(nil), cfresource.NewResourceNotFoundError()).Once()
-			_, err := rotationCleanupUpdate(t, store, cf, now)
+			_, err = rotationCleanupUpdate(t, store, cf, now)
 			require.NoError(t, err, "confirmed absence should remove the durable identity")
 			stored = store.get()
 			require.Empty(t, stored.Status.AtProvider.RetiredKeys)
@@ -237,8 +238,12 @@ func assertRotationCleanupReconcile(t *testing.T, store *rotationStoredClient, c
 func rotationCleanupUpdate(t *testing.T, store *rotationStoredClient, cf *fake.MockServiceCredentialBinding, now time.Time) (managed.ExternalUpdate, error) {
 	t.Helper()
 	cr := store.get() // each invocation models a fresh cache/object after reconciliation or restart
+	return rotationCleanupExternal(store, cf, now).Update(context.Background(), cr)
+}
+
+func rotationCleanupExternal(store *rotationStoredClient, cf *fake.MockServiceCredentialBinding, now time.Time) *external {
 	ext := rotationControllerExternal(store, cf)
 	ext.nowFn = func() time.Time { return now }
 	ext.keyRotator.(*servicecredentialbinding.SCBKeyRotator).Now = func() time.Time { return now }
-	return ext.Update(context.Background(), cr)
+	return ext
 }

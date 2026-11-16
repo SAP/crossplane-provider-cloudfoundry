@@ -94,7 +94,7 @@ func TestRotationHandoverAllowsAdditionalSecretKeys(t *testing.T) {
 			secret := &corev1.Secret{ObjectMeta: metav1.ObjectMeta{Name: "rotation-credentials", Namespace: "rotation-test", OwnerReferences: []metav1.OwnerReference{{APIVersion: v1alpha1.CRDGroupVersion.String(), Kind: v1alpha1.ServiceCredentialBindingKind, Name: cr.Name, UID: cr.UID, Controller: ptr.To(true)}}}, Type: resource.SecretTypeConnection, Data: tc.data}
 			require.NoError(t, kube.Create(context.Background(), secret))
 			c := rotationRuntimeExternal(kube, &fake.MockServiceCredentialBinding{})
-			assert.Equal(t, tc.want, c.confirmSecretHandover(context.Background(), cr, tc.details))
+			assert.Equal(t, tc.want, c.secretHandover(context.Background(), cr, tc.details) == handoverComplete)
 		})
 	}
 }
@@ -138,7 +138,7 @@ func TestRotationHandoverAncillaryOwners(t *testing.T) {
 			}
 			require.NoError(t, kube.Create(context.Background(), secret))
 			c := rotationRuntimeExternal(kube, &fake.MockServiceCredentialBinding{})
-			got := c.confirmSecretHandover(context.Background(), cr, managed.ConnectionDetails{"username": []byte("current")})
+			got := c.secretHandover(context.Background(), cr, managed.ConnectionDetails{"username": []byte("current")}) == handoverComplete
 			assert.Equal(t, tc.wantHandover, got)
 			assert.Equal(t, tc.owners, secret.OwnerReferences, "handover checks must not mutate ownership")
 			require.NoError(t, kube.Delete(context.Background(), secret))
@@ -170,7 +170,7 @@ func TestRotationPublisherNoopPreservesAncillaryOwners(t *testing.T) {
 	assert.False(t, published, "unchanged credentials are a publisher no-op")
 	require.NoError(t, kube.Get(ctx, key, secret))
 	assert.Contains(t, secret.OwnerReferences, ancillary)
-	assert.True(t, rotationRuntimeExternal(kube, &fake.MockServiceCredentialBinding{}).confirmSecretHandover(ctx, cr, details))
+	assert.Equal(t, handoverComplete, rotationRuntimeExternal(kube, &fake.MockServiceCredentialBinding{}).secretHandover(ctx, cr, details))
 }
 
 func TestRotationHandoverSecretMismatchAndReadErrors(t *testing.T) {
@@ -456,7 +456,7 @@ func TestRotationPublisherFormatChangesLeaveHandoverConvergent(t *testing.T) {
 			require.NoError(t, kube.Get(ctx, types.NamespacedName{Namespace: "rotation-test", Name: "rotation-credentials"}, secret))
 			require.Contains(t, secret.Data, tc.wantPreservedKey)
 			c := rotationRuntimeExternal(kube, &fake.MockServiceCredentialBinding{})
-			require.True(t, c.confirmSecretHandover(ctx, cr, tc.nextDetails), "expected current entries must confirm despite merge-patch leftovers")
+			require.Equal(t, handoverComplete, c.secretHandover(ctx, cr, tc.nextDetails), "expected current entries must confirm despite merge-patch leftovers")
 		})
 	}
 }

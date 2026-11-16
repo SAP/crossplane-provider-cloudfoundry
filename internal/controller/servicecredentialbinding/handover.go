@@ -91,40 +91,58 @@ func (c *external) connectionDetails(ctx context.Context, cr *v1alpha1.ServiceCr
 	return details, nil
 }
 
+// handoverState is how far the active key's credentials have been published.
+type handoverState int
+
+const (
+	handoverUnconfirmed handoverState = iota
+	// handoverStale: the Secret is ours but lacks the active key's credentials;
+	// the runtime republishes it after Observe.
+	handoverStale
+	handoverComplete
+)
+
 // confirmHandover requires successful CF operation and, when configured, a
 // connection Secret owned by this resource contains the freshly retrieved details.
 // Extra entries may remain because the runtime publisher merge-patches Secret data.
 func (c *external) confirmHandover(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding, details managed.ConnectionDetails) bool {
-	if cr == nil || binding == nil || binding.LastOperation.State != v1alpha1.LastOperationSucceeded {
-		return false
-	}
-	if cr.Spec.WriteConnectionSecretToReference == nil {
-		return true
-	}
-	return c.confirmSecretHandover(ctx, cr, details)
+	return c.handover(ctx, cr, binding, details) == handoverComplete
 }
 
-func (c *external) confirmSecretHandover(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, details managed.ConnectionDetails) bool {
+func (c *external) handover(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding, details managed.ConnectionDetails) handoverState {
+	if cr == nil || binding == nil || binding.LastOperation.State != v1alpha1.LastOperationSucceeded {
+		return handoverUnconfirmed
+	}
+	if cr.Spec.WriteConnectionSecretToReference == nil {
+		return handoverComplete
+	}
+	return c.secretHandover(ctx, cr, details)
+}
+
+func (c *external) secretHandover(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, details managed.ConnectionDetails) handoverState {
 	if details == nil {
-		return false
+		return handoverUnconfirmed
 	}
 	reader := c.reader
 	if reader == nil {
 		reader = c.kube
 	}
 	if reader == nil {
-		return false
+		return handoverUnconfirmed
 	}
 	ref := cr.Spec.WriteConnectionSecretToReference
 	secret := &corev1.Secret{}
 	if err := reader.Get(ctx, types.NamespacedName{Namespace: ref.Namespace, Name: ref.Name}, secret); err != nil {
-		return false
+		return handoverUnconfirmed
 	}
 	expected := resource.ConnectionSecretFor(cr, v1alpha1.ServiceCredentialBindingGroupVersionKind)
 	if secret.Namespace != expected.Namespace || secret.Name != expected.Name || secret.Type != resource.SecretTypeConnection || !sameControllerOwner(secret, expected) {
-		return false
+		return handoverUnconfirmed
 	}
-	return connectionDataContains(secret.Data, details)
+	if !connectionDataContains(secret.Data, details) {
+		return handoverStale
+	}
+	return handoverComplete
 }
 
 func sameControllerOwner(actual, expected *corev1.Secret) bool {

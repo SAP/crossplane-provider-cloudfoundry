@@ -38,8 +38,8 @@ func TestSCBKeyRotator_ActiveKeyProtection(t *testing.T) {
 
 	cf := &fake.MockServiceCredentialBinding{}
 	rotator.SCBClient = cf
-	remaining, err := rotator.DeleteExpiredKeys(context.Background(), cr)
-	require.NoError(t, err)
+	remaining, failures := rotator.DeleteExpiredKeys(context.Background(), cr)
+	require.Empty(t, failures)
 	assert.Equal(t, []*v1alpha1.SCBResource{active}, remaining)
 	cf.AssertNotCalled(t, "Delete", mock.Anything, active.GUID)
 }
@@ -74,8 +74,8 @@ func TestSCBKeyRotator_CleanupMalformedRetiredEntries(t *testing.T) {
 			rotator := &SCBKeyRotator{SCBClient: cf}
 
 			assert.NotPanics(t, func() {
-				remaining, err := rotator.DeleteExpiredKeys(context.Background(), cr)
-				assert.NoError(t, err)
+				remaining, failures := rotator.DeleteExpiredKeys(context.Background(), cr)
+				assert.Empty(t, failures)
 				assert.Equal(t, retired, remaining, "unknown expiry must conservatively retain its identity")
 			})
 			cf.AssertNotCalled(t, "Delete", mock.Anything, "")
@@ -108,8 +108,9 @@ func TestSCBKeyRotator_DeleteExpiredKeysPartialProgress(t *testing.T) {
 	cf.On("Get", mock.Anything, failed.GUID).Return(deleteTestBinding(failed.GUID, "create", "succeeded"), nil).Once()
 	cf.On("Delete", mock.Anything, failed.GUID).Return("", assert.AnError).Once()
 
-	remaining, err := (&SCBKeyRotator{SCBClient: cf}).DeleteExpiredKeys(context.Background(), cr)
-	require.EqualError(t, err, "cannot delete expired key failed: cannot delete service credential binding failed: assert.AnError general error for testing")
+	remaining, failures := (&SCBKeyRotator{SCBClient: cf}).DeleteExpiredKeys(context.Background(), cr)
+	require.Len(t, failures, 1)
+	require.EqualError(t, failures[0], "cannot delete expired key failed: cannot delete service credential binding failed: assert.AnError general error for testing")
 	assert.Equal(t, []*v1alpha1.SCBResource{failed}, remaining)
 	cf.AssertExpectations(t)
 }
@@ -126,15 +127,35 @@ func TestSCBKeyRotator_AsyncDeletionRetainsIdentityUntilNotFound(t *testing.T) {
 	cf.On("Get", mock.Anything, retiree.GUID).Return((*cfresource.ServiceCredentialBinding)(nil), cfresource.NewResourceNotFoundError()).Once()
 	rotator := &SCBKeyRotator{SCBClient: cf}
 
-	remaining, err := rotator.DeleteExpiredKeys(context.Background(), cr)
-	require.NoError(t, err, "expected asynchronous progress is not a cleanup failure")
+	remaining, failures := rotator.DeleteExpiredKeys(context.Background(), cr)
+	require.Empty(t, failures, "expected asynchronous progress is not a cleanup failure")
 	require.Equal(t, []*v1alpha1.SCBResource{retiree}, remaining, "accepted async deletion must not discard tracking")
 	require.Same(t, retiree, remaining[0], "retired identity and its deadline remain unchanged")
 
-	remaining, err = rotator.DeleteExpiredKeys(context.Background(), cr)
-	require.NoError(t, err)
+	remaining, failures = rotator.DeleteExpiredKeys(context.Background(), cr)
+	require.Empty(t, failures)
 	require.Empty(t, remaining, "a later binding GET not-found confirms completion")
 	cf.AssertNumberOfCalls(t, "Delete", 1)
+	cf.AssertExpectations(t)
+}
+
+func TestSCBKeyRotator_FailedUnbindRetryIsCleanupFailure(t *testing.T) {
+	retiree := &v1alpha1.SCBResource{GUID: rotationTestK0, CreatedAt: &metav1.Time{Time: time.Now().Add(-48 * time.Hour)}}
+	cr := rotationTestCR("key")
+	cr.Spec.ForProvider.Rotation = &v1alpha1.RotationParameters{TTL: &metav1.Duration{Duration: time.Hour}}
+	cr.Status.AtProvider.RetiredKeys = []*v1alpha1.SCBResource{retiree}
+	failedUnbind := deleteTestBinding(retiree.GUID, "delete", "failed")
+	failedUnbind.LastOperation.Description = "broker rejected unbind"
+	cf := &fake.MockServiceCredentialBinding{}
+	cf.On("Get", mock.Anything, retiree.GUID).Return(failedUnbind, nil).Once()
+	cf.On("Delete", mock.Anything, retiree.GUID).Return("retry-job", nil).Once()
+	cf.On("Get", mock.Anything, retiree.GUID).Return(deleteTestBinding(retiree.GUID, "delete", "in progress"), nil).Once()
+
+	remaining, failures := (&SCBKeyRotator{SCBClient: cf}).DeleteExpiredKeys(context.Background(), cr)
+	require.Equal(t, []*v1alpha1.SCBResource{retiree}, remaining, "a resubmitted unbind keeps the identity tracked")
+	require.Len(t, failures, 1, "an accepted retry must not hide the broker failure")
+	require.ErrorIs(t, failures[0], ErrUnbindFailed)
+	require.ErrorContains(t, failures[0], "broker rejected unbind")
 	cf.AssertExpectations(t)
 }
 
@@ -159,9 +180,9 @@ func TestSCBKeyRotator_PendingDoesNotHideRealCleanupFailure(t *testing.T) {
 			cf.On("Get", mock.Anything, failed.GUID).Return(deleteTestBinding(failed.GUID, "create", "succeeded"), nil).Once()
 			cf.On("Delete", mock.Anything, failed.GUID).Return("", assert.AnError).Once()
 
-			remaining, err := (&SCBKeyRotator{SCBClient: cf}).DeleteExpiredKeys(context.Background(), cr)
-			require.ErrorIs(t, err, assert.AnError)
-			require.NotErrorIs(t, err, ErrDeletionPending, "normal progress must be filtered before aggregation")
+			remaining, failures := (&SCBKeyRotator{SCBClient: cf}).DeleteExpiredKeys(context.Background(), cr)
+			require.Len(t, failures, 1, "normal progress must not be reported as a failure")
+			require.ErrorIs(t, failures[0], assert.AnError)
 			require.ElementsMatch(t, keys, remaining)
 			cf.AssertNotCalled(t, "Delete", mock.Anything, pending.GUID)
 			cf.AssertExpectations(t)
@@ -202,8 +223,8 @@ func TestSCBKeyRotator_DeleteExpiredKeysKeepsCurrentWithMixedKeys(t *testing.T) 
 	rotator := &SCBKeyRotator{SCBClient: cf}
 
 	assert.True(t, rotator.HasExpiredKeys(cr), "only the non-active expired key should be eligible")
-	remaining, err := rotator.DeleteExpiredKeys(context.Background(), cr)
-	require.NoError(t, err)
+	remaining, failures := rotator.DeleteExpiredKeys(context.Background(), cr)
+	require.Empty(t, failures)
 	assert.Equal(t, []*v1alpha1.SCBResource{active}, remaining)
 	cf.AssertNotCalled(t, "Delete", mock.Anything, active.GUID)
 	cf.AssertExpectations(t)

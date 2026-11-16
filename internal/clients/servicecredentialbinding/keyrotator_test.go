@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/go-cmp/cmp/cmpopts"
 	"github.com/stretchr/testify/mock"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/utils/ptr"
@@ -294,7 +295,7 @@ func TestSCBKeyRotator_DeleteExpiredKeys(t *testing.T) {
 
 	type want struct {
 		newRetiredKeys []*v1alpha1.SCBResource
-		err            error
+		failures       []string
 	}
 
 	now := time.Now()
@@ -349,7 +350,6 @@ func TestSCBKeyRotator_DeleteExpiredKeys(t *testing.T) {
 			},
 			want: want{
 				newRetiredKeys: []*v1alpha1.SCBResource{nonExpiredKey, currentKey}, // Only non-expired and current key remain
-				err:            nil,
 			},
 			mockClient: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
@@ -364,7 +364,7 @@ func TestSCBKeyRotator_DeleteExpiredKeys(t *testing.T) {
 			},
 			want: want{
 				newRetiredKeys: []*v1alpha1.SCBResource{expiredKey, nonExpiredKey, currentKey}, // All keys remain due to error
-				err:            errors.New("cannot delete expired key expired-key: cannot delete service credential binding expired-key: boom"),
+				failures:       []string{"cannot delete expired key expired-key: cannot delete service credential binding expired-key: boom"},
 			},
 			mockClient: func() *fake.MockServiceCredentialBinding {
 				m := &fake.MockServiceCredentialBinding{}
@@ -382,16 +382,14 @@ func TestSCBKeyRotator_DeleteExpiredKeys(t *testing.T) {
 				SCBClient: mockClient,
 			}
 
-			newRetiredKeys, err := rotator.DeleteExpiredKeys(tc.args.ctx, tc.args.cr)
+			newRetiredKeys, failures := rotator.DeleteExpiredKeys(tc.args.ctx, tc.args.cr)
 
-			if tc.want.err != nil && err != nil {
-				if diff := cmp.Diff(tc.want.err.Error(), err.Error()); diff != "" {
-					t.Errorf("DeleteExpiredKeys(...): want error string != got error string:\n%s", diff)
-				}
-			} else {
-				if diff := cmp.Diff(tc.want.err, err); diff != "" {
-					t.Errorf("DeleteExpiredKeys(...): want error != got error:\n%s", diff)
-				}
+			got := make([]string, 0, len(failures))
+			for _, failure := range failures {
+				got = append(got, failure.Error())
+			}
+			if diff := cmp.Diff(tc.want.failures, got, cmpopts.EquateEmpty()); diff != "" {
+				t.Errorf("DeleteExpiredKeys(...): -want failures, +got failures:\n%s", diff)
 			}
 
 			if diff := cmp.Diff(tc.want.newRetiredKeys, newRetiredKeys); diff != "" {

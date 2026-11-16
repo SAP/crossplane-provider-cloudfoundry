@@ -41,8 +41,8 @@ func TestRotationFallbackRetention(t *testing.T) {
 			}
 			rotator.SCBClient = cf
 			require.Equal(t, tc.expired, rotator.HasExpiredKeys(cr))
-			remaining, err := rotator.DeleteExpiredKeys(context.Background(), cr)
-			require.NoError(t, err)
+			remaining, failures := rotator.DeleteExpiredKeys(context.Background(), cr)
+			require.Empty(t, failures)
 			if tc.expired {
 				require.Empty(t, remaining)
 			} else {
