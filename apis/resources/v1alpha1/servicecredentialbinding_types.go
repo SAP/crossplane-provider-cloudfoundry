@@ -144,6 +144,14 @@ type SCBResource struct {
 	ReplacementGUID string `json:"replacementGUID,omitempty"`
 }
 
+// Values of SCBResource.RotationTrigger. Keep in sync with its Enum marker.
+const (
+	// RotationTriggerForced marks a key retired by the force-rotation annotation.
+	RotationTriggerForced = "forced"
+	// RotationTriggerScheduled marks a key retired because rotation.frequency elapsed.
+	RotationTriggerScheduled = "scheduled"
+)
+
 // +kubebuilder:object:root=true
 
 // ServiceCredentialBinding is the Schema for the ServiceCredentialBindings API. Provides a Cloud Foundry Service Key.

@@ -30,21 +30,36 @@ func (c *external) completeRotation(ctx context.Context, cr *v1alpha1.ServiceCre
 	if !isKeyBinding(cr) || active == "" {
 		return nil
 	}
-	for i := range cr.Status.AtProvider.RetiredKeys {
-		retired := cr.Status.AtProvider.RetiredKeys[i]
-		if retired == nil || retired.GUID == "" || retired.RotationTrigger == "" || retired.ReplacementGUID != "" || scb.SameGUID(retired.GUID, active) {
+	var completed []*v1alpha1.SCBResource
+	for _, retired := range cr.Status.AtProvider.RetiredKeys {
+		if !awaitsCompletion(retired, active) {
 			continue
 		}
 		retired.ReplacementGUID = active
-		if err := c.kube.Status().Update(ctx, cr); err != nil {
-			// The runtime writes this object back after the error; undo so the
-			// event is retried.
+		completed = append(completed, retired)
+	}
+	if len(completed) == 0 {
+		return nil
+	}
+	if err := c.kube.Status().Update(ctx, cr); err != nil {
+		// The runtime writes this object back after the error; undo so the
+		// events are retried.
+		for _, retired := range completed {
 			retired.ReplacementGUID = ""
-			return fmt.Errorf("cannot persist completed key rotation: %w", err)
 		}
+		return fmt.Errorf("cannot persist completed key rotation: %w", err)
+	}
+	for _, retired := range completed {
 		c.emit(cr, event.Normal(reasonKeyRotated, fmt.Sprintf("Rotated key %s to %s (%s)", retired.GUID, active, retired.RotationTrigger)))
 	}
 	return nil
+}
+
+// awaitsCompletion reports whether retired was rotated by this provider version
+// and has not yet been reported as replaced by active.
+func awaitsCompletion(retired *v1alpha1.SCBResource, active string) bool {
+	return retired != nil && retired.GUID != "" && retired.RotationTrigger != "" &&
+		retired.ReplacementGUID == "" && !scb.SameGUID(retired.GUID, active)
 }
 
 // recordSecretRepublish reports that the runtime is about to overwrite the

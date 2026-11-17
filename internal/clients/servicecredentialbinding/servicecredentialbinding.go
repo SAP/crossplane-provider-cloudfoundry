@@ -105,8 +105,8 @@ func Update(ctx context.Context, scbClient ServiceCredentialBinding, guid string
 // ErrDeletionPending means Cloud Foundry still reports the binding or its delete operation.
 var ErrDeletionPending = errors.New("service credential binding deletion is pending")
 
-// ErrUnbindFailed is wrapped together with ErrDeletionPending when the broker
-// failed an earlier unbind, so callers can report it instead of waiting.
+// ErrUnbindFailed means the broker failed an earlier unbind. Delete resubmits it,
+// but reports the failure instead of ErrDeletionPending so callers surface it.
 var ErrUnbindFailed = errors.New("previous unbind failed")
 
 // Delete deletes a ServiceCredentialBinding resource and confirms its absence.
@@ -151,11 +151,10 @@ func stillPresentError(binding *resource.ServiceCredentialBinding, guid string) 
 	if binding.LastOperation.Type != v1alpha1.LastOperationDelete || binding.LastOperation.State != v1alpha1.LastOperationFailed {
 		return fmt.Errorf("%w: Cloud Foundry still returns binding %s", ErrDeletionPending, guid)
 	}
-	reason := ErrUnbindFailed
 	if description := binding.LastOperation.Description; description != "" {
-		reason = fmt.Errorf("%w: %s", ErrUnbindFailed, description)
+		return fmt.Errorf("%w for %s: %s; unbind resubmitted", ErrUnbindFailed, guid, description)
 	}
-	return fmt.Errorf("%w after resubmitting unbind of %s: %w", ErrDeletionPending, guid, reason)
+	return fmt.Errorf("%w for %s; unbind resubmitted", ErrUnbindFailed, guid)
 }
 
 func confirmBindingDeletion(ctx context.Context, scbClient ServiceCredentialBinding, guid string) (bool, error) {

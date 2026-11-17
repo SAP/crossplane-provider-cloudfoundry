@@ -61,9 +61,9 @@ func (r *SCBKeyRotator) RetireBinding(cr *v1alpha1.ServiceCredentialBinding, ser
 	if !forced && !r.rotationIsDue(cr) {
 		return false
 	}
-	trigger := "scheduled"
+	trigger := v1alpha1.RotationTriggerScheduled
 	if forced {
-		trigger = "forced"
+		trigger = v1alpha1.RotationTriggerForced
 	}
 
 	cr.Status.AtProvider.RetiredKeys = append(cr.Status.AtProvider.RetiredKeys, &v1alpha1.SCBResource{
@@ -170,7 +170,7 @@ func (r *SCBKeyRotator) DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.Serv
 
 		if err := Delete(ctx, r.SCBClient, key.GUID); err != nil {
 			newRetiredKeys = append(newRetiredKeys, key)
-			if !errors.Is(err, ErrDeletionPending) || errors.Is(err, ErrUnbindFailed) {
+			if !errors.Is(err, ErrDeletionPending) {
 				failures = append(failures, fmt.Errorf("cannot delete expired key %s: %w", key.GUID, err))
 			}
 		}

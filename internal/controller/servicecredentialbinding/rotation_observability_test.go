@@ -45,12 +45,12 @@ func TestRotationObserveReportsNextRotation(t *testing.T) {
 }
 
 func TestRotationRecoveryPreservesAcceptedTrigger(t *testing.T) {
-	for _, trigger := range []string{"forced", "scheduled"} {
+	for _, trigger := range []string{v1alpha1.RotationTriggerForced, v1alpha1.RotationTriggerScheduled} {
 		t.Run(trigger, func(t *testing.T) {
 			ctx := context.Background()
 			now := time.Date(2026, 11, 16, 12, 0, 0, 0, time.UTC)
 			cr := rotationControllerCR(rotationTestK0, nil)
-			if trigger == "forced" {
+			if trigger == v1alpha1.RotationTriggerForced {
 				cr.Annotations[scb.ForceRotationKey] = rotationTestK0
 			} else {
 				cr.Spec.ForProvider.Rotation = &v1alpha1.RotationParameters{Frequency: &metav1.Duration{Duration: time.Hour}}
@@ -81,7 +81,7 @@ func TestRotationRecoveryPreservesAcceptedTrigger(t *testing.T) {
 			// Change the annotation and schedule; the event must still report
 			// the trigger recorded at retirement.
 			changed := store.get()
-			if trigger == "forced" {
+			if trigger == v1alpha1.RotationTriggerForced {
 				delete(changed.Annotations, scb.ForceRotationKey)
 			} else {
 				changed.Annotations[scb.ForceRotationKey] = rotationTestK0
