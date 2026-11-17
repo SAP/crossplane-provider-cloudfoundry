@@ -464,6 +464,56 @@ stringData:
 
 </details>
 
+#### Restart an `App` without downtime
+
+To restart an `App` without changing its spec, for example to pick up rotated credentials or to recover a degraded app, set the `app.cloudfoundry.crossplane.io/restart` annotation. The provider then creates a Cloud Foundry `rolling` deployment of the app's current droplet, which replaces the `web` process instances one by one, like `cf restart --strategy rolling`.
+
+```shell
+kubectl annotate app my-app app.cloudfoundry.crossplane.io/restart="$(date -u +%FT%TZ)" --overwrite
+```
+
+Each new non-empty value requests one restart. Re-applying the same value, for example by a GitOps re-sync, does nothing, and neither does removing the annotation. Changing the value back to the last handled one does nothing either, so always use a new value; a timestamp is recommended. The provider never writes or removes the annotation. If you set a new value while a restart is still running, the next restart runs once the current one has finished.
+
+**Status:**
+
+```yaml title="Example: status of a finished restart"
+status:
+  atProvider:
+    lastHandledRestart: "2026-11-17T10:00:00Z"
+    deployment:
+      guid: 5d1f6b2c-3a4e-4f6b-9c1d-2e3f4a5b6c7d
+      strategy: rolling
+      state: FINALIZED
+      reason: DEPLOYED
+      createdAt: "2026-11-17T10:00:05Z"
+      lastSuccessfulHealthcheck: "2026-11-17T10:00:40Z"
+      restart: "2026-11-17T10:00:00Z"
+```
+
+- **`lastHandledRestart`**: the last annotation value the provider acted on.
+- **`deployment`**: the latest Cloud Foundry deployment the provider started or is waiting on. `state` and `reason` are Cloud Foundry's `status.value` and `status.reason`. `reason: NOT_FOUND` is set by the provider when the deployment no longer exists in Cloud Foundry. `lastSuccessfulHealthcheck` is when Cloud Foundry last scaled up the new instances after the previous ones became healthy; it starts at the creation time and stays there for a single-instance app. `error` is the error Cloud Foundry reported while updating the deployment, for example an exceeded quota. `restart` is the annotation value that started the deployment and is empty for a deployment the provider only waits on.
+
+For the value `v` currently set in the annotation, the restart is:
+- **pending** while `lastHandledRestart` differs from `v`;
+- **running** when `lastHandledRestart` and `deployment.restart` are both `v` and `deployment.state` is `ACTIVE`;
+- **finished** when `lastHandledRestart` and `deployment.restart` are both `v` and `deployment.reason` is `DEPLOYED`;
+- **failed** when `lastHandledRestart` and `deployment.restart` are both `v`, `deployment.state` is `FINALIZED` and `deployment.reason` is anything else (`CANCELED`, `SUPERSEDED` or `NOT_FOUND`);
+- **skipped** when `lastHandledRestart` is `v` but `deployment.restart` is not, because the app was stopped.
+
+The status is refreshed on every poll, by default once a minute. The `App` stays `Ready` during the restart, because the app keeps serving traffic.
+
+**Events:** `DeploymentStarted` when the provider starts a deployment, `DeploymentSucceeded` when it finishes, and a `DeploymentFailed` warning with the Cloud Foundry reason when it ends any other way. `RestartSkipped` is emitted for a stopped app, and `RestartDeferred` when a pending restart finds an active deployment the provider is not tracking, for example one started by `cf restart --strategy rolling`, and waits for it.
+
+**Things to know:**
+
+- **Only `web` processes are replaced one by one.** Cloud Foundry restarts all instances of other process types, for example a `worker`, at once after the `web` rollout, so those processes are briefly down.
+- **Stopped apps are not restarted.** A rolling deployment would start every instance of a stopped app, so the provider only records the request and emits `RestartSkipped`. If you stop the app with `cf stop` while a restart is running, the deployment stays active until the app is started again or the deployment is cancelled.
+- **Spec changes wait while a tracked deployment runs.** While the deployment in `status.atProvider.deployment` is active, the provider applies no spec changes and starts no other restart. If you request a restart while a deployment started outside the provider is active, for example by `cf restart --strategy rolling`, the provider tracks that deployment, emits `RestartDeferred`, and holds the restart and any spec changes until it has finished. A paused canary deployment holds them until `cf continue-deployment <app>` or `cf cancel-deployment <app>`. If a spec change and a restart are both pending and no deployment is active, the spec change is applied first and the restart follows on the next reconcile.
+- **A stuck restart needs your action.** If the new instances never become healthy, for example because the app crashes on start, Cloud Foundry keeps the deployment active with no timeout, and so does the provider. A stuck deployment stays `ACTIVE`; for an app with several instances, `deployment.lastSuccessfulHealthcheck` also stops advancing, and `deployment.error` may show why. Run `cf cancel-deployment <app>`; the provider then records `CANCELED`, emits `DeploymentFailed`, and resumes applying held spec changes.
+- **Quota:** a rolling deployment runs one extra instance at a time. Without quota headroom for it, Cloud Foundry rejects the deployment; the provider reports the error on every reconcile until the quota is raised.
+- **Management policies:** the restart runs as an update, so it needs the `Update` management policy.
+- **Annotation at creation:** an `App` created with the annotation already set is rolling-restarted once right after it is created. The same applies when an `App` with the annotation set takes over an existing Cloud Foundry app.
+
 
 ### Bind `App` to `ServiceInstance`
 

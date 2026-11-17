@@ -5,12 +5,16 @@ package e2e
 
 import (
 	"context"
+	"net/http"
 	"slices"
+	"sync"
 	"testing"
 	"time"
 
+	"k8s.io/client-go/util/retry"
 	"sigs.k8s.io/e2e-framework/klient/k8s"
 	"sigs.k8s.io/e2e-framework/klient/wait"
+	"sigs.k8s.io/e2e-framework/klient/wait/conditions"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/envfuncs"
 	"sigs.k8s.io/e2e-framework/pkg/features"
@@ -129,6 +133,8 @@ func TestCloudfoundry_App(t *testing.T) {
 		},
 	)
 
+	feat.Assess("app:e2e-app rolling restart without downtime", assessRollingRestart)
+
 	for _, name := range steps {
 		ft, ok := feats[name]
 		if !ok {
@@ -180,6 +186,134 @@ func TestCloudfoundry_App(t *testing.T) {
 	}
 
 	testenv.Test(t, feat.Feature())
+}
+
+// restartAnnotation is a literal so the e2e package does not import internal/.
+const restartAnnotation = "app.cloudfoundry.crossplane.io/restart"
+
+// assessRollingRestart restarts e2e-app and checks its route keeps answering
+// and the restart is not repeated. Failures use Errorf so delete steps still run.
+func assessRollingRestart(ctx context.Context, t *testing.T, cfg *envconf.Config) context.Context {
+	res := cfg.Client().Resources()
+	app := &v1alpha1.App{}
+	if err := res.Get(ctx, "e2e-app", cfg.Namespace(), app); err != nil {
+		t.Errorf("error getting app e2e-app: %s", err.Error())
+		return ctx
+	}
+	route, ok := findRouteByHost(app.Status.AtProvider.Routes, runScopedName("app-route-host-domainref"))
+	if !ok {
+		t.Errorf("route of e2e-app not found among %v", hosts(app.Status.AtProvider.Routes))
+		return ctx
+	}
+	url := "https://" + route.URL
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	reachable := func() bool {
+		resp, err := httpClient.Get(url)
+		if err != nil {
+			return false
+		}
+		_ = resp.Body.Close()
+		return resp.StatusCode >= 200 && resp.StatusCode < 300
+	}
+
+	// Baseline: the app must answer before the restart, or the probe proves nothing.
+	if err := wait.For(func(context.Context) (bool, error) { return reachable(), nil },
+		wait.WithTimeout(3*time.Minute), wait.WithInterval(5*time.Second)); err != nil {
+		t.Errorf("app e2e-app not reachable at %s before restart: %s", url, err.Error())
+		return ctx
+	}
+
+	// Probe once per second; a probe fails only if an immediate retry fails too.
+	var (
+		mu       sync.Mutex
+		failures []time.Time
+		probes   sync.WaitGroup
+		stopOnce sync.Once
+	)
+	stop := make(chan struct{})
+	probes.Add(1)
+	go func() {
+		defer probes.Done()
+		ticker := time.NewTicker(time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				if !reachable() && !reachable() {
+					mu.Lock()
+					failures = append(failures, time.Now().UTC())
+					mu.Unlock()
+				}
+			}
+		}
+	}()
+	stopProbes := func() {
+		stopOnce.Do(func() {
+			close(stop)
+			probes.Wait()
+		})
+	}
+	defer stopProbes()
+
+	value := time.Now().UTC().Format(time.RFC3339Nano)
+	if err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		if err := res.Get(ctx, "e2e-app", cfg.Namespace(), app); err != nil {
+			return err
+		}
+		annotations := app.GetAnnotations()
+		if annotations == nil {
+			annotations = map[string]string{}
+		}
+		annotations[restartAnnotation] = value
+		app.SetAnnotations(annotations)
+		return res.Update(ctx, app)
+	}); err != nil {
+		t.Errorf("error setting restart annotation on e2e-app: %s", err.Error())
+		return ctx
+	}
+	t.Logf("requested rolling restart of e2e-app with %s=%s", restartAnnotation, value)
+
+	if err := wait.For(conditions.New(res).ResourceMatch(app, func(o k8s.Object) bool {
+		d := o.(*v1alpha1.App).Status.AtProvider.Deployment
+		return d != nil && d.Restart == value && d.State == "FINALIZED"
+	}), wait.WithTimeout(10*time.Minute)); err != nil {
+		t.Errorf("rolling restart of e2e-app did not finish: %s (deployment: %+v)", err.Error(), app.Status.AtProvider.Deployment)
+		return ctx
+	}
+	// A copy: the Get below decodes into app and may reuse its pointers.
+	deployment := *app.Status.AtProvider.Deployment
+	if deployment.Reason != "DEPLOYED" {
+		t.Errorf("rolling deployment %s of e2e-app ended with reason %s, want DEPLOYED", deployment.GUID, deployment.Reason)
+		return ctx
+	}
+
+	// Keep probing: CF may remove the old instances just before the provider sees FINALIZED.
+	t.Logf("rolling deployment %s finished; checking it is not repeated", deployment.GUID)
+	select {
+	case <-ctx.Done():
+		t.Errorf("context done while checking the restart is not repeated: %s", ctx.Err())
+		return ctx
+	case <-time.After(90 * time.Second):
+	}
+	stopProbes()
+	if len(failures) > 0 {
+		t.Errorf("e2e-app at %s was unreachable during or after the rolling restart at %v", url, failures)
+	}
+
+	// Idempotency: the same annotation value must not start another deployment.
+	if err := res.Get(ctx, "e2e-app", cfg.Namespace(), app); err != nil {
+		t.Errorf("error getting app e2e-app: %s", err.Error())
+		return ctx
+	}
+	if got := app.Status.AtProvider.Deployment; got == nil || got.GUID != deployment.GUID {
+		t.Errorf("restart was repeated: deployment %+v, want guid %s", got, deployment.GUID)
+	}
+	if got := app.Status.AtProvider.LastHandledRestart; got != value {
+		t.Errorf("lastHandledRestart = %q, want %q", got, value)
+	}
+	return ctx
 }
 
 // findRouteByHost returns the first route matching the given host.

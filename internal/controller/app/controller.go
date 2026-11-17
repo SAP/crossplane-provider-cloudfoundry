@@ -42,15 +42,17 @@ var (
 // Setup adds a controller that reconciles App resources.
 func Setup(mgr ctrl.Manager, o controller.Options) error {
 	name := managed.ControllerName(resourceKind)
+	recorder := event.NewAPIRecorder(mgr.GetEventRecorderFor(name))
 
 	options := []managed.ReconcilerOption{
 		managed.WithExternalConnector(
 			&connector{kube: mgr.GetClient(),
-				usage: resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
+				usage:    resource.NewLegacyProviderConfigUsageTracker(mgr.GetClient(), &pcv1beta1.ProviderConfigUsage{}),
+				recorder: recorder,
 			}),
 		managed.WithLogger(o.Logger.WithValues("controller", name)),
 		managed.WithPollInterval(o.PollInterval),
-		managed.WithRecorder(event.NewAPIRecorder(mgr.GetEventRecorderFor(name))),
+		managed.WithRecorder(recorder),
 		managed.WithInitializers(&spaceInitializer{
 			kube: mgr.GetClient(),
 		}),
@@ -73,8 +75,9 @@ func Setup(mgr ctrl.Manager, o controller.Options) error {
 
 // A connector supplies a function for the Reconciler to create a client to the external CloudFoundry resources.
 type connector struct {
-	kube  k8s.Client
-	usage resource.LegacyTracker
+	kube     k8s.Client
+	usage    resource.LegacyTracker
+	recorder event.Recorder
 }
 
 // Connect typically produces an ExternalClient by:
@@ -97,15 +100,17 @@ func (c *connector) Connect(ctx context.Context, mg resource.Managed) (managed.E
 	}
 
 	return &external{
-		client: app.NewAppClient(cf),
-		kube:   c.kube,
+		client:   app.NewAppClient(cf),
+		kube:     c.kube,
+		recorder: c.recorder,
 	}, nil
 }
 
 // An external provide clients to operate both Kubernetes resources and Cloud Foundry resources.
 type external struct {
-	client *app.Client
-	kube   k8s.Client
+	client   *app.Client
+	kube     k8s.Client
+	recorder event.Recorder
 }
 
 // Observe managed resource
@@ -146,6 +151,11 @@ func (c *external) Observe(ctx context.Context, mg resource.Managed) (managed.Ex
 		return managed.ExternalObservation{}, err
 	}
 
+	isUpToDate, err = c.deploymentUpToDate(ctx, cr, isUpToDate)
+	if err != nil {
+		return managed.ExternalObservation{}, err
+	}
+
 	return managed.ExternalObservation{
 		ResourceExists:          true,
 		ResourceUpToDate:        isUpToDate,
@@ -157,9 +167,14 @@ func (c *external) updateObservedStatus(ctx context.Context, cr *v1alpha1.App, r
 	// Preserve previously observed routes so they survive a transient
 	// failure from the Routes API.
 	prevRoutes := cr.Status.AtProvider.Routes
+	// Deployment tracking is owned by the provider, not observed from the app.
+	prevDeployment := cr.Status.AtProvider.Deployment
+	prevLastHandledRestart := cr.Status.AtProvider.LastHandledRestart
 
 	// Update the status of the resource
 	cr.Status.AtProvider = app.GenerateObservation(res)
+	cr.Status.AtProvider.Deployment = prevDeployment
+	cr.Status.AtProvider.LastHandledRestart = prevLastHandledRestart
 	appManifest, err := c.client.GenerateManifest(ctx, res.GUID)
 	if err != nil {
 		return false, errors.Wrap(err, errObserveResource)
@@ -226,13 +241,27 @@ func (c *external) Update(ctx context.Context, mg resource.Managed) (managed.Ext
 	}
 	guid := meta.GetExternalName(cr)
 
+	// Before spec changes, because CF rejects process updates during a rollout.
+	restart, pending := app.PendingRestart(cr)
+	if pending {
+		tracked, err := c.recoverRestart(ctx, cr, restart)
+		if err != nil || tracked {
+			return managed.ExternalUpdate{}, err
+		}
+	}
+
 	changes, err := app.DetectChanges(cr, cr.Spec.ForProvider, cr.Status.AtProvider)
 	if err != nil {
 		return managed.ExternalUpdate{}, errors.Wrap(err, errUpdateResource+": Failed to detect changes")
 	}
 
-	if err := c.applyAppUpdates(ctx, guid, cr, changes); err != nil {
-		return managed.ExternalUpdate{}, err
+	// Spec changes first; the restart follows once Observe has seen them.
+	if changes.HasChanges() {
+		return managed.ExternalUpdate{}, c.applyAppUpdates(ctx, guid, cr, changes)
+	}
+
+	if pending {
+		return managed.ExternalUpdate{}, c.startRestart(ctx, cr, restart)
 	}
 
 	return managed.ExternalUpdate{}, nil
