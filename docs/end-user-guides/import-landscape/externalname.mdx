@@ -1,0 +1,45 @@
+---
+slug: overview
+sidebar_position: 10
+hide_table_of_contents: true
+---
+
+import Link from '@docusaurus/Link';
+import SortableTable from '@site/src/components/SortableTable.jsx';
+
+# External Name
+
+Crossplane uses the [`external-name` annotation](https://docs.crossplane.io/latest/guides/import-existing-resources/) to indicate and link external resources.
+
+Most Cloud Foundry resources return a unique GUID as their identifier. The following table summarizes the external-name format for every provider resource, where to find the identifier, and any adoption notes.
+
+## Resource coverage {#resource-coverage}
+
+<div className="resource-coverage">
+
+<SortableTable searchPlaceholder="Search resources…">
+
+{/* BEGIN GENERATED EXTERNAL NAMES */}
+
+| Resource | External name | Where to find | Notes |
+|---|---|---|---|
+| <Link id="organization" to="#organization">Organization</Link> | <span className="badge badge--success"><span className="external-name-key">GUID</span></span> | **UI:**<br />BTP Cockpit → open the org; the ID is in the URL<br />**CLI:**<br />`cf org <org-name> --guid` | — |
+| <Link id="space" to="#space">Space</Link> | <span className="badge badge--success"><span className="external-name-key">GUID</span></span> | **UI:**<br />BTP Cockpit → Subaccount → Spaces → [Select Space]; the space ID is in the URL<br />**CLI:**<br />`cf space <space> --guid` | — |
+| <Link id="app" to="#app">App</Link> | <span className="badge badge--success"><span className="external-name-key">GUID</span></span> | **UI:**<br />BTP Cockpit → open the app; the ID follows `app/` in the URL<br />**CLI:**<br />`cf app <app-name> --guid` | — |
+| <Link id="serviceinstance" to="#serviceinstance">ServiceInstance</Link> | <span className="badge badge--success"><span className="external-name-key">GUID</span></span> | **UI:**<br />BTP Cockpit → open the service instance; the GUID is shown in the **Instance ID** field<br />**CLI:**<br />`cf service <instance-name> --guid` | — |
+| <Link id="orgrole" to="#orgrole">OrgRole</Link> | <span className="badge badge--success"><span className="external-name-key">GUID</span></span> | **CLI:**<br />`cf org-users <org> -v` and find the role GUID in the output | — |
+| <Link id="spacerole" to="#spacerole">SpaceRole</Link> | <span className="badge badge--success"><span className="external-name-key">GUID</span></span> | **CLI:**<br />`cf space-users <org> <space> -v` and find the role GUID in the output | — |
+| <Link id="domain" to="#domain">Domain</Link> | <span className="badge badge--success"><span className="external-name-key">GUID</span></span> | **CLI:**<br />`cf domains` (see the GUID column) | — |
+| <Link id="orgquota" to="#orgquota">OrgQuota</Link> | <span className="badge badge--success"><span className="external-name-key">GUID</span></span> | **UI:**<br />Cloud Foundry → Quota Definitions → `<quota name>` (GUID in the URL or details)<br />**CLI:**<br />`cf curl /v3/organization_quotas?names=<name>` (field: guid) | — |
+| <Link id="spacequota" to="#spacequota">SpaceQuota</Link> | <span className="badge badge--success"><span className="external-name-key">GUID</span></span> | **CLI:**<br />`cf space-quota <quota-name> -v` and find the GUID in the output | — |
+| <Link id="route" to="#route">Route</Link> | <span className="badge badge--success"><span className="external-name-key">GUID</span></span> | **CLI:**<br />`cf routes` and find the GUID in the output | — |
+| <Link id="servicecredentialbinding" to="#servicecredentialbinding">ServiceCredentialBinding</Link> | <span className="badge badge--success"><span className="external-name-key">GUID</span></span> | **CLI (key):**<br />`cf service-keys <instance>`, then `cf curl /v3/service_credential_bindings?names=<key-name>` (field: guid)<br />**UI (app):**<br />open the app → Service Bindings → Service Binding GUID column | — |
+| <Link id="serviceroutebinding" to="#serviceroutebinding">ServiceRouteBinding</Link> | <span className="badge badge--success"><span className="external-name-key">GUID</span></span> | **CLI:**<br />`cf <service-instance> -v` and find the GUID in the output | — |
+| <Link id="orgmembers" to="#orgmembers">OrgMembers</Link> | <span className="badge badge--warning">Compound: <span className="external-name-key">org-guid / role-type</span></span> | **CLI:**<br />`cf org <org-name> --guid` (field: guid) combined with `spec.forProvider.roleType` | Aggregate resource; import is not covered by the exporter. Combine the org GUID with the role type. |
+| <Link id="spacemembers" to="#spacemembers">SpaceMembers</Link> | <span className="badge badge--warning">Compound: <span className="external-name-key">space-guid / role-type</span></span> | **CLI:**<br />`cf space <space-name> --guid` (field: guid) combined with `spec.forProvider.roleType` | Aggregate resource; import is not covered by the exporter. Combine the space GUID with the role type. |
+
+{/* END GENERATED EXTERNAL NAMES */}
+
+</SortableTable>
+
+</div>
