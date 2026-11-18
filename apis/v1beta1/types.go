@@ -21,6 +21,13 @@ type ProviderConfigSpec struct {
 	Endpoint *EndpointConfig `json:"endpoint"`
 	// Credentials required to authenticate to this provider.
 	Credentials ProviderCredentials `json:"credentials"`
+	// SkipTLSValidation disables verification of the CloudFoundry API server's
+	// TLS certificate. This is insecure and must only be used in non-production
+	// environments (e.g. a test landscape with a self-signed certificate).
+	// Defaults to false: server certificates are verified.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:default=false
+	SkipTLSValidation *bool `json:"skipTLSValidation,omitempty"`
 }
 
 // EndpointConfig is used to configure cf API endpoint.
