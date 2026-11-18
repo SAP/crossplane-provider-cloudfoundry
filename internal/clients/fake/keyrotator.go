@@ -23,12 +23,10 @@ func (m *MockKeyRotator) HasExpiredKeys(cr *v1alpha1.ServiceCredentialBinding) b
 	return args.Bool(0)
 }
 
-func (m *MockKeyRotator) DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) ([]*v1alpha1.SCBResource, error) {
+func (m *MockKeyRotator) DeleteExpiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) ([]*v1alpha1.SCBResource, []error) {
 	args := m.Called(ctx, cr)
-	if len(args) == 2 {
-		return args.Get(0).([]*v1alpha1.SCBResource), args.Error(1)
-	}
-	return nil, args.Error(0)
+	failures, _ := args.Get(1).([]error)
+	return args.Get(0).([]*v1alpha1.SCBResource), failures
 }
 
 func (m *MockKeyRotator) DeleteRetiredKeys(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding) error {

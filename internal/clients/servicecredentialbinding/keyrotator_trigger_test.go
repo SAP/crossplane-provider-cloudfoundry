@@ -128,3 +128,25 @@ func TestSCBKeyRotator_ScheduledRotationIgnoresStaleForceTarget(t *testing.T) {
 	require.Len(t, cr.Status.AtProvider.RetiredKeys, 1)
 	require.Equal(t, rotationTestK1, cr.Status.AtProvider.RetiredKeys[0].GUID)
 }
+
+func TestNextRotationAt(t *testing.T) {
+	created := time.Date(2026, time.January, 1, 0, 0, 0, 0, time.UTC)
+	hourly := &v1alpha1.RotationParameters{Frequency: &metav1.Duration{Duration: time.Hour}}
+	for _, tc := range []struct {
+		name      string
+		rotation  *v1alpha1.RotationParameters
+		createdAt *metav1.Time
+		want      *metav1.Time
+	}{
+		{name: "scheduled key", rotation: hourly, createdAt: &metav1.Time{Time: created}, want: &metav1.Time{Time: created.Add(time.Hour)}},
+		{name: "no schedule", createdAt: &metav1.Time{Time: created}},
+		{name: "creation time unknown", rotation: hourly},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			cr := rotationTestCR("key")
+			cr.Spec.ForProvider.Rotation = tc.rotation
+			cr.Status.AtProvider.CreatedAt = tc.createdAt
+			require.Equal(t, tc.want, NextRotationAt(cr))
+		})
+	}
+}

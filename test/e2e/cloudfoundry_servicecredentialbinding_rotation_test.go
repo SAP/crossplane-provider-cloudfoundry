@@ -6,6 +6,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -13,11 +15,13 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/fields"
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/util/retry"
 	ctrlclient "sigs.k8s.io/controller-runtime/pkg/client"
+	"sigs.k8s.io/e2e-framework/klient/k8s/resources"
 	"sigs.k8s.io/e2e-framework/pkg/envconf"
 	"sigs.k8s.io/e2e-framework/pkg/features"
 
@@ -84,6 +88,9 @@ func runForceRotationE2E(t *testing.T, parent context.Context, cfg *envconf.Conf
 	if err := testutil.ValidateRotationCredentialChange(k0Credentials, k1Credentials); err != nil {
 		t.Fatalf("XSUAA binding credentials did not change at first rotation: %v", err)
 	}
+	waitForRotationEvent(t, ctx, cfg, name, "KeyRotated", fmt.Sprintf("Rotated key %s to %s (forced)", k0, k1))
+	waitForRotationEvent(t, ctx, cfg, name, "ConnectionSecretRepublished", k1)
+	assertNextRotationAt(t, ctx, cfg, name)
 	k0Deadline := waitForFallbackDeadline(t, ctx, cfg, name, k0, cfBinding)
 	assertFallbackDeadlineNear(t, k0Deadline, time.Now())
 	if _, err := cfBinding.Get(ctx, k0); err != nil {
@@ -194,9 +201,11 @@ func runRetiredKeyCleanupE2E(t *testing.T, parent context.Context, cfg *envconf.
 	if err := testutil.ValidateRotationCredentialChange(k0Credentials, k1Credentials); err != nil {
 		t.Fatalf("XSUAA binding credentials did not change at cleanup rotation: %v", err)
 	}
+	assertNextRotationAt(t, ctx, cfg, name)
 	if err := waitForRetiredKeyCollection(ctx, cfg, name, k0, cfBinding); err != nil {
 		t.Fatalf("wait for retired key CF and status collection: %v", err)
 	}
+	waitForRotationEvent(t, ctx, cfg, name, "RetiredKeyDeleted", k0)
 	waitForStablePublishedActiveBinding(t, ctx, cfg, cfBinding, name, runScopedName("scb-rotation-cleanup-secret"))
 
 	// Once K0 is actually gone, disable scheduled rotation and replay the stale
@@ -471,6 +480,56 @@ func assertCurrentGUID(t *testing.T, ctx context.Context, cfg *envconf.Config, n
 	}
 	if got := binding.Status.AtProvider.GUID; got != expected {
 		t.Fatalf("current binding GUID changed during stale-target replay (expected %s)", expected)
+	}
+}
+
+// assertNextRotationAt checks that the reported due time follows the active key's
+// creation time and the configured frequency, and is absent without a schedule.
+func assertNextRotationAt(t *testing.T, ctx context.Context, cfg *envconf.Config, name string) {
+	t.Helper()
+	binding := &v1alpha1.ServiceCredentialBinding{}
+	if err := cfg.Client().Resources().Get(ctx, name, "", binding); err != nil {
+		t.Fatalf("read binding for next rotation time: %v", err)
+	}
+	observation := binding.Status.AtProvider
+	rotation := binding.Spec.ForProvider.Rotation
+	if rotation == nil || rotation.Frequency == nil {
+		if observation.NextRotationAt != nil {
+			t.Fatalf("nextRotationAt is %s without a rotation frequency", observation.NextRotationAt)
+		}
+		return
+	}
+	if observation.CreatedAt == nil || observation.NextRotationAt == nil {
+		t.Fatalf("createdAt and nextRotationAt must both be reported for a scheduled key")
+	}
+	if want := observation.CreatedAt.Add(rotation.Frequency.Duration); !observation.NextRotationAt.Time.Equal(want) {
+		t.Fatalf("nextRotationAt is %s, want createdAt + frequency = %s", observation.NextRotationAt, want)
+	}
+}
+
+// waitForRotationEvent waits for an event on the binding with the given reason
+// and a message containing fragment.
+func waitForRotationEvent(t *testing.T, ctx context.Context, cfg *envconf.Config, name, reason, fragment string) {
+	t.Helper()
+	selector := fields.SelectorFromSet(fields.Set{
+		"involvedObject.kind": v1alpha1.ServiceCredentialBindingKind,
+		"involvedObject.name": name,
+		"reason":              reason,
+	}).String()
+	err := wait.PollUntilContextTimeout(ctx, 5*time.Second, 2*time.Minute, true, func(ctx context.Context) (bool, error) {
+		events := &corev1.EventList{}
+		if err := cfg.Client().Resources().List(ctx, events, resources.WithFieldSelector(selector)); err != nil {
+			return false, nil
+		}
+		for _, e := range events.Items {
+			if strings.Contains(e.Message, fragment) {
+				return true, nil
+			}
+		}
+		return false, nil
+	})
+	if err != nil {
+		t.Fatalf("no %s event mentioning %q on %s: %v", reason, fragment, name, err)
 	}
 }
 

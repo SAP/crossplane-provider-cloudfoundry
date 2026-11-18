@@ -234,6 +234,10 @@ func (c *external) adoptBinding(ctx context.Context, cr *v1alpha1.ServiceCredent
 func applyBindingObservation(cr *v1alpha1.ServiceCredentialBinding, binding *cfresource.ServiceCredentialBinding) {
 	cr.Status.AtProvider.GUID = binding.GUID
 	cr.Status.AtProvider.CreatedAt = &metav1.Time{Time: binding.CreatedAt}
+	cr.Status.AtProvider.NextRotationAt = nil
+	if isKeyBinding(cr) {
+		cr.Status.AtProvider.NextRotationAt = scb.NextRotationAt(cr)
+	}
 	scb.UpdateObservation(&cr.Status.AtProvider, binding)
 }
 
@@ -415,13 +419,21 @@ func (c *external) updateConnectionDetails(ctx context.Context, cr *v1alpha1.Ser
 }
 
 func (c *external) deleteExpiredBindings(ctx context.Context, cr *v1alpha1.ServiceCredentialBinding, details managed.ConnectionDetails) (managed.ExternalUpdate, error) {
-	oldLen := len(cr.Status.AtProvider.RetiredKeys)
-	newRetiredKeys, deleteErr := c.keyRotator.DeleteExpiredKeys(ctx, cr)
-	cr.Status.AtProvider.RetiredKeys = newRetiredKeys
-	if len(newRetiredKeys) != oldLen {
+	retired := cr.Status.AtProvider.RetiredKeys
+	newRetiredKeys, failures := c.keyRotator.DeleteExpiredKeys(ctx, cr)
+	for _, failure := range failures {
+		c.emit(cr, event.Warning(reasonCannotDeleteRetiredKey, failure))
+	}
+	deleteErr := errors.Join(failures...)
+	if len(newRetiredKeys) != len(retired) {
+		cr.Status.AtProvider.RetiredKeys = newRetiredKeys
 		if err := c.kube.Status().Update(ctx, cr); err != nil {
+			// The runtime writes this object back after an error. Restore the keys
+			// so none leaves status without its RetiredKeyDeleted event.
+			cr.Status.AtProvider.RetiredKeys = retired
 			return managed.ExternalUpdate{}, c.cleanupPersistenceError(deleteErr, err)
 		}
+		c.recordDeletedKeys(cr, retired, newRetiredKeys)
 	}
 	if deleteErr != nil {
 		return managed.ExternalUpdate{}, fmt.Errorf(errDeleteExpiredKeys, deleteErr)
@@ -548,7 +560,14 @@ func (c *external) observeSucceeded(ctx context.Context, cr *v1alpha1.ServiceCre
 	if err != nil {
 		return managed.ExternalObservation{}, err
 	}
-	handedOver := c.confirmHandover(ctx, cr, binding, connectionDetails)
+	if err := c.completeRotation(ctx, cr, binding.GUID); err != nil {
+		return managed.ExternalObservation{}, err
+	}
+	state := c.handover(ctx, cr, binding, connectionDetails)
+	if state == handoverStale {
+		c.recordSecretRepublish(cr, binding.GUID)
+	}
+	handedOver := state == handoverComplete
 	return managed.ExternalObservation{
 		ResourceExists:    true,
 		ResourceUpToDate:  scb.IsUpToDate(ctx, cr, cr.Spec.ForProvider, *binding) && (!handedOver || !c.keyRotator.HasExpiredKeys(cr)),

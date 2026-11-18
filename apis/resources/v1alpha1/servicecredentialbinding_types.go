@@ -22,6 +22,12 @@ type ServiceCredentialBindingObservation struct {
 	// +kubebuilder:validation:Optional
 	RetiredKeys []*SCBResource `json:"retiredKeys,omitempty"`
 
+	// NextRotationAt is when the active key becomes due for scheduled rotation
+	// (createdAt + rotation.frequency). Rotation can happen later: it waits until
+	// the current credentials have been published.
+	// +kubebuilder:validation:Optional
+	NextRotationAt *metav1.Time `json:"nextRotationAt,omitempty"`
+
 	ResourceMetadata `json:",inline"`
 }
 
@@ -127,7 +133,24 @@ type SCBResource struct {
 	// and is not reset by subsequent reconciliations. It is unused on the active binding.
 	// +kubebuilder:validation:Optional
 	DeleteAfter *metav1.Time `json:"deleteAfter,omitempty"`
+	// RotationTrigger is why this key was retired. Unset on the active key and on
+	// keys retired by older provider versions.
+	// +kubebuilder:validation:Optional
+	// +kubebuilder:validation:Enum=forced;scheduled
+	RotationTrigger string `json:"rotationTrigger,omitempty"`
+	// ReplacementGUID is the key that replaced this one, set once the replacement
+	// is observed ready. Unset on keys retired by older provider versions.
+	// +kubebuilder:validation:Optional
+	ReplacementGUID string `json:"replacementGUID,omitempty"`
 }
+
+// Values of SCBResource.RotationTrigger. Keep in sync with its Enum marker.
+const (
+	// RotationTriggerForced marks a key retired by the force-rotation annotation.
+	RotationTriggerForced = "forced"
+	// RotationTriggerScheduled marks a key retired because rotation.frequency elapsed.
+	RotationTriggerScheduled = "scheduled"
+)
 
 // +kubebuilder:object:root=true
 
@@ -147,6 +170,8 @@ type SCBResource struct {
 // +kubebuilder:printcolumn:name="READY",type="string",JSONPath=".status.conditions[?(@.type=='Ready')].status"
 // +kubebuilder:printcolumn:name="SYNCED",type="string",JSONPath=".status.conditions[?(@.type=='Synced')].status"
 // +kubebuilder:printcolumn:name="EXTERNAL-NAME",type="string",JSONPath=".metadata.annotations.crossplane\\.io/external-name"
+// +kubebuilder:printcolumn:name="KEY-AGE",type="date",JSONPath=".status.atProvider.createdAt",priority=1
+// +kubebuilder:printcolumn:name="NEXT-ROTATION",type="string",JSONPath=".status.atProvider.nextRotationAt",priority=1
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:subresource:status
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,managed,cloudfoundry}

@@ -122,6 +122,20 @@ func TestDeleteConfirmsBindingAbsence(t *testing.T) {
 		cf.AssertExpectations(t)
 	})
 
+	t.Run("failed delete operation that survives the retry is a failure", func(t *testing.T) {
+		failed := binding("delete", "failed")
+		failed.LastOperation.Description = "broker rejected unbind"
+		cf := &fake.MockServiceCredentialBinding{}
+		cf.On("Get", mock.Anything, guid).Return(failed, nil).Once()
+		cf.On("Delete", mock.Anything, guid).Return("retry-job", nil).Once()
+		cf.On("Get", mock.Anything, guid).Return(binding("delete", "in progress"), nil).Once()
+		err := Delete(context.Background(), cf, guid)
+		require.ErrorIs(t, err, ErrUnbindFailed)
+		require.NotErrorIs(t, err, ErrDeletionPending, "callers must not treat a broker failure as normal progress")
+		require.ErrorContains(t, err, "broker rejected unbind")
+		cf.AssertExpectations(t)
+	})
+
 	t.Run("delete request failure is not completion", func(t *testing.T) {
 		cf := &fake.MockServiceCredentialBinding{}
 		cf.On("Get", mock.Anything, guid).Return(binding("create", "succeeded"), nil).Once()

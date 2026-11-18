@@ -234,6 +234,62 @@ func TestRotationRuntimeDeleteFailureRemainsVisible(t *testing.T) {
 	cf.AssertExpectations(t)
 }
 
+func TestRotationRuntimeFailedUnbindDuringDeletionIsVisible(t *testing.T) {
+	cases := map[string]struct {
+		active  string
+		retired []*v1alpha1.SCBResource
+		reason  event.Reason
+	}{
+		"active key":                       {active: rotationTestK0, reason: "CannotDeleteExternalResource"},
+		"retired key after active is gone": {active: rotationTestK1, retired: []*v1alpha1.SCBResource{{GUID: rotationTestK0}}, reason: "CannotObserveExternalResource"},
+	}
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			cr := rotationControllerCR(tc.active, nil)
+			cr.Spec.ManagementPolicies = xpv2.ManagementPolicies{xpv2.ManagementActionAll}
+			cr.Spec.DeletionPolicy = xpv2.DeletionDelete
+			cr.Finalizers = []string{managed.FinalizerName}
+			deleting := metav1.NewTime(time.Now())
+			cr.SetDeletionTimestamp(&deleting)
+			cr.Status.AtProvider.RetiredKeys = tc.retired
+			store, scheme := rotationRuntimeStore(t, cr)
+
+			failedUnbind := rotationControllerBinding(rotationTestK0, v1alpha1.LastOperationFailed)
+			failedUnbind.LastOperation.Type = v1alpha1.LastOperationDelete
+			failedUnbind.LastOperation.Description = "broker rejected unbind"
+			retrying := rotationControllerBinding(rotationTestK0, v1alpha1.LastOperationInProgress)
+			retrying.LastOperation.Type = v1alpha1.LastOperationDelete
+			cf := &fake.MockServiceCredentialBinding{}
+			if tc.active == rotationTestK0 {
+				// Observe reads the active key before the runtime calls Delete.
+				cf.On("Get", mock.Anything, rotationTestK0).Return(failedUnbind, nil).Once()
+			} else {
+				cf.On("Get", mock.Anything, tc.active).Return((*cfresource.ServiceCredentialBinding)(nil), cfresource.NewResourceNotFoundError()).Once()
+			}
+			cf.On("Get", mock.Anything, rotationTestK0).Return(failedUnbind, nil).Once()
+			cf.On("Delete", mock.Anything, rotationTestK0).Return("retry-job", nil).Once()
+			cf.On("Get", mock.Anything, rotationTestK0).Return(retrying, nil).Once()
+			recorder := &fakeRecorder{}
+			external := rotationRuntimeExternal(store, cf)
+			reconciler := rotationRuntimeReconciler(t, store, scheme, external, true, managed.WithRecorder(recorder))
+
+			_, err := reconciler.Reconcile(context.Background(), reconcile.Request{NamespacedName: client.ObjectKeyFromObject(cr)})
+			require.NoError(t, err, "runtime reports external errors through managed conditions/events")
+			remaining := &v1alpha1.ServiceCredentialBinding{}
+			require.NoError(t, store.Get(context.Background(), client.ObjectKeyFromObject(cr), remaining))
+			require.Contains(t, remaining.Finalizers, managed.FinalizerName)
+			require.Equal(t, tc.retired, remaining.Status.AtProvider.RetiredKeys, "the failed key stays tracked")
+			require.Equal(t, xpv2.ReasonReconcileError, remaining.GetCondition(xpv2.TypeSynced).Reason)
+			require.Contains(t, remaining.GetCondition(xpv2.TypeSynced).Message, "broker rejected unbind")
+			warnings := eventsWithReason(recorder, tc.reason)
+			require.Len(t, warnings, 1)
+			require.Equal(t, event.TypeWarning, warnings[0].Type)
+			require.Contains(t, warnings[0].Message, "broker rejected unbind")
+			cf.AssertExpectations(t)
+		})
+	}
+}
+
 func runtimeRequestsRequeue(result reconcile.Result) bool {
 	// The pinned runtime still uses Result.Requeue for its normal deletion poll,
 	// although controller-runtime marks that field deprecated.
