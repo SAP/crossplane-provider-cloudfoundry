@@ -1,0 +1,22 @@
+apiVersion: cloudfoundry.crossplane.io/v1alpha1
+kind: ServiceInstance
+metadata:
+  name: cleanup-instance-$BUILD_ID
+  namespace: default
+spec:
+  forProvider:
+    type: managed
+    name: cleanup-instance-$BUILD_ID
+    spaceRef:
+      name: cleanup-space-$BUILD_ID
+      policy:
+        resolve: Always
+    servicePlan:
+      offering: xsuaa
+      plan: application
+    parameters:
+      xsappname: scb-rotation-cleanup-$BUILD_ID
+      tenant-mode: dedicated
+      oauth2-configuration:
+        credential-types:
+          - binding-secret
