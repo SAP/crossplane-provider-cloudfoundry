@@ -21,6 +21,10 @@ type ProviderConfigSpec struct {
 	Endpoint *EndpointConfig `json:"endpoint"`
 	// Credentials required to authenticate to this provider.
 	Credentials ProviderCredentials `json:"credentials"`
+	// SkipTLSValidation disables TLS certificate verification for the CF API and UAA.
+	// Insecure: use only for development endpoints with self-signed certificates.
+	// +kubebuilder:validation:Optional
+	SkipTLSValidation bool `json:"skipTLSValidation,omitempty"`
 }
 
 // EndpointConfig is used to configure cf API endpoint.
@@ -50,6 +54,7 @@ type ProviderConfigStatus struct {
 // +kubebuilder:subresource:status
 // +kubebuilder:printcolumn:name="AGE",type="date",JSONPath=".metadata.creationTimestamp"
 // +kubebuilder:printcolumn:name="SECRET-NAME",type="string",JSONPath=".spec.credentials.secretRef.name",priority=1
+// +kubebuilder:printcolumn:name="SKIP-TLS",type="boolean",JSONPath=".spec.skipTLSValidation",priority=1
 // +kubebuilder:resource:scope=Cluster
 // +kubebuilder:resource:scope=Cluster,categories={crossplane,provider,cloudfoundry}
 type ProviderConfig struct {

@@ -26,6 +26,10 @@ spec:
       name: SECRET-NAME
       priority: 1
       type: string
+    - jsonPath: .spec.skipTLSValidation
+      name: SKIP-TLS
+      priority: 1
+      type: boolean
     name: v1beta1
     schema:
       openAPIV3Schema:
@@ -167,6 +171,11 @@ spec:
                 required:
                 - source
                 type: object
+              skipTLSValidation:
+                description: |-
+                  SkipTLSValidation disables TLS certificate verification for the CF API and UAA.
+                  Insecure: use only for development endpoints with self-signed certificates.
+                type: boolean
             required:
             - credentials
             type: object

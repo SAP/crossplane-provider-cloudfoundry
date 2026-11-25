@@ -115,6 +115,13 @@ spec:
             key: credentials
 ```
 
+:::note TLS verification
+The provider verifies the TLS certificates of the Cloud Foundry API and UAA endpoints.
+For development endpoints with self-signed certificates, you can disable verification with
+`spec.skipTLSValidation: true`. Do not use this in production: credentials can be intercepted.
+:::
+
+
 Apply the provider configuration.
 
 ```sh

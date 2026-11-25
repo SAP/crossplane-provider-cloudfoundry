@@ -6,6 +6,7 @@ package clients
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/json"
 
 	cfv3 "github.com/cloudfoundry/go-cfclient/v3/client"
@@ -37,6 +38,7 @@ const (
 	errUnmarshalCredentials = "cannot unmarshal cloudfoundry credentials as JSON"
 	errUnmarshalEndpoint    = "cannot unmarshal cloudfoundry endpoint as JSON"
 	errNoEndpoint           = "no API endpoint is configured in ProviderConfig"
+	errTLSVerification      = "TLS certificate verification failed for %s; if this endpoint uses a self-signed certificate, set spec.skipTLSValidation: true on ProviderConfig %q (insecure)"
 )
 
 // GetCredentialConfig returns a config.Config for the given managed resource
@@ -55,7 +57,24 @@ func GetCredentialConfig(ctx context.Context, client client.Client, mg resource.
 		return nil, errors.Wrap(err, errExtractEndpoint)
 	}
 
-	return config.New(*url, config.UserPassword(cred.Email, cred.Password), config.SkipTLSValidation())
+	opts := []config.Option{config.UserPassword(cred.Email, cred.Password)}
+	if pc.Spec.SkipTLSValidation {
+		opts = append(opts, config.SkipTLSValidation())
+	}
+
+	cfg, err := config.New(*url, opts...)
+	if err != nil {
+		return nil, wrapTLSError(err, *url, pc.GetName())
+	}
+	return cfg, nil
+}
+
+func wrapTLSError(err error, endpoint, pcName string) error {
+	var certErr *tls.CertificateVerificationError
+	if errors.As(err, &certErr) {
+		return errors.Wrapf(err, errTLSVerification, endpoint, pcName)
+	}
+	return err
 }
 
 func getProviderConfig(ctx context.Context, client client.Client, mg resource.Managed) (*v1beta1.ProviderConfig, error) {
