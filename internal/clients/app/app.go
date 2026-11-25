@@ -29,7 +29,6 @@ type AppClient interface {
 
 	Start(ctx context.Context, guid string) (*resource.App, error)
 	Stop(ctx context.Context, guid string) (*resource.App, error)
-	// Restart(ctx context.Context, guid string) (*resource.App, error)
 	GetEnvironmentVariables(ctx context.Context, guid string) (map[string]*string, error)
 	SetEnvironmentVariables(ctx context.Context, guid string, envVars map[string]*string) (map[string]*string, error)
 }
@@ -52,6 +51,8 @@ type Client struct {
 	job.Job
 	servicecredentialbinding.ServiceCredentialBinding
 	RouteFetcher
+	// Deployments is a named field: embedding would collide with AppClient's Create and Get.
+	Deployments DeploymentClient
 }
 
 // NewAppClient returns a new AppClient.
@@ -62,6 +63,7 @@ func NewAppClient(client *client.Client) *Client {
 		Job:                      client.Jobs,
 		ServiceCredentialBinding: servicecredentialbinding.NewClient(client),
 		RouteFetcher:             client.Routes,
+		Deployments:              client.Deployments,
 	}
 }
 

@@ -26,7 +26,42 @@ type AppObservation struct {
 	// The list of routes currently mapped to the application.
 	Routes []AppRouteObservation `json:"routes,omitempty"`
 
+	// The latest Cloud Foundry deployment the provider started or is waiting on.
+	Deployment *AppDeploymentObservation `json:"deployment,omitempty"`
+
+	// The last value of the `app.cloudfoundry.crossplane.io/restart` annotation the provider acted on.
+	LastHandledRestart string `json:"lastHandledRestart,omitempty"`
+
 	ResourceMetadata `json:",inline"`
+}
+
+// AppDeploymentObservation represents a Cloud Foundry deployment of the application.
+type AppDeploymentObservation struct {
+	// The GUID of the deployment.
+	GUID string `json:"guid,omitempty"`
+
+	// The deployment strategy, e.g. `rolling`.
+	Strategy string `json:"strategy,omitempty"`
+
+	// The Cloud Foundry `status.value` of the deployment: `ACTIVE` or `FINALIZED`.
+	State string `json:"state,omitempty"`
+
+	// The Cloud Foundry `status.reason` of the deployment, e.g. `DEPLOYING`, `DEPLOYED`, `CANCELED` or `SUPERSEDED`.
+	// `NOT_FOUND` if the deployment no longer exists.
+	Reason string `json:"reason,omitempty"`
+
+	// The date and time when the deployment was created in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format.
+	CreatedAt *string `json:"createdAt,omitempty"`
+
+	// The date and time in [RFC3339](https://www.ietf.org/rfc/rfc3339.txt) format when Cloud Foundry last scaled up the new
+	// instances, which needs the previous ones to be healthy. Stays at the creation time for a single-instance app.
+	LastSuccessfulHealthcheck *string `json:"lastSuccessfulHealthcheck,omitempty"`
+
+	// The error Cloud Foundry reported while updating the deployment, e.g. an exceeded quota.
+	Error string `json:"error,omitempty"`
+
+	// The `app.cloudfoundry.crossplane.io/restart` value that started this deployment; empty if the provider only waits on it.
+	Restart string `json:"restart,omitempty"`
 }
 
 // AppRouteObservation represents an observed route for the application.
