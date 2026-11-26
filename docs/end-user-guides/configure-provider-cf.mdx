@@ -116,11 +116,15 @@ spec:
 ```
 
 :::note TLS verification
-The provider verifies the TLS certificates of the Cloud Foundry API and UAA endpoints.
-For development endpoints with self-signed certificates, you can disable verification with
-`spec.skipTLSValidation: true`. Do not use this in production: credentials can be intercepted.
-:::
+The provider verifies the TLS certificates of the Cloud Foundry API and UAA endpoints
+against the system trust store of the provider image.
 
+Endpoints with self-signed or privately issued certificates (for example, an internal CA)
+fail verification until custom CA support is available
+([#171](https://github.com/SAP/crossplane-provider-cloudfoundry/issues/171)).
+Until then, you can disable verification with `spec.skipTLSValidation: true`.
+Do not use this in production: credentials can be intercepted.
+:::
 
 Apply the provider configuration.
 
