@@ -11,3 +11,5 @@ spec:
       name: cf-credentials-secret
       namespace: default
       key: credentials
+  # Insecure: only for development endpoints with self-signed certificates.
+  # skipTLSValidation: true

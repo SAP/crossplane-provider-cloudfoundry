@@ -104,7 +104,7 @@ func newCfClient() (*client.Client, error) {
 		return nil, fmt.Errorf("cannot extract CF credentials: %w", err)
 	}
 
-	cfg, err := config.New(endpoint, config.UserPassword(s.Email, s.Password), config.SkipTLSValidation())
+	cfg, err := config.New(endpoint, config.UserPassword(s.Email, s.Password))
 	if err != nil {
 		return nil, fmt.Errorf("cannot configure CF client: %w", err)
 	}
